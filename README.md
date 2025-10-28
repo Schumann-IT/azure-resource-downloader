@@ -82,6 +82,38 @@ azure-rd download --subscription "different-subscription-id" --resource-group "m
 
 **Note**: The subscription ID is optional. If not specified via CLI flag, config file, or environment variable, the tool will automatically use the default subscription from your `az login` session.
 
+### Microsoft Graph Permissions
+
+Some resources (like Conditional Access Policies) are accessed via Microsoft Graph API and require additional permissions:
+
+**For Azure CLI users (`az login`):**
+```bash
+# Your user account needs the appropriate Azure AD role assignments
+# Required roles for Conditional Access Policies:
+# - Security Reader (read-only)
+# - Security Administrator (read/write)
+# - Global Administrator (full access)
+```
+
+**For Service Principal authentication:**
+```bash
+# Your service principal needs Microsoft Graph API permissions
+# Required API permissions for Conditional Access Policies:
+# - Policy.Read.All (read-only)
+# - Policy.ReadWrite.ConditionalAccess (read/write)
+
+# To grant permissions:
+# 1. Register an app in Azure AD
+# 2. Add Microsoft Graph API permissions
+# 3. Grant admin consent for the permissions
+# 4. Set environment variables:
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_CLIENT_ID="your-client-id"
+export AZURE_CLIENT_SECRET="your-client-secret"
+```
+
+**Note**: If you receive permission errors when listing Graph resources, contact your Azure AD administrator to grant the necessary permissions.
+
 ## 📖 Usage
 
 ### Basic Commands
@@ -107,6 +139,14 @@ azure-rd download \
 
 azure-rd download \
   --type "Microsoft.Storage/storageAccounts"
+
+# Download Microsoft Graph resources (tenant-level)
+azure-rd download \
+  --type "Microsoft.Graph/conditionalAccessPolicies"
+
+# Download a specific conditional access policy by ID
+azure-rd download \
+  --resource-id "12345678-1234-1234-1234-123456789abc"
 
 # Override default subscription with explicit subscription ID
 azure-rd download \
@@ -358,6 +398,7 @@ Currently supported Azure resource types:
 | `Microsoft.Resources/resourceGroups` | `azurerm_resource_group` | ✅ |
 | `Microsoft.Storage/storageAccounts` | `azurerm_storage_account` | ✅ |
 | `Microsoft.Compute/virtualMachines` | `azurerm_virtual_machine` | ✅ |
+| `Microsoft.Graph/conditionalAccessPolicies` | `azuread_conditional_access_policy` | ✅ |
 
 ## 🔧 Adding New Resource Types
 

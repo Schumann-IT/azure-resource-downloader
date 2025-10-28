@@ -12,6 +12,7 @@ azure-resource-downloader
 
 # Output coverage
 *.out
+coverage.html
 
 # Go workspace file
 go.work

@@ -4,6 +4,16 @@
 - Errors:
     - Wrap with `%w` and `fmt.Errorf` (no `%v`).
     - Sentinel errors via `var ErrX = errors.New("x")` in package scope.
+    - Error strings must NOT end with punctuation (`.`, `!`, `?`) or newlines (`\n`).
+    - Use lowercase for error messages unless starting with proper nouns or acronyms.
+    - For multi-part error messages, use parentheses or commas, not newlines:
+      ```go
+      // ❌ BAD
+      return fmt.Errorf("failed to connect: %w\nHint: check network.", err)
+      
+      // ✅ GOOD
+      return fmt.Errorf("failed to connect: %w (hint: check network)", err)
+      ```
 - Concurrency:
     - Use `sync.WaitGroup` + channels for pipeline worker pools.
     - Always propagate context cancellation via select statements.

@@ -1,3 +1,46 @@
+# Makefile Usage Policy
+
+**ALWAYS use Makefile targets instead of running commands directly.**
+
+This project uses a Makefile to standardize development workflows. All instructions, documentation, and generated code must reference make targets, not raw commands.
+
+## Required Make Targets
+
+When providing instructions or examples:
+- ✅ `make lint` — NOT `golangci-lint run`
+- ✅ `make test` — NOT `go test ./...`
+- ✅ `make build` — NOT `go build`
+- ✅ `make fmt` — NOT `go fmt ./...`
+- ✅ `make deps` — NOT `go mod tidy`
+- ✅ `make check` — Run fmt + lint + test
+- ✅ `make all` — Run fmt + lint + test + build
+- ✅ `make ci` — For CI/CD pipelines
+
+## In Documentation and Instructions
+
+When writing README updates, commit messages, or instructions:
+- Always reference `make <target>` 
+- Never show raw `go` or `golangci-lint` commands
+- Exception: Internal Makefile implementation may use raw commands
+
+## Examples
+
+**Bad:**
+```bash
+go build -o azure-rd
+golangci-lint run ./...
+go test -v ./...
+```
+
+**Good:**
+```bash
+make build
+make lint
+make test
+# Or run all checks at once
+make check
+```
+
 # What to generate on request
 
 ## "Create a new resource handler"
@@ -40,13 +83,16 @@
 
 # Output shape
 - Provide full file paths and complete code blocks
-- Include `go mod tidy` if new dependencies added
+- Include `make deps` if new dependencies added (NOT `go mod tidy`)
 - Show registration/wiring steps
-- Provide example usage
+- Provide example usage using make targets
 - End with checklist of manual steps:
   ```
   ✅ Handler created
   ✅ Registered in cmd/download.go
+  ✅ Dependencies updated: make deps
+  ✅ Built successfully: make build
+  ✅ All checks passed: make check
   ⚠️  Manual: Add to README.md supported types table
   ⚠️  Manual: Test with: ./azure-rd list --subscription "SUB_ID"
   ```

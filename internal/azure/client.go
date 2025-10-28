@@ -3,10 +3,12 @@ package azure
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
+	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 )
 
 // Client wraps Azure SDK clients
@@ -29,7 +31,7 @@ func NewClient(ctx context.Context, subscriptionID string) (*Client, error) {
 	if subscriptionID == "" {
 		defaultSub, err := getDefaultSubscription(ctx, cred)
 		if err != nil {
-			return nil, fmt.Errorf("no subscription specified and failed to get default subscription: %w\nHint: use 'az login' to authenticate or specify --subscription flag", err)
+			return nil, fmt.Errorf("no subscription specified and failed to get default subscription: %w (hint: use 'az login' to authenticate or specify --subscription flag)", err)
 		}
 		subscriptionID = defaultSub
 	}
@@ -146,6 +148,11 @@ func (c *Client) GetCredential() *azidentity.DefaultAzureCredential {
 func (c *Client) ListResourcesByType(ctx context.Context, resourceType string) ([]string, error) {
 	var resourceIDs []string
 
+	// Special handling for Microsoft Graph resources (tenant-level, not subscription-level)
+	if strings.HasPrefix(resourceType, "Microsoft.Graph/") {
+		return c.listGraphResources(ctx, resourceType)
+	}
+
 	// Special handling for Resource Groups - they use a different API
 	if resourceType == "Microsoft.Resources/resourceGroups" {
 		return c.listResourceGroups(ctx)
@@ -196,6 +203,41 @@ func (c *Client) listResourceGroups(ctx context.Context) ([]string, error) {
 				resourceIDs = append(resourceIDs, *rg.ID)
 			}
 		}
+	}
+
+	return resourceIDs, nil
+}
+
+// listGraphResources lists Microsoft Graph resources (tenant-level resources)
+func (c *Client) listGraphResources(ctx context.Context, resourceType string) ([]string, error) {
+	var resourceIDs []string
+
+	// Create Graph client
+	graphClient, err := msgraphsdk.NewGraphServiceClientWithCredentials(c.credential, []string{
+		"https://graph.microsoft.com/.default",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Graph client: %w (Hint: Ensure you have the necessary permissions to access Microsoft Graph API)", err)
+	}
+
+	// Handle different Graph resource types
+	switch resourceType {
+	case "Microsoft.Graph/conditionalAccessPolicies":
+		policies, err := graphClient.Identity().ConditionalAccess().Policies().Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list conditional access policies: %w (Hint: This requires 'Policy.Read.All' or 'Policy.ReadWrite.ConditionalAccess' permission in Microsoft Graph. To grant permissions, your Azure AD admin needs to grant consent for these permissions)", err)
+		}
+
+		if policies != nil && policies.GetValue() != nil {
+			for _, policy := range policies.GetValue() {
+				if policy.GetId() != nil {
+					resourceIDs = append(resourceIDs, *policy.GetId())
+				}
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies)", resourceType)
 	}
 
 	return resourceIDs, nil

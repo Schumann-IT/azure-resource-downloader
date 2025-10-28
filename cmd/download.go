@@ -181,6 +181,11 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	registry.Register("Microsoft.Storage/storageAccounts", handlers.NewStorageAccountHandler(cred, sub))
 	registry.Register("Microsoft.Compute/virtualMachines", handlers.NewVirtualMachineHandler(cred, sub))
 
+	// Register Microsoft Graph handlers (tenant-level resources)
+	if capHandler, err := handlers.NewConditionalAccessPolicyHandler(cred); err == nil {
+		registry.Register("Microsoft.Graph/conditionalAccessPolicies", capHandler)
+	}
+
 	// Add more handlers here as needed
 	// registry.Register("Microsoft.Network/virtualNetworks", handlers.NewVirtualNetworkHandler(cred, sub))
 	// registry.Register("Microsoft.Sql/servers", handlers.NewSqlServerHandler(cred, sub))
@@ -220,10 +225,17 @@ func buildFetchRequests(ctx context.Context, azureClient *azure.Client, resource
 
 		resourceList, err := azureClient.ListResourcesByType(ctx, resourceType)
 		if err != nil {
+			log.Error("Failed to list resources", "type", resourceType, "error", err)
 			return nil, fmt.Errorf("failed to list resources of type %s: %w", resourceType, err)
 		}
 
 		log.Info("Found resources", "count", len(resourceList))
+
+		if len(resourceList) == 0 {
+			log.Warn("No resources found",
+				"type", resourceType,
+				"note", "This could be due to: (1) No resources of this type exist, (2) Insufficient permissions, or (3) Resources exist in a different scope (e.g., tenant vs subscription)")
+		}
 
 		for _, resourceID := range resourceList {
 			requests = append(requests, &models.FetchRequest{
