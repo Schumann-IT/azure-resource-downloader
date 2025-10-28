@@ -40,7 +40,9 @@ For in-depth information about how the pipeline works:
 - **[PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md)** - Complete guide to each pipeline stage, concurrency model, error handling, performance optimizations, and configuration options
 - **[docs/PIPELINE_FLOW.md](./docs/PIPELINE_FLOW.md)** - Visual diagrams and flowcharts showing data movement, timing, and examples
 - **[docs/TRANSFORMER_CONFIGURATION.md](./docs/TRANSFORMER_CONFIGURATION.md)** - Per-transformer configuration: custom exclusions, ID resolution, name sanitization, and Terraform import formats
-- **[docs/CLEANING_TRANSFORMER.md](./docs/CLEANING_TRANSFORMER.md)** - Detailed guide to the cleaning transformer: exclude-keys, exclude-keys-by-type, and clean-empty options
+- **[docs/CLEANING_TRANSFORMER.md](./docs/CLEANING_TRANSFORMER.md)** - Detailed guide to the cleaning transformer: remove-keys, remove-keys-by-type, preserve-keys, replace, and clean-empty
+- **[docs/PRESERVE_KEYS.md](./docs/PRESERVE_KEYS.md)** - Preserve specific keys while removing others: fine-grained control over property removal
+- **[docs/REPLACE_KEYS.md](./docs/REPLACE_KEYS.md)** - Replace complex objects with specific field values: simplify nested structures
 - **[docs/DEBUG_LOGGING.md](./docs/DEBUG_LOGGING.md)** - Debug logging guide: see exactly what each transformer does to your data
 
 ## 🛠️ Installation
@@ -379,31 +381,29 @@ Each transformer can be independently configured with its own settings. By defau
 Add to `~/.azure-rd.yaml`:
 
 ```yaml
-# Example 1: All transformers with default settings
+# Example 1: Typical Terraform workflow
 transformers:
   - name: cleaning
+    remove-keys:
+      - provisioningState
+      - etag
+      - systemData
+    clean-empty: true
   - name: id-resolution
   - name: name-sanitization
   - name: terraform-import
 
-# Example 2: Cleaning with custom exclusions
+# Example 2: Remove ID everywhere except specific paths
 transformers:
   - name: cleaning
-    exclude-keys:
-      - provisioningState
-      - etag
-      - systemData
-    exclude-keys-by-type:
-      Microsoft.Resources/resourceGroups:
-        - id
-        - managedBy
-      Microsoft.Storage/storageAccounts:
-        - primaryEndpoints
-        - secondaryEndpoints
+    remove-keys:
+      - id                      # Remove "id" recursively everywhere
+    preserve-keys:
+      - properties.subnet.id    # But keep this specific one
+    clean-empty: true
   - name: id-resolution
   - name: name-sanitization
   - name: terraform-import
-    target-format: "{resource_type}.{name}"
 
 # Example 3: Documentation only (no Terraform)
 transformers:

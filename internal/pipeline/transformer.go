@@ -120,9 +120,9 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 
 		// Get type-specific keys for this resource type
 		normalizedType := strings.ToLower(fetchResult.ResourceType)
-		typeSpecificKeys := config.ExcludeKeysByType[normalizedType]
+		typeSpecificKeys := config.RemoveKeysByType[normalizedType]
 
-		processedData = transform.CleanProperties(processedData, config.ExcludeKeys, typeSpecificKeys, config.CleanEmpty)
+		processedData = transform.CleanPropertiesWithReplace(processedData, config.RemoveKeys, typeSpecificKeys, config.PreserveKeys, config.Replace, config.CleanEmpty)
 	} else {
 		log.Debug("Skipping cleaning transformer (not configured)")
 	}

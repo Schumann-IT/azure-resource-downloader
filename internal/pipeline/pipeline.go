@@ -21,10 +21,19 @@ type Pipeline struct {
 
 // NewPipeline creates a new pipeline
 func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config *models.PipelineConfig) *Pipeline {
-	// Use default transformer configs if none specified
+	log := logger.Default
+
+	// Use transformer configs from config (could be empty if user wants no transformers)
 	transformerConfigs := config.TransformerConfigs
+
+	// NOTE: We do NOT apply defaults here if empty!
+	// Empty list means user explicitly disabled transformers
+	// Only cmd/download.go should apply defaults when config key is missing
+
 	if len(transformerConfigs) == 0 {
-		transformerConfigs = models.DefaultTransformerConfigs()
+		log.Debug("Pipeline initialized with no transformers")
+	} else {
+		log.Debug("Pipeline initialized with transformers", "count", len(transformerConfigs))
 	}
 
 	return &Pipeline{

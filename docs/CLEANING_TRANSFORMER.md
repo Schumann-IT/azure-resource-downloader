@@ -4,15 +4,17 @@ The `cleaning` transformer removes Azure metadata and unwanted properties from r
 
 ## Configuration Options
 
-### `exclude-keys` (list of strings)
+### `remove-keys` (list of strings)
 
-Global keys to exclude from all resources.
+Global keys to remove from all resources. Applied recursively to all nested structures.
+
+**Note:** `exclude-keys` still works for backward compatibility but `remove-keys` is the preferred name.
 
 **Example:**
 ```yaml
 transformers:
   - name: cleaning
-    exclude-keys:
+    remove-keys:
       - provisioningState
       - etag
       - systemData
@@ -20,20 +22,15 @@ transformers:
       - changedTime
 ```
 
-**Default behavior:** If no keys are specified, the transformer uses built-in defaults:
-- `provisioningState`
-- `creationTime`
-- `changedTime`
-- `correlationId`
-- `etag`
-- `managedBy`
-- `sku.tier`
+**Default behavior:** If no keys are specified, **no keys are removed** (you must explicitly specify which keys to remove).
 
 ---
 
-### `exclude-keys-by-type` (map)
+### `remove-keys-by-type` (map)
 
-Resource-type-specific exclusions. These are applied in addition to global exclusions.
+Resource-type-specific key removals. These are applied in addition to global remove-keys.
+
+**Note:** `exclude-keys-by-type` still works for backward compatibility but `remove-keys-by-type` is the preferred name.
 
 **Format:**
 ```yaml
@@ -119,31 +116,34 @@ location: eastus
 
 ## Complete Examples
 
-### Example 1: Default Cleaning
+### Example 1: Default Cleaning (clean-empty only)
 
 ```yaml
 transformers:
   - name: cleaning
-    # Uses default exclude keys and clean-empty: true (default)
+    # No remove-keys specified - only clean-empty: true applies
 ```
 
 Output:
 ```yaml
+id: /subscriptions/.../resourceGroups/my-rg    # Kept (not removed)
 name: my-rg
 location: eastus
+provisioningState: Succeeded                   # Kept (not removed)
+etag: "W/..."                                  # Kept (not removed)
 properties:
   someValue: test
-  # Empty values removed by default
+  # Only empty values removed (tags: {}, etc.)
 ```
 
 ---
 
-### Example 2: Aggressive Cleaning
+### Example 2: Typical Terraform Workflow
 
 ```yaml
 transformers:
   - name: cleaning
-    exclude-keys:
+    remove-keys:
       - provisioningState
       - etag
       - systemData
@@ -380,9 +380,12 @@ exclude-keys-by-type:
 
 | Option | Type | Default | Purpose |
 |--------|------|---------|---------|
-| `exclude-keys` | list | Built-in defaults | Remove specific keys globally |
-| `exclude-keys-by-type` | map | (none) | Remove keys for specific resource types |
+| `remove-keys` | list | `[]` (none) | Remove specific keys globally (recursive) |
+| `remove-keys-by-type` | map | `{}` (none) | Remove keys for specific resource types |
+| `preserve-keys` | list | `[]` (none) | Preserve specific paths (exception to remove-keys) |
 | `clean-empty` | boolean | `true` | Remove empty values (null, [], "", {}) |
+
+**Note:** `exclude-keys` and `exclude-keys-by-type` are deprecated aliases for `remove-keys` and `remove-keys-by-type`.
 
 The cleaning transformer provides fine-grained control over which properties to include in the output! 🧹
 

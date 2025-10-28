@@ -79,6 +79,30 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Build transformer configurations
 	transformerConfigs := buildTransformerConfigs()
 
+	// Log which transformers will be used
+	if len(transformerConfigs) == 0 {
+		log.Info("No transformers enabled - raw Azure data will be output")
+	} else {
+		transformerNames := make([]string, len(transformerConfigs))
+		for i, tc := range transformerConfigs {
+			transformerNames[i] = tc.Name
+		}
+		log.Info("Active transformers", "transformers", transformerNames, "count", len(transformerConfigs))
+
+		// Debug: show detailed config for each transformer
+		for _, tc := range transformerConfigs {
+			if len(tc.Config) > 0 {
+				log.Debug("Transformer configuration",
+					"name", tc.Name,
+					"config", tc.Config)
+			} else {
+				log.Debug("Transformer configuration",
+					"name", tc.Name,
+					"config", "default")
+			}
+		}
+	}
+
 	// Validate input
 	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
 		return fmt.Errorf("at least one of --resource-id, --resource-group, or --type must be specified")
@@ -345,25 +369,41 @@ func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string
 func buildTransformerConfigs() []models.TransformerConfig {
 	log := logger.Default
 
-	// Check if transformers are configured
+	// Check if transformers key exists in config
 	if !viper.IsSet("transformers") {
-		// Use defaults if not configured
+		// No transformers key at all - use defaults
+		log.Debug("No 'transformers' key in config, using defaults")
 		return models.DefaultTransformerConfigs()
 	}
 
 	// Get transformers configuration
-	var configs []models.TransformerConfig
 	transformersConfig := viper.Get("transformers")
+
+	// Debug: show what we got from viper
+	log.Debug("Raw transformers config from viper",
+		"type", fmt.Sprintf("%T", transformersConfig),
+		"value", transformersConfig)
 
 	// Handle different config formats
 	switch v := transformersConfig.(type) {
 	case []interface{}:
-		// List of transformer configs
+		// List of transformer configs (could be empty list)
+		log.Debug("Transformers config is a list",
+			"length", len(v))
+
+		if len(v) == 0 {
+			// Explicitly empty list - user wants NO transformers
+			log.Info("Transformers explicitly disabled via empty list: transformers: []")
+			return []models.TransformerConfig{}
+		}
+
+		var configs []models.TransformerConfig
 		for _, item := range v {
 			if itemMap, ok := item.(map[string]interface{}); ok {
 				// Full transformer config with name and config
 				name, _ := itemMap["name"].(string)
 				if name == "" {
+					log.Warn("Transformer config missing 'name' field, skipping", "item", itemMap)
 					continue
 				}
 
@@ -381,7 +421,7 @@ func buildTransformerConfigs() []models.TransformerConfig {
 
 				log.Debug("Loaded transformer config",
 					"name", name,
-					"config_keys", len(config))
+					"config", config)
 			} else if name, ok := item.(string); ok {
 				// Simple string name (no config)
 				configs = append(configs, models.TransformerConfig{
@@ -389,19 +429,31 @@ func buildTransformerConfigs() []models.TransformerConfig {
 					Config: map[string]interface{}{},
 				})
 
-				log.Debug("Loaded transformer", "name", name)
+				log.Debug("Loaded transformer (simple format)", "name", name)
+			} else {
+				log.Warn("Unexpected transformer item type",
+					"type", fmt.Sprintf("%T", item),
+					"value", item)
 			}
 		}
 
+		// If configs is still empty after processing, all items were invalid
+		if len(configs) == 0 {
+			log.Warn("Transformers list had no valid items, using defaults")
+			return models.DefaultTransformerConfigs()
+		}
+
+		return configs
+
+	case nil:
+		// Explicit nil value (transformers: null or transformers: ~)
+		log.Info("Transformers explicitly set to null - disabling all transformers")
+		return []models.TransformerConfig{}
+
 	default:
-		log.Warn("Unexpected transformers configuration format, using defaults")
+		log.Warn("Unexpected transformers configuration format, using defaults",
+			"type", fmt.Sprintf("%T", v),
+			"value", v)
 		return models.DefaultTransformerConfigs()
 	}
-
-	if len(configs) == 0 {
-		log.Debug("No transformers configured, using defaults")
-		return models.DefaultTransformerConfigs()
-	}
-
-	return configs
 }

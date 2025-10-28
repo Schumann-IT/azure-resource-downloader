@@ -50,32 +50,46 @@ log-level: "info"
 #   - name-sanitization: Sanitize resource names for files/Terraform
 #   - terraform-import: Generate Terraform import blocks
 #
-# Example 1: All transformers with default settings (implicit default)
+# Example 1: All transformers with default settings
 # transformers:
 #   - name: cleaning
+#     # No remove-keys specified - only clean-empty: true applies (removes empty values)
+#     # To remove Azure metadata, specify remove-keys explicitly
 #   - name: id-resolution
 #   - name: name-sanitization
 #   - name: terraform-import
 #
-# Example 2: Cleaning transformer with custom exclusions and clean-empty
+# Example 2: Cleaning transformer with remove-keys, preserve-keys, and replace
 # transformers:
 #   - name: cleaning
-#     exclude-keys:
+#     remove-keys:                # Keys to remove (replaces old "exclude-keys" name)
 #       - provisioningState
 #       - etag
 #       - systemData
-#     exclude-keys-by-type:
+#       - id                      # Remove "id" everywhere recursively
+#     remove-keys-by-type:        # Type-specific removals (replaces "exclude-keys-by-type")
 #       Microsoft.Resources/resourceGroups:
-#         - id
 #         - managedBy
 #       Microsoft.Storage/storageAccounts:
 #         - primaryEndpoints
 #         - secondaryEndpoints
-#     clean-empty: true          # Remove keys with empty values (null, [], "", {})
+#     preserve-keys:              # Exceptions - preserve these even if in remove-keys
+#       - properties.subnet.id    # Keep this specific "id" (even though "id" is in remove-keys)
+#       - metadata.id             # Keep this one too
+#     replace:                    # Replace complex objects with specific values
+#       - from: grantControls.authenticationStrength.displayName
+#         to: grantControls.authenticationStrength
+#         # Takes displayName value and replaces entire authenticationStrength object with it
+#       - from: properties.networkProfile.id
+#         to: networkProfileId
+#         # Moves nested value to top level with new name
+#     clean-empty: true           # Remove keys with empty values (null, [], "", {}). Default: true
 #   - name: id-resolution
 #   - name: name-sanitization
 #   - name: terraform-import
 #     target-format: "{resource_type}.{name}"
+#
+# Note: exclude-keys and exclude-keys-by-type still work for backward compatibility
 #
 # Example 3: Skip Terraform imports
 # transformers:
@@ -97,6 +111,9 @@ log-level: "info"
 #   - id-resolution
 #   - name-sanitization
 #   - terraform-import
+#
+# Example 6: Disable ALL transformers (raw Azure data)
+# transformers: []
 
 # Note: Property exclusions are now configured per-transformer
 # See the cleaning transformer configuration above

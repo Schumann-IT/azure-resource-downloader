@@ -29,7 +29,6 @@ go.work
 
 # Output directory
 output/
-azure-resources/
 
 # OS
 .DS_Store

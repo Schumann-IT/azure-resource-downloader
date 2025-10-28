@@ -209,6 +209,26 @@ func (h *ConditionalAccessPolicyHandler) Transform(resource interface{}) (*model
 		if termsOfUse := grantControls.GetTermsOfUse(); termsOfUse != nil {
 			grantMap["termsOfUse"] = termsOfUse
 		}
+		// Authentication Strength
+		if authStrength := grantControls.GetAuthenticationStrength(); authStrength != nil {
+			authStrengthMap := make(map[string]interface{})
+			if id := authStrength.GetId(); id != nil {
+				authStrengthMap["id"] = *id
+			}
+			if displayName := authStrength.GetDisplayName(); displayName != nil {
+				authStrengthMap["displayName"] = *displayName
+			}
+			if description := authStrength.GetDescription(); description != nil {
+				authStrengthMap["description"] = *description
+			}
+			if policyType := authStrength.GetPolicyType(); policyType != nil {
+				authStrengthMap["policyType"] = policyType.String()
+			}
+			if requirementsSatisfied := authStrength.GetRequirementsSatisfied(); requirementsSatisfied != nil {
+				authStrengthMap["requirementsSatisfied"] = requirementsSatisfied.String()
+			}
+			grantMap["authenticationStrength"] = authStrengthMap
+		}
 		properties["grantControls"] = grantMap
 	}
 
