@@ -144,12 +144,6 @@ func resolveIDsInSliceWithTracking(slice []interface{}, path string, resolvedIDs
 	return result
 }
 
-// resolveIDsInSlice handles arrays (non-tracking version for backward compatibility)
-func resolveIDsInSlice(slice []interface{}) []interface{} {
-	resolvedIDs := []string{}
-	return resolveIDsInSliceWithTracking(slice, "", &resolvedIDs)
-}
-
 // isAzureResourceID checks if a string looks like an Azure resource ID
 func isAzureResourceID(s string) bool {
 	// Azure resource IDs follow a specific pattern

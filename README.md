@@ -33,17 +33,24 @@ Each stage runs concurrently with configurable worker pools for optimal performa
    - Generates Terraform import statements
 3. **Writer**: Saves resources as YAML files and consolidated Terraform import.tf files
 
-### 📚 Detailed Architecture Documentation
+### 📚 Pipeline Architecture
 
-For in-depth information about how the pipeline works:
+The pipeline uses a streaming architecture with three concurrent stages connected via Go channels for maximum parallelism.
 
-- **[PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md)** - Complete guide to each pipeline stage, concurrency model, error handling, performance optimizations, and configuration options
-- **[docs/PIPELINE_FLOW.md](./docs/PIPELINE_FLOW.md)** - Visual diagrams and flowcharts showing data movement, timing, and examples
-- **[docs/TRANSFORMER_CONFIGURATION.md](./docs/TRANSFORMER_CONFIGURATION.md)** - Per-transformer configuration: custom exclusions, ID resolution, name sanitization, and Terraform import formats
-- **[docs/CLEANING_TRANSFORMER.md](./docs/CLEANING_TRANSFORMER.md)** - Detailed guide to the cleaning transformer: remove-keys, remove-keys-by-type, preserve-keys, replace, and clean-empty
-- **[docs/PRESERVE_KEYS.md](./docs/PRESERVE_KEYS.md)** - Preserve specific keys while removing others: fine-grained control over property removal
-- **[docs/REPLACE_KEYS.md](./docs/REPLACE_KEYS.md)** - Replace complex objects with specific field values: simplify nested structures
-- **[docs/DEBUG_LOGGING.md](./docs/DEBUG_LOGGING.md)** - Debug logging guide: see exactly what each transformer does to your data
+**Pipeline Flow:**
+```
+[FetchRequest] → Fetcher (workers) → [FetchResult] → Transformer (workers) → [TransformResult] → Writer (workers) → [WriteResult]
+```
+
+All stages run **concurrently** - resources flow through as soon as they're fetched, enabling true parallelism.
+
+**Stage Details:**
+
+1. **Fetcher** - Retrieves resources from Azure with retry logic (5 attempts, exponential backoff)
+2. **Transformer** - Applies configurable transformations (cleaning, ID resolution, name sanitization, Terraform import generation)
+3. **Writer** - Writes YAML files and consolidated import.tf per resource type
+
+Each stage uses a worker pool for parallel processing. Worker count is configurable via `--workers` flag or API-specific settings in config file.
 
 ## 🛠️ Installation
 
@@ -367,14 +374,23 @@ azure-rd download --resource-group "my-rg"
 
 ## 🎛️ Transformers
 
-Each transformer can be independently configured with its own settings. By default, all transformers are applied with sensible defaults.
+Each transformer can be independently configured with its own settings. By default, all transformers are applied. Set `transformers: []` to disable all and get raw Azure data.
 
 ### Available Transformers
 
-- **`cleaning`** - Remove Azure metadata and apply custom exclusions
-- **`id-resolution`** - Convert resource IDs to friendly names
-- **`name-sanitization`** - Sanitize names for files/Terraform
-- **`terraform-import`** - Generate Terraform import blocks
+**`cleaning`** - Remove unwanted properties and transform data
+- `remove-keys` - Keys to remove globally (recursive)
+- `remove-keys-by-type` - Resource-type-specific removals  
+- `preserve-keys` - Preserve specific paths (exceptions to remove-keys)
+- `replace` - Replace complex objects with field values
+- `clean-empty` - Remove empty values (default: true)
+
+**`id-resolution`** - Convert Azure resource IDs to friendly names
+
+**`name-sanitization`** - Sanitize names for files/Terraform
+
+**`terraform-import`** - Generate Terraform import blocks
+- `target-format` - Template for import address (default: `{resource_type}.{name}`)
 
 ### Configuration File
 
@@ -429,7 +445,6 @@ transformers:
 | Only `id-resolution` | Raw Azure data with resolved IDs | Debugging, keeping all metadata |
 | Custom `exclude-keys` | Selective property filtering | Fine-tuned data export |
 
-📖 **See [docs/TRANSFORMER_CONFIGURATION.md](./docs/TRANSFORMER_CONFIGURATION.md) for complete configuration reference.**
 
 ### Worker Count Optimization
 
@@ -818,12 +833,45 @@ For issues and questions:
 
 ## 🗺️ Roadmap
 
+## 🐛 Debug Logging
+
+Run with `--log-level debug` to see detailed transformation operations:
+
+**Cleaning transformer:**
+```
+DEBUG Removed key key=id path=id
+DEBUG Removed empty array key=excludeApplications path=conditions.applications.excludeApplications type=[]string
+DEBUG Preserving key (in preserve-keys list) key=id path=properties.subnet.id
+DEBUG Replaced key value from=grantControls.authenticationStrength.displayName to=grantControls.authenticationStrength
+DEBUG Removed excluded keys keys_removed=[id etag systemData] count=3
+DEBUG Removed empty values keys_removed=[conditions.applications.excludeApplications ...] count=8
+```
+
+**ID resolution transformer:**
+```
+DEBUG Resolved resource IDs to names ids_resolved=[virtualNetworkId subnet.id] count=2
+```
+
+**Name sanitization transformer:**
+```
+DEBUG Sanitized name original="My-Resource@Group!" sanitized=my_resource_group
+```
+
+**Terraform import transformer:**
+```
+DEBUG Generated Terraform import block resource_type=azurerm_resource_group target_address=azurerm_resource_group.my_rg
+```
+
+Debug logging shows exactly what each transformer does, which keys are removed/preserved/replaced, and why.
+
+---
+
+## 🔮 Roadmap
+
 - [ ] Support for more Azure resource types
 - [ ] Bulk download by subscription
 - [ ] Resource filtering by tags
-- [ ] Custom transformation rules
 - [ ] Export to multiple formats (JSON, HCL)
 - [ ] Interactive mode
-- [ ] Progress bars and better output
 - [ ] Unit and integration tests
 

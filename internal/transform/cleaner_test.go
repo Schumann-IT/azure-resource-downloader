@@ -9,26 +9,44 @@ func TestCleanProperties(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      map[string]interface{}
+		removeKeys []string
 		cleanEmpty bool
 		expected   map[string]interface{}
 	}{
 		{
 			name:       "nil map",
 			input:      nil,
+			removeKeys: nil,
 			cleanEmpty: true,
 			expected:   map[string]interface{}{},
 		},
 		{
-			name: "remove provisioning state",
+			name: "remove provisioning state with explicit key",
 			input: map[string]interface{}{
 				"name":              "test-resource",
 				"provisioningState": "Succeeded",
 				"location":          "eastus",
 			},
+			removeKeys: []string{"provisioningState"},
 			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
 				"location": "eastus",
+			},
+		},
+		{
+			name: "nil removeKeys removes nothing",
+			input: map[string]interface{}{
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"location":          "eastus",
+			},
+			removeKeys: nil,
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"location":          "eastus",
 			},
 		},
 		{
@@ -40,6 +58,7 @@ func TestCleanProperties(t *testing.T) {
 				"emptyMap":    map[string]interface{}{},
 				"emptySlice":  []interface{}{},
 			},
+			removeKeys: nil,
 			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
@@ -55,6 +74,7 @@ func TestCleanProperties(t *testing.T) {
 				"emptyMap":    map[string]interface{}{},
 				"emptySlice":  []interface{}{},
 			},
+			removeKeys: nil,
 			cleanEmpty: false,
 			expected: map[string]interface{}{
 				"name":        "test-resource",
@@ -65,7 +85,7 @@ func TestCleanProperties(t *testing.T) {
 			},
 		},
 		{
-			name: "remove metadata keys",
+			name: "remove metadata keys with explicit list",
 			input: map[string]interface{}{
 				"name":          "test-resource",
 				"creationTime":  "2024-01-01",
@@ -75,6 +95,7 @@ func TestCleanProperties(t *testing.T) {
 				"managedBy":     "system",
 				"location":      "eastus",
 			},
+			removeKeys: []string{"creationTime", "changedTime", "correlationId", "etag", "managedBy"},
 			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
@@ -82,7 +103,7 @@ func TestCleanProperties(t *testing.T) {
 			},
 		},
 		{
-			name: "nested map with metadata",
+			name: "nested map with metadata - explicit removal",
 			input: map[string]interface{}{
 				"name": "test-resource",
 				"properties": map[string]interface{}{
@@ -91,6 +112,7 @@ func TestCleanProperties(t *testing.T) {
 					"etag":              "xyz789",
 				},
 			},
+			removeKeys: []string{"provisioningState", "etag"},
 			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name": "test-resource",
@@ -100,7 +122,7 @@ func TestCleanProperties(t *testing.T) {
 			},
 		},
 		{
-			name: "array with nested maps",
+			name: "array with nested maps - explicit removal",
 			input: map[string]interface{}{
 				"name": "test-resource",
 				"items": []interface{}{
@@ -114,6 +136,7 @@ func TestCleanProperties(t *testing.T) {
 					},
 				},
 			},
+			removeKeys: []string{"provisioningState", "etag"},
 			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name": "test-resource",
@@ -131,7 +154,7 @@ func TestCleanProperties(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanProperties(tt.input, nil, nil, tt.cleanEmpty)
+			result := CleanProperties(tt.input, tt.removeKeys, nil, tt.cleanEmpty)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
 			}
@@ -339,7 +362,7 @@ func TestCleanPropertiesWithCleanEmptyFlag(t *testing.T) {
 	}
 }
 
-func TestCleanPropertiesDefaultKeys(t *testing.T) {
+func TestCleanPropertiesNoDefaults(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      map[string]interface{}
@@ -347,23 +370,40 @@ func TestCleanPropertiesDefaultKeys(t *testing.T) {
 		expected   map[string]interface{}
 	}{
 		{
-			name: "remove provisioning state",
+			name: "nil removeKeys removes nothing (no defaults)",
+			input: map[string]interface{}{
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"etag":              "xyz123",
+				"location":          "eastus",
+			},
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"etag":              "xyz123",
+				"location":          "eastus",
+			},
+		},
+		{
+			name: "empty removeKeys removes nothing",
 			input: map[string]interface{}{
 				"name":              "test-resource",
 				"provisioningState": "Succeeded",
 				"location":          "eastus",
 			},
-			cleanEmpty: true,
+			cleanEmpty: false,
 			expected: map[string]interface{}{
-				"name":     "test-resource",
-				"location": "eastus",
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"location":          "eastus",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanProperties(tt.input, nil, nil, tt.cleanEmpty)
+			result := CleanProperties(tt.input, []string{}, nil, tt.cleanEmpty)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
 			}

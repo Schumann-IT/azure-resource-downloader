@@ -225,7 +225,7 @@ func (c *Client) listGraphResources(ctx context.Context, resourceType string) ([
 	case "Microsoft.Graph/conditionalAccessPolicies":
 		policies, err := graphClient.Identity().ConditionalAccess().Policies().Get(ctx, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list conditional access policies: %w (Hint: This requires 'Policy.Read.All' or 'Policy.ReadWrite.ConditionalAccess' permission in Microsoft Graph. To grant permissions, your Azure AD admin needs to grant consent for these permissions)", err)
+			return nil, fmt.Errorf("failed to list conditional access policies: %w (hint: this requires 'Policy.Read.All' or 'Policy.ReadWrite.ConditionalAccess' permission in Microsoft Graph - your Azure AD admin needs to grant consent for these permissions)", err)
 		}
 
 		if policies != nil && policies.GetValue() != nil {

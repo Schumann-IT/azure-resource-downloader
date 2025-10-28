@@ -273,18 +273,6 @@ func findAndRemoveKeysWithPreserve(data map[string]interface{}, removeKeys []str
 	return removed, preserved
 }
 
-// findAndRemoveKeys removes specified keys and returns which keys were actually found and removed
-func findAndRemoveKeys(data map[string]interface{}, keys []string) []string {
-	removed, _ := findAndRemoveKeysWithPreserve(data, keys, []string{}, "")
-	return removed
-}
-
-// removeKeys removes specified keys from the map (supports nested paths with dots)
-// This is kept for backward compatibility and non-logging use cases
-func removeKeys(data map[string]interface{}, keys []string) {
-	findAndRemoveKeys(data, keys)
-}
-
 // removeEmptyValuesWithTracking removes empty values and returns which keys were removed
 func removeEmptyValuesWithTracking(data map[string]interface{}) []string {
 	removed := []string{}
