@@ -7,14 +7,16 @@ import (
 
 func TestCleanProperties(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected map[string]interface{}
+		name       string
+		input      map[string]interface{}
+		cleanEmpty bool
+		expected   map[string]interface{}
 	}{
 		{
-			name:     "nil map",
-			input:    nil,
-			expected: map[string]interface{}{},
+			name:       "nil map",
+			input:      nil,
+			cleanEmpty: true,
+			expected:   map[string]interface{}{},
 		},
 		{
 			name: "remove provisioning state",
@@ -23,13 +25,14 @@ func TestCleanProperties(t *testing.T) {
 				"provisioningState": "Succeeded",
 				"location":          "eastus",
 			},
+			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
 				"location": "eastus",
 			},
 		},
 		{
-			name: "remove empty values",
+			name: "remove empty values when cleanEmpty=true",
 			input: map[string]interface{}{
 				"name":        "test-resource",
 				"emptyString": "",
@@ -37,9 +40,28 @@ func TestCleanProperties(t *testing.T) {
 				"emptyMap":    map[string]interface{}{},
 				"emptySlice":  []interface{}{},
 			},
+			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
 				"location": "eastus",
+			},
+		},
+		{
+			name: "keep empty values when cleanEmpty=false",
+			input: map[string]interface{}{
+				"name":        "test-resource",
+				"emptyString": "",
+				"location":    "eastus",
+				"emptyMap":    map[string]interface{}{},
+				"emptySlice":  []interface{}{},
+			},
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name":        "test-resource",
+				"emptyString": "",
+				"location":    "eastus",
+				"emptyMap":    map[string]interface{}{},
+				"emptySlice":  []interface{}{},
 			},
 		},
 		{
@@ -53,6 +75,7 @@ func TestCleanProperties(t *testing.T) {
 				"managedBy":     "system",
 				"location":      "eastus",
 			},
+			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name":     "test-resource",
 				"location": "eastus",
@@ -68,6 +91,7 @@ func TestCleanProperties(t *testing.T) {
 					"etag":              "xyz789",
 				},
 			},
+			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name": "test-resource",
 				"properties": map[string]interface{}{
@@ -90,6 +114,7 @@ func TestCleanProperties(t *testing.T) {
 					},
 				},
 			},
+			cleanEmpty: true,
 			expected: map[string]interface{}{
 				"name": "test-resource",
 				"items": []interface{}{
@@ -106,7 +131,7 @@ func TestCleanProperties(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanProperties(tt.input, nil, nil) // nil uses default keys
+			result := CleanProperties(tt.input, nil, nil, tt.cleanEmpty)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
 			}
@@ -115,49 +140,234 @@ func TestCleanProperties(t *testing.T) {
 }
 
 func TestCleanPropertiesCustomKeys(t *testing.T) {
-	input := map[string]interface{}{
-		"id":       "/subscriptions/.../resourceGroups/my-rg",
-		"name":     "my-rg",
-		"location": "eastus",
-		"etag":     "xyz123",
+	tests := []struct {
+		name       string
+		input      map[string]interface{}
+		globalKeys []string
+		cleanEmpty bool
+		expected   map[string]interface{}
+	}{
+		{
+			name: "custom global keys with cleanEmpty=true",
+			input: map[string]interface{}{
+				"id":       "/subscriptions/.../resourceGroups/my-rg",
+				"name":     "my-rg",
+				"location": "eastus",
+				"etag":     "xyz123",
+			},
+			globalKeys: []string{"id", "etag"},
+			cleanEmpty: true,
+			expected: map[string]interface{}{
+				"name":     "my-rg",
+				"location": "eastus",
+			},
+		},
+		{
+			name: "custom global keys with cleanEmpty=false",
+			input: map[string]interface{}{
+				"id":          "/subscriptions/.../resourceGroups/my-rg",
+				"name":        "my-rg",
+				"location":    "eastus",
+				"etag":        "xyz123",
+				"emptyString": "",
+			},
+			globalKeys: []string{"id", "etag"},
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name":        "my-rg",
+				"location":    "eastus",
+				"emptyString": "", // Kept because cleanEmpty=false
+			},
+		},
 	}
 
-	// Test with custom global exclude keys
-	globalKeys := []string{"id", "etag"}
-	result := CleanProperties(input, globalKeys, nil)
-
-	expected := map[string]interface{}{
-		"name":     "my-rg",
-		"location": "eastus",
-	}
-
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("CleanProperties() with custom keys = %v, want %v", result, expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CleanProperties(tt.input, tt.globalKeys, nil, tt.cleanEmpty)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 
 func TestCleanPropertiesTypeSpecificKeys(t *testing.T) {
-	input := map[string]interface{}{
-		"id":                "/subscriptions/.../resourceGroups/my-rg",
-		"name":              "my-rg",
-		"location":          "eastus",
-		"etag":              "xyz123",
-		"provisioningState": "Succeeded",
-		"managedBy":         "system",
+	tests := []struct {
+		name             string
+		input            map[string]interface{}
+		globalKeys       []string
+		typeSpecificKeys []string
+		cleanEmpty       bool
+		expected         map[string]interface{}
+	}{
+		{
+			name: "global and type-specific keys",
+			input: map[string]interface{}{
+				"id":                "/subscriptions/.../resourceGroups/my-rg",
+				"name":              "my-rg",
+				"location":          "eastus",
+				"etag":              "xyz123",
+				"provisioningState": "Succeeded",
+				"managedBy":         "system",
+			},
+			globalKeys:       []string{"etag", "provisioningState"},
+			typeSpecificKeys: []string{"id", "managedBy"},
+			cleanEmpty:       true,
+			expected: map[string]interface{}{
+				"name":     "my-rg",
+				"location": "eastus",
+			},
+		},
+		{
+			name: "type-specific with empty values preserved",
+			input: map[string]interface{}{
+				"id":          "/subscriptions/.../resourceGroups/my-rg",
+				"name":        "my-rg",
+				"location":    "eastus",
+				"emptyString": "",
+				"managedBy":   "system",
+			},
+			globalKeys:       []string{},
+			typeSpecificKeys: []string{"id", "managedBy"},
+			cleanEmpty:       false,
+			expected: map[string]interface{}{
+				"name":        "my-rg",
+				"location":    "eastus",
+				"emptyString": "", // Kept
+			},
+		},
 	}
 
-	// Test with both global and type-specific keys
-	globalKeys := []string{"etag", "provisioningState"} // Exclude these globally
-	typeSpecificKeys := []string{"id", "managedBy"}     // Exclude these for this type
-	result := CleanProperties(input, globalKeys, typeSpecificKeys)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CleanProperties(tt.input, tt.globalKeys, tt.typeSpecificKeys, tt.cleanEmpty)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
 
-	expected := map[string]interface{}{
-		"name":     "my-rg",
-		"location": "eastus",
+func TestCleanPropertiesWithCleanEmptyFlag(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      map[string]interface{}
+		cleanEmpty bool
+		expected   map[string]interface{}
+	}{
+		{
+			name: "cleanEmpty=true removes empty values",
+			input: map[string]interface{}{
+				"name":        "test-resource",
+				"emptyString": "",
+				"location":    "eastus",
+				"emptyArray":  []interface{}{},
+				"emptyMap":    map[string]interface{}{},
+				"nullValue":   nil,
+			},
+			cleanEmpty: true,
+			expected: map[string]interface{}{
+				"name":     "test-resource",
+				"location": "eastus",
+			},
+		},
+		{
+			name: "cleanEmpty=false keeps empty values",
+			input: map[string]interface{}{
+				"name":        "test-resource",
+				"emptyString": "",
+				"location":    "eastus",
+				"emptyArray":  []interface{}{},
+				"emptyMap":    map[string]interface{}{},
+			},
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name":        "test-resource",
+				"emptyString": "",
+				"location":    "eastus",
+				"emptyArray":  []interface{}{},
+				"emptyMap":    map[string]interface{}{},
+			},
+		},
+		{
+			name: "cleanEmpty=true with nested empty values",
+			input: map[string]interface{}{
+				"name": "test-resource",
+				"properties": map[string]interface{}{
+					"value":      "keep",
+					"emptyNest":  "",
+					"emptyArray": []interface{}{},
+				},
+			},
+			cleanEmpty: true,
+			expected: map[string]interface{}{
+				"name": "test-resource",
+				"properties": map[string]interface{}{
+					"value": "keep",
+				},
+			},
+		},
+		{
+			name: "cleanEmpty=false with nested empty values",
+			input: map[string]interface{}{
+				"name": "test-resource",
+				"properties": map[string]interface{}{
+					"value":      "keep",
+					"emptyNest":  "",
+					"emptyArray": []interface{}{},
+				},
+			},
+			cleanEmpty: false,
+			expected: map[string]interface{}{
+				"name": "test-resource",
+				"properties": map[string]interface{}{
+					"value":      "keep",
+					"emptyNest":  "",
+					"emptyArray": []interface{}{},
+				},
+			},
+		},
 	}
 
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("CleanProperties() with type-specific keys = %v, want %v", result, expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CleanProperties(tt.input, nil, nil, tt.cleanEmpty)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("CleanProperties(cleanEmpty=%v) = %v, want %v", tt.cleanEmpty, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCleanPropertiesDefaultKeys(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      map[string]interface{}
+		cleanEmpty bool
+		expected   map[string]interface{}
+	}{
+		{
+			name: "remove provisioning state",
+			input: map[string]interface{}{
+				"name":              "test-resource",
+				"provisioningState": "Succeeded",
+				"location":          "eastus",
+			},
+			cleanEmpty: true,
+			expected: map[string]interface{}{
+				"name":     "test-resource",
+				"location": "eastus",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CleanProperties(tt.input, nil, nil, tt.cleanEmpty)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 

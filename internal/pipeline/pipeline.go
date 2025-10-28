@@ -21,9 +21,15 @@ type Pipeline struct {
 
 // NewPipeline creates a new pipeline
 func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config *models.PipelineConfig) *Pipeline {
+	// Use default transformer configs if none specified
+	transformerConfigs := config.TransformerConfigs
+	if len(transformerConfigs) == 0 {
+		transformerConfigs = models.DefaultTransformerConfigs()
+	}
+
 	return &Pipeline{
 		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount),
-		transformer: NewTransformer(registry, config.WorkerCount, config.ExcludeKeys, config.ExcludeKeysByType, config.ImportTargetFormat),
+		transformer: NewTransformer(registry, config.WorkerCount, transformerConfigs),
 		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun),
 		config:      config,
 	}

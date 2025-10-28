@@ -3,10 +3,14 @@ package transform
 import (
 	"regexp"
 	"strings"
+
+	"azure-resource-downloader/internal/logger"
 )
 
 // SanitizeFileName converts a display name into a valid filename
 func SanitizeFileName(displayName string) string {
+	log := logger.Default
+
 	if displayName == "" {
 		return "unnamed"
 	}
@@ -31,6 +35,13 @@ func SanitizeFileName(displayName string) string {
 	// If empty after sanitization, use default
 	if sanitized == "" {
 		sanitized = "unnamed"
+	}
+
+	// Log if name changed significantly
+	if sanitized != displayName {
+		log.Debug("Sanitized name",
+			"original", displayName,
+			"sanitized", sanitized)
 	}
 
 	return sanitized

@@ -3,6 +3,8 @@ package azure
 import (
 	"regexp"
 	"strings"
+
+	"azure-resource-downloader/internal/logger"
 )
 
 // ResourceIDInfo contains parsed information from an Azure resource ID
@@ -64,23 +66,46 @@ func ResolveResourceIDToName(resourceID string) string {
 
 // ResolveIDsInProperties recursively finds and resolves Azure resource IDs in properties
 func ResolveIDsInProperties(properties map[string]interface{}) map[string]interface{} {
+	log := logger.Default
+	resolvedIDs := []string{}
+
+	result := resolveIDsWithTracking(properties, "", &resolvedIDs)
+
+	if len(resolvedIDs) > 0 {
+		log.Debug("Resolved resource IDs to names",
+			"ids_resolved", resolvedIDs,
+			"count", len(resolvedIDs))
+	}
+
+	return result
+}
+
+// resolveIDsWithTracking recursively resolves IDs and tracks which ones were resolved
+func resolveIDsWithTracking(properties map[string]interface{}, path string, resolvedIDs *[]string) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	for key, value := range properties {
+		currentPath := key
+		if path != "" {
+			currentPath = path + "." + key
+		}
+
 		switch v := value.(type) {
 		case string:
 			// Check if this looks like an Azure resource ID
 			if isAzureResourceID(v) {
 				result[key] = v
 				// Add a resolved name field
-				result[key+"_name"] = ResolveResourceIDToName(v)
+				resolvedName := ResolveResourceIDToName(v)
+				result[key+"_name"] = resolvedName
+				*resolvedIDs = append(*resolvedIDs, currentPath)
 			} else {
 				result[key] = v
 			}
 		case map[string]interface{}:
-			result[key] = ResolveIDsInProperties(v)
+			result[key] = resolveIDsWithTracking(v, currentPath, resolvedIDs)
 		case []interface{}:
-			result[key] = resolveIDsInSlice(v)
+			result[key] = resolveIDsInSliceWithTracking(v, currentPath, resolvedIDs)
 		default:
 			result[key] = v
 		}
@@ -89,11 +114,13 @@ func ResolveIDsInProperties(properties map[string]interface{}) map[string]interf
 	return result
 }
 
-// resolveIDsInSlice handles arrays
-func resolveIDsInSlice(slice []interface{}) []interface{} {
+// resolveIDsInSliceWithTracking handles arrays with tracking
+func resolveIDsInSliceWithTracking(slice []interface{}, path string, resolvedIDs *[]string) []interface{} {
 	result := make([]interface{}, len(slice))
 
 	for i, item := range slice {
+		currentPath := path + "[" + string(rune('0'+i)) + "]"
+
 		switch v := item.(type) {
 		case string:
 			if isAzureResourceID(v) {
@@ -101,19 +128,26 @@ func resolveIDsInSlice(slice []interface{}) []interface{} {
 					"id":   v,
 					"name": ResolveResourceIDToName(v),
 				}
+				*resolvedIDs = append(*resolvedIDs, currentPath)
 			} else {
 				result[i] = v
 			}
 		case map[string]interface{}:
-			result[i] = ResolveIDsInProperties(v)
+			result[i] = resolveIDsWithTracking(v, currentPath, resolvedIDs)
 		case []interface{}:
-			result[i] = resolveIDsInSlice(v)
+			result[i] = resolveIDsInSliceWithTracking(v, currentPath, resolvedIDs)
 		default:
 			result[i] = v
 		}
 	}
 
 	return result
+}
+
+// resolveIDsInSlice handles arrays (non-tracking version for backward compatibility)
+func resolveIDsInSlice(slice []interface{}) []interface{} {
+	resolvedIDs := []string{}
+	return resolveIDsInSliceWithTracking(slice, "", &resolvedIDs)
 }
 
 // isAzureResourceID checks if a string looks like an Azure resource ID

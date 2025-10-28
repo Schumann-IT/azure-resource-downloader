@@ -3,6 +3,8 @@ package transform
 import (
 	"fmt"
 	"strings"
+
+	"azure-resource-downloader/internal/logger"
 )
 
 // GenerateTerraformImport creates a Terraform import statement
@@ -18,6 +20,8 @@ func GenerateTerraformImport(terraformResourceType, resourceName, azureResourceI
 
 // GenerateTerraformImportBlock creates a Terraform import block (Terraform 1.5+)
 func GenerateTerraformImportBlock(terraformResourceType, resourceName, azureResourceID, targetFormat string) string {
+	log := logger.Default
+
 	sanitizedName := SanitizeTerraformName(resourceName)
 
 	// Default format if not specified
@@ -28,6 +32,13 @@ func GenerateTerraformImportBlock(terraformResourceType, resourceName, azureReso
 	// Replace template variables
 	targetAddress := strings.ReplaceAll(targetFormat, "{resource_type}", terraformResourceType)
 	targetAddress = strings.ReplaceAll(targetAddress, "{name}", sanitizedName)
+
+	log.Debug("Generated Terraform import block",
+		"resource_type", terraformResourceType,
+		"resource_name", resourceName,
+		"sanitized_name", sanitizedName,
+		"target_address", targetAddress,
+		"target_format", targetFormat)
 
 	var sb strings.Builder
 

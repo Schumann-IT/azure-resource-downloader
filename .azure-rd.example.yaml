@@ -37,35 +37,67 @@ dry-run: false
 # - error: Errors only
 log-level: "info"
 
-# Terraform import target format (optional)
-# Controls the format of the 'to' address in Terraform import blocks
-# Available template variables: {resource_type}, {name}
-# Default: "{resource_type}.{name}"
-# Examples:
-#   - Default format: "azurerm_resource_group.my_rg"
-#   - Module format: "module[\"my_rg\"].azurerm_resource_group.this"
-#   - Nested module: "module.infrastructure.azurerm_resource_group.my_rg"
-# import-target-format: "{resource_type}.{name}"
-# import-target-format: "module[\"{name}\"].{resource_type}.this"
+# Note: Terraform import format is now configured per-transformer
+# See the terraform-import transformer configuration above
 
-# Global keys to exclude from all resource types (optional)
-# If not specified, default keys will be excluded (provisioningState, etag, etc.)
-# exclude-keys:
-#   - id
-#   - etag
-#   - provisioningState
+# Transformers (optional)
+# List of transformers to apply with their configurations
+# Default: all transformers are applied with default settings
+#
+# Available transformers:
+#   - cleaning: Clean properties and apply exclusions
+#   - id-resolution: Resolve Azure resource IDs to friendly names  
+#   - name-sanitization: Sanitize resource names for files/Terraform
+#   - terraform-import: Generate Terraform import blocks
+#
+# Example 1: All transformers with default settings (implicit default)
+# transformers:
+#   - name: cleaning
+#   - name: id-resolution
+#   - name: name-sanitization
+#   - name: terraform-import
+#
+# Example 2: Cleaning transformer with custom exclusions and clean-empty
+# transformers:
+#   - name: cleaning
+#     exclude-keys:
+#       - provisioningState
+#       - etag
+#       - systemData
+#     exclude-keys-by-type:
+#       Microsoft.Resources/resourceGroups:
+#         - id
+#         - managedBy
+#       Microsoft.Storage/storageAccounts:
+#         - primaryEndpoints
+#         - secondaryEndpoints
+#     clean-empty: true          # Remove keys with empty values (null, [], "", {})
+#   - name: id-resolution
+#   - name: name-sanitization
+#   - name: terraform-import
+#     target-format: "{resource_type}.{name}"
+#
+# Example 3: Skip Terraform imports
+# transformers:
+#   - name: cleaning
+#   - name: id-resolution
+#   - name: name-sanitization
+#
+# Example 4: Module-based Terraform imports
+# transformers:
+#   - name: cleaning
+#   - name: id-resolution
+#   - name: name-sanitization
+#   - name: terraform-import
+#     target-format: 'module["{name}"].{resource_type}.this'
+#
+# Example 5: Simple list format (no custom config)
+# transformers:
+#   - cleaning
+#   - id-resolution
+#   - name-sanitization
+#   - terraform-import
 
-# Resource-type-specific exclusions (optional)
-# These keys are excluded in addition to the global exclude-keys
-# exclude-keys-by-type:
-#   Microsoft.Resources/resourceGroups:
-#     - id
-#     - managedBy
-#   Microsoft.Storage/storageAccounts:
-#     - id
-#     - primaryEndpoints
-#     - secondaryEndpoints
-#   Microsoft.Compute/virtualMachines:
-#     - id
-#     - vmId
+# Note: Property exclusions are now configured per-transformer
+# See the cleaning transformer configuration above
 

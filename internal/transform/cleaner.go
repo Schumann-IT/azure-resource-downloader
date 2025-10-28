@@ -1,7 +1,10 @@
 package transform
 
 import (
+	"reflect"
 	"strings"
+
+	"azure-resource-downloader/internal/logger"
 )
 
 // DefaultExcludeKeys returns the default list of keys to exclude from resources
@@ -20,7 +23,10 @@ func DefaultExcludeKeys() []string {
 // CleanProperties removes unnecessary Azure metadata from resource properties
 // If globalKeys is empty, uses DefaultExcludeKeys()
 // typeSpecificKeys are merged with globalKeys for the final exclusion list
-func CleanProperties(props map[string]interface{}, globalKeys []string, typeSpecificKeys []string) map[string]interface{} {
+// If cleanEmpty is true, removes keys with empty values (null, [], "", {})
+func CleanProperties(props map[string]interface{}, globalKeys []string, typeSpecificKeys []string, cleanEmpty bool) map[string]interface{} {
+	log := logger.Default
+
 	if props == nil {
 		return make(map[string]interface{})
 	}
@@ -36,8 +42,26 @@ func CleanProperties(props map[string]interface{}, globalKeys []string, typeSpec
 	allKeys = append(allKeys, typeSpecificKeys...)
 
 	cleaned := deepCopy(props)
-	removeKeys(cleaned, allKeys)
-	removeEmptyValues(cleaned)
+
+	// Track what keys were removed
+	if len(allKeys) > 0 {
+		removedKeys := findAndRemoveKeys(cleaned, allKeys)
+		if len(removedKeys) > 0 {
+			log.Debug("Removed excluded keys",
+				"keys_removed", removedKeys,
+				"count", len(removedKeys))
+		}
+	}
+
+	// Conditionally remove empty values
+	if cleanEmpty {
+		removedEmpty := removeEmptyValuesWithTracking(cleaned)
+		if len(removedEmpty) > 0 {
+			log.Debug("Removed empty values",
+				"keys_removed", removedEmpty,
+				"count", len(removedEmpty))
+		}
+	}
 
 	return cleaned
 }
@@ -78,60 +102,116 @@ func deepCopySlice(src []interface{}) []interface{} {
 	return dst
 }
 
-// removeKeys removes specified keys from the map (supports nested paths with dots)
-func removeKeys(data map[string]interface{}, keys []string) {
+// findAndRemoveKeys removes specified keys and returns which keys were actually found and removed
+func findAndRemoveKeys(data map[string]interface{}, keys []string) []string {
+	removed := []string{}
+
 	for _, key := range keys {
 		if strings.Contains(key, ".") {
 			// Handle nested keys
 			parts := strings.SplitN(key, ".", 2)
 			if nested, ok := data[parts[0]].(map[string]interface{}); ok {
-				removeKeys(nested, []string{parts[1]})
+				nestedRemoved := findAndRemoveKeys(nested, []string{parts[1]})
+				for _, r := range nestedRemoved {
+					removed = append(removed, parts[0]+"."+r)
+				}
 			}
 		} else {
-			delete(data, key)
+			if _, exists := data[key]; exists {
+				delete(data, key)
+				removed = append(removed, key)
+			}
 		}
 	}
 
 	// Recursively clean nested maps
 	for _, value := range data {
 		if nested, ok := value.(map[string]interface{}); ok {
-			removeKeys(nested, keys)
+			findAndRemoveKeys(nested, keys)
 		} else if slice, ok := value.([]interface{}); ok {
 			for _, item := range slice {
 				if nestedMap, ok := item.(map[string]interface{}); ok {
-					removeKeys(nestedMap, keys)
+					findAndRemoveKeys(nestedMap, keys)
 				}
 			}
+		}
+	}
+
+	return removed
+}
+
+// removeKeys removes specified keys from the map (supports nested paths with dots)
+// This is kept for backward compatibility and non-logging use cases
+func removeKeys(data map[string]interface{}, keys []string) {
+	findAndRemoveKeys(data, keys)
+}
+
+// removeEmptyValuesWithTracking removes empty values and returns which keys were removed
+func removeEmptyValuesWithTracking(data map[string]interface{}) []string {
+	removed := []string{}
+	removeEmptyValuesWithPath(data, "", &removed)
+	return removed
+}
+
+// removeEmptyValuesWithPath recursively removes empty values and tracks the path
+func removeEmptyValuesWithPath(data map[string]interface{}, path string, removed *[]string) {
+	for key, value := range data {
+		currentPath := key
+		if path != "" {
+			currentPath = path + "." + key
+		}
+
+		if value == nil {
+			delete(data, key)
+			*removed = append(*removed, currentPath)
+			continue
+		}
+
+		// Use reflection to check if it's a slice of any type
+		v := reflect.ValueOf(value)
+		switch v.Kind() {
+		case reflect.String:
+			if v.String() == "" {
+				delete(data, key)
+				*removed = append(*removed, currentPath)
+			}
+		case reflect.Map:
+			if mapVal, ok := value.(map[string]interface{}); ok {
+				removeEmptyValuesWithPath(mapVal, currentPath, removed)
+				if len(mapVal) == 0 {
+					delete(data, key)
+					*removed = append(*removed, currentPath)
+				}
+			} else if v.Len() == 0 {
+				delete(data, key)
+				*removed = append(*removed, currentPath)
+			}
+		case reflect.Slice, reflect.Array:
+			if v.Len() == 0 {
+				// Empty slice/array of any type
+				delete(data, key)
+				*removed = append(*removed, currentPath)
+			} else if slice, ok := value.([]interface{}); ok {
+				// If it's []interface{}, clean nested elements
+				cleanedSlice := cleanSlice(slice)
+				if len(cleanedSlice) == 0 {
+					delete(data, key)
+					*removed = append(*removed, currentPath)
+				} else {
+					data[key] = cleanedSlice
+				}
+			}
+			// For typed slices ([]string, etc.), just check if empty (already done above)
 		}
 	}
 }
 
 // removeEmptyValues removes null, empty strings, and empty maps/arrays
 // Recursively cleans nested structures including maps inside arrays
+// Handles both []interface{} and typed slices ([]string, []int, etc.)
 func removeEmptyValues(data map[string]interface{}) {
-	for key, value := range data {
-		switch v := value.(type) {
-		case nil:
-			delete(data, key)
-		case string:
-			if v == "" {
-				delete(data, key)
-			}
-		case map[string]interface{}:
-			removeEmptyValues(v)
-			if len(v) == 0 {
-				delete(data, key)
-			}
-		case []interface{}:
-			// Clean nested maps inside arrays
-			cleanedSlice := cleanSlice(v)
-			if len(cleanedSlice) == 0 {
-				delete(data, key)
-			} else {
-				data[key] = cleanedSlice
-			}
-		}
-	}
+	removed := []string{}
+	removeEmptyValuesWithPath(data, "", &removed)
 }
 
 // cleanSlice recursively cleans maps inside arrays and removes empty elements

@@ -17,19 +17,15 @@ import (
 type Transformer struct {
 	registry           *handlers.Registry
 	workerCount        int
-	excludeKeys        []string
-	excludeKeysByType  map[string][]string
-	importTargetFormat string
+	transformerConfigs []models.TransformerConfig
 }
 
 // NewTransformer creates a new transformer
-func NewTransformer(registry *handlers.Registry, workerCount int, excludeKeys []string, excludeKeysByType map[string][]string, importTargetFormat string) *Transformer {
+func NewTransformer(registry *handlers.Registry, workerCount int, transformerConfigs []models.TransformerConfig) *Transformer {
 	return &Transformer{
 		registry:           registry,
 		workerCount:        workerCount,
-		excludeKeys:        excludeKeys,
-		excludeKeysByType:  excludeKeysByType,
-		importTargetFormat: importTargetFormat,
+		transformerConfigs: transformerConfigs,
 	}
 }
 
@@ -115,58 +111,73 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		}
 	}
 
-	// Apply additional transformations
-	// Get type-specific exclude keys if available
-	// Note: Keys in the map are lowercase (from config parsing), so normalize the lookup
-	typeSpecificKeys := []string{}
-	if t.excludeKeysByType != nil {
+	// Apply transformations based on configuration
+	processedData := transformed.Properties
+
+	// Step 1: Clean properties (remove excluded keys)
+	if cleaningConfig := models.GetTransformerConfig(t.transformerConfigs, models.TransformerCleaning); cleaningConfig != nil {
+		config := models.ParseCleaningConfig(cleaningConfig.Config)
+
+		// Get type-specific keys for this resource type
 		normalizedType := strings.ToLower(fetchResult.ResourceType)
-		if keys, ok := t.excludeKeysByType[normalizedType]; ok {
-			typeSpecificKeys = keys
-			log.Debug("Using type-specific exclusions",
-				"resource_type", fetchResult.ResourceType,
-				"normalized_type", normalizedType,
-				"type_specific_keys", typeSpecificKeys,
-				"global_keys", t.excludeKeys)
-		} else {
-			log.Debug("No type-specific exclusions found",
-				"resource_type", fetchResult.ResourceType,
-				"normalized_type", normalizedType,
-				"available_types", func() []string {
-					types := make([]string, 0, len(t.excludeKeysByType))
-					for k := range t.excludeKeysByType {
-						types = append(types, k)
-					}
-					return types
-				}())
-		}
+		typeSpecificKeys := config.ExcludeKeysByType[normalizedType]
+
+		processedData = transform.CleanProperties(processedData, config.ExcludeKeys, typeSpecificKeys, config.CleanEmpty)
+	} else {
+		log.Debug("Skipping cleaning transformer (not configured)")
 	}
 
-	cleanedData := transform.CleanProperties(transformed.Properties, t.excludeKeys, typeSpecificKeys)
-	resolvedData := azure.ResolveIDsInProperties(cleanedData)
-	sanitizedName := transform.SanitizeFileName(transformed.DisplayName)
+	// Step 2: Resolve Azure resource IDs to names
+	if models.HasTransformer(t.transformerConfigs, models.TransformerIDResolution) {
+		processedData = azure.ResolveIDsInProperties(processedData)
+	} else {
+		log.Debug("Skipping id-resolution transformer (not configured)")
+	}
+
+	// Step 3: Sanitize name for file/Terraform compatibility
+	var sanitizedName string
+	if models.HasTransformer(t.transformerConfigs, models.TransformerNameSanitization) {
+		sanitizedName = transform.SanitizeFileName(transformed.DisplayName)
+	} else {
+		sanitizedName = transformed.DisplayName
+		log.Debug("Skipping name-sanitization transformer (not configured)",
+			"using_original_name", sanitizedName)
+	}
 
 	terraformResourceType := handler.GetTerraformResourceType()
 
-	// Generate Terraform import block (Terraform 1.5+ format)
-	terraformImport := transform.GenerateTerraformImportBlock(
-		terraformResourceType,
-		sanitizedName,
-		fetchResult.ResourceID,
-		t.importTargetFormat,
-	)
+	// Step 4: Generate Terraform import block
+	var terraformImport string
+	if importConfig := models.GetTransformerConfig(t.transformerConfigs, models.TransformerTerraformImport); importConfig != nil {
+		config := models.ParseTerraformImportConfig(importConfig.Config)
+		terraformImport = transform.GenerateTerraformImportBlock(
+			terraformResourceType,
+			sanitizedName,
+			fetchResult.ResourceID,
+			config.TargetFormat,
+		)
+	} else {
+		log.Debug("Skipping terraform-import transformer (not configured)")
+	}
+
+	// Build list of active transformers for logging
+	activeTransformers := []string{}
+	for _, tc := range t.transformerConfigs {
+		activeTransformers = append(activeTransformers, tc.Name)
+	}
 
 	log.Debug("Resource transformed successfully",
 		"resource_id", fetchResult.ResourceID,
 		"name", transformed.DisplayName,
-		"sanitized_name", sanitizedName)
+		"sanitized_name", sanitizedName,
+		"transformers", strings.Join(activeTransformers, ", "))
 
 	return &models.TransformResult{
 		ResourceID:            fetchResult.ResourceID,
 		ResourceType:          fetchResult.ResourceType,
 		DisplayName:           transformed.DisplayName,
 		SanitizedName:         sanitizedName,
-		CleanedData:           resolvedData,
+		CleanedData:           processedData,
 		TerraformImport:       terraformImport,
 		TerraformResourceType: terraformResourceType,
 		Error:                 nil,

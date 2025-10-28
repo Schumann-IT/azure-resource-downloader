@@ -25,13 +25,23 @@ Each stage runs concurrently with configurable worker pools for optimal performa
 
 ### Pipeline Stages
 
-1. **Fetcher**: Retrieves resources from Azure using the Azure SDK
+1. **Fetcher**: Retrieves resources from Azure using the Azure SDK with retry logic
 2. **Transformer**: 
    - Removes unnecessary properties (provisioningState, etag, etc.)
    - Resolves resource IDs to names
    - Sanitizes display names for filenames
    - Generates Terraform import statements
-3. **Writer**: Saves resources as YAML files and Terraform import scripts
+3. **Writer**: Saves resources as YAML files and consolidated Terraform import.tf files
+
+### 📚 Detailed Architecture Documentation
+
+For in-depth information about how the pipeline works:
+
+- **[PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md)** - Complete guide to each pipeline stage, concurrency model, error handling, performance optimizations, and configuration options
+- **[docs/PIPELINE_FLOW.md](./docs/PIPELINE_FLOW.md)** - Visual diagrams and flowcharts showing data movement, timing, and examples
+- **[docs/TRANSFORMER_CONFIGURATION.md](./docs/TRANSFORMER_CONFIGURATION.md)** - Per-transformer configuration: custom exclusions, ID resolution, name sanitization, and Terraform import formats
+- **[docs/CLEANING_TRANSFORMER.md](./docs/CLEANING_TRANSFORMER.md)** - Detailed guide to the cleaning transformer: exclude-keys, exclude-keys-by-type, and clean-empty options
+- **[docs/DEBUG_LOGGING.md](./docs/DEBUG_LOGGING.md)** - Debug logging guide: see exactly what each transformer does to your data
 
 ## 🛠️ Installation
 
@@ -352,6 +362,74 @@ azure-rd download --resource-group "my-rg"
 **`error` level:**
 - ERROR: Only errors that occurred
 - (Minimal output for automation)
+
+## 🎛️ Transformers
+
+Each transformer can be independently configured with its own settings. By default, all transformers are applied with sensible defaults.
+
+### Available Transformers
+
+- **`cleaning`** - Remove Azure metadata and apply custom exclusions
+- **`id-resolution`** - Convert resource IDs to friendly names
+- **`name-sanitization`** - Sanitize names for files/Terraform
+- **`terraform-import`** - Generate Terraform import blocks
+
+### Configuration File
+
+Add to `~/.azure-rd.yaml`:
+
+```yaml
+# Example 1: All transformers with default settings
+transformers:
+  - name: cleaning
+  - name: id-resolution
+  - name: name-sanitization
+  - name: terraform-import
+
+# Example 2: Cleaning with custom exclusions
+transformers:
+  - name: cleaning
+    exclude-keys:
+      - provisioningState
+      - etag
+      - systemData
+    exclude-keys-by-type:
+      Microsoft.Resources/resourceGroups:
+        - id
+        - managedBy
+      Microsoft.Storage/storageAccounts:
+        - primaryEndpoints
+        - secondaryEndpoints
+  - name: id-resolution
+  - name: name-sanitization
+  - name: terraform-import
+    target-format: "{resource_type}.{name}"
+
+# Example 3: Documentation only (no Terraform)
+transformers:
+  - name: cleaning
+  - name: id-resolution
+  - name: name-sanitization
+
+# Example 4: Module-based Terraform imports
+transformers:
+  - name: cleaning
+  - name: id-resolution
+  - name: name-sanitization
+  - name: terraform-import
+    target-format: 'module["{name}"].{resource_type}.this'
+```
+
+### Common Use Cases
+
+| Configuration | Output | Use Case |
+|---------------|--------|----------|
+| All transformers (default) | Clean data, resolved IDs, sanitized names, Terraform imports | **Default** - Ready for Terraform import |
+| Omit `terraform-import` | Clean data without Terraform files | Documentation generation |
+| Only `id-resolution` | Raw Azure data with resolved IDs | Debugging, keeping all metadata |
+| Custom `exclude-keys` | Selective property filtering | Fine-tuned data export |
+
+📖 **See [docs/TRANSFORMER_CONFIGURATION.md](./docs/TRANSFORMER_CONFIGURATION.md) for complete configuration reference.**
 
 ### Worker Count Optimization
 

@@ -69,43 +69,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	sub := viper.GetString("subscription")
 	output := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
-	excludeKeys := viper.GetStringSlice("exclude-keys")
 	workersFlag := viper.GetInt("workers")
-	importTargetFormat := viper.GetString("import-target-format")
 
 	// Build worker configuration
 	workerConfig := buildWorkerConfig()
 
 	log := logger.Default
 
-	// Get resource-type-specific exclusions
-	// Note: Viper converts YAML keys to lowercase, but Azure resource types use proper case
-	// We need to normalize keys to lowercase for case-insensitive matching
-	excludeKeysByType := make(map[string][]string)
-	if viper.IsSet("exclude-keys-by-type") {
-		excludeKeysByTypeConfig := viper.GetStringMap("exclude-keys-by-type")
-		for resourceType, keys := range excludeKeysByTypeConfig {
-			if keyList, ok := keys.([]interface{}); ok {
-				strKeys := make([]string, 0, len(keyList))
-				for _, k := range keyList {
-					if strKey, ok := k.(string); ok {
-						strKeys = append(strKeys, strKey)
-					}
-				}
-				// Store with lowercase key for case-insensitive lookup
-				normalizedType := strings.ToLower(resourceType)
-				excludeKeysByType[normalizedType] = strKeys
-				log.Debug("Loaded type-specific exclusions",
-					"resource_type", resourceType,
-					"normalized_type", normalizedType,
-					"keys", strKeys)
-			}
-		}
-	}
-
-	if len(excludeKeysByType) > 0 {
-		log.Debug("Total type-specific exclusions loaded", "count", len(excludeKeysByType))
-	}
+	// Build transformer configurations
+	transformerConfigs := buildTransformerConfigs()
 
 	// Validate input
 	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
@@ -190,6 +162,18 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Log transformer configuration
+	if len(transformerConfigs) > 0 {
+		transformerNames := make([]string, len(transformerConfigs))
+		for i, tc := range transformerConfigs {
+			transformerNames[i] = tc.Name
+		}
+		defaultConfigs := models.DefaultTransformerConfigs()
+		if len(transformerConfigs) != len(defaultConfigs) {
+			log.Info("Custom transformers configured", "transformers", transformerNames)
+		}
+	}
+
 	// Create and configure pipeline
 	pipelineConfig := &models.PipelineConfig{
 		OutputDir:          output,
@@ -197,9 +181,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		Timeout:            time.Duration(timeout) * time.Second,
 		DryRun:             dryRun,
 		SubscriptionID:     sub,
-		ExcludeKeys:        excludeKeys,
-		ExcludeKeysByType:  excludeKeysByType,
-		ImportTargetFormat: importTargetFormat,
+		TransformerConfigs: transformerConfigs,
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
@@ -357,4 +339,69 @@ func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string
 
 	// Priority 3: For mixed resource types, use safe default
 	return workerConfig.Default
+}
+
+// buildTransformerConfigs constructs transformer configurations from viper
+func buildTransformerConfigs() []models.TransformerConfig {
+	log := logger.Default
+
+	// Check if transformers are configured
+	if !viper.IsSet("transformers") {
+		// Use defaults if not configured
+		return models.DefaultTransformerConfigs()
+	}
+
+	// Get transformers configuration
+	var configs []models.TransformerConfig
+	transformersConfig := viper.Get("transformers")
+
+	// Handle different config formats
+	switch v := transformersConfig.(type) {
+	case []interface{}:
+		// List of transformer configs
+		for _, item := range v {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				// Full transformer config with name and config
+				name, _ := itemMap["name"].(string)
+				if name == "" {
+					continue
+				}
+
+				config := make(map[string]interface{})
+				for key, value := range itemMap {
+					if key != "name" {
+						config[key] = value
+					}
+				}
+
+				configs = append(configs, models.TransformerConfig{
+					Name:   name,
+					Config: config,
+				})
+
+				log.Debug("Loaded transformer config",
+					"name", name,
+					"config_keys", len(config))
+			} else if name, ok := item.(string); ok {
+				// Simple string name (no config)
+				configs = append(configs, models.TransformerConfig{
+					Name:   name,
+					Config: map[string]interface{}{},
+				})
+
+				log.Debug("Loaded transformer", "name", name)
+			}
+		}
+
+	default:
+		log.Warn("Unexpected transformers configuration format, using defaults")
+		return models.DefaultTransformerConfigs()
+	}
+
+	if len(configs) == 0 {
+		log.Debug("No transformers configured, using defaults")
+		return models.DefaultTransformerConfigs()
+	}
+
+	return configs
 }
