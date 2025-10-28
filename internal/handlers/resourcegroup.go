@@ -78,7 +78,7 @@ func (h *ResourceGroupHandler) Transform(resource interface{}) (*models.Transfor
 	if rg.Location != nil {
 		properties["location"] = *rg.Location
 	}
-	if rg.Tags != nil && len(rg.Tags) > 0 {
+	if len(rg.Tags) > 0 {
 		properties["tags"] = rg.Tags
 	}
 	if rg.Type != nil {

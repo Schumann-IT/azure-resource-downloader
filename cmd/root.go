@@ -41,19 +41,16 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.azure-rd.yaml)")
-	rootCmd.PersistentFlags().StringVar(&subscriptionID, "subscription", "", "Azure subscription ID (required)")
+	rootCmd.PersistentFlags().StringVar(&subscriptionID, "subscription", "", "Azure subscription ID (optional, uses default from az login if not specified)")
 	rootCmd.PersistentFlags().StringVar(&outputDir, "output", "./output", "output directory for downloaded resources")
 	rootCmd.PersistentFlags().IntVar(&workerCount, "workers", 5, "number of concurrent workers")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
 
 	// Bind flags to viper
-	viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
-	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
-	viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
-	viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
-
-	// Mark required flags
-	rootCmd.MarkPersistentFlagRequired("subscription")
+	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
+	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
+	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
+	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 }
 
 // initConfig reads in config file and ENV variables if set

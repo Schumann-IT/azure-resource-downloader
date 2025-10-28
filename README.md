@@ -61,7 +61,7 @@ go install
 
 The tool uses Azure's DefaultAzureCredential, which supports multiple authentication methods:
 
-1. **Azure CLI**: `az login`
+1. **Azure CLI**: `az login` (recommended)
 2. **Managed Identity**: When running on Azure resources
 3. **Environment Variables**: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
 4. **Service Principal**: Configure via environment variables
@@ -72,9 +72,15 @@ The tool uses Azure's DefaultAzureCredential, which supports multiple authentica
 # Login via Azure CLI (easiest method)
 az login
 
-# Set subscription (if you have multiple)
+# The tool will automatically use the default subscription from your Azure CLI session
+# Optionally, set a specific subscription (if you have multiple)
 az account set --subscription "your-subscription-id"
+
+# Or override the subscription using the --subscription flag
+azure-rd download --subscription "different-subscription-id" --resource-group "my-rg"
 ```
+
+**Note**: The subscription ID is optional. If not specified via CLI flag, config file, or environment variable, the tool will automatically use the default subscription from your `az login` session.
 
 ## 📖 Usage
 
@@ -84,40 +90,39 @@ az account set --subscription "your-subscription-id"
 # Show help
 azure-rd --help
 
-# List supported resource types
-azure-rd list --subscription "your-subscription-id"
+# List supported resource types (uses default subscription from az login)
+azure-rd list
 
-# Download a specific resource
+# Download a specific resource (uses default subscription)
 azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-id "/subscriptions/.../resourceGroups/my-rg"
 
 # Download all resources in a resource group
+azure-rd download \
+  --resource-group "my-resource-group"
+
+# Override default subscription with explicit subscription ID
 azure-rd download \
   --subscription "your-subscription-id" \
   --resource-group "my-resource-group"
 
 # Dry run (preview without writing files)
 azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-group "my-rg" \
   --dry-run
 
 # Specify output directory
 azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-group "my-rg" \
   --output "./azure-resources"
 
 # Adjust worker count for performance
 azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-group "my-rg" \
   --workers 10
 
 # Control log verbosity
 LOG_LEVEL=debug azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-group "my-rg"
 ```
 
@@ -127,16 +132,16 @@ Control output verbosity with the `LOG_LEVEL` environment variable:
 
 ```bash
 # Show only errors (quiet mode)
-LOG_LEVEL=error azure-rd download --subscription "sub-id" --resource-group "my-rg"
+LOG_LEVEL=error azure-rd download --resource-group "my-rg"
 
 # Show warnings and above
-LOG_LEVEL=warn azure-rd download --subscription "sub-id" --resource-group "my-rg"
+LOG_LEVEL=warn azure-rd download --resource-group "my-rg"
 
 # Default: info level (recommended)
-azure-rd download --subscription "sub-id" --resource-group "my-rg"
+azure-rd download --resource-group "my-rg"
 
 # Show debug information (verbose, includes file paths)
-LOG_LEVEL=debug azure-rd download --subscription "sub-id" --resource-group "my-rg"
+LOG_LEVEL=debug azure-rd download --resource-group "my-rg"
 ```
 
 **Available levels:** `debug`, `info` (default), `warn`, `error`, `fatal`
@@ -146,7 +151,6 @@ LOG_LEVEL=debug azure-rd download --subscription "sub-id" --resource-group "my-r
 ```bash
 # Download multiple specific resources
 azure-rd download \
-  --subscription "your-subscription-id" \
   --resource-id "/subscriptions/.../resourceGroups/rg1" \
   --resource-id "/subscriptions/.../resourceGroups/rg2" \
   --resource-id "/subscriptions/.../Microsoft.Storage/storageAccounts/mysa"
@@ -157,7 +161,7 @@ azure-rd download \
 You can use environment variables instead of flags:
 
 ```bash
-export AZURE_RD_SUBSCRIPTION="your-subscription-id"
+export AZURE_RD_SUBSCRIPTION="your-subscription-id"  # Optional - overrides default from az login
 export AZURE_RD_OUTPUT="./output"
 export AZURE_RD_WORKERS="5"
 export LOG_LEVEL="info"  # or debug, warn, error
@@ -166,7 +170,7 @@ azure-rd download --resource-group "my-rg"
 ```
 
 **Available environment variables:**
-- `AZURE_RD_SUBSCRIPTION` - Azure subscription ID
+- `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses default from az login if not set)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
 - `LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
@@ -176,9 +180,16 @@ azure-rd download --resource-group "my-rg"
 Create `~/.azure-rd.yaml`:
 
 ```yaml
-subscription: "your-subscription-id"
+# All fields are optional
+# subscription: "your-subscription-id"  # Optional - uses default from az login if not specified
 output: "./azure-resources"
 workers: 10
+```
+
+You can also copy the example configuration:
+
+```bash
+cp .azure-rd.example.yaml ~/.azure-rd.yaml
 ```
 
 Then run:
@@ -309,7 +320,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 
 ```bash
 go build -o azure-rd
-./azure-rd list --subscription "your-subscription-id"
+./azure-rd list  # Uses default subscription from az login
 ```
 
 That's it! Your new resource type is now supported.

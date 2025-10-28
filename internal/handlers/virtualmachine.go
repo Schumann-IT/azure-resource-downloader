@@ -82,7 +82,7 @@ func (h *VirtualMachineHandler) Transform(resource interface{}) (*models.Transfo
 	if vm.Type != nil {
 		properties["type"] = *vm.Type
 	}
-	if vm.Tags != nil && len(vm.Tags) > 0 {
+	if len(vm.Tags) > 0 {
 		properties["tags"] = vm.Tags
 	}
 

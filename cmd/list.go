@@ -29,16 +29,19 @@ func init() {
 func runList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	sub := viper.GetString("subscription")
+	log := logger.Default
 
-	if sub == "" {
-		return fmt.Errorf("subscription ID is required")
-	}
-
-	// Create Azure client
+	// Create Azure client (will auto-detect subscription if not provided)
+	// Note: list command doesn't really need a subscription, but we create the client
+	// to ensure authentication works and to maintain consistency
 	azureClient, err := azure.NewClient(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("failed to create Azure client: %w", err)
 	}
+
+	// Get the actual subscription ID being used
+	sub = azureClient.GetSubscriptionID()
+	log.Info("Using subscription", "subscription", sub)
 
 	// Create handler registry and register handlers
 	registry := handlers.NewRegistry()
@@ -46,7 +49,6 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// Get and display all registered types
 	types := registry.GetAllTypes()
-	log := logger.Default
 
 	log.Info("Supported Azure Resource Types", "count", len(types))
 

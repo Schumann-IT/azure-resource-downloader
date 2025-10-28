@@ -82,7 +82,7 @@ func (h *StorageAccountHandler) Transform(resource interface{}) (*models.Transfo
 	if account.Type != nil {
 		properties["type"] = *account.Type
 	}
-	if account.Tags != nil && len(account.Tags) > 0 {
+	if len(account.Tags) > 0 {
 		properties["tags"] = account.Tags
 	}
 

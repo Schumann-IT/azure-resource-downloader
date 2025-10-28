@@ -85,11 +85,11 @@ func TestGetLogLevel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable
 			if tt.envValue != "" {
-				os.Setenv("LOG_LEVEL", tt.envValue)
+				_ = os.Setenv("LOG_LEVEL", tt.envValue)
 			} else {
-				os.Unsetenv("LOG_LEVEL")
+				_ = os.Unsetenv("LOG_LEVEL")
 			}
-			defer os.Unsetenv("LOG_LEVEL")
+			defer func() { _ = os.Unsetenv("LOG_LEVEL") }()
 
 			result := getLogLevel()
 			if result != tt.expected {

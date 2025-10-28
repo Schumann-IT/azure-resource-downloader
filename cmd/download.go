@@ -34,15 +34,17 @@ You can specify resources in multiple ways:
   - By type: --type "Microsoft.Storage/storageAccounts"
   - By resource group: --resource-group "my-rg"
 
+The subscription ID is optional. If not specified, the default subscription from your 'az login' session will be used.
+
 Examples:
-  # Download a specific resource
-  azure-rd download --subscription "sub-id" --resource-id "/subscriptions/.../resourceGroups/my-rg"
+  # Download a specific resource (uses default subscription from az login)
+  azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
   
-  # Download all resources in a resource group
+  # Download all resources in a resource group with explicit subscription
   azure-rd download --subscription "sub-id" --resource-group "my-rg"
   
   # Dry run to see what would be downloaded
-  azure-rd download --subscription "sub-id" --resource-group "my-rg" --dry-run`,
+  azure-rd download --resource-group "my-rg" --dry-run`,
 	RunE: runDownload,
 }
 
@@ -65,10 +67,6 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	workers := viper.GetInt("workers")
 	dryRun := viper.GetBool("dry-run")
 
-	if sub == "" {
-		return fmt.Errorf("subscription ID is required")
-	}
-
 	// Validate input
 	if len(resourceIDs) == 0 && resourceGroup == "" {
 		return fmt.Errorf("either --resource-id or --resource-group must be specified")
@@ -76,19 +74,31 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log := logger.Default
 
+	if sub == "" {
+		log.Info("No subscription specified, will use default from Azure CLI session")
+	}
+
 	log.Info("Azure Resource Downloader",
-		"subscription", sub,
+		"subscription", func() string {
+			if sub == "" {
+				return "<default>"
+			}
+			return sub
+		}(),
 		"output", output,
 		"workers", workers,
 		"dry_run", dryRun)
 
-	// Create Azure client
+	// Create Azure client (will auto-detect subscription if not provided)
 	log.Info("Authenticating with Azure...")
 	azureClient, err := azure.NewClient(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("failed to create Azure client: %w", err)
 	}
-	log.Info("Authentication successful")
+
+	// Get the actual subscription ID being used (may have been auto-detected)
+	sub = azureClient.GetSubscriptionID()
+	log.Info("Authentication successful", "subscription", sub)
 
 	// Create handler registry and register handlers
 	registry := handlers.NewRegistry()

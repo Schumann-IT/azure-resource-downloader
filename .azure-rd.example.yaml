@@ -1,8 +1,10 @@
 # Example configuration file for Azure Resource Downloader
 # Copy this to ~/.azure-rd.yaml or specify with --config flag
 
-# Azure subscription ID (required)
-subscription: "00000000-0000-0000-0000-000000000000"
+# Azure subscription ID (optional)
+# If not specified, the default subscription from 'az login' will be used
+# You can override this with the --subscription CLI flag
+# subscription: "00000000-0000-0000-0000-000000000000"
 
 # Output directory for downloaded resources (default: ./output)
 output: "./azure-resources"
