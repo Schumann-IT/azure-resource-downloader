@@ -38,11 +38,24 @@ func NewComponentLogger(component string) *log.Logger {
 	return Default.With("component", component)
 }
 
+// SetLogLevel sets the log level for the default logger
+func SetLogLevel(level string) {
+	logLevel := parseLogLevel(level)
+	Default.SetLevel(logLevel)
+}
+
 // getLogLevel reads LOG_LEVEL environment variable
 func getLogLevel() log.Level {
-	levelStr := strings.ToLower(os.Getenv("LOG_LEVEL"))
+	levelStr := os.Getenv("LOG_LEVEL")
+	if levelStr == "" {
+		return log.InfoLevel // Default to info
+	}
+	return parseLogLevel(levelStr)
+}
 
-	switch levelStr {
+// parseLogLevel converts a string to log.Level
+func parseLogLevel(levelStr string) log.Level {
+	switch strings.ToLower(levelStr) {
 	case "debug":
 		return log.DebugLevel
 	case "info":

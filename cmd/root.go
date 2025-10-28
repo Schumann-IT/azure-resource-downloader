@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"azure-resource-downloader/internal/logger"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -15,6 +17,7 @@ var (
 	workerCount    int
 	dryRun         bool
 	excludeKeys    []string
+	logLevel       string
 )
 
 // rootCmd represents the base command
@@ -47,6 +50,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&workerCount, "workers", 5, "number of concurrent workers")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
 	rootCmd.PersistentFlags().StringSliceVar(&excludeKeys, "exclude-keys", []string{}, "comma-separated list of keys to exclude from output (e.g., 'id,etag')")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
@@ -54,6 +58,7 @@ func init() {
 	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("exclude-keys", rootCmd.PersistentFlags().Lookup("exclude-keys"))
+	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 }
 
 // initConfig reads in config file and ENV variables if set
@@ -71,6 +76,7 @@ func initConfig() {
 
 		// Search config in home directory with name ".azure-rd" (without extension)
 		viper.AddConfigPath(home)
+		viper.AddConfigPath(".")
 		viper.SetConfigType("yaml")
 		viper.SetConfigName(".azure-rd")
 	}
@@ -82,5 +88,12 @@ func initConfig() {
 	// If a config file is found, read it in
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	}
+
+	// Configure log level after reading config
+	// Priority: CLI flag > config file > env variable > default
+	configuredLevel := viper.GetString("log-level")
+	if configuredLevel != "" {
+		logger.SetLogLevel(configuredLevel)
 	}
 }

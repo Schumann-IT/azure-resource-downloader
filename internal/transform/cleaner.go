@@ -107,6 +107,7 @@ func removeKeys(data map[string]interface{}, keys []string) {
 }
 
 // removeEmptyValues removes null, empty strings, and empty maps/arrays
+// Recursively cleans nested structures including maps inside arrays
 func removeEmptyValues(data map[string]interface{}) {
 	for key, value := range data {
 		switch v := value.(type) {
@@ -122,9 +123,49 @@ func removeEmptyValues(data map[string]interface{}) {
 				delete(data, key)
 			}
 		case []interface{}:
-			if len(v) == 0 {
+			// Clean nested maps inside arrays
+			cleanedSlice := cleanSlice(v)
+			if len(cleanedSlice) == 0 {
 				delete(data, key)
+			} else {
+				data[key] = cleanedSlice
 			}
 		}
 	}
+}
+
+// cleanSlice recursively cleans maps inside arrays and removes empty elements
+func cleanSlice(slice []interface{}) []interface{} {
+	cleaned := make([]interface{}, 0, len(slice))
+
+	for _, item := range slice {
+		switch v := item.(type) {
+		case nil:
+			// Skip nil values
+			continue
+		case string:
+			if v == "" {
+				// Skip empty strings
+				continue
+			}
+			cleaned = append(cleaned, v)
+		case map[string]interface{}:
+			// Recursively clean nested maps
+			removeEmptyValues(v)
+			if len(v) > 0 {
+				cleaned = append(cleaned, v)
+			}
+		case []interface{}:
+			// Recursively clean nested slices
+			nestedCleaned := cleanSlice(v)
+			if len(nestedCleaned) > 0 {
+				cleaned = append(cleaned, nestedCleaned)
+			}
+		default:
+			// Keep other types (numbers, bools, etc.)
+			cleaned = append(cleaned, v)
+		}
+	}
+
+	return cleaned
 }

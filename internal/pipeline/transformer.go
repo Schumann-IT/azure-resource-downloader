@@ -7,6 +7,7 @@ import (
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/transform"
 )
@@ -80,9 +81,19 @@ func (t *Transformer) transformWorker(ctx context.Context, fetchResults <-chan *
 
 // transformResource transforms a single resource
 func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models.TransformResult {
+	log := logger.Default
+
+	log.Debug("Transforming resource",
+		"resource_id", fetchResult.ResourceID,
+		"type", fetchResult.ResourceType)
+
 	// Get handler for this resource type
 	handler, err := t.registry.Get(fetchResult.ResourceType)
 	if err != nil {
+		log.Error("No handler for resource type during transform",
+			"resource_id", fetchResult.ResourceID,
+			"type", fetchResult.ResourceType,
+			"error", err)
 		return &models.TransformResult{
 			ResourceID: fetchResult.ResourceID,
 			Error:      fmt.Errorf("no handler for resource type %s: %w", fetchResult.ResourceType, err),
@@ -92,6 +103,9 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 	// Transform using handler
 	transformed, err := handler.Transform(fetchResult.RawData)
 	if err != nil {
+		log.Error("Failed to transform resource",
+			"resource_id", fetchResult.ResourceID,
+			"error", err)
 		return &models.TransformResult{
 			ResourceID: fetchResult.ResourceID,
 			Error:      fmt.Errorf("failed to transform resource: %w", err),
@@ -117,6 +131,11 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		sanitizedName,
 		fetchResult.ResourceID,
 	)
+
+	log.Debug("Resource transformed successfully",
+		"resource_id", fetchResult.ResourceID,
+		"name", transformed.DisplayName,
+		"sanitized_name", sanitizedName)
 
 	return &models.TransformResult{
 		ResourceID:      fetchResult.ResourceID,

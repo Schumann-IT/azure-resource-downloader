@@ -15,6 +15,14 @@ workers: 10
 # Dry run mode - preview without writing files (default: false)
 dry-run: false
 
+# Log level - controls verbosity (default: info)
+# Options: debug, info, warn, error
+# - debug: Maximum verbosity (all messages)
+# - info: Normal operation (progress, metrics, warnings, errors)
+# - warn: Warnings and errors only
+# - error: Errors only
+log-level: "info"
+
 # Global keys to exclude from all resource types (optional)
 # If not specified, default keys will be excluded (provisioningState, etag, etc.)
 # exclude-keys:

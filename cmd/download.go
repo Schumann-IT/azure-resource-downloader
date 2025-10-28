@@ -140,6 +140,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Preparing to download resources", "count", len(requests))
 
+	// Warn if using too many workers for Microsoft Graph resources
+	if resourceType != "" && strings.HasPrefix(resourceType, "Microsoft.Graph/") && workers > 5 {
+		log.Warn("High worker count detected for Microsoft Graph API",
+			"workers", workers,
+			"resource_type", resourceType,
+			"recommendation", "Use 3-5 workers for Graph API to avoid rate limiting",
+			"note", "More workers can actually SLOW DOWN downloads due to rate limits and retries")
+	}
+
 	// Create and configure pipeline
 	pipelineConfig := &models.PipelineConfig{
 		OutputDir:         output,

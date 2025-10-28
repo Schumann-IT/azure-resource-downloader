@@ -282,6 +282,113 @@ func TestRemoveEmptyValues(t *testing.T) {
 				"key3": []interface{}{1, 2, 3},
 			},
 		},
+		{
+			name: "remove empty maps from arrays",
+			input: map[string]interface{}{
+				"key1": "value1",
+				"items": []interface{}{
+					map[string]interface{}{"name": "item1"},
+					map[string]interface{}{}, // empty map
+					map[string]interface{}{"name": "item2"},
+				},
+			},
+			expected: map[string]interface{}{
+				"key1": "value1",
+				"items": []interface{}{
+					map[string]interface{}{"name": "item1"},
+					map[string]interface{}{"name": "item2"},
+				},
+			},
+		},
+		{
+			name: "remove nil and empty strings from arrays",
+			input: map[string]interface{}{
+				"key1": "value1",
+				"items": []interface{}{
+					"valid",
+					nil,
+					"",
+					"another",
+				},
+			},
+			expected: map[string]interface{}{
+				"key1": "value1",
+				"items": []interface{}{
+					"valid",
+					"another",
+				},
+			},
+		},
+		{
+			name: "remove arrays that become empty after cleaning",
+			input: map[string]interface{}{
+				"key1": "value1",
+				"items": []interface{}{
+					nil,
+					"",
+					map[string]interface{}{},
+				},
+			},
+			expected: map[string]interface{}{
+				"key1": "value1",
+			},
+		},
+		{
+			name: "deeply nested empty structures",
+			input: map[string]interface{}{
+				"key1": "value1",
+				"nested": map[string]interface{}{
+					"level1": map[string]interface{}{
+						"level2": map[string]interface{}{
+							"emptyArray": []interface{}{},
+							"emptyMap":   map[string]interface{}{},
+							"emptyStr":   "",
+						},
+					},
+				},
+			},
+			expected: map[string]interface{}{
+				"key1": "value1",
+			},
+		},
+		{
+			name: "complex nested structure with mixed empty values",
+			input: map[string]interface{}{
+				"name": "resource",
+				"properties": map[string]interface{}{
+					"validProp": "value",
+					"emptyProp": "",
+					"items": []interface{}{
+						map[string]interface{}{
+							"name":  "item1",
+							"empty": "",
+							"nested": map[string]interface{}{
+								"validNested": "keep",
+								"emptyNested": nil,
+							},
+						},
+						map[string]interface{}{
+							"empty": "",
+							"null":  nil,
+						},
+					},
+				},
+			},
+			expected: map[string]interface{}{
+				"name": "resource",
+				"properties": map[string]interface{}{
+					"validProp": "value",
+					"items": []interface{}{
+						map[string]interface{}{
+							"name": "item1",
+							"nested": map[string]interface{}{
+								"validNested": "keep",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

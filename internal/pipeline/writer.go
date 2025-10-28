@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 
 	"gopkg.in/yaml.v3"
@@ -79,11 +80,22 @@ func (w *Writer) writeWorker(ctx context.Context, transformResults <-chan *model
 
 // writeResource writes a single resource to disk
 func (w *Writer) writeResource(transformResult *models.TransformResult) *models.WriteResult {
+	log := logger.Default
+
+	log.Debug("Writing resource files",
+		"resource_id", transformResult.ResourceID,
+		"name", transformResult.DisplayName,
+		"type", transformResult.ResourceType)
+
 	// Create resource type directory
 	resourceTypeDir := filepath.Join(w.outputDir, transformResult.ResourceType)
 
 	if !w.dryRun {
 		if err := os.MkdirAll(resourceTypeDir, 0755); err != nil {
+			log.Error("Failed to create directory",
+				"resource_id", transformResult.ResourceID,
+				"directory", resourceTypeDir,
+				"error", err)
 			return &models.WriteResult{
 				ResourceID: transformResult.ResourceID,
 				Error:      fmt.Errorf("failed to create directory: %w", err),
@@ -96,6 +108,9 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 	if !w.dryRun {
 		yamlData, err := yaml.Marshal(transformResult.CleanedData)
 		if err != nil {
+			log.Error("Failed to marshal YAML",
+				"resource_id", transformResult.ResourceID,
+				"error", err)
 			return &models.WriteResult{
 				ResourceID: transformResult.ResourceID,
 				Error:      fmt.Errorf("failed to marshal YAML: %w", err),
@@ -103,6 +118,10 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 		}
 
 		if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
+			log.Error("Failed to write YAML file",
+				"resource_id", transformResult.ResourceID,
+				"path", yamlPath,
+				"error", err)
 			return &models.WriteResult{
 				ResourceID: transformResult.ResourceID,
 				Error:      fmt.Errorf("failed to write YAML file: %w", err),
@@ -119,12 +138,21 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 		)
 
 		if err := os.WriteFile(terraformPath, []byte(terraformContent), 0644); err != nil {
+			log.Error("Failed to write Terraform file",
+				"resource_id", transformResult.ResourceID,
+				"path", terraformPath,
+				"error", err)
 			return &models.WriteResult{
 				ResourceID: transformResult.ResourceID,
 				Error:      fmt.Errorf("failed to write Terraform file: %w", err),
 			}
 		}
 	}
+
+	log.Debug("Resource files written successfully",
+		"resource_id", transformResult.ResourceID,
+		"yaml_path", yamlPath,
+		"terraform_path", terraformPath)
 
 	return &models.WriteResult{
 		ResourceID:    transformResult.ResourceID,

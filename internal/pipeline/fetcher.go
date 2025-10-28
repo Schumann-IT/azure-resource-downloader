@@ -7,7 +7,9 @@ import (
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/retry"
 )
 
 // Fetcher handles fetching resources from Azure
@@ -73,11 +75,16 @@ func (f *Fetcher) fetchWorker(ctx context.Context, requests <-chan *models.Fetch
 	}
 }
 
-// fetchResource fetches a single resource
+// fetchResource fetches a single resource with retry logic
 func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *models.FetchResult {
+	log := logger.Default
+
 	// Parse resource ID to get type information
 	idInfo, err := azure.ParseResourceID(req.ResourceID)
 	if err != nil {
+		log.Error("Failed to parse resource ID",
+			"resource_id", req.ResourceID,
+			"error", err)
 		return &models.FetchResult{
 			ResourceID: req.ResourceID,
 			Error:      fmt.Errorf("failed to parse resource ID: %w", err),
@@ -92,6 +99,10 @@ func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *
 	// Get handler for this resource type
 	handler, err := f.registry.Get(resourceType)
 	if err != nil {
+		log.Error("No handler for resource type",
+			"resource_id", req.ResourceID,
+			"type", resourceType,
+			"error", err)
 		return &models.FetchResult{
 			ResourceID:   req.ResourceID,
 			ResourceType: resourceType,
@@ -99,14 +110,48 @@ func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *
 		}
 	}
 
-	// Fetch the resource using the handler
-	rawData, err := handler.Fetch(ctx, req.ResourceID)
+	// Log start of fetch
+	log.Debug("Fetching resource",
+		"resource_id", req.ResourceID,
+		"type", resourceType,
+		"name", idInfo.ResourceName)
+
+	// Fetch the resource using the handler with retry logic
+	retryConfig := retry.DefaultConfig()
+	attemptNum := 0
+
+	rawData, err := retry.DoWithData(ctx, retryConfig, func() (interface{}, error) {
+		attemptNum++
+		if attemptNum > 1 {
+			log.Warn("Retrying resource fetch",
+				"resource_id", req.ResourceID,
+				"attempt", attemptNum,
+				"max_attempts", retryConfig.MaxAttempts)
+		}
+		return handler.Fetch(ctx, req.ResourceID)
+	})
+
 	if err != nil {
+		log.Error("Failed to fetch resource",
+			"resource_id", req.ResourceID,
+			"type", resourceType,
+			"attempts", attemptNum,
+			"error", err)
 		return &models.FetchResult{
 			ResourceID:   req.ResourceID,
 			ResourceType: resourceType,
 			Error:        fmt.Errorf("failed to fetch resource: %w", err),
 		}
+	}
+
+	if attemptNum > 1 {
+		log.Info("Resource fetch succeeded after retries",
+			"resource_id", req.ResourceID,
+			"attempts", attemptNum)
+	} else {
+		log.Debug("Resource fetched successfully",
+			"resource_id", req.ResourceID,
+			"type", resourceType)
 	}
 
 	return &models.FetchResult{

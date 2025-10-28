@@ -230,7 +230,8 @@ azure-rd download --resource-group "my-rg"
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
 - `AZURE_RD_EXCLUDE_KEYS` - Comma-separated list of keys to exclude from output
-- `LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
+- `AZURE_RD_LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
+- `LOG_LEVEL` - Legacy logging verbosity (still supported)
 
 ### Configuration File
 
@@ -241,6 +242,10 @@ Create `~/.azure-rd.yaml`:
 # subscription: "your-subscription-id"  # Optional - uses default from az login if not specified
 output: "./azure-resources"
 workers: 10
+
+# Log level - controls verbosity (default: info)
+# Options: debug, info, warn, error
+log-level: "info"
 
 # Global exclusions (apply to all resource types)
 # If not specified, default keys will be excluded (provisioningState, etag, etc.)
@@ -270,6 +275,78 @@ Then run:
 ```bash
 azure-rd download --resource-group "my-rg"
 ```
+
+### Logging Configuration
+
+Control the verbosity of output with the `log-level` setting. Available in **three ways** (priority order):
+
+#### **1. CLI Flag (Highest Priority)**
+```bash
+# Debug mode - see all details
+azure-rd download --resource-group "my-rg" --log-level debug
+
+# Quiet mode - errors only
+azure-rd download --resource-group "my-rg" --log-level error
+
+# Warnings and errors only
+azure-rd download --resource-group "my-rg" --log-level warn
+```
+
+#### **2. Configuration File**
+In `~/.azure-rd.yaml`:
+```yaml
+log-level: "info"  # debug, info, warn, or error
+```
+
+#### **3. Environment Variable (Lowest Priority)**
+```bash
+# Option 1: Use AZURE_RD_LOG_LEVEL (recommended)
+export AZURE_RD_LOG_LEVEL=debug
+azure-rd download --resource-group "my-rg"
+
+# Option 2: Use legacy LOG_LEVEL (still supported)
+export LOG_LEVEL=debug
+azure-rd download --resource-group "my-rg"
+```
+
+#### **Available Log Levels**
+
+| Level | What You See | Use Case |
+|-------|--------------|----------|
+| `debug` | All messages including detailed debug info | Troubleshooting, development |
+| `info` | Progress, metrics, warnings, errors | **Default** - normal operation |
+| `warn` | Warnings and errors only | Reduce noise, still see issues |
+| `error` | Errors only | CI/CD, cron jobs, silent mode |
+
+**Examples of what you'll see:**
+
+**`debug` level:**
+- DEBUG: Fetching resource X
+- DEBUG: Resource fetched successfully
+- DEBUG: Transforming resource X
+- DEBUG: Resource transformed successfully
+- DEBUG: Writing resource files
+- DEBUG: Resource files written successfully
+- INFO: Progress updates (every 10%)
+- WARN: Retry attempts
+- INFO: Performance metrics
+
+**`info` level (default):**
+- INFO: Progress updates (every 10%)
+- INFO: Retry succeeded messages (when retries work)
+- WARN: Retry attempts
+- ERROR: Any errors
+- INFO: Performance summary
+- (No per-resource details - keeps output clean!)
+
+**`warn` level:**
+- WARN: Retry warnings
+- ERROR: Errors
+- (Progress updates hidden)
+
+**`error` level:**
+- ERROR: Only errors that occurred
+- (Minimal output for automation)
 
 ### Customizing Output for Different Use Cases
 

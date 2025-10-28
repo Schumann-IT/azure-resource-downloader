@@ -124,3 +124,58 @@ func TestLoggerSetLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestSetLogLevel(t *testing.T) {
+	// Test the exported SetLogLevel function
+	tests := []struct {
+		name     string
+		input    string
+		expected log.Level
+	}{
+		{
+			name:     "debug level",
+			input:    "debug",
+			expected: log.DebugLevel,
+		},
+		{
+			name:     "info level",
+			input:    "info",
+			expected: log.InfoLevel,
+		},
+		{
+			name:     "warn level",
+			input:    "warn",
+			expected: log.WarnLevel,
+		},
+		{
+			name:     "error level",
+			input:    "error",
+			expected: log.ErrorLevel,
+		},
+		{
+			name:     "uppercase",
+			input:    "DEBUG",
+			expected: log.DebugLevel,
+		},
+		{
+			name:     "mixed case",
+			input:    "WaRn",
+			expected: log.WarnLevel,
+		},
+		{
+			name:     "invalid defaults to info",
+			input:    "invalid",
+			expected: log.InfoLevel,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			SetLogLevel(tt.input)
+			result := Default.GetLevel()
+			if result != tt.expected {
+				t.Errorf("SetLogLevel(%q) set level to %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
