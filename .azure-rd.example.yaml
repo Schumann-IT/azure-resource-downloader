@@ -1,0 +1,15 @@
+# Example configuration file for Azure Resource Downloader
+# Copy this to ~/.azure-rd.yaml or specify with --config flag
+
+# Azure subscription ID (required)
+subscription: "00000000-0000-0000-0000-000000000000"
+
+# Output directory for downloaded resources (default: ./output)
+output: "./azure-resources"
+
+# Number of concurrent workers for parallel processing (default: 5)
+workers: 10
+
+# Dry run mode - preview without writing files (default: false)
+dry-run: false
+
