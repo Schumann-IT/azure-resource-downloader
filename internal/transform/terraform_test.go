@@ -65,16 +65,57 @@ func TestGenerateTerraformImportBlock(t *testing.T) {
 		terraformResourceType string
 		resourceName          string
 		azureResourceID       string
+		targetFormat          string
 		expectedContains      []string
 	}{
 		{
-			name:                  "import block format",
+			name:                  "default format",
 			terraformResourceType: "azurerm_storage_account",
 			resourceName:          "mystorageaccount",
 			azureResourceID:       "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount",
+			targetFormat:          "",
 			expectedContains: []string{
 				"import {",
 				"to = azurerm_storage_account.mystorageaccount",
+				"id = \"/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount\"",
+				"}",
+			},
+		},
+		{
+			name:                  "explicit default format",
+			terraformResourceType: "azurerm_resource_group",
+			resourceName:          "my-rg",
+			azureResourceID:       "/subscriptions/sub-id/resourceGroups/my-rg",
+			targetFormat:          "{resource_type}.{name}",
+			expectedContains: []string{
+				"import {",
+				"to = azurerm_resource_group.my_rg",
+				"id = \"/subscriptions/sub-id/resourceGroups/my-rg\"",
+				"}",
+			},
+		},
+		{
+			name:                  "module format",
+			terraformResourceType: "azurerm_resource_group",
+			resourceName:          "my-rg",
+			azureResourceID:       "/subscriptions/sub-id/resourceGroups/my-rg",
+			targetFormat:          "module[\"{name}\"].{resource_type}.this",
+			expectedContains: []string{
+				"import {",
+				"to = module[\"my_rg\"].azurerm_resource_group.this",
+				"id = \"/subscriptions/sub-id/resourceGroups/my-rg\"",
+				"}",
+			},
+		},
+		{
+			name:                  "custom nested format",
+			terraformResourceType: "azurerm_storage_account",
+			resourceName:          "mystorageaccount",
+			azureResourceID:       "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount",
+			targetFormat:          "module.resources.{resource_type}.{name}",
+			expectedContains: []string{
+				"import {",
+				"to = module.resources.azurerm_storage_account.mystorageaccount",
 				"id = \"/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount\"",
 				"}",
 			},
@@ -83,7 +124,7 @@ func TestGenerateTerraformImportBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GenerateTerraformImportBlock(tt.terraformResourceType, tt.resourceName, tt.azureResourceID)
+			result := GenerateTerraformImportBlock(tt.terraformResourceType, tt.resourceName, tt.azureResourceID, tt.targetFormat)
 
 			for _, expected := range tt.expectedContains {
 				if !strings.Contains(result, expected) {

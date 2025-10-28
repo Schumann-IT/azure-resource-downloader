@@ -17,13 +17,22 @@ func GenerateTerraformImport(terraformResourceType, resourceName, azureResourceI
 }
 
 // GenerateTerraformImportBlock creates a Terraform import block (Terraform 1.5+)
-func GenerateTerraformImportBlock(terraformResourceType, resourceName, azureResourceID string) string {
+func GenerateTerraformImportBlock(terraformResourceType, resourceName, azureResourceID, targetFormat string) string {
 	sanitizedName := SanitizeTerraformName(resourceName)
+
+	// Default format if not specified
+	if targetFormat == "" {
+		targetFormat = "{resource_type}.{name}"
+	}
+
+	// Replace template variables
+	targetAddress := strings.ReplaceAll(targetFormat, "{resource_type}", terraformResourceType)
+	targetAddress = strings.ReplaceAll(targetAddress, "{name}", sanitizedName)
 
 	var sb strings.Builder
 
 	sb.WriteString("import {\n")
-	sb.WriteString(fmt.Sprintf("  to = %s.%s\n", terraformResourceType, sanitizedName))
+	sb.WriteString(fmt.Sprintf("  to = %s\n", targetAddress))
 	sb.WriteString(fmt.Sprintf("  id = \"%s\"\n", azureResourceID))
 	sb.WriteString("}\n")
 

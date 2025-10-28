@@ -9,8 +9,22 @@
 # Output directory for downloaded resources (default: ./output)
 output: "./azure-resources"
 
-# Number of concurrent workers for parallel processing (default: 5)
-workers: 10
+# Number of concurrent workers for parallel processing
+# Option 1: Use API-specific defaults (RECOMMENDED)
+# - Microsoft Graph API: 5 workers (strict rate limits)
+# - Azure Resource Manager: 20 workers (generous limits)
+# Comment out 'workers' to use automatic API-based defaults
+# workers: 5
+
+# Option 2: Set workers globally (overrides API-based defaults)
+# Uncomment to use same worker count for all APIs
+# workers: 10
+
+# Option 3: Configure workers per API (ADVANCED)
+# Fine-tune worker count for each API independently
+workers-by-api:
+  microsoft-graph: 5        # For Microsoft.Graph/* resources
+  azure-resource-manager: 20  # For Microsoft.* ARM resources
 
 # Dry run mode - preview without writing files (default: false)
 dry-run: false
@@ -22,6 +36,17 @@ dry-run: false
 # - warn: Warnings and errors only
 # - error: Errors only
 log-level: "info"
+
+# Terraform import target format (optional)
+# Controls the format of the 'to' address in Terraform import blocks
+# Available template variables: {resource_type}, {name}
+# Default: "{resource_type}.{name}"
+# Examples:
+#   - Default format: "azurerm_resource_group.my_rg"
+#   - Module format: "module[\"my_rg\"].azurerm_resource_group.this"
+#   - Nested module: "module.infrastructure.azurerm_resource_group.my_rg"
+# import-target-format: "{resource_type}.{name}"
+# import-target-format: "module[\"{name}\"].{resource_type}.this"
 
 # Global keys to exclude from all resource types (optional)
 # If not specified, default keys will be excluded (provisioningState, etag, etc.)

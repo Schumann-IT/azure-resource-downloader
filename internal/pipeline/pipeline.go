@@ -23,7 +23,7 @@ type Pipeline struct {
 func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config *models.PipelineConfig) *Pipeline {
 	return &Pipeline{
 		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount),
-		transformer: NewTransformer(registry, config.WorkerCount, config.ExcludeKeys, config.ExcludeKeysByType),
+		transformer: NewTransformer(registry, config.WorkerCount, config.ExcludeKeys, config.ExcludeKeysByType, config.ImportTargetFormat),
 		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun),
 		config:      config,
 	}

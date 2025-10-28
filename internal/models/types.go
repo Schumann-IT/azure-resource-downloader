@@ -23,13 +23,14 @@ type FetchResult struct {
 
 // TransformResult represents the result of transforming a resource
 type TransformResult struct {
-	ResourceID      string
-	ResourceType    string
-	DisplayName     string
-	SanitizedName   string
-	CleanedData     map[string]interface{}
-	TerraformImport string
-	Error           error
+	ResourceID            string
+	ResourceType          string
+	DisplayName           string
+	SanitizedName         string
+	CleanedData           map[string]interface{}
+	TerraformImport       string
+	TerraformResourceType string // The Terraform resource type (e.g., "azurerm_resource_group")
+	Error                 error
 }
 
 // WriteResult represents the result of writing files
@@ -68,11 +69,20 @@ type ResourceHandler interface {
 
 // PipelineConfig holds configuration for the pipeline
 type PipelineConfig struct {
-	OutputDir         string
-	WorkerCount       int
-	Timeout           time.Duration
-	DryRun            bool
-	SubscriptionID    string
-	ExcludeKeys       []string            // Global keys to exclude from all resources
-	ExcludeKeysByType map[string][]string // Resource-type-specific keys to exclude
+	OutputDir          string
+	WorkerCount        int
+	Timeout            time.Duration
+	DryRun             bool
+	SubscriptionID     string
+	ExcludeKeys        []string            // Global keys to exclude from all resources
+	ExcludeKeysByType  map[string][]string // Resource-type-specific keys to exclude
+	ImportTargetFormat string              // Format template for import block 'to' property
+}
+
+// WorkerConfig holds worker count configuration
+type WorkerConfig struct {
+	Default              int            // Default worker count (fallback)
+	MicrosoftGraph       int            // Workers for Microsoft Graph API
+	AzureResourceManager int            // Workers for Azure Resource Manager API
+	ByAPI                map[string]int // Custom per-API overrides
 }

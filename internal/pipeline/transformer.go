@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"azure-resource-downloader/internal/azure"
@@ -14,19 +15,21 @@ import (
 
 // Transformer handles transforming resources
 type Transformer struct {
-	registry          *handlers.Registry
-	workerCount       int
-	excludeKeys       []string
-	excludeKeysByType map[string][]string
+	registry           *handlers.Registry
+	workerCount        int
+	excludeKeys        []string
+	excludeKeysByType  map[string][]string
+	importTargetFormat string
 }
 
 // NewTransformer creates a new transformer
-func NewTransformer(registry *handlers.Registry, workerCount int, excludeKeys []string, excludeKeysByType map[string][]string) *Transformer {
+func NewTransformer(registry *handlers.Registry, workerCount int, excludeKeys []string, excludeKeysByType map[string][]string, importTargetFormat string) *Transformer {
 	return &Transformer{
-		registry:          registry,
-		workerCount:       workerCount,
-		excludeKeys:       excludeKeys,
-		excludeKeysByType: excludeKeysByType,
+		registry:           registry,
+		workerCount:        workerCount,
+		excludeKeys:        excludeKeys,
+		excludeKeysByType:  excludeKeysByType,
+		importTargetFormat: importTargetFormat,
 	}
 }
 
@@ -114,10 +117,28 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 
 	// Apply additional transformations
 	// Get type-specific exclude keys if available
+	// Note: Keys in the map are lowercase (from config parsing), so normalize the lookup
 	typeSpecificKeys := []string{}
 	if t.excludeKeysByType != nil {
-		if keys, ok := t.excludeKeysByType[fetchResult.ResourceType]; ok {
+		normalizedType := strings.ToLower(fetchResult.ResourceType)
+		if keys, ok := t.excludeKeysByType[normalizedType]; ok {
 			typeSpecificKeys = keys
+			log.Debug("Using type-specific exclusions",
+				"resource_type", fetchResult.ResourceType,
+				"normalized_type", normalizedType,
+				"type_specific_keys", typeSpecificKeys,
+				"global_keys", t.excludeKeys)
+		} else {
+			log.Debug("No type-specific exclusions found",
+				"resource_type", fetchResult.ResourceType,
+				"normalized_type", normalizedType,
+				"available_types", func() []string {
+					types := make([]string, 0, len(t.excludeKeysByType))
+					for k := range t.excludeKeysByType {
+						types = append(types, k)
+					}
+					return types
+				}())
 		}
 	}
 
@@ -125,11 +146,14 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 	resolvedData := azure.ResolveIDsInProperties(cleanedData)
 	sanitizedName := transform.SanitizeFileName(transformed.DisplayName)
 
-	// Generate Terraform import statement
-	terraformImport := transform.GenerateTerraformImport(
-		handler.GetTerraformResourceType(),
+	terraformResourceType := handler.GetTerraformResourceType()
+
+	// Generate Terraform import block (Terraform 1.5+ format)
+	terraformImport := transform.GenerateTerraformImportBlock(
+		terraformResourceType,
 		sanitizedName,
 		fetchResult.ResourceID,
+		t.importTargetFormat,
 	)
 
 	log.Debug("Resource transformed successfully",
@@ -138,12 +162,13 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		"sanitized_name", sanitizedName)
 
 	return &models.TransformResult{
-		ResourceID:      fetchResult.ResourceID,
-		ResourceType:    fetchResult.ResourceType,
-		DisplayName:     transformed.DisplayName,
-		SanitizedName:   sanitizedName,
-		CleanedData:     resolvedData,
-		TerraformImport: terraformImport,
-		Error:           nil,
+		ResourceID:            fetchResult.ResourceID,
+		ResourceType:          fetchResult.ResourceType,
+		DisplayName:           transformed.DisplayName,
+		SanitizedName:         sanitizedName,
+		CleanedData:           resolvedData,
+		TerraformImport:       terraformImport,
+		TerraformResourceType: terraformResourceType,
+		Error:                 nil,
 	}
 }

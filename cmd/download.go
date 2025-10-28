@@ -68,11 +68,19 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Get configuration
 	sub := viper.GetString("subscription")
 	output := viper.GetString("output")
-	workers := viper.GetInt("workers")
 	dryRun := viper.GetBool("dry-run")
 	excludeKeys := viper.GetStringSlice("exclude-keys")
+	workersFlag := viper.GetInt("workers")
+	importTargetFormat := viper.GetString("import-target-format")
+
+	// Build worker configuration
+	workerConfig := buildWorkerConfig()
+
+	log := logger.Default
 
 	// Get resource-type-specific exclusions
+	// Note: Viper converts YAML keys to lowercase, but Azure resource types use proper case
+	// We need to normalize keys to lowercase for case-insensitive matching
 	excludeKeysByType := make(map[string][]string)
 	if viper.IsSet("exclude-keys-by-type") {
 		excludeKeysByTypeConfig := viper.GetStringMap("exclude-keys-by-type")
@@ -84,17 +92,25 @@ func runDownload(cmd *cobra.Command, args []string) error {
 						strKeys = append(strKeys, strKey)
 					}
 				}
-				excludeKeysByType[resourceType] = strKeys
+				// Store with lowercase key for case-insensitive lookup
+				normalizedType := strings.ToLower(resourceType)
+				excludeKeysByType[normalizedType] = strKeys
+				log.Debug("Loaded type-specific exclusions",
+					"resource_type", resourceType,
+					"normalized_type", normalizedType,
+					"keys", strKeys)
 			}
 		}
+	}
+
+	if len(excludeKeysByType) > 0 {
+		log.Debug("Total type-specific exclusions loaded", "count", len(excludeKeysByType))
 	}
 
 	// Validate input
 	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
 		return fmt.Errorf("at least one of --resource-id, --resource-group, or --type must be specified")
 	}
-
-	log := logger.Default
 
 	if sub == "" {
 		log.Info("No subscription specified, will use default from Azure CLI session")
@@ -108,7 +124,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			return sub
 		}(),
 		"output", output,
-		"workers", workers,
+		"workers", workersFlag,
 		"dry_run", dryRun)
 
 	// Create Azure client (will auto-detect subscription if not provided)
@@ -140,24 +156,50 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Preparing to download resources", "count", len(requests))
 
-	// Warn if using too many workers for Microsoft Graph resources
-	if resourceType != "" && strings.HasPrefix(resourceType, "Microsoft.Graph/") && workers > 5 {
-		log.Warn("High worker count detected for Microsoft Graph API",
-			"workers", workers,
-			"resource_type", resourceType,
-			"recommendation", "Use 3-5 workers for Graph API to avoid rate limiting",
-			"note", "More workers can actually SLOW DOWN downloads due to rate limits and retries")
+	// Determine worker count based on resource type and API
+	workers := determineWorkerCount(workerConfig, resourceType, requests, workersFlag)
+
+	log.Info("Worker configuration",
+		"workers", workers,
+		"resource_type", func() string {
+			if resourceType != "" {
+				return resourceType
+			}
+			return "mixed"
+		}(),
+		"api", func() string {
+			if resourceType != "" {
+				return string(models.DetectAPIType(resourceType))
+			}
+			return "auto-detected"
+		}())
+
+	// Warn if using too many workers based on API type
+	if resourceType != "" {
+		shouldWarn, rateLimitInfo := models.ShouldWarnAboutWorkerCount(resourceType, workers)
+		if shouldWarn {
+			apiConfig := models.GetAPIConfig(resourceType)
+			log.Warn("Worker count exceeds recommendation for this API",
+				"workers", workers,
+				"resource_type", resourceType,
+				"api", apiConfig.Name,
+				"recommended_workers", apiConfig.RecommendedWorkers,
+				"max_recommended", apiConfig.MaxRecommendedWorkers,
+				"rate_limit", rateLimitInfo,
+				"note", "More workers can SLOW DOWN downloads due to rate limits and exponential backoff")
+		}
 	}
 
 	// Create and configure pipeline
 	pipelineConfig := &models.PipelineConfig{
-		OutputDir:         output,
-		WorkerCount:       workers,
-		Timeout:           time.Duration(timeout) * time.Second,
-		DryRun:            dryRun,
-		SubscriptionID:    sub,
-		ExcludeKeys:       excludeKeys,
-		ExcludeKeysByType: excludeKeysByType,
+		OutputDir:          output,
+		WorkerCount:        workers,
+		Timeout:            time.Duration(timeout) * time.Second,
+		DryRun:             dryRun,
+		SubscriptionID:     sub,
+		ExcludeKeys:        excludeKeys,
+		ExcludeKeysByType:  excludeKeysByType,
+		ImportTargetFormat: importTargetFormat,
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
@@ -270,4 +312,49 @@ func parseResourceType(resourceID string) string {
 	}
 
 	return ""
+}
+
+// buildWorkerConfig constructs worker configuration from config file
+func buildWorkerConfig() *models.WorkerConfig {
+	config := models.DefaultWorkerConfig()
+
+	// Read general workers setting from config (overrides defaults)
+	if viper.IsSet("workers") {
+		generalWorkers := viper.GetInt("workers")
+		if generalWorkers > 0 {
+			config.Default = generalWorkers
+			// Don't override API-specific defaults yet - those come from workers-by-api
+		}
+	}
+
+	// Read API-specific worker configuration (highest priority from config)
+	if viper.IsSet("workers-by-api.microsoft-graph") {
+		if graphWorkers := viper.GetInt("workers-by-api.microsoft-graph"); graphWorkers > 0 {
+			config.MicrosoftGraph = graphWorkers
+		}
+	}
+	if viper.IsSet("workers-by-api.azure-resource-manager") {
+		if armWorkers := viper.GetInt("workers-by-api.azure-resource-manager"); armWorkers > 0 {
+			config.AzureResourceManager = armWorkers
+		}
+	}
+
+	return config
+}
+
+// determineWorkerCount determines the worker count based on resource type
+func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string, requests []*models.FetchRequest, workersFlag int) int {
+	// Priority 1: Check if --workers CLI flag was explicitly set (highest priority)
+	// The flag value is passed in; if it's not the default (5), user set it explicitly
+	if workersFlag != 5 {
+		return workersFlag
+	}
+
+	// Priority 2: Use API-specific worker count based on resource type
+	if resourceType != "" {
+		return workerConfig.GetWorkerCount(resourceType)
+	}
+
+	// Priority 3: For mixed resource types, use safe default
+	return workerConfig.Default
 }
