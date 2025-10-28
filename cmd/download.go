@@ -8,6 +8,7 @@ import (
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
 
@@ -73,25 +74,27 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("either --resource-id or --resource-group must be specified")
 	}
 
-	fmt.Printf("🚀 Azure Resource Downloader\n")
-	fmt.Printf("   Subscription: %s\n", sub)
-	fmt.Printf("   Output: %s\n", output)
-	fmt.Printf("   Workers: %d\n", workers)
-	fmt.Printf("   Dry Run: %v\n\n", dryRun)
+	log := logger.Default
+
+	log.Info("Azure Resource Downloader",
+		"subscription", sub,
+		"output", output,
+		"workers", workers,
+		"dry_run", dryRun)
 
 	// Create Azure client
-	fmt.Println("🔐 Authenticating with Azure...")
+	log.Info("Authenticating with Azure...")
 	azureClient, err := azure.NewClient(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("failed to create Azure client: %w", err)
 	}
-	fmt.Println("✅ Authentication successful\n")
+	log.Info("Authentication successful")
 
 	// Create handler registry and register handlers
 	registry := handlers.NewRegistry()
 	registerHandlers(registry, azureClient)
 
-	fmt.Printf("📦 Registered %d resource type handlers\n\n", len(registry.GetAllTypes()))
+	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
 	requests, err := buildFetchRequests(resourceIDs, resourceGroup, resourceType, sub)
@@ -103,7 +106,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no resources to download")
 	}
 
-	fmt.Printf("📥 Preparing to download %d resource(s)...\n\n", len(requests))
+	log.Info("Preparing to download resources", "count", len(requests))
 
 	// Create and configure pipeline
 	pipelineConfig := &models.PipelineConfig{
@@ -117,7 +120,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
 
 	// Execute pipeline
-	fmt.Println("⚡ Starting pipeline execution...")
+	log.Info("Starting pipeline execution...")
 	summary, err := p.Execute(ctx, requests)
 	if err != nil {
 		return fmt.Errorf("pipeline execution failed: %w", err)
@@ -130,7 +133,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("pipeline completed with %d errors", summary.FailedResources)
 	}
 
-	fmt.Println("\n✨ Download completed successfully!")
+	log.Info("Download completed successfully")
 	return nil
 }
 

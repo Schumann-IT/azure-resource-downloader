@@ -6,6 +6,7 @@ import (
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 )
 
@@ -76,23 +77,29 @@ type ExecutionSummary struct {
 
 // PrintSummary prints a summary of the execution
 func (s *ExecutionSummary) PrintSummary() {
-	fmt.Printf("\n=== Pipeline Execution Summary ===\n")
-	fmt.Printf("Total resources: %d\n", s.TotalResources)
-	fmt.Printf("Successful: %d\n", s.SuccessfulResources)
-	fmt.Printf("Failed: %d\n", s.FailedResources)
+	log := logger.Default
+
+	log.Info("Pipeline Execution Summary",
+		"total", s.TotalResources,
+		"successful", s.SuccessfulResources,
+		"failed", s.FailedResources)
 
 	if len(s.Errors) > 0 {
-		fmt.Printf("\nErrors:\n")
+		log.Warn("Errors occurred during execution")
 		for _, err := range s.Errors {
-			fmt.Printf("  - %s\n", err)
+			log.Error(err)
 		}
 	}
 
-	fmt.Printf("\nFiles written:\n")
-	for _, result := range s.Results {
-		if result.Error == nil {
-			fmt.Printf("  - YAML: %s\n", result.YAMLPath)
-			fmt.Printf("  - TF:   %s\n", result.TerraformPath)
+	// Log successful results
+	if s.SuccessfulResources > 0 {
+		log.Info("Files written", "count", s.SuccessfulResources)
+		for _, result := range s.Results {
+			if result.Error == nil {
+				log.Debug("Resource files",
+					"yaml", result.YAMLPath,
+					"terraform", result.TerraformPath)
+			}
 		}
 	}
 }

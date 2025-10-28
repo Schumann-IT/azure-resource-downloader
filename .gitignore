@@ -23,6 +23,9 @@ go.work
 *.swo
 *~
 
+# Cursor (commit .cursor/rules/, but ignore user-specific settings)
+# .cursor/rules/ should be committed for team consistency
+
 # Output directory
 output/
 azure-resources/

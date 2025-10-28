@@ -114,7 +114,32 @@ azure-rd download \
   --subscription "your-subscription-id" \
   --resource-group "my-rg" \
   --workers 10
+
+# Control log verbosity
+LOG_LEVEL=debug azure-rd download \
+  --subscription "your-subscription-id" \
+  --resource-group "my-rg"
 ```
+
+### Log Levels
+
+Control output verbosity with the `LOG_LEVEL` environment variable:
+
+```bash
+# Show only errors (quiet mode)
+LOG_LEVEL=error azure-rd download --subscription "sub-id" --resource-group "my-rg"
+
+# Show warnings and above
+LOG_LEVEL=warn azure-rd download --subscription "sub-id" --resource-group "my-rg"
+
+# Default: info level (recommended)
+azure-rd download --subscription "sub-id" --resource-group "my-rg"
+
+# Show debug information (verbose, includes file paths)
+LOG_LEVEL=debug azure-rd download --subscription "sub-id" --resource-group "my-rg"
+```
+
+**Available levels:** `debug`, `info` (default), `warn`, `error`, `fatal`
 
 ### Download Multiple Resources
 
@@ -135,9 +160,16 @@ You can use environment variables instead of flags:
 export AZURE_RD_SUBSCRIPTION="your-subscription-id"
 export AZURE_RD_OUTPUT="./output"
 export AZURE_RD_WORKERS="5"
+export LOG_LEVEL="info"  # or debug, warn, error
 
 azure-rd download --resource-group "my-rg"
 ```
+
+**Available environment variables:**
+- `AZURE_RD_SUBSCRIPTION` - Azure subscription ID
+- `AZURE_RD_OUTPUT` - Output directory path
+- `AZURE_RD_WORKERS` - Number of concurrent workers
+- `LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 
 ### Configuration File
 

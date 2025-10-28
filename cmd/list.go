@@ -6,6 +6,7 @@ import (
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
+	"azure-resource-downloader/internal/logger"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,15 +46,21 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// Get and display all registered types
 	types := registry.GetAllTypes()
+	log := logger.Default
 
-	fmt.Printf("📋 Supported Azure Resource Types (%d total):\n\n", len(types))
+	log.Info("Supported Azure Resource Types", "count", len(types))
+
+	// List each type
 	for i, resourceType := range types {
 		handler, _ := registry.Get(resourceType)
 		terraformType := handler.GetTerraformResourceType()
-		fmt.Printf("%2d. %-50s -> %s\n", i+1, resourceType, terraformType)
+		log.Info("",
+			"number", i+1,
+			"azure_type", resourceType,
+			"terraform_type", terraformType)
 	}
 
-	fmt.Println("\n💡 To add more resource types, implement a new handler and register it in cmd/download.go")
+	log.Info("To add more resource types, implement a new handler and register it in cmd/download.go")
 
 	return nil
 }
