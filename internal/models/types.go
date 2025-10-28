@@ -68,9 +68,11 @@ type ResourceHandler interface {
 
 // PipelineConfig holds configuration for the pipeline
 type PipelineConfig struct {
-	OutputDir      string
-	WorkerCount    int
-	Timeout        time.Duration
-	DryRun         bool
-	SubscriptionID string
+	OutputDir         string
+	WorkerCount       int
+	Timeout           time.Duration
+	DryRun            bool
+	SubscriptionID    string
+	ExcludeKeys       []string            // Global keys to exclude from all resources
+	ExcludeKeysByType map[string][]string // Resource-type-specific keys to exclude
 }

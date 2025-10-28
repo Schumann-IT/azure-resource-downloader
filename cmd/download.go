@@ -31,8 +31,8 @@ var downloadCmd = &cobra.Command{
 
 You can specify resources in multiple ways:
   - By resource ID: --resource-id "/subscriptions/.../resourceGroups/my-rg"
-  - By type: --type "Microsoft.Storage/storageAccounts"
-  - By resource group: --resource-group "my-rg"
+  - By resource type: --type "Microsoft.Storage/storageAccounts" (downloads all resources of that type)
+  - By resource group: --resource-group "my-rg" (downloads the resource group itself)
 
 The subscription ID is optional. If not specified, the default subscription from your 'az login' session will be used.
 
@@ -40,11 +40,15 @@ Examples:
   # Download a specific resource (uses default subscription from az login)
   azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
   
+  # Download all resources of a specific type
+  azure-rd download --type "Microsoft.Resources/resourceGroups"
+  azure-rd download --type "Microsoft.Storage/storageAccounts"
+  
   # Download all resources in a resource group with explicit subscription
   azure-rd download --subscription "sub-id" --resource-group "my-rg"
   
   # Dry run to see what would be downloaded
-  azure-rd download --resource-group "my-rg" --dry-run`,
+  azure-rd download --type "Microsoft.Compute/virtualMachines" --dry-run`,
 	RunE: runDownload,
 }
 
@@ -66,10 +70,28 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	output := viper.GetString("output")
 	workers := viper.GetInt("workers")
 	dryRun := viper.GetBool("dry-run")
+	excludeKeys := viper.GetStringSlice("exclude-keys")
+
+	// Get resource-type-specific exclusions
+	excludeKeysByType := make(map[string][]string)
+	if viper.IsSet("exclude-keys-by-type") {
+		excludeKeysByTypeConfig := viper.GetStringMap("exclude-keys-by-type")
+		for resourceType, keys := range excludeKeysByTypeConfig {
+			if keyList, ok := keys.([]interface{}); ok {
+				strKeys := make([]string, 0, len(keyList))
+				for _, k := range keyList {
+					if strKey, ok := k.(string); ok {
+						strKeys = append(strKeys, strKey)
+					}
+				}
+				excludeKeysByType[resourceType] = strKeys
+			}
+		}
+	}
 
 	// Validate input
-	if len(resourceIDs) == 0 && resourceGroup == "" {
-		return fmt.Errorf("either --resource-id or --resource-group must be specified")
+	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
+		return fmt.Errorf("at least one of --resource-id, --resource-group, or --type must be specified")
 	}
 
 	log := logger.Default
@@ -107,7 +129,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
-	requests, err := buildFetchRequests(resourceIDs, resourceGroup, resourceType, sub)
+	requests, err := buildFetchRequests(ctx, azureClient, resourceIDs, resourceGroup, resourceType, sub)
 	if err != nil {
 		return err
 	}
@@ -120,11 +142,13 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	// Create and configure pipeline
 	pipelineConfig := &models.PipelineConfig{
-		OutputDir:      output,
-		WorkerCount:    workers,
-		Timeout:        time.Duration(timeout) * time.Second,
-		DryRun:         dryRun,
-		SubscriptionID: sub,
+		OutputDir:         output,
+		WorkerCount:       workers,
+		Timeout:           time.Duration(timeout) * time.Second,
+		DryRun:            dryRun,
+		SubscriptionID:    sub,
+		ExcludeKeys:       excludeKeys,
+		ExcludeKeysByType: excludeKeysByType,
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
@@ -163,7 +187,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 }
 
 // buildFetchRequests creates fetch requests from command-line arguments
-func buildFetchRequests(resourceIDs []string, resourceGroup, resourceType, subscriptionID string) ([]*models.FetchRequest, error) {
+func buildFetchRequests(ctx context.Context, azureClient *azure.Client, resourceIDs []string, resourceGroup, resourceType, subscriptionID string) ([]*models.FetchRequest, error) {
 	var requests []*models.FetchRequest
 
 	// If specific resource IDs are provided, use them
@@ -186,6 +210,28 @@ func buildFetchRequests(resourceIDs []string, resourceGroup, resourceType, subsc
 			ResourceGroup: resourceGroup,
 			Subscription:  subscriptionID,
 		})
+		return requests, nil
+	}
+
+	// If resource type is specified, list all resources of that type
+	if resourceType != "" {
+		log := logger.Default
+		log.Info("Listing all resources of type", "type", resourceType)
+
+		resourceList, err := azureClient.ListResourcesByType(ctx, resourceType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list resources of type %s: %w", resourceType, err)
+		}
+
+		log.Info("Found resources", "count", len(resourceList))
+
+		for _, resourceID := range resourceList {
+			requests = append(requests, &models.FetchRequest{
+				ResourceID:   resourceID,
+				ResourceType: resourceType,
+				Subscription: subscriptionID,
+			})
+		}
 		return requests, nil
 	}
 

@@ -101,6 +101,13 @@ azure-rd download \
 azure-rd download \
   --resource-group "my-resource-group"
 
+# Download all resources of a specific type
+azure-rd download \
+  --type "Microsoft.Resources/resourceGroups"
+
+azure-rd download \
+  --type "Microsoft.Storage/storageAccounts"
+
 # Override default subscription with explicit subscription ID
 azure-rd download \
   --subscription "your-subscription-id" \
@@ -124,6 +131,11 @@ azure-rd download \
 # Control log verbosity
 LOG_LEVEL=debug azure-rd download \
   --resource-group "my-rg"
+
+# Exclude specific keys from output (e.g., for Terraform imports)
+azure-rd download \
+  --resource-group "my-rg" \
+  --exclude-keys "id,etag,provisioningState"
 ```
 
 ### Log Levels
@@ -154,6 +166,10 @@ azure-rd download \
   --resource-id "/subscriptions/.../resourceGroups/rg1" \
   --resource-id "/subscriptions/.../resourceGroups/rg2" \
   --resource-id "/subscriptions/.../Microsoft.Storage/storageAccounts/mysa"
+
+# Download all resources of a specific type across the entire subscription
+azure-rd download --type "Microsoft.Compute/virtualMachines"
+azure-rd download --type "Microsoft.Network/virtualNetworks"
 ```
 
 ### Environment Variables
@@ -173,6 +189,7 @@ azure-rd download --resource-group "my-rg"
 - `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses default from az login if not set)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
+- `AZURE_RD_EXCLUDE_KEYS` - Comma-separated list of keys to exclude from output
 - `LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 
 ### Configuration File
@@ -184,6 +201,22 @@ Create `~/.azure-rd.yaml`:
 # subscription: "your-subscription-id"  # Optional - uses default from az login if not specified
 output: "./azure-resources"
 workers: 10
+
+# Global exclusions (apply to all resource types)
+# If not specified, default keys will be excluded (provisioningState, etag, etc.)
+exclude-keys:
+  - etag
+  - provisioningState
+
+# Resource-type-specific exclusions (merged with global)
+# Useful for Terraform imports where different resources need different exclusions
+exclude-keys-by-type:
+  Microsoft.Resources/resourceGroups:
+    - id
+    - managedBy
+  Microsoft.Storage/storageAccounts:
+    - id
+    - primaryEndpoints
 ```
 
 You can also copy the example configuration:
@@ -196,6 +229,80 @@ Then run:
 
 ```bash
 azure-rd download --resource-group "my-rg"
+```
+
+### Customizing Output for Different Use Cases
+
+The tool allows you to customize which properties are included in the output YAML files:
+
+#### Default Behavior
+
+By default, the following keys are automatically excluded from the output:
+- `provisioningState` - Azure provisioning status
+- `creationTime` - Resource creation timestamp
+- `changedTime` - Last modification timestamp
+- `correlationId` - Azure correlation ID
+- `etag` - Entity tag for versioning
+- `managedBy` - Management metadata
+- `sku.tier` - Auto-derived SKU tier
+
+#### For Terraform Imports
+
+When generating resources for Terraform imports, you typically don't need the `id` property since Terraform will manage it. You can exclude additional keys globally or per resource type:
+
+**Global Exclusions** (apply to all resource types):
+```bash
+# Exclude id and other Terraform-managed properties globally
+azure-rd download \
+  --type "Microsoft.Resources/resourceGroups" \
+  --exclude-keys "id,etag,provisioningState"
+```
+
+**Resource-Type-Specific Exclusions** (using config file):
+```yaml
+# Global exclusions (apply to all resources)
+exclude-keys:
+  - etag
+  - provisioningState
+  - creationTime
+  - changedTime
+
+# Resource-type-specific exclusions
+# These are merged with global exclusions
+exclude-keys-by-type:
+  Microsoft.Resources/resourceGroups:
+    - id
+    - managedBy
+  Microsoft.Storage/storageAccounts:
+    - id
+    - primaryEndpoints
+    - secondaryEndpoints
+  Microsoft.Compute/virtualMachines:
+    - id
+    - vmId
+```
+
+This allows you to fine-tune which properties are excluded for each resource type while maintaining common exclusions globally.
+
+**How It Works:**
+- Global `exclude-keys` apply to ALL resource types
+- Type-specific keys in `exclude-keys-by-type` are MERGED with global keys
+- The final exclusion list for each resource type is: `global keys + type-specific keys`
+
+**Example:** With the config above:
+- Resource Groups will exclude: `etag`, `provisioningState`, `id`, `managedBy`
+- Storage Accounts will exclude: `etag`, `provisioningState`, `id`, `primaryEndpoints`
+- All other types will only exclude: `etag`, `provisioningState`
+
+#### For Documentation
+
+If you want complete resource information for documentation purposes, you can exclude fewer keys:
+
+```bash
+# Keep most properties
+azure-rd download \
+  --resource-group "my-rg" \
+  --exclude-keys "correlationId"
 ```
 
 ## 📂 Output Structure

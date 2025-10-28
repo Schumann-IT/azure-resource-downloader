@@ -13,15 +13,19 @@ import (
 
 // Transformer handles transforming resources
 type Transformer struct {
-	registry    *handlers.Registry
-	workerCount int
+	registry          *handlers.Registry
+	workerCount       int
+	excludeKeys       []string
+	excludeKeysByType map[string][]string
 }
 
 // NewTransformer creates a new transformer
-func NewTransformer(registry *handlers.Registry, workerCount int) *Transformer {
+func NewTransformer(registry *handlers.Registry, workerCount int, excludeKeys []string, excludeKeysByType map[string][]string) *Transformer {
 	return &Transformer{
-		registry:    registry,
-		workerCount: workerCount,
+		registry:          registry,
+		workerCount:       workerCount,
+		excludeKeys:       excludeKeys,
+		excludeKeysByType: excludeKeysByType,
 	}
 }
 
@@ -95,7 +99,15 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 	}
 
 	// Apply additional transformations
-	cleanedData := transform.CleanProperties(transformed.Properties)
+	// Get type-specific exclude keys if available
+	typeSpecificKeys := []string{}
+	if t.excludeKeysByType != nil {
+		if keys, ok := t.excludeKeysByType[fetchResult.ResourceType]; ok {
+			typeSpecificKeys = keys
+		}
+	}
+
+	cleanedData := transform.CleanProperties(transformed.Properties, t.excludeKeys, typeSpecificKeys)
 	resolvedData := azure.ResolveIDsInProperties(cleanedData)
 	sanitizedName := transform.SanitizeFileName(transformed.DisplayName)
 

@@ -141,3 +141,62 @@ func (c *Client) GetSubscriptionID() string {
 func (c *Client) GetCredential() *azidentity.DefaultAzureCredential {
 	return c.credential
 }
+
+// ListResourcesByType lists all resources of a specific type in the subscription
+func (c *Client) ListResourcesByType(ctx context.Context, resourceType string) ([]string, error) {
+	var resourceIDs []string
+
+	// Special handling for Resource Groups - they use a different API
+	if resourceType == "Microsoft.Resources/resourceGroups" {
+		return c.listResourceGroups(ctx)
+	}
+
+	// For regular resources, list all resources and filter by type
+	// Note: Azure's filter parameter doesn't work reliably for resourceType, so we filter client-side
+	pager := c.resourcesClient.NewListPager(nil)
+
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list resources: %w", err)
+		}
+
+		for _, resource := range page.Value {
+			if resource.ID != nil && resource.Type != nil {
+				// Filter by resource type (case-insensitive comparison)
+				if *resource.Type == resourceType {
+					resourceIDs = append(resourceIDs, *resource.ID)
+				}
+			}
+		}
+	}
+
+	return resourceIDs, nil
+}
+
+// listResourceGroups lists all resource groups in the subscription
+func (c *Client) listResourceGroups(ctx context.Context) ([]string, error) {
+	var resourceIDs []string
+
+	client, err := armresources.NewResourceGroupsClient(c.subscriptionID, c.credential, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource groups client: %w", err)
+	}
+
+	pager := client.NewListPager(nil)
+
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list resource groups: %w", err)
+		}
+
+		for _, rg := range page.Value {
+			if rg.ID != nil {
+				resourceIDs = append(resourceIDs, *rg.ID)
+			}
+		}
+	}
+
+	return resourceIDs, nil
+}

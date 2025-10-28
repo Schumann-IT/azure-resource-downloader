@@ -4,14 +4,9 @@ import (
 	"strings"
 )
 
-// CleanProperties removes unnecessary Azure metadata from resource properties
-func CleanProperties(props map[string]interface{}) map[string]interface{} {
-	if props == nil {
-		return make(map[string]interface{})
-	}
-
-	// List of keys to remove from Azure resources
-	keysToRemove := []string{
+// DefaultExcludeKeys returns the default list of keys to exclude from resources
+func DefaultExcludeKeys() []string {
+	return []string{
 		"provisioningState",
 		"creationTime",
 		"changedTime",
@@ -20,9 +15,28 @@ func CleanProperties(props map[string]interface{}) map[string]interface{} {
 		"managedBy",
 		"sku.tier", // Often auto-derived
 	}
+}
+
+// CleanProperties removes unnecessary Azure metadata from resource properties
+// If globalKeys is empty, uses DefaultExcludeKeys()
+// typeSpecificKeys are merged with globalKeys for the final exclusion list
+func CleanProperties(props map[string]interface{}, globalKeys []string, typeSpecificKeys []string) map[string]interface{} {
+	if props == nil {
+		return make(map[string]interface{})
+	}
+
+	// Use default keys if no global keys provided
+	if len(globalKeys) == 0 {
+		globalKeys = DefaultExcludeKeys()
+	}
+
+	// Merge global and type-specific keys
+	allKeys := make([]string, 0, len(globalKeys)+len(typeSpecificKeys))
+	allKeys = append(allKeys, globalKeys...)
+	allKeys = append(allKeys, typeSpecificKeys...)
 
 	cleaned := deepCopy(props)
-	removeKeys(cleaned, keysToRemove)
+	removeKeys(cleaned, allKeys)
 	removeEmptyValues(cleaned)
 
 	return cleaned

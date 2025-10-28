@@ -14,6 +14,7 @@ var (
 	outputDir      string
 	workerCount    int
 	dryRun         bool
+	excludeKeys    []string
 )
 
 // rootCmd represents the base command
@@ -45,12 +46,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&outputDir, "output", "./output", "output directory for downloaded resources")
 	rootCmd.PersistentFlags().IntVar(&workerCount, "workers", 5, "number of concurrent workers")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
+	rootCmd.PersistentFlags().StringSliceVar(&excludeKeys, "exclude-keys", []string{}, "comma-separated list of keys to exclude from output (e.g., 'id,etag')")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
 	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
+	_ = viper.BindPFlag("exclude-keys", rootCmd.PersistentFlags().Lookup("exclude-keys"))
 }
 
 // initConfig reads in config file and ENV variables if set

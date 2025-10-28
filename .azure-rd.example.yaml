@@ -15,3 +15,24 @@ workers: 10
 # Dry run mode - preview without writing files (default: false)
 dry-run: false
 
+# Global keys to exclude from all resource types (optional)
+# If not specified, default keys will be excluded (provisioningState, etag, etc.)
+# exclude-keys:
+#   - id
+#   - etag
+#   - provisioningState
+
+# Resource-type-specific exclusions (optional)
+# These keys are excluded in addition to the global exclude-keys
+# exclude-keys-by-type:
+#   Microsoft.Resources/resourceGroups:
+#     - id
+#     - managedBy
+#   Microsoft.Storage/storageAccounts:
+#     - id
+#     - primaryEndpoints
+#     - secondaryEndpoints
+#   Microsoft.Compute/virtualMachines:
+#     - id
+#     - vmId
+

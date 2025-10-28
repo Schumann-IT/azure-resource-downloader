@@ -106,11 +106,58 @@ func TestCleanProperties(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanProperties(tt.input)
+			result := CleanProperties(tt.input, nil, nil) // nil uses default keys
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("CleanProperties() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestCleanPropertiesCustomKeys(t *testing.T) {
+	input := map[string]interface{}{
+		"id":       "/subscriptions/.../resourceGroups/my-rg",
+		"name":     "my-rg",
+		"location": "eastus",
+		"etag":     "xyz123",
+	}
+
+	// Test with custom global exclude keys
+	globalKeys := []string{"id", "etag"}
+	result := CleanProperties(input, globalKeys, nil)
+
+	expected := map[string]interface{}{
+		"name":     "my-rg",
+		"location": "eastus",
+	}
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("CleanProperties() with custom keys = %v, want %v", result, expected)
+	}
+}
+
+func TestCleanPropertiesTypeSpecificKeys(t *testing.T) {
+	input := map[string]interface{}{
+		"id":                "/subscriptions/.../resourceGroups/my-rg",
+		"name":              "my-rg",
+		"location":          "eastus",
+		"etag":              "xyz123",
+		"provisioningState": "Succeeded",
+		"managedBy":         "system",
+	}
+
+	// Test with both global and type-specific keys
+	globalKeys := []string{"etag", "provisioningState"} // Exclude these globally
+	typeSpecificKeys := []string{"id", "managedBy"}     // Exclude these for this type
+	result := CleanProperties(input, globalKeys, typeSpecificKeys)
+
+	expected := map[string]interface{}{
+		"name":     "my-rg",
+		"location": "eastus",
+	}
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("CleanProperties() with type-specific keys = %v, want %v", result, expected)
 	}
 }
 

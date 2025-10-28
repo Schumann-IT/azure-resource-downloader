@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -16,6 +17,7 @@ func TestBuildFetchRequests(t *testing.T) {
 		subscriptionID string
 		expectedCount  int
 		expectError    bool
+		skipTypeTest   bool // Skip tests that require Azure client
 	}{
 		{
 			name: "single resource ID",
@@ -62,7 +64,12 @@ func TestBuildFetchRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := buildFetchRequests(tt.resourceIDs, tt.resourceGroup, tt.resourceType, tt.subscriptionID)
+			// Skip resource type tests as they require a real Azure client
+			if tt.skipTypeTest {
+				t.Skip("Skipping test that requires Azure client")
+			}
+
+			result, err := buildFetchRequests(context.Background(), nil, tt.resourceIDs, tt.resourceGroup, tt.resourceType, tt.subscriptionID)
 
 			if tt.expectError && err == nil {
 				t.Errorf("buildFetchRequests() expected error but got none")
@@ -166,7 +173,7 @@ func TestBuildFetchRequestsValidation(t *testing.T) {
 	}
 	subscriptionID := "sub-123"
 
-	requests, err := buildFetchRequests(resourceIDs, "", "", subscriptionID)
+	requests, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", "", subscriptionID)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}
@@ -185,7 +192,7 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	subscriptionID := "sub-123"
 	resourceGroup := "my-rg"
 
-	requests, err := buildFetchRequests([]string{}, resourceGroup, "", subscriptionID)
+	requests, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, "", subscriptionID)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}
