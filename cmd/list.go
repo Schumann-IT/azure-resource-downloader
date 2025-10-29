@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"fmt"
+	"os"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
@@ -36,7 +36,9 @@ func runList(cmd *cobra.Command, args []string) error {
 	// to ensure authentication works and to maintain consistency
 	azureClient, err := azure.NewClient(ctx, sub)
 	if err != nil {
-		return fmt.Errorf("failed to create Azure client: %w", err)
+		// Runtime error - print and exit without showing help
+		log.Error("Failed to create Azure client", "error", err)
+		os.Exit(1)
 	}
 
 	// Get the actual subscription ID being used

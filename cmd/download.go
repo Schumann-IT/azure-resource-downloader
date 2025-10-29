@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -103,7 +104,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Validate input
+	// Validate input - this is a CLI validation error, so return it to show help
 	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
 		return fmt.Errorf("at least one of --resource-id, --resource-group, or --type must be specified")
 	}
@@ -127,7 +128,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Authenticating with Azure...")
 	azureClient, err := azure.NewClient(ctx, sub)
 	if err != nil {
-		return fmt.Errorf("failed to create Azure client: %w", err)
+		// Runtime error - print and exit without showing help
+		log.Error("Failed to create Azure client", "error", err)
+		os.Exit(1)
 	}
 
 	// Get the actual subscription ID being used (may have been auto-detected)
@@ -143,11 +146,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Build fetch requests
 	requests, err := buildFetchRequests(ctx, azureClient, resourceIDs, resourceGroup, resourceType, sub)
 	if err != nil {
-		return err
+		// Runtime error - print and exit without showing help
+		log.Error("Failed to build fetch requests", "error", err)
+		os.Exit(1)
 	}
 
 	if len(requests) == 0 {
-		return fmt.Errorf("no resources to download")
+		// Runtime error - print and exit without showing help
+		log.Error("No resources to download")
+		os.Exit(1)
 	}
 
 	log.Info("Preparing to download resources", "count", len(requests))
@@ -214,14 +221,18 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Starting pipeline execution...")
 	summary, err := p.Execute(ctx, requests)
 	if err != nil {
-		return fmt.Errorf("pipeline execution failed: %w", err)
+		// Runtime error - print and exit without showing help
+		log.Error("Pipeline execution failed", "error", err)
+		os.Exit(1)
 	}
 
 	// Print summary
 	summary.PrintSummary()
 
 	if summary.FailedResources > 0 {
-		return fmt.Errorf("pipeline completed with %d errors", summary.FailedResources)
+		// Runtime error - print and exit without showing help
+		log.Error("Pipeline completed with errors", "failed", summary.FailedResources)
+		os.Exit(1)
 	}
 
 	log.Info("Download completed successfully")
