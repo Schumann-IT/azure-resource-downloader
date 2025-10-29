@@ -242,6 +242,9 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	if capHandler, err := handlers.NewConditionalAccessPolicyHandler(cred); err == nil {
 		registry.Register("Microsoft.Graph/conditionalAccessPolicies", capHandler)
 	}
+	if aspHandler, err := handlers.NewAuthenticationStrengthPolicyHandler(cred); err == nil {
+		registry.Register("Microsoft.Graph/authenticationStrengthPolicies", aspHandler)
+	}
 
 	// Add more handlers here as needed
 	// registry.Register("Microsoft.Network/virtualNetworks", handlers.NewVirtualNetworkHandler(cred, sub))

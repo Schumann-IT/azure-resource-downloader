@@ -236,8 +236,22 @@ func (c *Client) listGraphResources(ctx context.Context, resourceType string) ([
 			}
 		}
 
+	case "Microsoft.Graph/authenticationStrengthPolicies":
+		policies, err := graphClient.Policies().AuthenticationStrengthPolicies().Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list authentication strength policies: %w (hint: this requires 'Policy.Read.All' or 'Policy.ReadWrite.AuthenticationMethod' permission in Microsoft Graph - your Azure AD admin needs to grant consent for these permissions)", err)
+		}
+
+		if policies != nil && policies.GetValue() != nil {
+			for _, policy := range policies.GetValue() {
+				if policy.GetId() != nil {
+					resourceIDs = append(resourceIDs, *policy.GetId())
+				}
+			}
+		}
+
 	default:
-		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies)", resourceType)
+		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies, Microsoft.Graph/authenticationStrengthPolicies)", resourceType)
 	}
 
 	return resourceIDs, nil

@@ -103,12 +103,17 @@ azure-rd download --subscription "different-subscription-id" --resource-group "m
 
 ### Microsoft Graph Permissions
 
-Some resources (like Conditional Access Policies) are accessed via Microsoft Graph API and require additional permissions:
+Some resources (like Conditional Access Policies and Authentication Strength Policies) are accessed via Microsoft Graph API and require additional permissions:
 
 **For Azure CLI users (`az login`):**
 ```bash
 # Your user account needs the appropriate Azure AD role assignments
 # Required roles for Conditional Access Policies:
+# - Security Reader (read-only)
+# - Security Administrator (read/write)
+# - Global Administrator (full access)
+
+# Required roles for Authentication Strength Policies:
 # - Security Reader (read-only)
 # - Security Administrator (read/write)
 # - Global Administrator (full access)
@@ -121,6 +126,10 @@ Some resources (like Conditional Access Policies) are accessed via Microsoft Gra
 # - Policy.Read.All (read-only)
 # - Policy.ReadWrite.ConditionalAccess (read/write)
 
+# Required API permissions for Authentication Strength Policies:
+# - Policy.Read.All (read-only)
+# - Policy.ReadWrite.AuthenticationMethod (read/write)
+
 # To grant permissions:
 # 1. Register an app in Azure AD
 # 2. Add Microsoft Graph API permissions
@@ -131,7 +140,17 @@ export AZURE_CLIENT_ID="your-client-id"
 export AZURE_CLIENT_SECRET="your-client-secret"
 ```
 
-**Note**: If you receive permission errors when listing Graph resources, contact your Azure AD administrator to grant the necessary permissions.
+**Note**: If you receive permission errors when listing Graph resources, even as a Global Administrator, this is likely a **token scope issue**. See [Troubleshooting Graph Permissions](docs/TROUBLESHOOTING-GRAPH-PERMISSIONS.md) for solutions.
+
+**Quick Fix** (if you're getting "Request Authorization failed"):
+```bash
+# Logout and re-login with proper scope
+az logout
+az login --scope https://graph.microsoft.com/.default
+
+# Or create a service principal with proper permissions
+./docs/grant-graph-permissions.sh
+```
 
 ## 📖 Usage
 
@@ -162,6 +181,9 @@ azure-rd download \
 # Download Microsoft Graph resources (tenant-level)
 azure-rd download \
   --type "Microsoft.Graph/conditionalAccessPolicies"
+
+azure-rd download \
+  --type "Microsoft.Graph/authenticationStrengthPolicies"
 
 # Download a specific conditional access policy by ID
 azure-rd download \
@@ -698,6 +720,7 @@ Currently supported Azure resource types:
 | `Microsoft.Storage/storageAccounts` | `azurerm_storage_account` | ✅ |
 | `Microsoft.Compute/virtualMachines` | `azurerm_virtual_machine` | ✅ |
 | `Microsoft.Graph/conditionalAccessPolicies` | `azuread_conditional_access_policy` | ✅ |
+| `Microsoft.Graph/authenticationStrengthPolicies` | `azuread_authentication_strength_policy` | ✅ |
 
 ## 🔧 Adding New Resource Types
 
