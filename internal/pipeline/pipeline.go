@@ -67,8 +67,6 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	log.Info("Starting pipeline",
 		"resources", len(requests),
 		"workers", p.config.WorkerCount)
-	log.Info("⚡ Pipeline stages run CONCURRENTLY via streaming channels")
-	log.Info("   Each resource flows: Fetch → Transform → Write in parallel")
 
 	// All three stages start immediately and run concurrently
 	// They're connected via Go channels for streaming data flow

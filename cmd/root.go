@@ -83,8 +83,9 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	// If a config file is found, read it in
+	configFileUsed := ""
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+		configFileUsed = viper.ConfigFileUsed()
 	}
 
 	// Configure log level after reading config
@@ -92,5 +93,10 @@ func initConfig() {
 	configuredLevel := viper.GetString("log-level")
 	if configuredLevel != "" {
 		logger.SetLogLevel(configuredLevel)
+	}
+
+	// Log config file usage after logger is configured
+	if configFileUsed != "" {
+		logger.Default.Info("Using config file", "path", configFileUsed)
 	}
 }

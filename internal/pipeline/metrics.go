@@ -94,11 +94,4 @@ func (m *PipelineMetrics) LogSummary() {
 			"time_to_first_result", timeToFirst.Round(time.Millisecond),
 			"note", "Time from start until first resource completed all stages")
 	}
-
-	log.Info("⚡ Architecture: Concurrent Streaming Pipeline")
-	log.Info("   Fetch → Transform → Write stages overlap via Go channels")
-	log.Info("   While Resource N is being fetched, N-1 transforms and N-2 writes")
-	log.Info("   This enables true parallelism even with a single resource type!")
-
-	log.Info("═══════════════════════════════════════════════════════════")
 }
