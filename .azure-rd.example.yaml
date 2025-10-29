@@ -89,8 +89,6 @@ log-level: "info"
 #   - name: terraform-import
 #     target-format: "{resource_type}.{name}"
 #
-# Note: exclude-keys and exclude-keys-by-type still work for backward compatibility
-#
 # Example 3: Skip Terraform imports
 # transformers:
 #   - name: cleaning

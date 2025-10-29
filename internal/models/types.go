@@ -148,28 +148,18 @@ func ParseCleaningConfig(config map[string]interface{}) *CleaningConfig {
 		CleanEmpty:       true, // Default: remove empty values (maintains original behavior)
 	}
 
-	// Support both new name (remove-keys) and old name (exclude-keys) for backward compatibility
-	removeKeys := config["remove-keys"]
-	if removeKeys == nil {
-		removeKeys = config["exclude-keys"] // Backward compatibility
-	}
-
-	if keys, ok := removeKeys.([]interface{}); ok {
-		for _, key := range keys {
+	// Parse remove-keys
+	if removeKeys, ok := config["remove-keys"].([]interface{}); ok {
+		for _, key := range removeKeys {
 			if strKey, ok := key.(string); ok {
 				result.RemoveKeys = append(result.RemoveKeys, strKey)
 			}
 		}
 	}
 
-	// Support both new and old names for type-specific keys
-	removeKeysByType := config["remove-keys-by-type"]
-	if removeKeysByType == nil {
-		removeKeysByType = config["exclude-keys-by-type"] // Backward compatibility
-	}
-
-	if keysByType, ok := removeKeysByType.(map[string]interface{}); ok {
-		for resourceType, keys := range keysByType {
+	// Parse remove-keys-by-type
+	if removeKeysByType, ok := config["remove-keys-by-type"].(map[string]interface{}); ok {
+		for resourceType, keys := range removeKeysByType {
 			if keyList, ok := keys.([]interface{}); ok {
 				strKeys := []string{}
 				for _, k := range keyList {

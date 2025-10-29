@@ -196,10 +196,10 @@ azure-rd download \
 LOG_LEVEL=debug azure-rd download \
   --resource-group "my-rg"
 
-# Exclude specific keys from output (e.g., for Terraform imports)
+# Remove specific keys from output (e.g., for Terraform imports)
 azure-rd download \
   --resource-group "my-rg" \
-  --exclude-keys "id,etag,provisioningState"
+  --remove-keys "id,etag,provisioningState"
 ```
 
 ### Log Levels
@@ -253,7 +253,7 @@ azure-rd download --resource-group "my-rg"
 - `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses default from az login if not set)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
-- `AZURE_RD_EXCLUDE_KEYS` - Comma-separated list of keys to exclude from output
+- `AZURE_RD_REMOVE_KEYS` - Comma-separated list of keys to remove from output
 - `AZURE_RD_LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 - `LOG_LEVEL` - Legacy logging verbosity (still supported)
 
@@ -272,14 +272,14 @@ workers: 10
 log-level: "info"
 
 # Global exclusions (apply to all resource types)
-# If not specified, default keys will be excluded (provisioningState, etag, etc.)
-exclude-keys:
+# Specify which keys to remove from output
+remove-keys:
   - etag
   - provisioningState
 
 # Resource-type-specific exclusions (merged with global)
 # Useful for Terraform imports where different resources need different exclusions
-exclude-keys-by-type:
+remove-keys-by-type:
   Microsoft.Resources/resourceGroups:
     - id
     - managedBy
@@ -443,7 +443,7 @@ transformers:
 | All transformers (default) | Clean data, resolved IDs, sanitized names, Terraform imports | **Default** - Ready for Terraform import |
 | Omit `terraform-import` | Clean data without Terraform files | Documentation generation |
 | Only `id-resolution` | Raw Azure data with resolved IDs | Debugging, keeping all metadata |
-| Custom `exclude-keys` | Selective property filtering | Fine-tuned data export |
+| Custom `remove-keys` | Selective property filtering | Fine-tuned data export |
 
 
 ### Worker Count Optimization
@@ -533,7 +533,7 @@ The tool allows you to customize which properties are included in the output YAM
 
 #### Default Behavior
 
-By default, the following keys are automatically excluded from the output:
+You can configure which keys to remove from the output using the cleaning transformer:
 - `provisioningState` - Azure provisioning status
 - `creationTime` - Resource creation timestamp
 - `changedTime` - Last modification timestamp
@@ -544,20 +544,20 @@ By default, the following keys are automatically excluded from the output:
 
 #### For Terraform Imports
 
-When generating resources for Terraform imports, you typically don't need the `id` property since Terraform will manage it. You can exclude additional keys globally or per resource type:
+When generating resources for Terraform imports, you typically don't need the `id` property since Terraform will manage it. You can remove additional keys globally or per resource type:
 
 **Global Exclusions** (apply to all resource types):
 ```bash
-# Exclude id and other Terraform-managed properties globally
+# Remove id and other Terraform-managed properties globally
 azure-rd download \
   --type "Microsoft.Resources/resourceGroups" \
-  --exclude-keys "id,etag,provisioningState"
+  --remove-keys "id,etag,provisioningState"
 ```
 
 **Resource-Type-Specific Exclusions** (using config file):
 ```yaml
 # Global exclusions (apply to all resources)
-exclude-keys:
+remove-keys:
   - etag
   - provisioningState
   - creationTime
@@ -565,7 +565,7 @@ exclude-keys:
 
 # Resource-type-specific exclusions
 # These are merged with global exclusions
-exclude-keys-by-type:
+remove-keys-by-type:
   Microsoft.Resources/resourceGroups:
     - id
     - managedBy
@@ -578,27 +578,27 @@ exclude-keys-by-type:
     - vmId
 ```
 
-This allows you to fine-tune which properties are excluded for each resource type while maintaining common exclusions globally.
+This allows you to fine-tune which properties are removed for each resource type while maintaining common removals globally.
 
 **How It Works:**
-- Global `exclude-keys` apply to ALL resource types
-- Type-specific keys in `exclude-keys-by-type` are MERGED with global keys
+- Global `remove-keys` apply to ALL resource types
+- Type-specific keys in `remove-keys-by-type` are MERGED with global keys
 - The final exclusion list for each resource type is: `global keys + type-specific keys`
 
 **Example:** With the config above:
-- Resource Groups will exclude: `etag`, `provisioningState`, `id`, `managedBy`
-- Storage Accounts will exclude: `etag`, `provisioningState`, `id`, `primaryEndpoints`
-- All other types will only exclude: `etag`, `provisioningState`
+- Resource Groups will remove: `etag`, `provisioningState`, `id`, `managedBy`
+- Storage Accounts will remove: `etag`, `provisioningState`, `id`, `primaryEndpoints`
+- All other types will only remove: `etag`, `provisioningState`
 
 #### For Documentation
 
-If you want complete resource information for documentation purposes, you can exclude fewer keys:
+If you want complete resource information for documentation purposes, you can remove fewer keys:
 
 ```bash
 # Keep most properties
 azure-rd download \
   --resource-group "my-rg" \
-  --exclude-keys "correlationId"
+  --remove-keys "correlationId"
 ```
 
 ## 📂 Output Structure
