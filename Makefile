@@ -70,12 +70,8 @@ check: fmt lint test
 	@echo "✅ All checks passed"
 
 # Run all quality checks and build (useful for CI/CD)
-ci: deps check build
+ci: clean deps check build
 	@echo "✅ CI pipeline complete"
-
-# Run everything (format, lint, test, build)
-all: fmt lint test build
-	@echo "✅ All tasks complete"
 
 # Display help
 help:
@@ -94,7 +90,6 @@ help:
 	@echo ""
 	@echo "Composite targets:"
 	@echo "  make check          - Run fmt + lint + test"
-	@echo "  make all            - Run fmt + lint + test + build"
 	@echo "  make ci             - Run deps + check + build (for CI/CD)"
 	@echo ""
 	@echo "  make help           - Display this help message"
@@ -105,5 +100,5 @@ help:
 	@echo "    ✅ make build   (not: go build)"
 
 # Default target
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := ci
 
