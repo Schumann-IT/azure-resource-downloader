@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Project Context
 - **Language**: Go 1.24, Module mode
 - **Target**: CLI tool for downloading and transforming Azure resources to YAML + Terraform imports
@@ -13,6 +17,7 @@
     - `Makefile`                → Build automation
 - **External dependencies**:
     - Azure SDK for Go (azidentity, armresources, armcompute, armstorage)
+    - Microsoft Graph SDK for Go (stable v1.0 + beta for Intune endpoints)
     - Cobra (CLI framework)
     - Viper (configuration management)
     - gopkg.in/yaml.v3 (YAML marshaling)

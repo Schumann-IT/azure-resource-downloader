@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-coverage run help lint fmt deps check all ci
+.PHONY: build install clean test test-coverage run help lint fmt deps check all ci loc
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -65,6 +65,18 @@ lint:
 	@golangci-lint run ./...
 	@echo "✅ Linting complete"
 
+# Count lines of code (requires cloc)
+loc:
+	@echo "📊 Counting lines of code..."
+	@if ! command -v cloc >/dev/null 2>&1; then \
+		echo "⚠️  cloc not found. Please install it:"; \
+		echo "   macOS:   brew install cloc"; \
+		echo "   Linux:   sudo apt-get install cloc  (or yum install cloc)"; \
+		exit 1; \
+	fi
+	@cloc .
+	@echo "✅ LOC analysis complete"
+
 # Check code quality (fmt + lint + test)
 check: fmt lint test
 	@echo "✅ All checks passed"
@@ -87,6 +99,7 @@ help:
 	@echo "  make run            - Run the application"
 	@echo "  make fmt            - Format code"
 	@echo "  make lint           - Lint code (requires golangci-lint)"
+	@echo "  make loc            - Count lines of code (requires cloc)"
 	@echo ""
 	@echo "Composite targets:"
 	@echo "  make check          - Run fmt + lint + test"

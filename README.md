@@ -117,6 +117,11 @@ Some resources (like Conditional Access Policies and Authentication Strength Pol
 # - Security Reader (read-only)
 # - Security Administrator (read/write)
 # - Global Administrator (full access)
+
+# Required roles for Intune Settings Catalog (deviceManagementConfigurationPolicies):
+# - Intune Administrator
+# - Global Reader (read-only)
+# - Global Administrator (full access)
 ```
 
 **For Service Principal authentication:**
@@ -129,6 +134,10 @@ Some resources (like Conditional Access Policies and Authentication Strength Pol
 # Required API permissions for Authentication Strength Policies:
 # - Policy.Read.All (read-only)
 # - Policy.ReadWrite.AuthenticationMethod (read/write)
+
+# Required API permissions for Intune Settings Catalog (deviceManagementConfigurationPolicies):
+# - DeviceManagementConfiguration.Read.All (read-only)
+# - DeviceManagementConfiguration.ReadWrite.All (read/write)
 
 # To grant permissions:
 # 1. Register an app in Azure AD
@@ -184,6 +193,10 @@ azure-rd download \
 
 azure-rd download \
   --type "Microsoft.Graph/authenticationStrengthPolicies"
+
+# Download all Intune Settings Catalog policies (Microsoft Graph beta)
+azure-rd download \
+  --type "Microsoft.Graph/deviceManagementConfigurationPolicies"
 
 # Download a specific conditional access policy by ID
 azure-rd download \
@@ -721,6 +734,9 @@ Currently supported Azure resource types:
 | `Microsoft.Compute/virtualMachines` | `azurerm_virtual_machine` | ✅ |
 | `Microsoft.Graph/conditionalAccessPolicies` | `azuread_conditional_access_policy` | ✅ |
 | `Microsoft.Graph/authenticationStrengthPolicies` | `azuread_authentication_strength_policy` | ✅ |
+| `Microsoft.Graph/deviceManagementConfigurationPolicies` | `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy` | ✅ |
+
+> **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
 
 ## 🔧 Adding New Resource Types
 
@@ -827,6 +843,23 @@ azure-resource-downloader/
 ├── main.go
 └── README.md
 ```
+
+## 🤖 Editor & AI Assistant Rules
+
+This repo ships machine-readable coding conventions for AI pair-programming tools. The same rule set is maintained for both editors:
+
+- **Cursor**: `.cursor/rules/*.md`
+- **Windsurf**: `.windsurf/rules/*.md` (with activation frontmatter)
+
+| File | Purpose | Windsurf activation |
+|------|---------|---------------------|
+| `01-project.md` | Project context, architecture & non-negotiables | `always_on` |
+| `02-style-and-quality.md` | Go style, errors, testing philosophy, logging, docs policy | `glob` (`**/*.go`) |
+| `03-commands.md` | Makefile-first workflow & generation recipes | `always_on` |
+| `04-security-and-ops.md` | Secrets, config precedence, ops & production readiness | `always_on` |
+| `05-azure-conventions.md` | Handler structure, Graph/Intune SDK usage, naming | `glob` (`internal/handlers/**`, `internal/azure/**`) |
+
+When changing project conventions, update the rule files in **both** directories so Cursor and Windsurf stay in sync.
 
 ## 🤝 Contributing
 

@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
+	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 )
 
@@ -250,8 +251,52 @@ func (c *Client) listGraphResources(ctx context.Context, resourceType string) ([
 			}
 		}
 
+	case "Microsoft.Graph/deviceManagementConfigurationPolicies":
+		return c.listConfigurationPolicies(ctx)
+
 	default:
-		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies, Microsoft.Graph/authenticationStrengthPolicies)", resourceType)
+		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies, Microsoft.Graph/authenticationStrengthPolicies, Microsoft.Graph/deviceManagementConfigurationPolicies)", resourceType)
+	}
+
+	return resourceIDs, nil
+}
+
+// listConfigurationPolicies lists all Intune Settings Catalog configuration
+// policies. This endpoint only exists in the Microsoft Graph beta API, so it
+// uses the beta SDK and follows @odata.nextLink for pagination.
+func (c *Client) listConfigurationPolicies(ctx context.Context) ([]string, error) {
+	var resourceIDs []string
+
+	graphClient, err := msgraphbeta.NewGraphServiceClientWithCredentials(c.credential, []string{
+		"https://graph.microsoft.com/.default",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create beta Graph client: %w (Hint: Ensure you have the necessary permissions to access Microsoft Graph API)", err)
+	}
+
+	builder := graphClient.DeviceManagement().ConfigurationPolicies()
+	for {
+		policies, err := builder.Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list configuration policies: %w (hint: this requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph - your Azure AD admin needs to grant consent for these permissions)", err)
+		}
+
+		if policies == nil {
+			break
+		}
+
+		for _, policy := range policies.GetValue() {
+			if policy.GetId() != nil {
+				resourceIDs = append(resourceIDs, *policy.GetId())
+			}
+		}
+
+		// Follow pagination via @odata.nextLink
+		nextLink := policies.GetOdataNextLink()
+		if nextLink == nil || *nextLink == "" {
+			break
+		}
+		builder = builder.WithUrl(*nextLink)
 	}
 
 	return resourceIDs, nil

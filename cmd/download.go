@@ -257,6 +257,11 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 		registry.Register("Microsoft.Graph/authenticationStrengthPolicies", aspHandler)
 	}
 
+	// Register Intune (Microsoft Graph beta) handlers
+	if dmcpHandler, err := handlers.NewDeviceManagementConfigurationPolicyHandler(cred); err == nil {
+		registry.Register("Microsoft.Graph/deviceManagementConfigurationPolicies", dmcpHandler)
+	}
+
 	// Add more handlers here as needed
 	// registry.Register("Microsoft.Network/virtualNetworks", handlers.NewVirtualNetworkHandler(cred, sub))
 	// registry.Register("Microsoft.Sql/servers", handlers.NewSqlServerHandler(cred, sub))
