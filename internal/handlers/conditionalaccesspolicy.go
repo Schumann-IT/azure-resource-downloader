@@ -44,6 +44,25 @@ func (h *ConditionalAccessPolicyHandler) GetTerraformResourceType() string {
 	return "azuread_conditional_access_policy"
 }
 
+// List returns the IDs of all conditional access policies in the tenant.
+func (h *ConditionalAccessPolicyHandler) List(ctx context.Context) ([]string, error) {
+	policies, err := h.client.Identity().ConditionalAccess().Policies().Get(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list conditional access policies: %w (hint: requires 'Policy.Read.All' or 'Policy.ReadWrite.ConditionalAccess' permission in Microsoft Graph)", err)
+	}
+
+	var ids []string
+	if policies != nil {
+		for _, policy := range policies.GetValue() {
+			if policy.GetId() != nil {
+				ids = append(ids, *policy.GetId())
+			}
+		}
+	}
+
+	return ids, nil
+}
+
 // Fetch retrieves a conditional access policy from Microsoft Graph
 func (h *ConditionalAccessPolicyHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	// Extract policy ID from resource ID

@@ -171,6 +171,38 @@ func (h *DeviceConfigurationHandler) GetTerraformResourceType() string {
 	return "microsoft365_graph_beta_device_management_device_configuration"
 }
 
+// List returns the IDs of all legacy Intune device configuration profiles
+// (including Custom OMA-URI profiles) in the tenant. This endpoint uses the
+// Microsoft Graph beta API and is paged via @odata.nextLink.
+func (h *DeviceConfigurationHandler) List(ctx context.Context) ([]string, error) {
+	var ids []string
+
+	builder := h.client.DeviceManagement().DeviceConfigurations()
+	for {
+		configs, err := builder.Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list device configurations: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+		}
+		if configs == nil {
+			break
+		}
+
+		for _, config := range configs.GetValue() {
+			if config.GetId() != nil {
+				ids = append(ids, *config.GetId())
+			}
+		}
+
+		nextLink := configs.GetOdataNextLink()
+		if nextLink == nil || *nextLink == "" {
+			break
+		}
+		builder = builder.WithUrl(*nextLink)
+	}
+
+	return ids, nil
+}
+
 // Fetch retrieves a device configuration profile from Microsoft Graph beta.
 //
 // The polymorphic body (including omaSettings for custom profiles) is returned

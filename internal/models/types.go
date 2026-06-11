@@ -66,6 +66,11 @@ type ResourceHandler interface {
 	// GetType returns the Azure resource type (e.g., "Microsoft.Storage/storageAccounts")
 	GetType() string
 
+	// List enumerates all resource IDs of this handler's type within the
+	// current scope (subscription for ARM types, tenant for Microsoft Graph
+	// types). It is used to expand a "--type" download into individual fetches.
+	List(ctx context.Context) ([]string, error)
+
 	// Fetch retrieves the resource from Azure
 	Fetch(ctx context.Context, resourceID string) (interface{}, error)
 

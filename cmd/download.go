@@ -144,7 +144,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
-	requests, err := buildFetchRequests(ctx, azureClient, resourceIDs, resourceGroup, resourceType, sub)
+	requests, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceType, sub)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -280,7 +280,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 }
 
 // buildFetchRequests creates fetch requests from command-line arguments
-func buildFetchRequests(ctx context.Context, azureClient *azure.Client, resourceIDs []string, resourceGroup, resourceType, subscriptionID string) ([]*models.FetchRequest, error) {
+func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup, resourceType, subscriptionID string) ([]*models.FetchRequest, error) {
 	var requests []*models.FetchRequest
 
 	// If specific resource IDs are provided, use them
@@ -306,12 +306,19 @@ func buildFetchRequests(ctx context.Context, azureClient *azure.Client, resource
 		return requests, nil
 	}
 
-	// If resource type is specified, list all resources of that type
+	// If resource type is specified, list all resources of that type via the
+	// handler that owns it (each handler enumerates its own resources).
 	if resourceType != "" {
 		log := logger.Default
 		log.Info("Listing all resources of type", "type", resourceType)
 
-		resourceList, err := azureClient.ListResourcesByType(ctx, resourceType)
+		handler, err := registry.Get(resourceType)
+		if err != nil {
+			log.Error("No handler for resource type", "type", resourceType, "error", err)
+			return nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
+		}
+
+		resourceList, err := handler.List(ctx)
 		if err != nil {
 			log.Error("Failed to list resources", "type", resourceType, "error", err)
 			return nil, fmt.Errorf("failed to list resources of type %s: %w", resourceType, err)

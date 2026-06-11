@@ -35,6 +35,11 @@ func (h *VirtualMachineHandler) GetTerraformResourceType() string {
 	return "azurerm_virtual_machine"
 }
 
+// List returns the IDs of all virtual machines in the subscription.
+func (h *VirtualMachineHandler) List(ctx context.Context) ([]string, error) {
+	return azure.ListResourcesByType(ctx, h.credential, h.subscriptionID, h.GetType())
+}
+
 // Fetch retrieves a virtual machine from Azure
 func (h *VirtualMachineHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	// Parse resource ID

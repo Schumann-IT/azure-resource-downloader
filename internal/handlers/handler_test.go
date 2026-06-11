@@ -17,6 +17,10 @@ func (m *MockHandler) GetType() string {
 	return m.resourceType
 }
 
+func (m *MockHandler) List(ctx context.Context) ([]string, error) {
+	return []string{}, nil
+}
+
 func (m *MockHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	return map[string]interface{}{"id": resourceID}, nil
 }

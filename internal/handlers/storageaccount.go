@@ -35,6 +35,11 @@ func (h *StorageAccountHandler) GetTerraformResourceType() string {
 	return "azurerm_storage_account"
 }
 
+// List returns the IDs of all storage accounts in the subscription.
+func (h *StorageAccountHandler) List(ctx context.Context) ([]string, error) {
+	return azure.ListResourcesByType(ctx, h.credential, h.subscriptionID, h.GetType())
+}
+
 // Fetch retrieves a storage account from Azure
 func (h *StorageAccountHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	// Parse resource ID

@@ -44,6 +44,25 @@ func (h *AuthenticationStrengthPolicyHandler) GetTerraformResourceType() string 
 	return "azuread_authentication_strength_policy"
 }
 
+// List returns the IDs of all authentication strength policies in the tenant.
+func (h *AuthenticationStrengthPolicyHandler) List(ctx context.Context) ([]string, error) {
+	policies, err := h.client.Policies().AuthenticationStrengthPolicies().Get(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list authentication strength policies: %w (hint: requires 'Policy.Read.All' or 'Policy.ReadWrite.AuthenticationMethod' permission in Microsoft Graph)", err)
+	}
+
+	var ids []string
+	if policies != nil {
+		for _, policy := range policies.GetValue() {
+			if policy.GetId() != nil {
+				ids = append(ids, *policy.GetId())
+			}
+		}
+	}
+
+	return ids, nil
+}
+
 // Fetch retrieves an authentication strength policy from Microsoft Graph
 func (h *AuthenticationStrengthPolicyHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	// Extract policy ID from resource ID

@@ -35,6 +35,11 @@ func (h *ResourceGroupHandler) GetTerraformResourceType() string {
 	return "azurerm_resource_group"
 }
 
+// List returns the IDs of all resource groups in the subscription.
+func (h *ResourceGroupHandler) List(ctx context.Context) ([]string, error) {
+	return azure.ListResourceGroups(ctx, h.credential, h.subscriptionID)
+}
+
 // Fetch retrieves a resource group from Azure
 func (h *ResourceGroupHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
 	// Parse resource ID to get resource group name

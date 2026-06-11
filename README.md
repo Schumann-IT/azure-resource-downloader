@@ -824,6 +824,12 @@ func (h *KeyVaultHandler) GetTerraformResourceType() string {
     return "azurerm_key_vault"
 }
 
+// List enumerates all resource IDs of this type. ARM handlers delegate to the
+// shared azure pager; Microsoft Graph handlers page their own collection.
+func (h *KeyVaultHandler) List(ctx context.Context) ([]string, error) {
+    return azure.ListResourcesByType(ctx, h.credential, h.subscriptionID, h.GetType())
+}
+
 func (h *KeyVaultHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
     // Implement fetching logic using Azure SDK
 }
@@ -854,7 +860,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 ### 3. Test
 
 ```bash
-go build -o azure-rd
+make build
 ./azure-rd list  # Uses default subscription from az login
 ```
 

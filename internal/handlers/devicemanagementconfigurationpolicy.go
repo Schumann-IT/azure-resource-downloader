@@ -54,6 +54,38 @@ func (h *DeviceManagementConfigurationPolicyHandler) GetTerraformResourceType() 
 	return "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy"
 }
 
+// List returns the IDs of all Settings Catalog configuration policies in the
+// tenant. This endpoint only exists in the Microsoft Graph beta API and is
+// paged via @odata.nextLink.
+func (h *DeviceManagementConfigurationPolicyHandler) List(ctx context.Context) ([]string, error) {
+	var ids []string
+
+	builder := h.client.DeviceManagement().ConfigurationPolicies()
+	for {
+		policies, err := builder.Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list configuration policies: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+		}
+		if policies == nil {
+			break
+		}
+
+		for _, policy := range policies.GetValue() {
+			if policy.GetId() != nil {
+				ids = append(ids, *policy.GetId())
+			}
+		}
+
+		nextLink := policies.GetOdataNextLink()
+		if nextLink == nil || *nextLink == "" {
+			break
+		}
+		builder = builder.WithUrl(*nextLink)
+	}
+
+	return ids, nil
+}
+
 // Fetch retrieves a configuration policy (including its full settings tree) from
 // Microsoft Graph beta.
 func (h *DeviceManagementConfigurationPolicyHandler) Fetch(ctx context.Context, resourceID string) (interface{}, error) {
