@@ -296,6 +296,10 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 		handlers.NewNotificationMessageTemplateHandler,
 		handlers.NewNamedLocationHandler,
 		handlers.NewTermsOfUseAgreementHandler,
+		handlers.NewWindowsPlatformScriptHandler,
+		handlers.NewMacOSShellScriptHandler,
+		handlers.NewMacOSCustomAttributeScriptHandler,
+		handlers.NewWindowsRemediationScriptHandler,
 	}
 	for _, newHandler := range graphCollections {
 		if h, err := newHandler(cred); err == nil {

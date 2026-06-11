@@ -216,6 +216,106 @@ func TestApplyBase64DecodeOmaSettings(t *testing.T) {
 	})
 }
 
+func TestApplyBase64DecodeScriptContent(t *testing.T) {
+	script := "#!/bin/sh\necho hello"
+	encoded := base64.StdEncoding.EncodeToString([]byte(script))
+
+	t.Run("inline decodes scriptContent in place", func(t *testing.T) {
+		props := map[string]interface{}{
+			"fileName":      "hello.sh",
+			"scriptContent": encoded,
+		}
+		artifacts, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(artifacts) != 0 {
+			t.Fatalf("expected no artifacts in inline mode, got %d", len(artifacts))
+		}
+		if props["scriptContent"] != script {
+			t.Errorf("scriptContent = %q, want decoded %q", props["scriptContent"], script)
+		}
+	})
+
+	t.Run("file mode uses fileName for scriptContent", func(t *testing.T) {
+		props := map[string]interface{}{
+			"fileName":      "hello.sh",
+			"scriptContent": encoded,
+		}
+		artifacts, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{"mode": "file", "remove-source": true}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(artifacts) != 1 {
+			t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+		}
+		if artifacts[0].Filename != "hello.sh" {
+			t.Errorf("Filename = %q, want hello.sh", artifacts[0].Filename)
+		}
+		if string(artifacts[0].Content) != script {
+			t.Errorf("Content = %q, want %q", string(artifacts[0].Content), script)
+		}
+		if _, present := props["scriptContent"]; present {
+			t.Error("scriptContent should be removed with remove-source")
+		}
+	})
+
+	t.Run("health script detection and remediation pair", func(t *testing.T) {
+		props := map[string]interface{}{
+			"displayName":              "Fix Time Zone",
+			"detectionScriptContent":   encoded,
+			"remediationScriptContent": encoded,
+		}
+		artifacts, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{"mode": "file"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(artifacts) != 2 {
+			t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+		}
+		want := map[string]bool{
+			"fix_time_zone_detection.ps1":   false,
+			"fix_time_zone_remediation.ps1": false,
+		}
+		for _, a := range artifacts {
+			if _, ok := want[a.Filename]; !ok {
+				t.Errorf("unexpected artifact filename %q", a.Filename)
+			}
+			want[a.Filename] = true
+		}
+		for name, seen := range want {
+			if !seen {
+				t.Errorf("missing artifact %q", name)
+			}
+		}
+	})
+
+	t.Run("inline decodes detection and remediation in place", func(t *testing.T) {
+		props := map[string]interface{}{
+			"displayName":              "Fix Time Zone",
+			"detectionScriptContent":   encoded,
+			"remediationScriptContent": encoded,
+		}
+		artifacts, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(artifacts) != 0 {
+			t.Fatalf("expected no artifacts in inline mode, got %d", len(artifacts))
+		}
+		if props["detectionScriptContent"] != script || props["remediationScriptContent"] != script {
+			t.Error("detection/remediation script content should be decoded in place")
+		}
+	})
+
+	t.Run("invalid base64 returns error", func(t *testing.T) {
+		props := map[string]interface{}{"scriptContent": "%%%not-base64%%%"}
+		if _, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{})); err == nil {
+			t.Error("expected error for invalid base64 scriptContent")
+		}
+	})
+}
+
 func TestBuildArtifactFileName(t *testing.T) {
 	tests := []struct {
 		fileName  string

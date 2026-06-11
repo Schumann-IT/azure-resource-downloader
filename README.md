@@ -165,6 +165,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceConfigurations` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` + `--resolve-secrets` | `DeviceManagementConfiguration.ReadWrite.All` |
 | `Microsoft.Graph/assignmentFilters`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles`, `deviceCategories` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |
@@ -826,8 +827,14 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/notificationMessageTemplates` | `microsoft365_graph_beta_device_management_device_compliance_notification_template` | ✅ |
 | `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` | ✅ |
 | `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` | ✅ |
+| `Microsoft.Graph/deviceManagementScripts` | `microsoft365_graph_beta_device_management_windows_platform_script` | ✅ |
+| `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` | ✅ |
+| `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` | ✅ |
+| `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` | ✅ |
 
-> **Note:** The 11 collection types above (assignment filters through terms of use agreements) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
+> **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
+>
+> **Note:** Script resources (`deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts`) carry base64-encoded script bodies (`scriptContent`, or `detectionScriptContent`/`remediationScriptContent` for Remediations). The base64-decode transformer decodes them inline by default; in `file` mode the decoded script is written as a sidecar file named after the resource's `fileName` (`.ps1`/`.sh`), or `<display_name>_detection.ps1` / `<display_name>_remediation.ps1` for Remediations.
 
 > **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
 >
@@ -843,6 +850,7 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | Explicit property mapping (conditions, grant/session controls) |
 | Graph beta (`deviceManagementConfigurationPolicies`, `deviceConfigurations`) | `msgraph-beta-sdk-go` | Full generic serialization of the polymorphic `@odata.type` tree via the Kiota JSON writer — no setting is lost |
 | Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
+| Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
 
 ## 🔧 Adding New Resource Types
 
@@ -951,7 +959,7 @@ azure-resource-downloader/
 │   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog (Graph beta)
 │   │   ├── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI (Graph beta)
 │   │   ├── graphcollection.go                      # Shared base for simple Graph beta collections
-│   │   └── assignmentfilter.go, rolescopetag.go, … # 11 collection handlers built on the base
+│   │   └── assignmentfilter.go, rolescopetag.go, … # 15 collection handlers built on the base (incl. 4 script types)
 │   ├── azure/             # Azure client wrappers
 │   │   ├── client.go      # Auth (az login / device-code) + ARM client
 │   │   ├── errors.go      # Permission-error detection (warn & skip)

@@ -54,17 +54,20 @@ resource. Terraform types confirmed against `deploymenttheory/microsoft365`.
 | [x] | Named locations | `identity/conditionalAccess/namedLocations` | `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` |
 | [x] | Terms of use agreements | `identityGovernance/termsOfUse/agreements` | `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` |
 
-## Phase 2 — Scripts (base64-decode payloads)
+## Phase 2 — Scripts (base64-decode payloads) — DONE
 
-Each returns a base64 `scriptContent` (or detection/remediation pair) that should
-be decoded. Reuse the existing base64 transform.
+Implemented on the shared `GraphCollectionHandler` base. The base64 script
+bodies are decoded by the base64-decode transformer (extended in
+`internal/transform/base64.go`): inline by default, sidecar files in `file`
+mode (`fileName` when present, otherwise `<display_name>_<suffix>.ps1`).
+Terraform types confirmed against `deploymenttheory/microsoft365`.
 
-| Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
+| Status | Resource | Graph endpoint | Azure type | Terraform type |
 | --- | --- | --- | --- | --- |
-| [ ] | Windows platform scripts | `deviceManagement/deviceManagementScripts` | `Microsoft.Graph/deviceManagementScripts` | `scriptContent` → `.ps1` |
-| [ ] | macOS shell scripts | `deviceManagement/deviceShellScripts` | `Microsoft.Graph/deviceShellScripts` | `scriptContent` → `.sh` |
-| [ ] | macOS custom attribute scripts | `deviceManagement/deviceCustomAttributeShellScripts` | `Microsoft.Graph/deviceCustomAttributeShellScripts` | `scriptContent` → `.sh` |
-| [ ] | Remediations | `deviceManagement/deviceHealthScripts` | `Microsoft.Graph/deviceHealthScripts` | detection + remediation scripts |
+| [x] | Windows platform scripts | `deviceManagement/deviceManagementScripts` | `Microsoft.Graph/deviceManagementScripts` | `microsoft365_graph_beta_device_management_windows_platform_script` |
+| [x] | macOS shell scripts | `deviceManagement/deviceShellScripts` | `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` |
+| [x] | macOS custom attribute scripts | `deviceManagement/deviceCustomAttributeShellScripts` | `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` |
+| [x] | Remediations | `deviceManagement/deviceHealthScripts` | `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` |
 
 ## Phase 3 — Policies needing `$expand` / child fetches
 
