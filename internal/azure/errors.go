@@ -4,10 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 )
+
+// jsonMessagePattern extracts the "Message" value from JSON error bodies that
+// Microsoft Graph (Intune service) embeds in multi-line error strings.
+var jsonMessagePattern = regexp.MustCompile(`(?i)"message"\s*:\s*"([^"]+)"`)
 
 // permissionErrorMarkers are substrings that identify an authorization/permission
 // failure across both ARM and Microsoft Graph APIs. They are matched
@@ -84,10 +89,15 @@ func ErrorSummary(err error) string {
 		return summary
 	}
 
-	// Fall back to the first line of the error message.
+	// Fall back to the first line of the error message. If the dropped
+	// remainder is a JSON error body with a "Message" field (Intune-style
+	// Graph errors), surface that message so the actual cause is not lost.
 	line := full
 	if i := strings.IndexAny(line, "\r\n"); i >= 0 {
 		line = strings.TrimRight(strings.TrimSpace(line[:i]), " :{")
+		if m := jsonMessagePattern.FindStringSubmatch(full); m != nil {
+			line += ": " + strings.TrimSpace(m[1])
+		}
 	}
 	if hint != "" && !strings.Contains(line, "(hint:") {
 		line += " " + hint

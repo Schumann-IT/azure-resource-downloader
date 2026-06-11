@@ -29,7 +29,7 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list macOS custom attribute scripts: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list macOS custom attribute scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -50,7 +50,7 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceCustomAttributeShellScripts().ByDeviceCustomAttributeShellScriptId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get macOS custom attribute script: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get macOS custom attribute script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

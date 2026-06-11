@@ -29,7 +29,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list remediation scripts: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list remediation scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -50,7 +50,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceHealthScripts().ByDeviceHealthScriptId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get remediation script: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get remediation script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

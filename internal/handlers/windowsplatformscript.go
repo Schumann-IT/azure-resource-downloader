@@ -28,7 +28,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list Windows platform scripts: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list Windows platform scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -49,7 +49,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceManagementScripts().ByDeviceManagementScriptId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get Windows platform script: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get Windows platform script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

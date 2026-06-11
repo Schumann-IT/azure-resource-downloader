@@ -164,8 +164,9 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` + `--resolve-secrets` | `DeviceManagementConfiguration.ReadWrite.All` |
-| `Microsoft.Graph/assignmentFilters`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles`, `deviceCategories` | `DeviceManagementConfiguration.Read.All` |
-| `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/assignmentFilters`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All` |
+| `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementScripts.Read.All` |
 | `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |

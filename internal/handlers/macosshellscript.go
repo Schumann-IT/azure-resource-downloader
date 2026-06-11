@@ -28,7 +28,7 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list macOS shell scripts: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list macOS shell scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -49,7 +49,7 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceShellScripts().ByDeviceShellScriptId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get macOS shell script: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get macOS shell script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

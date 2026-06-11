@@ -118,8 +118,13 @@ func TestErrorSummary(t *testing.T) {
 			want: "HTTP 403 AuthorizationFailed",
 		},
 		{
-			name: "multiline Intune error keeps first line and hint",
+			name: "multiline Intune error surfaces embedded JSON Message and hint",
 			err:  errors.New("failed to list device configurations: {\r\n  \"Message\": \"Application is not authorized\"\r\n} (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"),
+			want: "failed to list device configurations: Application is not authorized (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)",
+		},
+		{
+			name: "multiline error without JSON Message keeps first line and hint",
+			err:  errors.New("failed to list device configurations: {\r\n  \"_version\": 3\r\n} (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"),
 			want: "failed to list device configurations (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)",
 		},
 		{

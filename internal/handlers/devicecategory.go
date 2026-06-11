@@ -26,7 +26,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list device categories: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list device categories: %w (hint: requires 'DeviceManagementManagedDevices.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -47,7 +47,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceCategories().ByDeviceCategoryId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get device category: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get device category: %w (hint: requires 'DeviceManagementManagedDevices.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},
