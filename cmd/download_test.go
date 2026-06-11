@@ -5,15 +5,17 @@ import (
 	"reflect"
 	"testing"
 
+	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
 )
 
 func TestBuildFetchRequests(t *testing.T) {
 	tests := []struct {
 		name           string
+		registry       *handlers.Registry
 		resourceIDs    []string
 		resourceGroup  string
-		resourceType   string
+		resourceTypes  []string
 		subscriptionID string
 		expectedCount  int
 		expectError    bool
@@ -25,7 +27,6 @@ func TestBuildFetchRequests(t *testing.T) {
 				"/subscriptions/sub-123/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount",
 			},
 			resourceGroup:  "",
-			resourceType:   "",
 			subscriptionID: "sub-123",
 			expectedCount:  1,
 			expectError:    false,
@@ -37,7 +38,6 @@ func TestBuildFetchRequests(t *testing.T) {
 				"/subscriptions/sub-123/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/account2",
 			},
 			resourceGroup:  "",
-			resourceType:   "",
 			subscriptionID: "sub-123",
 			expectedCount:  2,
 			expectError:    false,
@@ -46,16 +46,15 @@ func TestBuildFetchRequests(t *testing.T) {
 			name:           "resource group",
 			resourceIDs:    []string{},
 			resourceGroup:  "my-rg",
-			resourceType:   "",
 			subscriptionID: "sub-123",
 			expectedCount:  1,
 			expectError:    false,
 		},
 		{
-			name:           "no inputs",
+			name:           "no inputs with empty registry yields no requests",
+			registry:       handlers.NewRegistry(),
 			resourceIDs:    []string{},
 			resourceGroup:  "",
-			resourceType:   "",
 			subscriptionID: "sub-123",
 			expectedCount:  0,
 			expectError:    false,
@@ -69,7 +68,7 @@ func TestBuildFetchRequests(t *testing.T) {
 				t.Skip("Skipping test that requires Azure client")
 			}
 
-			result, err := buildFetchRequests(context.Background(), nil, tt.resourceIDs, tt.resourceGroup, tt.resourceType, tt.subscriptionID)
+			result, err := buildFetchRequests(context.Background(), tt.registry, tt.resourceIDs, tt.resourceGroup, tt.resourceTypes, tt.subscriptionID)
 
 			if tt.expectError && err == nil {
 				t.Errorf("buildFetchRequests() expected error but got none")
@@ -173,7 +172,7 @@ func TestBuildFetchRequestsValidation(t *testing.T) {
 	}
 	subscriptionID := "sub-123"
 
-	requests, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", "", subscriptionID)
+	requests, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", nil, subscriptionID)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}
@@ -192,7 +191,7 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	subscriptionID := "sub-123"
 	resourceGroup := "my-rg"
 
-	requests, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, "", subscriptionID)
+	requests, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, nil, subscriptionID)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}

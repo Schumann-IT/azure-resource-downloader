@@ -19,7 +19,7 @@ import (
 
 var (
 	resourceIDs   []string
-	resourceType  string
+	resourceTypes []string
 	resourceGroup string
 	timeout       int
 )
@@ -32,8 +32,12 @@ var downloadCmd = &cobra.Command{
 
 You can specify resources in multiple ways:
   - By resource ID: --resource-id "/subscriptions/.../resourceGroups/my-rg"
-  - By resource type: --type "Microsoft.Storage/storageAccounts" (downloads all resources of that type)
+  - By resource type: --type "Microsoft.Storage/storageAccounts" (repeatable; downloads all resources of the given type(s))
   - By resource group: --resource-group "my-rg" (downloads the resource group itself)
+
+The --type flag acts as a filter and may be specified multiple times. If no
+--type (and no --resource-id/--resource-group) is given, all registered
+resource types are downloaded.
 
 The subscription ID is optional. If not specified, the default subscription from your 'az login' session will be used.
 
@@ -41,9 +45,12 @@ Examples:
   # Download a specific resource (uses default subscription from az login)
   azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
   
-  # Download all resources of a specific type
+  # Download all resources of one or more types
   azure-rd download --type "Microsoft.Resources/resourceGroups"
-  azure-rd download --type "Microsoft.Storage/storageAccounts"
+  azure-rd download --type "Microsoft.Storage/storageAccounts" --type "Microsoft.Compute/virtualMachines"
+
+  # Download every registered resource type (no --type filter)
+  azure-rd download
   
   # Download all resources in a resource group with explicit subscription
   azure-rd download --subscription "sub-id" --resource-group "my-rg"
@@ -58,7 +65,7 @@ func init() {
 
 	// Download-specific flags
 	downloadCmd.Flags().StringSliceVar(&resourceIDs, "resource-id", []string{}, "Azure resource IDs to download (can be specified multiple times)")
-	downloadCmd.Flags().StringVar(&resourceType, "type", "", "Azure resource type to download")
+	downloadCmd.Flags().StringSliceVar(&resourceTypes, "type", []string{}, "Azure resource type(s) to download; repeatable. Acts as a filter \u2014 if omitted, all registered types are downloaded")
 	downloadCmd.Flags().StringVar(&resourceGroup, "resource-group", "", "Resource group name")
 	downloadCmd.Flags().IntVar(&timeout, "timeout", 300, "timeout in seconds for the download operation")
 }
@@ -104,11 +111,6 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Validate input - this is a CLI validation error, so return it to show help
-	if len(resourceIDs) == 0 && resourceGroup == "" && resourceType == "" {
-		return fmt.Errorf("at least one of --resource-id, --resource-group, or --type must be specified")
-	}
-
 	if sub == "" {
 		log.Info("No subscription specified, will use default from Azure CLI session")
 	}
@@ -144,7 +146,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
-	requests, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceType, sub)
+	requests, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -159,32 +161,39 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Preparing to download resources", "count", len(requests))
 
+	// Worker tuning is API-specific and only meaningful when a single type is
+	// targeted. With multiple types (or all registered types), treat as mixed.
+	effectiveType := ""
+	if len(resourceTypes) == 1 {
+		effectiveType = resourceTypes[0]
+	}
+
 	// Determine worker count based on resource type and API
-	workers := determineWorkerCount(workerConfig, resourceType, requests, workersFlag)
+	workers := determineWorkerCount(workerConfig, effectiveType, requests, workersFlag)
 
 	log.Info("Worker configuration",
 		"workers", workers,
 		"resource_type", func() string {
-			if resourceType != "" {
-				return resourceType
+			if effectiveType != "" {
+				return effectiveType
 			}
 			return "mixed"
 		}(),
 		"api", func() string {
-			if resourceType != "" {
-				return string(models.DetectAPIType(resourceType))
+			if effectiveType != "" {
+				return string(models.DetectAPIType(effectiveType))
 			}
 			return "auto-detected"
 		}())
 
 	// Warn if using too many workers based on API type
-	if resourceType != "" {
-		shouldWarn, rateLimitInfo := models.ShouldWarnAboutWorkerCount(resourceType, workers)
+	if effectiveType != "" {
+		shouldWarn, rateLimitInfo := models.ShouldWarnAboutWorkerCount(effectiveType, workers)
 		if shouldWarn {
-			apiConfig := models.GetAPIConfig(resourceType)
+			apiConfig := models.GetAPIConfig(effectiveType)
 			log.Warn("Worker count exceeds recommendation for this API",
 				"workers", workers,
-				"resource_type", resourceType,
+				"resource_type", effectiveType,
 				"api", apiConfig.Name,
 				"recommended_workers", apiConfig.RecommendedWorkers,
 				"max_recommended", apiConfig.MaxRecommendedWorkers,
@@ -279,9 +288,14 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	// registry.Register("Microsoft.Sql/servers", handlers.NewSqlServerHandler(cred, sub))
 }
 
-// buildFetchRequests creates fetch requests from command-line arguments
-func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup, resourceType, subscriptionID string) ([]*models.FetchRequest, error) {
+// buildFetchRequests creates fetch requests from command-line arguments.
+//
+// Selection precedence: explicit --resource-id, then --resource-group, then
+// type listing. The resourceTypes slice acts as a filter on the registered
+// handlers: when empty, all registered types are considered.
+func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup string, resourceTypes []string, subscriptionID string) ([]*models.FetchRequest, error) {
 	var requests []*models.FetchRequest
+	log := logger.Default
 
 	// If specific resource IDs are provided, use them
 	if len(resourceIDs) > 0 {
@@ -306,25 +320,33 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		return requests, nil
 	}
 
-	// If resource type is specified, list all resources of that type via the
-	// handler that owns it (each handler enumerates its own resources).
-	if resourceType != "" {
-		log := logger.Default
-		log.Info("Listing all resources of type", "type", resourceType)
+	// Otherwise, list resources by type. --type acts as a filter; when no type
+	// is given, every registered type is considered.
+	types := resourceTypes
+	if len(types) == 0 {
+		types = registry.GetAllTypes()
+		log.Info("No --type filter given, considering all registered types", "count", len(types))
+	}
 
+	for _, resourceType := range types {
 		handler, err := registry.Get(resourceType)
 		if err != nil {
 			log.Error("No handler for resource type", "type", resourceType, "error", err)
 			return nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
 		}
 
+		log.Info("Listing all resources of type", "type", resourceType)
+
 		resourceList, err := handler.List(ctx)
 		if err != nil {
-			log.Error("Failed to list resources", "type", resourceType, "error", err)
-			return nil, fmt.Errorf("failed to list resources of type %s: %w", resourceType, err)
+			// Don't abort the whole run because one type fails (e.g. missing
+			// permissions for a single Graph collection); log and continue so
+			// the remaining types are still downloaded.
+			log.Warn("Failed to list resources, skipping type", "type", resourceType, "error", err)
+			continue
 		}
 
-		log.Info("Found resources", "count", len(resourceList))
+		log.Info("Found resources", "type", resourceType, "count", len(resourceList))
 
 		if len(resourceList) == 0 {
 			log.Warn("No resources found",
@@ -339,7 +361,6 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 				Subscription: subscriptionID,
 			})
 		}
-		return requests, nil
 	}
 
 	return requests, nil

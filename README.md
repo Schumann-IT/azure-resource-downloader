@@ -196,6 +196,14 @@ azure-rd download \
 azure-rd download \
   --type "Microsoft.Storage/storageAccounts"
 
+# --type is a repeatable filter: pass it multiple times to download several types
+azure-rd download \
+  --type "Microsoft.Graph/deviceConfigurations" \
+  --type "Microsoft.Graph/deviceManagementConfigurationPolicies"
+
+# Omit --type (and --resource-id/--resource-group) to download EVERY registered type
+azure-rd download
+
 # Download Microsoft Graph resources (tenant-level)
 azure-rd download \
   --type "Microsoft.Graph/conditionalAccessPolicies"

@@ -1,0 +1,26 @@
+transformers:
+  - name: cleaning
+    remove-keys:
+      - id
+      - provisioningState
+      - creationTime
+      - createdDateTime
+      - modifiedDateTime
+      - changedTime
+      - correlationId
+      - etag
+      - managedBy
+      - sku.tier
+    remove-keys-by-type:
+      Microsoft.Resources/resourceGroups:
+       - type
+    replace:
+      - from: grantControls.authenticationStrength.displayName
+        to: grantControls.authenticationStrength
+
+  - name: base64-decode
+  - name: id-resolution
+  - name: name-sanitization
+#  - name: terraform-import
+#    target-format: 'module.conditional_access_policies["{name}"].{resource_type}.this'
+
