@@ -13,6 +13,7 @@ import (
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -280,6 +281,26 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	}
 	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, resolveSecrets); err == nil {
 		registry.Register("Microsoft.Graph/deviceConfigurations", dcHandler)
+	}
+
+	// Register simple Microsoft Graph beta collection handlers
+	graphCollections := []func(azcore.TokenCredential) (*handlers.GraphCollectionHandler, error){
+		handlers.NewAssignmentFilterHandler,
+		handlers.NewWindowsFeatureUpdateProfileHandler,
+		handlers.NewWindowsQualityUpdateProfileHandler,
+		handlers.NewWindowsDriverUpdateProfileHandler,
+		handlers.NewDeviceCategoryHandler,
+		handlers.NewRoleScopeTagHandler,
+		handlers.NewTermsAndConditionsHandler,
+		handlers.NewIntuneBrandingProfileHandler,
+		handlers.NewNotificationMessageTemplateHandler,
+		handlers.NewNamedLocationHandler,
+		handlers.NewTermsOfUseAgreementHandler,
+	}
+	for _, newHandler := range graphCollections {
+		if h, err := newHandler(cred); err == nil {
+			registry.Register(h.GetType(), h)
+		}
 	}
 
 	// Add more handlers here as needed

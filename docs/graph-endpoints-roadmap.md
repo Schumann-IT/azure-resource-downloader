@@ -21,6 +21,7 @@ added to the README "Supported Resource Types" table.
 | `deviceManagement/configurationPolicies` | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `devicemanagementconfigurationpolicy.go` |
 | `identity/conditionalAccess/policies` | `Microsoft.Graph/conditionalAccessPolicies` | `conditionalaccesspolicy.go` |
 | `policies/authenticationStrengthPolicies` | `Microsoft.Graph/authenticationStrengthPolicies` | `authenticationstrengthpolicy.go` |
+| Phase 1 collections (see below) | `Microsoft.Graph/*` | `graphcollection.go` base + 11 per-resource files |
 
 ## Common Graph scopes (delegated/app)
 
@@ -33,24 +34,25 @@ From the exporter; needed depending on which handlers are enabled:
 
 ---
 
-## Phase 1 — Simple collections (fetch + serialize)
+## Phase 1 — Simple collections (fetch + serialize) — DONE
 
-Structurally identical to the existing Settings Catalog handler: GET collection,
-serialize each item to a map, transform. Lowest effort, high coverage.
+Implemented via the shared `GraphCollectionHandler` base
+(`internal/handlers/graphcollection.go`) with one constructor file per
+resource. Terraform types confirmed against `deploymenttheory/microsoft365`.
 
-| Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
+| Status | Resource | Graph endpoint | Azure type | Terraform type |
 | --- | --- | --- | --- | --- |
-| [ ] | Assignment filters | `deviceManagement/assignmentFilters` | `Microsoft.Graph/assignmentFilters` | has `rule` syntax |
-| [ ] | Feature update profiles | `deviceManagement/windowsFeatureUpdateProfiles` | `Microsoft.Graph/windowsFeatureUpdateProfiles` | |
-| [ ] | Quality update profiles | `deviceManagement/windowsQualityUpdateProfiles` | `Microsoft.Graph/windowsQualityUpdateProfiles` | |
-| [ ] | Driver update profiles | `deviceManagement/windowsDriverUpdateProfiles` | `Microsoft.Graph/windowsDriverUpdateProfiles` | |
-| [ ] | Device categories | `deviceManagement/deviceCategories` | `Microsoft.Graph/deviceCategories` | |
-| [ ] | Scope tags | `deviceManagement/roleScopeTags` | `Microsoft.Graph/roleScopeTags` | |
-| [ ] | Terms & Conditions | `deviceManagement/termsAndConditions` | `Microsoft.Graph/termsAndConditions` | |
-| [ ] | Branding profiles | `deviceManagement/intuneBrandingProfiles` | `Microsoft.Graph/intuneBrandingProfiles` | name field `profileName` |
-| [ ] | Notification templates | `deviceManagement/notificationMessageTemplates` | `Microsoft.Graph/notificationMessageTemplates` | |
-| [ ] | Named locations | `identity/conditionalAccess/namedLocations` | `Microsoft.Graph/namedLocations` | |
-| [ ] | Terms of use agreements | `identityGovernance/termsOfUse/agreements` | `Microsoft.Graph/termsOfUseAgreements` | |
+| [x] | Assignment filters | `deviceManagement/assignmentFilters` | `Microsoft.Graph/assignmentFilters` | `microsoft365_graph_beta_device_management_assignment_filter` |
+| [x] | Feature update profiles | `deviceManagement/windowsFeatureUpdateProfiles` | `Microsoft.Graph/windowsFeatureUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_feature_update_policy` |
+| [x] | Quality update profiles | `deviceManagement/windowsQualityUpdateProfiles` | `Microsoft.Graph/windowsQualityUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_quality_update_policy` |
+| [x] | Driver update profiles | `deviceManagement/windowsDriverUpdateProfiles` | `Microsoft.Graph/windowsDriverUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_driver_update_profile` |
+| [x] | Device categories | `deviceManagement/deviceCategories` | `Microsoft.Graph/deviceCategories` | `microsoft365_graph_beta_device_management_device_category` |
+| [x] | Scope tags | `deviceManagement/roleScopeTags` | `Microsoft.Graph/roleScopeTags` | `microsoft365_graph_beta_device_management_role_scope_tag` |
+| [x] | Terms & Conditions | `deviceManagement/termsAndConditions` | `Microsoft.Graph/termsAndConditions` | `microsoft365_graph_beta_device_management_terms_and_conditions` |
+| [x] | Branding profiles | `deviceManagement/intuneBrandingProfiles` | `Microsoft.Graph/intuneBrandingProfiles` | `microsoft365_graph_beta_device_management_intune_branding_profile` (name field `profileName`) |
+| [x] | Notification templates | `deviceManagement/notificationMessageTemplates` | `Microsoft.Graph/notificationMessageTemplates` | `microsoft365_graph_beta_device_management_device_compliance_notification_template` |
+| [x] | Named locations | `identity/conditionalAccess/namedLocations` | `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` |
+| [x] | Terms of use agreements | `identityGovernance/termsOfUse/agreements` | `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` |
 
 ## Phase 2 — Scripts (base64-decode payloads)
 

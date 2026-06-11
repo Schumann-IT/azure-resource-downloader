@@ -164,7 +164,21 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` + `--resolve-secrets` | `DeviceManagementConfiguration.ReadWrite.All` |
+| `Microsoft.Graph/assignmentFilters`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles`, `deviceCategories` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
+| `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
+| `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |
+| `Microsoft.Graph/namedLocations` | `Policy.Read.All` |
+| `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` |
 | ARM types (`storageAccounts`, `virtualMachines`, `resourceGroups`) | `Azure Service Management/user_impersonation` (+ your Azure RBAC) |
+
+> To add further delegated scopes to the app, look up the permission ID by name and grant it:
+> ```bash
+> SCOPE_ID=$(az ad sp show --id "$GRAPH" --query "oauth2PermissionScopes[?value=='DeviceManagementRBAC.Read.All'].id" -o tsv)
+> az ad app permission add --id "$APP_ID" --api "$GRAPH" --api-permissions "$SCOPE_ID=Scope"
+> az ad app permission admin-consent --id "$APP_ID"
+> ```
+> Types whose scope is missing are simply skipped (reported in the summary).
 
 > These are **delegated** permissions — the token acts as the signed-in user, so the user still needs the matching directory / Intune / Azure RBAC roles.
 
@@ -801,6 +815,19 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/authenticationStrengthPolicies` | `azuread_authentication_strength_policy` | ✅ |
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy` | ✅ |
 | `Microsoft.Graph/deviceConfigurations` | `microsoft365_graph_beta_device_management_device_configuration` | ✅ |
+| `Microsoft.Graph/assignmentFilters` | `microsoft365_graph_beta_device_management_assignment_filter` | ✅ |
+| `Microsoft.Graph/windowsFeatureUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_feature_update_policy` | ✅ |
+| `Microsoft.Graph/windowsQualityUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_quality_update_policy` | ✅ |
+| `Microsoft.Graph/windowsDriverUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_driver_update_profile` | ✅ |
+| `Microsoft.Graph/deviceCategories` | `microsoft365_graph_beta_device_management_device_category` | ✅ |
+| `Microsoft.Graph/roleScopeTags` | `microsoft365_graph_beta_device_management_role_scope_tag` | ✅ |
+| `Microsoft.Graph/termsAndConditions` | `microsoft365_graph_beta_device_management_terms_and_conditions` | ✅ |
+| `Microsoft.Graph/intuneBrandingProfiles` | `microsoft365_graph_beta_device_management_intune_branding_profile` | ✅ |
+| `Microsoft.Graph/notificationMessageTemplates` | `microsoft365_graph_beta_device_management_device_compliance_notification_template` | ✅ |
+| `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` | ✅ |
+| `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` | ✅ |
+
+> **Note:** The 11 collection types above (assignment filters through terms of use agreements) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
 
 > **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
 >
@@ -815,6 +842,7 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
 | Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | Explicit property mapping (conditions, grant/session controls) |
 | Graph beta (`deviceManagementConfigurationPolicies`, `deviceConfigurations`) | `msgraph-beta-sdk-go` | Full generic serialization of the polymorphic `@odata.type` tree via the Kiota JSON writer — no setting is lost |
+| Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 
 ## 🔧 Adding New Resource Types
 
@@ -921,7 +949,9 @@ azure-resource-downloader/
 │   │   ├── conditionalaccesspolicy.go              # Graph v1.0
 │   │   ├── authenticationstrengthpolicy.go         # Graph v1.0
 │   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog (Graph beta)
-│   │   └── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI (Graph beta)
+│   │   ├── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI (Graph beta)
+│   │   ├── graphcollection.go                      # Shared base for simple Graph beta collections
+│   │   └── assignmentfilter.go, rolescopetag.go, … # 11 collection handlers built on the base
 │   ├── azure/             # Azure client wrappers
 │   │   ├── client.go      # Auth (az login / device-code) + ARM client
 │   │   ├── errors.go      # Permission-error detection (warn & skip)
