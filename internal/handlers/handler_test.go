@@ -42,6 +42,7 @@ func TestNewRegistry(t *testing.T) {
 
 	if registry == nil {
 		t.Fatal("NewRegistry() returned nil")
+		return
 	}
 
 	if registry.handlers == nil {

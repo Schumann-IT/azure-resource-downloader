@@ -92,10 +92,13 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 		processedCount++
 		metrics.RecordResult()
 
-		if writeResult.Error != nil {
+		switch {
+		case writeResult.Skipped:
+			summary.SkippedResources++
+		case writeResult.Error != nil:
 			summary.FailedResources++
 			summary.Errors = append(summary.Errors, fmt.Sprintf("%s: %v", writeResult.ResourceID, writeResult.Error))
-		} else {
+		default:
 			summary.SuccessfulResources++
 		}
 
@@ -107,6 +110,7 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 				"total", len(requests),
 				"percentage", fmt.Sprintf("%.1f%%", float64(processedCount)/float64(len(requests))*100),
 				"successful", summary.SuccessfulResources,
+				"skipped", summary.SkippedResources,
 				"failed", summary.FailedResources,
 				"elapsed", time.Since(metrics.StartTime).Round(time.Second))
 		}
@@ -123,13 +127,27 @@ func max(a, b int) int {
 	return b
 }
 
+// SkippedType describes a resource type that could not be listed at all (e.g.
+// missing permissions or no subscription). Because listing failed, the number
+// of resources of this type is unknown and none of them were downloaded.
+type SkippedType struct {
+	ResourceType string
+	Reason       string
+}
+
 // ExecutionSummary contains the results of a pipeline execution
 type ExecutionSummary struct {
 	TotalResources      int
 	SuccessfulResources int
 	FailedResources     int
-	Results             []*models.WriteResult
-	Errors              []string
+	// SkippedResources counts resources the signed-in user was not permitted to
+	// read. They are reported as warnings and do not cause a non-zero exit.
+	SkippedResources int
+	// SkippedTypes lists resource types whose listing failed before the
+	// pipeline ran; their resource counts are not part of the totals above.
+	SkippedTypes []SkippedType
+	Results      []*models.WriteResult
+	Errors       []string
 }
 
 // PrintSummary prints a summary of the execution
@@ -139,7 +157,22 @@ func (s *ExecutionSummary) PrintSummary() {
 	log.Info("Pipeline Execution Summary",
 		"total", s.TotalResources,
 		"successful", s.SuccessfulResources,
-		"failed", s.FailedResources)
+		"skipped", s.SkippedResources,
+		"failed", s.FailedResources,
+		"skipped_types", len(s.SkippedTypes))
+
+	if s.SkippedResources > 0 {
+		log.Warn("Some resources were skipped because the signed-in user is not permitted to read them",
+			"skipped", s.SkippedResources)
+	}
+
+	if len(s.SkippedTypes) > 0 {
+		log.Warn("Some resource types could not be listed and were skipped entirely; their resource counts are unknown and not included in the totals",
+			"count", len(s.SkippedTypes))
+		for _, st := range s.SkippedTypes {
+			log.Warn("Skipped type", "type", st.ResourceType, "reason", st.Reason)
+		}
+	}
 
 	if len(s.Errors) > 0 {
 		log.Warn("Errors occurred during execution")

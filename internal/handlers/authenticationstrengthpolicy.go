@@ -7,19 +7,19 @@ import (
 
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
 
 // AuthenticationStrengthPolicyHandler handles Azure AD Authentication Strength Policies
 type AuthenticationStrengthPolicyHandler struct {
-	credential *azidentity.DefaultAzureCredential
+	credential azcore.TokenCredential
 	client     *msgraphsdk.GraphServiceClient
 }
 
 // NewAuthenticationStrengthPolicyHandler creates a new authentication strength policy handler
-func NewAuthenticationStrengthPolicyHandler(credential *azidentity.DefaultAzureCredential) (*AuthenticationStrengthPolicyHandler, error) {
+func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (*AuthenticationStrengthPolicyHandler, error) {
 	// Create Graph client
 	client, err := msgraphsdk.NewGraphServiceClientWithCredentials(credential, []string{
 		"https://graph.microsoft.com/.default",

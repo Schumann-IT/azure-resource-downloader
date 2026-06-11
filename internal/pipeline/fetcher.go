@@ -132,6 +132,26 @@ func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *
 	})
 
 	if err != nil {
+		// A permission/authorization failure means the signed-in user simply
+		// isn't allowed to read this resource. Warn and skip instead of failing
+		// the whole run.
+		if azure.IsPermissionError(err) {
+			log.Warn("Skipping resource: not permitted for the signed-in user",
+				"resource_id", req.ResourceID,
+				"type", resourceType,
+				"reason", azure.ErrorSummary(err))
+			log.Debug("Fetch failed with permission error",
+				"resource_id", req.ResourceID,
+				"type", resourceType,
+				"error", err)
+			return &models.FetchResult{
+				ResourceID:   req.ResourceID,
+				ResourceType: resourceType,
+				Skipped:      true,
+				SkipReason:   err.Error(),
+			}
+		}
+
 		log.Error("Failed to fetch resource",
 			"resource_id", req.ResourceID,
 			"type", resourceType,

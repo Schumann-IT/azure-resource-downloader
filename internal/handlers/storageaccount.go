@@ -7,18 +7,18 @@ import (
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 )
 
 // StorageAccountHandler handles Azure Storage Accounts
 type StorageAccountHandler struct {
-	credential     *azidentity.DefaultAzureCredential
+	credential     azcore.TokenCredential
 	subscriptionID string
 }
 
 // NewStorageAccountHandler creates a new storage account handler
-func NewStorageAccountHandler(credential *azidentity.DefaultAzureCredential, subscriptionID string) *StorageAccountHandler {
+func NewStorageAccountHandler(credential azcore.TokenCredential, subscriptionID string) *StorageAccountHandler {
 	return &StorageAccountHandler{
 		credential:     credential,
 		subscriptionID: subscriptionID,

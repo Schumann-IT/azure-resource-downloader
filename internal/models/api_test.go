@@ -81,6 +81,7 @@ func TestGetAPIConfig(t *testing.T) {
 			config := GetAPIConfig(tt.resourceType)
 			if config == nil {
 				t.Fatal("GetAPIConfig() returned nil")
+				return
 			}
 			if config.Name != tt.expectedAPI {
 				t.Errorf("API Name = %v, want %v", config.Name, tt.expectedAPI)

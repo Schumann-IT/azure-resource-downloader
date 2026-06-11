@@ -43,8 +43,8 @@ func GenerateTerraformImportBlock(terraformResourceType, resourceName, azureReso
 	var sb strings.Builder
 
 	sb.WriteString("import {\n")
-	sb.WriteString(fmt.Sprintf("  to = %s\n", targetAddress))
-	sb.WriteString(fmt.Sprintf("  id = \"%s\"\n", azureResourceID))
+	fmt.Fprintf(&sb, "  to = %s\n", targetAddress)
+	fmt.Fprintf(&sb, "  id = %q\n", azureResourceID)
 	sb.WriteString("}\n")
 
 	return sb.String()
@@ -56,19 +56,19 @@ func GenerateTerraformResourceStub(terraformResourceType, resourceName string, p
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("resource \"%s\" \"%s\" {\n", terraformResourceType, sanitizedName))
+	fmt.Fprintf(&sb, "resource %q %q {\n", terraformResourceType, sanitizedName)
 
 	// Add common properties if available
 	if name, ok := properties["name"].(string); ok {
-		sb.WriteString(fmt.Sprintf("  name = \"%s\"\n", name))
+		fmt.Fprintf(&sb, "  name = %q\n", name)
 	}
 
 	if location, ok := properties["location"].(string); ok {
-		sb.WriteString(fmt.Sprintf("  location = \"%s\"\n", location))
+		fmt.Fprintf(&sb, "  location = %q\n", location)
 	}
 
 	if rgName := extractResourceGroup(properties); rgName != "" {
-		sb.WriteString(fmt.Sprintf("  resource_group_name = \"%s\"\n", rgName))
+		fmt.Fprintf(&sb, "  resource_group_name = %q\n", rgName)
 	}
 
 	sb.WriteString("\n  # Additional properties imported from Azure\n")

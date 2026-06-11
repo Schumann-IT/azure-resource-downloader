@@ -7,18 +7,18 @@ import (
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 )
 
 // ResourceGroupHandler handles Azure Resource Groups
 type ResourceGroupHandler struct {
-	credential     *azidentity.DefaultAzureCredential
+	credential     azcore.TokenCredential
 	subscriptionID string
 }
 
 // NewResourceGroupHandler creates a new resource group handler
-func NewResourceGroupHandler(credential *azidentity.DefaultAzureCredential, subscriptionID string) *ResourceGroupHandler {
+func NewResourceGroupHandler(credential azcore.TokenCredential, subscriptionID string) *ResourceGroupHandler {
 	return &ResourceGroupHandler{
 		credential:     credential,
 		subscriptionID: subscriptionID,

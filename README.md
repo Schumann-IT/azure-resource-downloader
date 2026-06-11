@@ -4,11 +4,12 @@ A powerful command-line tool that downloads Azure resources, transforms them int
 
 ## ToDo
 
-- Add support for Intune Settings Catalog policies
-- Add old and new device management policies (deviceManagementConfigurationPolicies are the new ones?)
 - Add support for remediation/platform scripts (old and new)
-- Add support for onboarding scrrens/profiles (OOBE settings/profiles, Mac deployment profiles etc) 
+- Add support for onboarding screens/profiles (OOBE settings/profiles, Mac deployment profiles etc)
 - Add support for Entra Groups incl. dynamic groups
+- Conditional access handler: map remaining condition fields (device filters, guest/external users, client applications, sign-in frequency interval)
+
+> Done: Intune Settings Catalog policies (`Microsoft.Graph/deviceManagementConfigurationPolicies`) and legacy device configuration profiles incl. Custom/OMA-URI (`Microsoft.Graph/deviceConfigurations`).
 
 ## 🚀 Features
 
@@ -86,89 +87,93 @@ go install
 
 ## 🔐 Authentication
 
-The tool uses Azure's DefaultAzureCredential, which supports multiple authentication methods:
-
-1. **Azure CLI**: `az login` (recommended)
-2. **Managed Identity**: When running on Azure resources
-3. **Environment Variables**: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
-4. **Service Principal**: Configure via environment variables
-
-### Quick Setup
+The tool authenticates **as the user signed in via the Azure CLI** (`az login`). Service principal / app-only credentials are **not** supported — the tool is intended to be run by a privileged user (e.g. a Global / Intune Administrator). The same delegated token is used for both ARM and Microsoft Graph calls.
 
 ```bash
-
-# Login via Azure CLI (easiest method)
+# Sign in (run once)
 az login
 
-# The tool will automatically use the default subscription from your Azure CLI session
-# Optionally, set a specific subscription (if you have multiple)
+# Optionally select a subscription (otherwise a default is auto-detected)
 az account set --subscription "your-subscription-id"
 
-# Or override the subscription using the --subscription flag
-azure-rd download --subscription "different-subscription-id" --resource-group "my-rg"
+# Run
+azure-rd download --subscription "your-subscription-id"
 ```
 
-**Note**: The subscription ID is optional. If not specified via CLI flag, config file, or environment variable, the tool will automatically use the default subscription from your `az login` session.
+By default no app registration, client ID, or tenant ID is required — the tool reuses your existing `az login` session.
 
-### Microsoft Graph Permissions
+### Required directory / Intune roles for the signed-in user
 
-Some resources (like Conditional Access Policies and Authentication Strength Policies) are accessed via Microsoft Graph API and require additional permissions:
+| Resource | Role the user needs |
+|---|---|
+| Conditional Access / Authentication Strength policies | Security Reader (or higher) |
+| Intune Settings Catalog / device configurations | Intune Administrator or Global Reader |
+| OMA-URI secret resolution (`--resolve-secrets`) | Intune Administrator (read rights on the profile) |
 
-**For Azure CLI users (`az login`):**
+> ⚠️ **ARM is separate from Entra roles.** Being a Global Administrator does **not** grant Azure RBAC. To download the ARM types the signed-in user must additionally hold a subscription role such as **Reader** (or use *elevate access*). Otherwise those types return `403 AuthorizationFailed` and are skipped.
+
+> ⚠️ **The Azure CLI app cannot obtain some Graph scopes.** Intune Settings Catalog / device configurations require `DeviceManagementConfiguration.Read.All` and authentication-strength policies require `Policy.Read.All`. The Microsoft Azure CLI is a Microsoft first-party app that is **not pre-authorized** for these scopes, so `az login` tokens can never include them (you'll see `AADSTS65002` if you request them). For those resource types use a **dedicated app registration** (below). Without it, those types are skipped gracefully.
+
+### Optional: dedicated app registration (device-code sign-in)
+
+To download resource types that need scopes the Azure CLI app can't provide, register your own Entra app and sign in to it with `--client-id`. The tool then uses an interactive **device-code** flow (prints a URL + code) and acquires a token carrying those delegated scopes.
+
+**One-time app setup** (requires a privileged admin):
+
 ```bash
-# Your user account needs the appropriate Azure AD role assignments
-# Required roles for Conditional Access Policies:
-# - Security Reader (read-only)
-# - Security Administrator (read/write)
-# - Global Administrator (full access)
+GRAPH="00000003-0000-0000-c000-000000000000"
+POLICY_READ_ALL="572fea84-0151-49b2-9301-11cb16974376"   # Policy.Read.All (delegated)
+DMC_READWRITE="0883f392-0a7a-443d-8c76-16a6d39c7b63"     # DeviceManagementConfiguration.ReadWrite.All (delegated)
+ARM="797f4846-ba00-4fd7-ba43-dac1f8f63013"
+ARM_USER_IMP="41094075-9dad-400e-a0bd-54e686782033"      # user_impersonation (delegated)
 
-# Required roles for Authentication Strength Policies:
-# - Security Reader (read-only)
-# - Security Administrator (read/write)
-# - Global Administrator (full access)
+# Create the app with public-client (device-code) flow enabled
+APP_ID=$(az ad app create --display-name "azure-resource-downloader" \
+  --is-fallback-public-client true --query appId -o tsv)
 
-# Required roles for Intune Settings Catalog (deviceManagementConfigurationPolicies):
-# - Intune Administrator
-# - Global Reader (read-only)
-# - Global Administrator (full access)
+# Add delegated permissions
+az ad app permission add --id "$APP_ID" --api "$GRAPH" \
+  --api-permissions "$POLICY_READ_ALL=Scope" "$DMC_READWRITE=Scope"
+az ad app permission add --id "$APP_ID" --api "$ARM" \
+  --api-permissions "$ARM_USER_IMP=Scope"
+
+# Create the service principal, then admin-consent (allow ~60s for replication)
+az ad sp create --id "$APP_ID"
+az ad app permission admin-consent --id "$APP_ID"
 ```
 
-**For Service Principal authentication:**
+**Run with the dedicated app:**
+
 ```bash
-# Your service principal needs Microsoft Graph API permissions
-# Required API permissions for Conditional Access Policies:
-# - Policy.Read.All (read-only)
-# - Policy.ReadWrite.ConditionalAccess (read/write)
-
-# Required API permissions for Authentication Strength Policies:
-# - Policy.Read.All (read-only)
-# - Policy.ReadWrite.AuthenticationMethod (read/write)
-
-# Required API permissions for Intune Settings Catalog (deviceManagementConfigurationPolicies):
-# - DeviceManagementConfiguration.Read.All (read-only)
-# - DeviceManagementConfiguration.ReadWrite.All (read/write)
-
-# To grant permissions:
-# 1. Register an app in Azure AD
-# 2. Add Microsoft Graph API permissions
-# 3. Grant admin consent for the permissions
-# 4. Set environment variables:
-export AZURE_TENANT_ID="your-tenant-id"
-export AZURE_CLIENT_ID="your-client-id"
-export AZURE_CLIENT_SECRET="your-client-secret"
+azure-rd download --client-id "$APP_ID" --tenant-id "<your-tenant-id>"
 ```
 
-**Note**: If you receive permission errors when listing Graph resources, even as a Global Administrator, this is likely a **token scope issue**. See [Troubleshooting Graph Permissions](docs/TROUBLESHOOTING-GRAPH-PERMISSIONS.md) for solutions.
+> ⚠️ **Pass `--client-id` to `azure-rd`, not to `az login`.** Tokens returned by `az account get-access-token` are always minted for the Azure CLI first-party app (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) — even after `az login --client-id <app>` — so the extra Graph scopes never appear in them. Only the tool's own `--client-id`/`--tenant-id` flags (device-code sign-in) produce a token for your app. Also verify `$APP_ID` is actually set (`echo "$APP_ID"`): an **empty** value silently falls back to the az login session and the Graph types are skipped with permission warnings.
 
-**Quick Fix** (if you're getting "Request Authorization failed"):
+To verify which app and scopes a CLI session token carries:
+
 ```bash
-# Logout and re-login with proper scope
-az logout
-az login --scope https://graph.microsoft.com/.default
-
-# Or create a service principal with proper permissions
-./docs/grant-graph-permissions.sh
+az account get-access-token --resource https://graph.microsoft.com -o tsv --query accessToken \
+  | python3 -c "import sys,base64,json; t=sys.stdin.read().strip().split('.')[1]; t+='='*(-len(t)%4); c=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:c.get(k) for k in ['appid','app_displayname','scp']}, indent=2))"
 ```
+
+| Resource type | Delegated permission |
+|---|---|
+| `Microsoft.Graph/conditionalAccessPolicies` | `Policy.Read.All` |
+| `Microsoft.Graph/authenticationStrengthPolicies` | `Policy.Read.All` |
+| `Microsoft.Graph/deviceManagementConfigurationPolicies` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceConfigurations` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceConfigurations` + `--resolve-secrets` | `DeviceManagementConfiguration.ReadWrite.All` |
+| ARM types (`storageAccounts`, `virtualMachines`, `resourceGroups`) | `Azure Service Management/user_impersonation` (+ your Azure RBAC) |
+
+> These are **delegated** permissions — the token acts as the signed-in user, so the user still needs the matching directory / Intune / Azure RBAC roles.
+
+> **Graph token scopes (az login path):** if you get `Request Authorization failed` / "required scopes are missing" for Graph types the CLI app *can* serve, refresh the session:
+> ```bash
+> az logout && az login --scope https://graph.microsoft.com/.default
+> ```
+
+**Note**: The subscription ID is optional. If not specified via CLI flag, config file, or environment variable, the tool resolves a default subscription the signed-in user can access.
 
 ## 📖 Usage
 
@@ -178,7 +183,7 @@ az login --scope https://graph.microsoft.com/.default
 # Show help
 azure-rd --help
 
-# List supported resource types (uses default subscription from az login)
+# List supported resource types (uses the signed-in user's default subscription)
 azure-rd list
 
 # Download a specific resource (uses default subscription)
@@ -297,7 +302,7 @@ azure-rd download --type "Microsoft.Network/virtualNetworks"
 You can use environment variables instead of flags:
 
 ```bash
-export AZURE_RD_SUBSCRIPTION="your-subscription-id"  # Optional - overrides default from az login
+export AZURE_RD_SUBSCRIPTION="your-subscription-id"  # Optional - overrides the signed-in user's default subscription
 export AZURE_RD_OUTPUT="./output"
 export AZURE_RD_WORKERS="5"
 export LOG_LEVEL="info"  # or debug, warn, error
@@ -306,7 +311,9 @@ azure-rd download --resource-group "my-rg"
 ```
 
 **Available environment variables:**
-- `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses default from az login if not set)
+- `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses the signed-in user's default subscription if not set)
+- `AZURE_RD_CLIENT_ID` - App registration (client) ID for device-code sign-in (optional; defaults to the az login session)
+- `AZURE_RD_TENANT_ID` - Entra tenant ID for device-code sign-in (used with `AZURE_RD_CLIENT_ID`)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
 - `AZURE_RD_REMOVE_KEYS` - Comma-separated list of keys to remove from output
@@ -319,7 +326,7 @@ Create `~/.azure-rd.yaml`:
 
 ```yaml
 # All fields are optional
-# subscription: "your-subscription-id"  # Optional - uses default from az login if not specified
+# subscription: "your-subscription-id"  # Optional - uses the signed-in user's default subscription if not specified
 output: "./azure-resources"
 workers: 10
 
@@ -432,6 +439,12 @@ azure-rd download --resource-group "my-rg"
 
 Each transformer can be independently configured with its own settings. By default, all transformers are applied. Set `transformers: []` to disable all and get raw Azure data.
 
+Listing a transformer in the config **enables** it; omitting it disables it. Regardless of the order in the config file, transformers always execute in this fixed pipeline order:
+
+```
+cleaning → id-resolution → base64-decode → name-sanitization → terraform-import
+```
+
 ### Available Transformers
 
 **`cleaning`** - Remove unwanted properties and transform data
@@ -468,17 +481,15 @@ Some Windows OMA-URI settings are stored as secrets; Microsoft Graph returns the
 Passing `--resolve-secrets` makes the `Microsoft.Graph/deviceConfigurations` handler resolve each masked value to plaintext via the Graph `getOmaSettingPlainTextValue(secretReferenceValueId=...)` function and write it into the output.
 
 ```bash
-azure-rd download --type "Microsoft.Graph/deviceConfigurations" \
-  --resolve-secrets \
-  --secrets-client-id "<public-client-app-id>"
-# (optional) --secrets-tenant-id "<tenant-id>"   # defaults to AZURE_TENANT_ID
+az login   # signed in as an Intune admin
+azure-rd download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
 ```
 
-On start you'll be prompted with a device-code URL + code; sign in as an Intune admin. After consent, downloads proceed and encrypted values are resolved.
+Secret resolution reuses the **same** `az login` session as everything else — no separate sign-in is needed.
 
-- **Delegated device-code auth required:** the Intune backend rejects **app-only** (service principal) tokens for `getOmaSettingPlainTextValue`, even with `DeviceManagementConfiguration.ReadWrite.All`. The Azure CLI's own token also can't carry that scope. Resolution therefore uses an interactive **device-code** sign-in against a public client app you supply via `--secrets-client-id`; normal fetching still uses your service principal.
-- **Public client requirements:** the app registration needs delegated `DeviceManagementConfiguration.ReadWrite.All`, *Allow public client flows* enabled, and the signed-in user must be an Intune admin. Tenant defaults to `AZURE_TENANT_ID` (override with `--secrets-tenant-id`).
-- **Graceful degradation:** if sign-in/consent fails, secret resolution is disabled with a warning and masked values are kept. Per-setting failures are logged and skipped.
+- **Delegated auth:** the Intune backend rejects app-only (service principal) tokens for `getOmaSettingPlainTextValue`. The `az login` user token is delegated, so resolution can work — provided the token carries the `DeviceManagementConfiguration.ReadWrite.All` scope and the user has Intune read rights on the profile.
+- **Token scopes:** the Azure CLI token may not include the Intune write scope by default. If resolution returns `Forbidden`, refresh with `az login --scope https://graph.microsoft.com/.default` (or a scope that grants `DeviceManagementConfiguration.ReadWrite.All`).
+- **Graceful degradation:** per-setting resolution failures are logged and skipped; the masked value is kept.
 - **Security:** this writes secrets to disk in plaintext. Disabled by default; a warning is logged when enabled.
 
 ### Configuration File
@@ -795,6 +806,16 @@ Currently supported Azure resource types:
 >
 > **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`. The Terraform resource type is polymorphic in practice; verify the emitted import against your provider/profile variant.
 
+### Handler Implementation Notes
+
+Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerraformResourceType`, `List`, `Fetch`, `Transform`). Listing is handler-driven: ARM handlers delegate to shared pagers in `internal/azure/list.go`, Graph handlers page their own collection via `@odata.nextLink`.
+
+| Handler group | SDK | Transform strategy |
+|---|---|---|
+| ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
+| Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | Explicit property mapping (conditions, grant/session controls) |
+| Graph beta (`deviceManagementConfigurationPolicies`, `deviceConfigurations`) | `msgraph-beta-sdk-go` | Full generic serialization of the polymorphic `@odata.type` tree via the Kiota JSON writer — no setting is lost |
+
 ## 🔧 Adding New Resource Types
 
 The tool is designed to be easily extensible. To add support for a new resource type:
@@ -813,11 +834,11 @@ import (
 )
 
 type KeyVaultHandler struct {
-    credential     *azidentity.DefaultAzureCredential
+    credential     azcore.TokenCredential
     subscriptionID string
 }
 
-func NewKeyVaultHandler(credential *azidentity.DefaultAzureCredential, subscriptionID string) *KeyVaultHandler {
+func NewKeyVaultHandler(credential azcore.TokenCredential, subscriptionID string) *KeyVaultHandler {
     return &KeyVaultHandler{
         credential:     credential,
         subscriptionID: subscriptionID,
@@ -869,7 +890,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 
 ```bash
 make build
-./azure-rd list  # Uses default subscription from az login
+./azure-rd list  # Uses the signed-in user's default subscription
 ```
 
 That's it! Your new resource type is now supported.
@@ -884,24 +905,35 @@ azure-resource-downloader/
 │   └── list.go            # List command
 ├── internal/
 │   ├── models/            # Core types and interfaces
-│   │   └── types.go
+│   │   ├── types.go       # ResourceHandler interface, pipeline types
+│   │   └── api.go         # API type detection (ARM vs Graph), worker defaults
 │   ├── pipeline/          # Pipeline implementation
 │   │   ├── pipeline.go    # Orchestrator
-│   │   ├── fetcher.go     # Fetch stage
+│   │   ├── fetcher.go     # Fetch stage (retry + permission skips)
 │   │   ├── transformer.go # Transform stage
-│   │   └── writer.go      # Write stage
+│   │   ├── writer.go      # Write stage
+│   │   └── metrics.go     # Execution metrics
 │   ├── handlers/          # Resource handlers
 │   │   ├── handler.go     # Registry
 │   │   ├── resourcegroup.go
 │   │   ├── storageaccount.go
-│   │   └── virtualmachine.go
+│   │   ├── virtualmachine.go
+│   │   ├── conditionalaccesspolicy.go              # Graph v1.0
+│   │   ├── authenticationstrengthpolicy.go         # Graph v1.0
+│   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog (Graph beta)
+│   │   └── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI (Graph beta)
 │   ├── azure/             # Azure client wrappers
-│   │   ├── client.go
+│   │   ├── client.go      # Auth (az login / device-code) + ARM client
+│   │   ├── errors.go      # Permission-error detection (warn & skip)
+│   │   ├── list.go        # Shared ARM listing pagers
 │   │   └── resolver.go    # ID to name resolver
+│   ├── logger/            # Structured logging (charmbracelet/log)
+│   ├── retry/             # Exponential backoff for transient errors
 │   └── transform/         # Transformation utilities
-│       ├── cleaner.go     # YAML cleanup
-│       ├── sanitizer.go   # Filename sanitizer
-│       └── terraform.go   # Terraform generator
+│       ├── cleaner.go     # Key removal / empty-value cleanup
+│       ├── sanitizer.go   # Filename & Terraform name sanitizer
+│       ├── terraform.go   # Terraform import generator
+│       └── base64.go      # Base64 payload decoding (inline / sidecar files)
 ├── go.mod
 ├── main.go
 └── README.md
@@ -949,8 +981,6 @@ Contributions are welcome! Here are some ways you can contribute:
 For issues and questions:
 - Open an issue on GitHub
 - Check existing issues for solutions
-
-## 🗺️ Roadmap
 
 ## 🐛 Debug Logging
 

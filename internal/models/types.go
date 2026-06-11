@@ -20,6 +20,11 @@ type FetchResult struct {
 	ResourceType string
 	RawData      interface{}
 	Error        error
+	// Skipped marks a resource the signed-in user is not permitted to read.
+	// Skipped resources are reported as warnings and are neither counted as
+	// failures nor written to disk.
+	Skipped    bool
+	SkipReason string
 }
 
 // TransformResult represents the result of transforming a resource
@@ -33,6 +38,10 @@ type TransformResult struct {
 	TerraformResourceType string         // The Terraform resource type (e.g., "azurerm_resource_group")
 	Artifacts             []FileArtifact // Extra sidecar files to write alongside the YAML (e.g., decoded payloads)
 	Error                 error
+	// Skipped is propagated from the fetch stage for resources the signed-in
+	// user is not permitted to read.
+	Skipped    bool
+	SkipReason string
 }
 
 // FileArtifact represents an additional file to be written alongside a
@@ -48,6 +57,10 @@ type WriteResult struct {
 	YAMLPath      string
 	TerraformPath string
 	Error         error
+	// Skipped is propagated from earlier stages for resources the signed-in
+	// user is not permitted to read (no file is written).
+	Skipped    bool
+	SkipReason string
 }
 
 // TransformedResource represents a fully transformed Azure resource

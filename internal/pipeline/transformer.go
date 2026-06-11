@@ -63,6 +63,18 @@ func (t *Transformer) transformWorker(ctx context.Context, fetchResults <-chan *
 			}
 			return
 		default:
+			// Propagate resources the user was not permitted to read; they are
+			// neither transformed nor written, just reported as warnings.
+			if fetchResult.Skipped {
+				transformResults <- &models.TransformResult{
+					ResourceID:   fetchResult.ResourceID,
+					ResourceType: fetchResult.ResourceType,
+					Skipped:      true,
+					SkipReason:   fetchResult.SkipReason,
+				}
+				continue
+			}
+
 			// Check if fetch had an error
 			if fetchResult.Error != nil {
 				transformResults <- &models.TransformResult{

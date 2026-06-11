@@ -7,19 +7,19 @@ import (
 
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
 
 // ConditionalAccessPolicyHandler handles Azure AD Conditional Access Policies
 type ConditionalAccessPolicyHandler struct {
-	credential *azidentity.DefaultAzureCredential
+	credential azcore.TokenCredential
 	client     *msgraphsdk.GraphServiceClient
 }
 
 // NewConditionalAccessPolicyHandler creates a new conditional access policy handler
-func NewConditionalAccessPolicyHandler(credential *azidentity.DefaultAzureCredential) (*ConditionalAccessPolicyHandler, error) {
+func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*ConditionalAccessPolicyHandler, error) {
 	// Create Graph client
 	client, err := msgraphsdk.NewGraphServiceClientWithCredentials(credential, []string{
 		"https://graph.microsoft.com/.default",

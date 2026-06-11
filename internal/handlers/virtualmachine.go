@@ -7,18 +7,18 @@ import (
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 )
 
 // VirtualMachineHandler handles Azure Virtual Machines
 type VirtualMachineHandler struct {
-	credential     *azidentity.DefaultAzureCredential
+	credential     azcore.TokenCredential
 	subscriptionID string
 }
 
 // NewVirtualMachineHandler creates a new virtual machine handler
-func NewVirtualMachineHandler(credential *azidentity.DefaultAzureCredential, subscriptionID string) *VirtualMachineHandler {
+func NewVirtualMachineHandler(credential azcore.TokenCredential, subscriptionID string) *VirtualMachineHandler {
 	return &VirtualMachineHandler{
 		credential:     credential,
 		subscriptionID: subscriptionID,

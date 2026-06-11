@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"azure-resource-downloader/internal/logger"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
@@ -11,33 +14,48 @@ import (
 
 // Client wraps Azure SDK clients
 type Client struct {
-	credential      *azidentity.DefaultAzureCredential
+	credential      azcore.TokenCredential
 	subscriptionID  string
 	resourcesClient *armresources.Client
 }
 
-// NewClient creates a new Azure client
-// If subscriptionID is empty, it will attempt to use the default subscription from the Azure CLI
-func NewClient(ctx context.Context, subscriptionID string) (*Client, error) {
-	// Use DefaultAzureCredential which handles multiple auth methods (az login, env vars, managed identity, etc.)
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
+// NewClient creates a new Azure client. By default it authenticates as the user
+// signed in via the Azure CLI (az login). If clientID is set, it instead performs
+// an interactive device-code sign-in against that dedicated app registration,
+// which can carry Microsoft Graph scopes the first-party Azure CLI app cannot
+// obtain (e.g. Policy.Read.All, DeviceManagementConfiguration.ReadWrite.All).
+// The same delegated token is used for both ARM and Microsoft Graph requests.
+// If subscriptionID is empty, it attempts to resolve a default subscription for
+// that user.
+func NewClient(ctx context.Context, subscriptionID, clientID, tenantID string) (*Client, error) {
+	cred, err := newCredential(clientID, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create credential: %w", err)
+		return nil, err
 	}
 
-	// If no subscription ID is provided, try to get the default one
+	// If no subscription ID is provided, try to get the default one. Failing to
+	// resolve a subscription is NOT fatal: the signed-in user may only have
+	// tenant-level (Microsoft Graph) access. We warn and continue with an empty
+	// subscription so Graph resources can still be downloaded; ARM resource
+	// types are skipped later.
 	if subscriptionID == "" {
 		defaultSub, err := getDefaultSubscription(ctx, cred)
 		if err != nil {
-			return nil, fmt.Errorf("no subscription specified and failed to get default subscription: %w (hint: use 'az login' to authenticate or specify --subscription flag)", err)
+			logger.Default.Warn("No Azure subscription available; ARM resources cannot be downloaded and will be skipped (Microsoft Graph resources are unaffected)",
+				"reason", ErrorSummary(err))
+			logger.Default.Debug("Default subscription resolution failed", "error", err)
+		} else {
+			subscriptionID = defaultSub
 		}
-		subscriptionID = defaultSub
 	}
 
-	// Create resources client for generic resource operations
-	resourcesClient, err := armresources.NewClient(subscriptionID, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resources client: %w", err)
+	// Create the generic ARM resources client only when a subscription exists.
+	var resourcesClient *armresources.Client
+	if subscriptionID != "" {
+		resourcesClient, err = armresources.NewClient(subscriptionID, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create resources client: %w", err)
+		}
 	}
 
 	return &Client{
@@ -47,8 +65,43 @@ func NewClient(ctx context.Context, subscriptionID string) (*Client, error) {
 	}, nil
 }
 
+// newCredential builds the token credential used for all ARM and Microsoft Graph
+// requests. With no clientID it reuses the existing Azure CLI session (az login).
+// When clientID is provided it starts an interactive device-code sign-in against
+// the given app registration so that delegated scopes unavailable to the Azure
+// CLI first-party app can be requested.
+func newCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
+	if clientID == "" {
+		cred, err := azidentity.NewAzureCLICredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to use Azure CLI credentials: %w (hint: run 'az login' first)", err)
+		}
+		return cred, nil
+	}
+
+	// A single-tenant app registration requires an explicit tenant; without it
+	// the device-code endpoint rejects the request with AADSTS50059.
+	if tenantID == "" {
+		return nil, fmt.Errorf("--tenant-id is required when --client-id is set (device-code sign-in needs a tenant; pass --tenant-id or set AZURE_RD_TENANT_ID)")
+	}
+
+	opts := &azidentity.DeviceCodeCredentialOptions{
+		ClientID: clientID,
+		TenantID: tenantID,
+		UserPrompt: func(_ context.Context, msg azidentity.DeviceCodeMessage) error {
+			logger.Default.Info("Device-code sign-in required", "instructions", msg.Message)
+			return nil
+		},
+	}
+	cred, err := azidentity.NewDeviceCodeCredential(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start device-code sign-in: %w (hint: ensure the app registration allows public client flows)", err)
+	}
+	return cred, nil
+}
+
 // getDefaultSubscription retrieves the default subscription from Azure
-func getDefaultSubscription(ctx context.Context, cred *azidentity.DefaultAzureCredential) (string, error) {
+func getDefaultSubscription(ctx context.Context, cred azcore.TokenCredential) (string, error) {
 	client, err := armsubscriptions.NewClient(cred, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create subscriptions client: %w", err)
@@ -101,6 +154,10 @@ func getDefaultSubscription(ctx context.Context, cred *azidentity.DefaultAzureCr
 
 // GetResource retrieves a generic Azure resource by ID
 func (c *Client) GetResource(ctx context.Context, resourceID, apiVersion string) (map[string]interface{}, error) {
+	if c.resourcesClient == nil {
+		return nil, fmt.Errorf("cannot get ARM resource %q: no subscription available", resourceID)
+	}
+
 	// Parse resource ID to get the resource details
 	result, err := c.resourcesClient.GetByID(ctx, resourceID, apiVersion, nil)
 	if err != nil {
@@ -138,6 +195,6 @@ func (c *Client) GetSubscriptionID() string {
 }
 
 // GetCredential returns the Azure credential
-func (c *Client) GetCredential() *azidentity.DefaultAzureCredential {
+func (c *Client) GetCredential() azcore.TokenCredential {
 	return c.credential
 }

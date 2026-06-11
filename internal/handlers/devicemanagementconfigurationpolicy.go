@@ -8,7 +8,7 @@ import (
 
 	"azure-resource-downloader/internal/models"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
 	kjson "github.com/microsoft/kiota-serialization-json-go"
 	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
@@ -23,13 +23,13 @@ import (
 // handler uses the beta SDK (github.com/microsoftgraph/msgraph-beta-sdk-go)
 // rather than the stable v1.0 SDK used by the other handlers.
 type DeviceManagementConfigurationPolicyHandler struct {
-	credential *azidentity.DefaultAzureCredential
+	credential azcore.TokenCredential
 	client     *msgraphbeta.GraphServiceClient
 }
 
 // NewDeviceManagementConfigurationPolicyHandler creates a new Intune Settings
 // Catalog configuration policy handler.
-func NewDeviceManagementConfigurationPolicyHandler(credential *azidentity.DefaultAzureCredential) (*DeviceManagementConfigurationPolicyHandler, error) {
+func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCredential) (*DeviceManagementConfigurationPolicyHandler, error) {
 	// Create beta Graph client
 	client, err := msgraphbeta.NewGraphServiceClientWithCredentials(credential, []string{
 		"https://graph.microsoft.com/.default",
@@ -151,7 +151,7 @@ func (h *DeviceManagementConfigurationPolicyHandler) Transform(resource interfac
 // to manually handle every model type.
 func serializeParsableToMap(parsable serialization.Parsable) (map[string]interface{}, error) {
 	writer := kjson.NewJsonSerializationWriter()
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	if err := writer.WriteObjectValue("", parsable); err != nil {
 		return nil, fmt.Errorf("failed to write object value: %w", err)

@@ -3,56 +3,16 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"sync"
-	"time"
 
+	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
-
-// secretResolutionScopes is the delegated Graph scope required to read encrypted
-// OMA-URI values via getOmaSettingPlainTextValue. Requesting the explicit scope
-// (rather than ".default") triggers incremental consent on first sign-in.
-var secretResolutionScopes = []string{"https://graph.microsoft.com/DeviceManagementConfiguration.ReadWrite.All"}
-
-// reusableCredential wraps an interactive credential so a single token acquired
-// up front is reused for every request. This prevents repeated device-code
-// prompts that would otherwise be triggered when the Intune backend returns a
-// per-call Conditional Access claims challenge: the request options (including
-// any claims) are ignored and the cached token is returned until near expiry.
-type reusableCredential struct {
-	inner  azcore.TokenCredential
-	scopes []string
-
-	mu    sync.Mutex
-	token azcore.AccessToken
-}
-
-// GetToken returns the cached token if it is still valid, otherwise it acquires
-// a new one from the wrapped credential using the fixed scopes.
-func (c *reusableCredential) GetToken(ctx context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.token.Token != "" && time.Until(c.token.ExpiresOn) > 5*time.Minute {
-		return c.token, nil
-	}
-
-	token, err := c.inner.GetToken(ctx, policy.TokenRequestOptions{Scopes: c.scopes})
-	if err != nil {
-		return azcore.AccessToken{}, err
-	}
-	c.token = token
-	return token, nil
-}
 
 // DeviceConfigurationHandler handles legacy Intune device configuration profiles
 // (deviceManagement/deviceConfigurations), including Custom (OMA-URI) profiles
@@ -64,19 +24,9 @@ func (c *reusableCredential) GetToken(ctx context.Context, _ policy.TokenRequest
 // DeviceManagementConfigurationPolicyHandler. This handler uses the Microsoft
 // Graph BETA SDK to expose the full polymorphic setting tree.
 type DeviceConfigurationHandler struct {
-	credential     *azidentity.DefaultAzureCredential
+	credential     azcore.TokenCredential
 	client         *msgraphbeta.GraphServiceClient
-	secretsClient  *msgraphbeta.GraphServiceClient
 	resolveSecrets bool
-}
-
-// SecretResolutionOptions configures delegated resolution of encrypted OMA-URI
-// secret values. Resolution requires a delegated (device-code) sign-in because
-// the Intune backend rejects app-only tokens for getOmaSettingPlainTextValue.
-type SecretResolutionOptions struct {
-	Enabled  bool   // Whether to resolve encrypted OMA-URI values
-	ClientID string // Public client (app registration) ID with delegated DeviceManagementConfiguration.ReadWrite.All
-	TenantID string // Tenant for sign-in (defaults to AZURE_TENANT_ID, then "organizations")
 }
 
 // omaSettingsHolder is implemented by the custom configuration types that expose
@@ -86,14 +36,14 @@ type omaSettingsHolder interface {
 }
 
 // NewDeviceConfigurationHandler creates a new Intune device configuration
-// profile handler. When secretOpts.Enabled is true, masked (encrypted) OMA-URI
+// profile handler. When resolveSecrets is true, masked (encrypted) OMA-URI
 // setting values are resolved to plaintext via getOmaSettingPlainTextValue.
 //
-// Resolving those secrets requires a delegated token because the Intune backend
-// rejects app-only tokens for getOmaSettingPlainTextValue. Resolution therefore
-// uses an interactive device-code sign-in (against the provided public client ID)
-// while normal fetches keep using the provided (service principal) credential.
-func NewDeviceConfigurationHandler(credential *azidentity.DefaultAzureCredential, secretOpts SecretResolutionOptions) (*DeviceConfigurationHandler, error) {
+// Because the tool now authenticates as the running (privileged) user, secret
+// resolution reuses the same delegated Graph client as normal fetches — no
+// separate sign-in is required. The signed-in user must hold delegated
+// DeviceManagementConfiguration.ReadWrite.All and the necessary Intune RBAC.
+func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSecrets bool) (*DeviceConfigurationHandler, error) {
 	client, err := msgraphbeta.NewGraphServiceClientWithCredentials(credential, []string{
 		"https://graph.microsoft.com/.default",
 	})
@@ -101,64 +51,11 @@ func NewDeviceConfigurationHandler(credential *azidentity.DefaultAzureCredential
 		return nil, fmt.Errorf("failed to create beta Graph client: %w", err)
 	}
 
-	h := &DeviceConfigurationHandler{
+	return &DeviceConfigurationHandler{
 		credential:     credential,
 		client:         client,
-		resolveSecrets: secretOpts.Enabled,
-	}
-
-	if secretOpts.Enabled {
-		if err := h.initSecretsClient(secretOpts); err != nil {
-			logger.Default.Warn("Secret resolution disabled", "error", err)
-			h.resolveSecrets = false
-		}
-	}
-
-	return h, nil
-}
-
-// initSecretsClient performs an interactive device-code sign-in and builds the
-// delegated Graph client used for secret resolution. Signing in eagerly here (a)
-// surfaces auth/consent errors before the pipeline starts and (b) avoids
-// concurrent device-code prompts from parallel pipeline workers.
-func (h *DeviceConfigurationHandler) initSecretsClient(secretOpts SecretResolutionOptions) error {
-	if secretOpts.ClientID == "" {
-		return fmt.Errorf("--secrets-client-id is required (public client app with delegated DeviceManagementConfiguration.ReadWrite.All)")
-	}
-
-	tenantID := secretOpts.TenantID
-	if tenantID == "" {
-		tenantID = os.Getenv("AZURE_TENANT_ID")
-	}
-
-	deviceCodeCred, err := azidentity.NewDeviceCodeCredential(&azidentity.DeviceCodeCredentialOptions{
-		ClientID: secretOpts.ClientID,
-		TenantID: tenantID,
-		UserPrompt: func(_ context.Context, msg azidentity.DeviceCodeMessage) error {
-			fmt.Fprintln(os.Stderr, msg.Message)
-			return nil
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create device-code credential: %w", err)
-	}
-
-	// Wrap the interactive credential so the token from the single up-front
-	// sign-in is reused for every getOmaSettingPlainTextValue call.
-	secretsCred := &reusableCredential{inner: deviceCodeCred, scopes: secretResolutionScopes}
-
-	// Force the interactive sign-in now so consent happens up front (once),
-	// before the pipeline starts and before any concurrent workers run.
-	if _, err := secretsCred.GetToken(context.Background(), policy.TokenRequestOptions{Scopes: secretResolutionScopes}); err != nil {
-		return fmt.Errorf("device-code sign-in failed: %w", err)
-	}
-
-	secretsClient, err := msgraphbeta.NewGraphServiceClientWithCredentials(secretsCred, secretResolutionScopes)
-	if err != nil {
-		return fmt.Errorf("failed to create delegated Graph client: %w", err)
-	}
-	h.secretsClient = secretsClient
-	return nil
+		resolveSecrets: resolveSecrets,
+	}, nil
 }
 
 // GetType returns the Azure resource type
@@ -247,11 +144,15 @@ func (h *DeviceConfigurationHandler) resolveOmaSecrets(ctx context.Context, conf
 			continue
 		}
 
-		resp, err := h.secretsClient.DeviceManagement().DeviceConfigurations().ByDeviceConfigurationId(configID).
+		resp, err := h.client.DeviceManagement().DeviceConfigurations().ByDeviceConfigurationId(configID).
 			GetOmaSettingPlainTextValueWithSecretReferenceValueId(secretRef).
 			GetAsGetOmaSettingPlainTextValueWithSecretReferenceValueIdGetResponse(ctx, nil)
 		if err != nil {
 			logger.Default.Warn("Failed to resolve encrypted OMA setting value (signed-in user needs delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights)",
+				"config_id", configID,
+				"oma_uri", safeStringValue(setting.GetOmaUri()),
+				"reason", azure.ErrorSummary(err))
+			logger.Default.Debug("OMA secret resolution failed",
 				"config_id", configID,
 				"oma_uri", safeStringValue(setting.GetOmaUri()),
 				"error", err)

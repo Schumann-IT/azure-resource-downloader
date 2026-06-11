@@ -11,15 +11,15 @@ import (
 )
 
 var (
-	cfgFile         string
-	subscriptionID  string
-	outputDir       string
-	workerCount     int
-	dryRun          bool
-	logLevel        string
-	resolveSecrets  bool
-	secretsClientID string
-	secretsTenantID string
+	cfgFile        string
+	subscriptionID string
+	outputDir      string
+	workerCount    int
+	dryRun         bool
+	logLevel       string
+	resolveSecrets bool
+	clientID       string
+	tenantID       string
 )
 
 // rootCmd represents the base command
@@ -53,8 +53,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().BoolVar(&resolveSecrets, "resolve-secrets", false, "resolve masked (encrypted) Intune OMA-URI secret values to plaintext (writes secrets to output)")
-	rootCmd.PersistentFlags().StringVar(&secretsClientID, "secrets-client-id", "", "public client app ID (with delegated DeviceManagementConfiguration.ReadWrite.All) used for device-code sign-in when --resolve-secrets is set")
-	rootCmd.PersistentFlags().StringVar(&secretsTenantID, "secrets-tenant-id", "", "tenant ID for the device-code sign-in (defaults to AZURE_TENANT_ID)")
+	rootCmd.PersistentFlags().StringVar(&clientID, "client-id", "", "app registration (client) ID for device-code sign-in (optional; defaults to the az login session). Enables Graph scopes the Azure CLI app cannot obtain, e.g. DeviceManagementConfiguration.ReadWrite.All")
+	rootCmd.PersistentFlags().StringVar(&tenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (used with --client-id)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
@@ -63,8 +63,8 @@ func init() {
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 	_ = viper.BindPFlag("resolve-secrets", rootCmd.PersistentFlags().Lookup("resolve-secrets"))
-	_ = viper.BindPFlag("secrets-client-id", rootCmd.PersistentFlags().Lookup("secrets-client-id"))
-	_ = viper.BindPFlag("secrets-tenant-id", rootCmd.PersistentFlags().Lookup("secrets-tenant-id"))
+	_ = viper.BindPFlag("client-id", rootCmd.PersistentFlags().Lookup("client-id"))
+	_ = viper.BindPFlag("tenant-id", rootCmd.PersistentFlags().Lookup("tenant-id"))
 }
 
 // initConfig reads in config file and ENV variables if set

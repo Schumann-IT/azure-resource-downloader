@@ -126,9 +126,11 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		"workers", workersFlag,
 		"dry_run", dryRun)
 
-	// Create Azure client (will auto-detect subscription if not provided)
+	// Create Azure client (will auto-detect subscription if not provided).
+	// Authentication uses the existing Azure CLI session (az login) by default,
+	// or device-code sign-in against a dedicated app when --client-id is set.
 	log.Info("Authenticating with Azure...")
-	azureClient, err := azure.NewClient(ctx, sub)
+	azureClient, err := azure.NewClient(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to create Azure client", "error", err)
@@ -146,7 +148,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
-	requests, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub)
+	requests, skippedTypes, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -235,7 +237,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	// Print summary
+	// Print summary, including resource types that could not be listed
+	summary.SkippedTypes = skippedTypes
 	summary.PrintSummary()
 
 	if summary.FailedResources > 0 {
@@ -270,16 +273,12 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	if dmcpHandler, err := handlers.NewDeviceManagementConfigurationPolicyHandler(cred); err == nil {
 		registry.Register("Microsoft.Graph/deviceManagementConfigurationPolicies", dmcpHandler)
 	}
-	secretOpts := handlers.SecretResolutionOptions{
-		Enabled:  viper.GetBool("resolve-secrets"),
-		ClientID: viper.GetString("secrets-client-id"),
-		TenantID: viper.GetString("secrets-tenant-id"),
+	resolveSecrets := viper.GetBool("resolve-secrets")
+	if resolveSecrets {
+		logger.Default.Info("Secret resolution enabled", "flag", "--resolve-secrets")
+		logger.Default.Debug("Secret resolution writes encrypted Intune OMA-URI values to output in plaintext; the signed-in user must hold delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights")
 	}
-	if secretOpts.Enabled {
-		logger.Default.Warn("Secret resolution enabled - encrypted Intune OMA-URI values will be written to output in plaintext; you will be prompted for a delegated device-code sign-in as an Intune admin",
-			"flag", "--resolve-secrets")
-	}
-	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, secretOpts); err == nil {
+	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, resolveSecrets); err == nil {
 		registry.Register("Microsoft.Graph/deviceConfigurations", dcHandler)
 	}
 
@@ -293,8 +292,13 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 // Selection precedence: explicit --resource-id, then --resource-group, then
 // type listing. The resourceTypes slice acts as a filter on the registered
 // handlers: when empty, all registered types are considered.
-func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup string, resourceTypes []string, subscriptionID string) ([]*models.FetchRequest, error) {
+//
+// The second return value lists resource types that could not be listed at all
+// (missing permissions or no subscription); callers should surface them in the
+// execution summary because their resource counts are unknown.
+func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup string, resourceTypes []string, subscriptionID string) ([]*models.FetchRequest, []pipeline.SkippedType, error) {
 	var requests []*models.FetchRequest
+	var skippedTypes []pipeline.SkippedType
 	log := logger.Default
 
 	// If specific resource IDs are provided, use them
@@ -305,11 +309,16 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 				Subscription: subscriptionID,
 			})
 		}
-		return requests, nil
+		return requests, nil, nil
 	}
 
 	// If resource group is specified, build resource ID
 	if resourceGroup != "" {
+		if subscriptionID == "" {
+			log.Warn("Cannot download ARM resources because of missing subscription, skipping resource group",
+				"resource_group", resourceGroup)
+			return requests, nil, nil
+		}
 		rgID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", subscriptionID, resourceGroup)
 		requests = append(requests, &models.FetchRequest{
 			ResourceID:    rgID,
@@ -317,7 +326,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 			ResourceGroup: resourceGroup,
 			Subscription:  subscriptionID,
 		})
-		return requests, nil
+		return requests, nil, nil
 	}
 
 	// Otherwise, list resources by type. --type acts as a filter; when no type
@@ -332,7 +341,17 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		handler, err := registry.Get(resourceType)
 		if err != nil {
 			log.Error("No handler for resource type", "type", resourceType, "error", err)
-			return nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
+			return nil, nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
+		}
+
+		// ARM (subscription-scoped) types cannot be listed without a
+		// subscription. Skip them with a clear warning so tenant-level
+		// Microsoft Graph types still download.
+		if subscriptionID == "" && models.DetectAPIType(resourceType) == models.APIAzureResourceManager {
+			log.Warn("Cannot download ARM resources because of missing subscription, skipping type",
+				"type", resourceType)
+			skippedTypes = append(skippedTypes, pipeline.SkippedType{ResourceType: resourceType, Reason: "no subscription available"})
+			continue
 		}
 
 		log.Info("Listing all resources of type", "type", resourceType)
@@ -342,7 +361,9 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 			// Don't abort the whole run because one type fails (e.g. missing
 			// permissions for a single Graph collection); log and continue so
 			// the remaining types are still downloaded.
-			log.Warn("Failed to list resources, skipping type", "type", resourceType, "error", err)
+			log.Warn("Failed to list resources, skipping type", "type", resourceType, "reason", azure.ErrorSummary(err))
+			log.Debug("Listing failed", "type", resourceType, "error", err)
+			skippedTypes = append(skippedTypes, pipeline.SkippedType{ResourceType: resourceType, Reason: azure.ErrorSummary(err)})
 			continue
 		}
 
@@ -363,7 +384,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		}
 	}
 
-	return requests, nil
+	return requests, skippedTypes, nil
 }
 
 // parseResourceType extracts the resource type from a resource ID

@@ -34,7 +34,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Create Azure client (will auto-detect subscription if not provided)
 	// Note: list command doesn't really need a subscription, but we create the client
 	// to ensure authentication works and to maintain consistency
-	azureClient, err := azure.NewClient(ctx, sub)
+	azureClient, err := azure.NewClient(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to create Azure client", "error", err)
