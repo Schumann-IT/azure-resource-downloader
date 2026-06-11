@@ -30,8 +30,16 @@ type TransformResult struct {
 	SanitizedName         string
 	CleanedData           map[string]interface{}
 	TerraformImport       string
-	TerraformResourceType string // The Terraform resource type (e.g., "azurerm_resource_group")
+	TerraformResourceType string         // The Terraform resource type (e.g., "azurerm_resource_group")
+	Artifacts             []FileArtifact // Extra sidecar files to write alongside the YAML (e.g., decoded payloads)
 	Error                 error
+}
+
+// FileArtifact represents an additional file to be written alongside a
+// resource's YAML document (e.g., a base64-decoded payload).
+type FileArtifact struct {
+	Filename string // File name relative to the resource type output directory
+	Content  []byte // Raw file content
 }
 
 // WriteResult represents the result of writing files
@@ -86,6 +94,7 @@ const (
 	TransformerIDResolution     TransformerType = "id-resolution"
 	TransformerNameSanitization TransformerType = "name-sanitization"
 	TransformerTerraformImport  TransformerType = "terraform-import"
+	TransformerBase64Decode     TransformerType = "base64-decode"
 )
 
 // TransformerConfig holds configuration for a single transformer
@@ -114,6 +123,23 @@ type TerraformImportConfig struct {
 	TargetFormat string // Format template for 'to' address
 }
 
+// Base64 decode transformer modes
+const (
+	// Base64ModeInline replaces the encoded property value with the decoded text in the YAML output
+	Base64ModeInline = "inline"
+	// Base64ModeFile writes the decoded value to a sidecar file alongside the YAML
+	Base64ModeFile = "file"
+)
+
+// Base64DecodeConfig holds configuration for the base64-decode transformer
+type Base64DecodeConfig struct {
+	Mode         string // Decode mode: "inline" (default) or "file"
+	SourceKey    string // Property key holding the base64-encoded value (default: "payload")
+	FilenameKey  string // Property key holding the target file name, file mode only (default: "payloadFileName")
+	Extension    string // Extension for the decoded file, file mode only (default: ".mobileconfig")
+	RemoveSource bool   // File mode only: if true, remove the source (encoded) key from the YAML output (default: false)
+}
+
 // DefaultTransformerConfigs returns the default transformer configurations
 func DefaultTransformerConfigs() []TransformerConfig {
 	return []TransformerConfig{
@@ -121,6 +147,7 @@ func DefaultTransformerConfigs() []TransformerConfig {
 		{Name: string(TransformerIDResolution), Config: map[string]interface{}{}},
 		{Name: string(TransformerNameSanitization), Config: map[string]interface{}{}},
 		{Name: string(TransformerTerraformImport), Config: map[string]interface{}{}},
+		{Name: string(TransformerBase64Decode), Config: map[string]interface{}{}},
 	}
 }
 
@@ -212,6 +239,35 @@ func ParseTerraformImportConfig(config map[string]interface{}) *TerraformImportC
 
 	if targetFormat, ok := config["target-format"].(string); ok && targetFormat != "" {
 		result.TargetFormat = targetFormat
+	}
+
+	return result
+}
+
+// ParseBase64DecodeConfig extracts base64-decode configuration
+func ParseBase64DecodeConfig(config map[string]interface{}) *Base64DecodeConfig {
+	result := &Base64DecodeConfig{
+		Mode:         Base64ModeInline,
+		SourceKey:    "payload",
+		FilenameKey:  "payloadFileName",
+		Extension:    ".mobileconfig",
+		RemoveSource: false,
+	}
+
+	if mode, ok := config["mode"].(string); ok && strings.EqualFold(mode, Base64ModeFile) {
+		result.Mode = Base64ModeFile
+	}
+	if sourceKey, ok := config["source-key"].(string); ok && sourceKey != "" {
+		result.SourceKey = sourceKey
+	}
+	if filenameKey, ok := config["filename-key"].(string); ok && filenameKey != "" {
+		result.FilenameKey = filenameKey
+	}
+	if extension, ok := config["extension"].(string); ok && extension != "" {
+		result.Extension = extension
+	}
+	if removeSource, ok := config["remove-source"].(bool); ok {
+		result.RemoveSource = removeSource
 	}
 
 	return result

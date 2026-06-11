@@ -9,6 +9,7 @@ import (
 	"azure-resource-downloader/internal/models"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/microsoft/kiota-abstractions-go/serialization"
 	kjson "github.com/microsoft/kiota-serialization-json-go"
 	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
 	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
@@ -116,11 +117,11 @@ func (h *DeviceManagementConfigurationPolicyHandler) Transform(resource interfac
 // round-tripping through its JSON representation. This captures the full nested
 // tree (including polymorphic @odata.type discriminated children) without having
 // to manually handle every model type.
-func serializeParsableToMap(policy betamodels.DeviceManagementConfigurationPolicyable) (map[string]interface{}, error) {
+func serializeParsableToMap(parsable serialization.Parsable) (map[string]interface{}, error) {
 	writer := kjson.NewJsonSerializationWriter()
 	defer writer.Close()
 
-	if err := writer.WriteObjectValue("", policy); err != nil {
+	if err := writer.WriteObjectValue("", parsable); err != nil {
 		return nil, fmt.Errorf("failed to write object value: %w", err)
 	}
 

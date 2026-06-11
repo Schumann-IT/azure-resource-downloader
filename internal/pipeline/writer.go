@@ -143,6 +143,38 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 		}
 	}
 
+	// Write sidecar artifacts (e.g. base64-decoded payloads) alongside the YAML
+	for _, artifact := range transformResult.Artifacts {
+		if artifact.Filename == "" {
+			continue
+		}
+		artifactPath := filepath.Join(resourceTypeDir, artifact.Filename)
+
+		if w.dryRun {
+			log.Info("Would write artifact",
+				"resource_id", transformResult.ResourceID,
+				"path", artifactPath,
+				"bytes", len(artifact.Content))
+			continue
+		}
+
+		if err := os.WriteFile(artifactPath, artifact.Content, 0644); err != nil {
+			log.Error("Failed to write artifact file",
+				"resource_id", transformResult.ResourceID,
+				"path", artifactPath,
+				"error", err)
+			return &models.WriteResult{
+				ResourceID: transformResult.ResourceID,
+				Error:      fmt.Errorf("failed to write artifact file: %w", err),
+			}
+		}
+
+		log.Debug("Artifact file written",
+			"resource_id", transformResult.ResourceID,
+			"path", artifactPath,
+			"bytes", len(artifact.Content))
+	}
+
 	// Collect import statement for consolidated import.tf file
 	terraformPath := filepath.Join(resourceTypeDir, "import.tf")
 	w.mu.Lock()

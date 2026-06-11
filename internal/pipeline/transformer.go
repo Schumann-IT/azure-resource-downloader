@@ -134,6 +134,25 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		log.Debug("Skipping id-resolution transformer (not configured)")
 	}
 
+	// Step 2b: Decode base64 payloads (inline replacement or sidecar file)
+	var artifacts []models.FileArtifact
+	if base64Config := models.GetTransformerConfig(t.transformerConfigs, models.TransformerBase64Decode); base64Config != nil {
+		config := models.ParseBase64DecodeConfig(base64Config.Config)
+		decoded, err := transform.ApplyBase64Decode(processedData, config)
+		if err != nil {
+			log.Error("Failed to decode base64 payload",
+				"resource_id", fetchResult.ResourceID,
+				"error", err)
+			return &models.TransformResult{
+				ResourceID: fetchResult.ResourceID,
+				Error:      fmt.Errorf("failed to decode base64 payload: %w", err),
+			}
+		}
+		artifacts = append(artifacts, decoded...)
+	} else {
+		log.Debug("Skipping base64-decode transformer (not configured)")
+	}
+
 	// Step 3: Sanitize name for file/Terraform compatibility
 	var sanitizedName string
 	if models.HasTransformer(t.transformerConfigs, models.TransformerNameSanitization) {
@@ -180,6 +199,7 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		CleanedData:           processedData,
 		TerraformImport:       terraformImport,
 		TerraformResourceType: terraformResourceType,
+		Artifacts:             artifacts,
 		Error:                 nil,
 	}
 }

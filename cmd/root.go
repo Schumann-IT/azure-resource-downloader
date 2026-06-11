@@ -11,12 +11,15 @@ import (
 )
 
 var (
-	cfgFile        string
-	subscriptionID string
-	outputDir      string
-	workerCount    int
-	dryRun         bool
-	logLevel       string
+	cfgFile         string
+	subscriptionID  string
+	outputDir       string
+	workerCount     int
+	dryRun          bool
+	logLevel        string
+	resolveSecrets  bool
+	secretsClientID string
+	secretsTenantID string
 )
 
 // rootCmd represents the base command
@@ -49,6 +52,9 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&workerCount, "workers", 5, "number of concurrent workers")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().BoolVar(&resolveSecrets, "resolve-secrets", false, "resolve masked (encrypted) Intune OMA-URI secret values to plaintext (writes secrets to output)")
+	rootCmd.PersistentFlags().StringVar(&secretsClientID, "secrets-client-id", "", "public client app ID (with delegated DeviceManagementConfiguration.ReadWrite.All) used for device-code sign-in when --resolve-secrets is set")
+	rootCmd.PersistentFlags().StringVar(&secretsTenantID, "secrets-tenant-id", "", "tenant ID for the device-code sign-in (defaults to AZURE_TENANT_ID)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
@@ -56,6 +62,9 @@ func init() {
 	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+	_ = viper.BindPFlag("resolve-secrets", rootCmd.PersistentFlags().Lookup("resolve-secrets"))
+	_ = viper.BindPFlag("secrets-client-id", rootCmd.PersistentFlags().Lookup("secrets-client-id"))
+	_ = viper.BindPFlag("secrets-tenant-id", rootCmd.PersistentFlags().Lookup("secrets-tenant-id"))
 }
 
 // initConfig reads in config file and ENV variables if set

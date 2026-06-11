@@ -254,8 +254,11 @@ func (c *Client) listGraphResources(ctx context.Context, resourceType string) ([
 	case "Microsoft.Graph/deviceManagementConfigurationPolicies":
 		return c.listConfigurationPolicies(ctx)
 
+	case "Microsoft.Graph/deviceConfigurations":
+		return c.listDeviceConfigurations(ctx)
+
 	default:
-		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies, Microsoft.Graph/authenticationStrengthPolicies, Microsoft.Graph/deviceManagementConfigurationPolicies)", resourceType)
+		return nil, fmt.Errorf("unsupported Microsoft Graph resource type: %s (Currently supported Graph types: Microsoft.Graph/conditionalAccessPolicies, Microsoft.Graph/authenticationStrengthPolicies, Microsoft.Graph/deviceManagementConfigurationPolicies, Microsoft.Graph/deviceConfigurations)", resourceType)
 	}
 
 	return resourceIDs, nil
@@ -293,6 +296,48 @@ func (c *Client) listConfigurationPolicies(ctx context.Context) ([]string, error
 
 		// Follow pagination via @odata.nextLink
 		nextLink := policies.GetOdataNextLink()
+		if nextLink == nil || *nextLink == "" {
+			break
+		}
+		builder = builder.WithUrl(*nextLink)
+	}
+
+	return resourceIDs, nil
+}
+
+// listDeviceConfigurations lists all legacy Intune device configuration profiles
+// (deviceManagement/deviceConfigurations), including Custom (OMA-URI) profiles.
+// This endpoint uses the Microsoft Graph beta API and follows @odata.nextLink
+// for pagination.
+func (c *Client) listDeviceConfigurations(ctx context.Context) ([]string, error) {
+	var resourceIDs []string
+
+	graphClient, err := msgraphbeta.NewGraphServiceClientWithCredentials(c.credential, []string{
+		"https://graph.microsoft.com/.default",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create beta Graph client: %w (Hint: Ensure you have the necessary permissions to access Microsoft Graph API)", err)
+	}
+
+	builder := graphClient.DeviceManagement().DeviceConfigurations()
+	for {
+		configs, err := builder.Get(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list device configurations: %w (hint: this requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph - your Azure AD admin needs to grant consent for these permissions)", err)
+		}
+
+		if configs == nil {
+			break
+		}
+
+		for _, config := range configs.GetValue() {
+			if config.GetId() != nil {
+				resourceIDs = append(resourceIDs, *config.GetId())
+			}
+		}
+
+		// Follow pagination via @odata.nextLink
+		nextLink := configs.GetOdataNextLink()
 		if nextLink == nil || *nextLink == "" {
 			break
 		}

@@ -49,6 +49,14 @@ log-level: "info"
 #   - id-resolution: Resolve Azure resource IDs to friendly names  
 #   - name-sanitization: Sanitize resource names for files/Terraform
 #   - terraform-import: Generate Terraform import blocks
+#   - base64-decode: Decode a base64 property (e.g. Intune macOS profile payload).
+#                    Options:
+#                      mode (default: inline)  # inline = replace value in YAML;
+#                                              # file = write decoded sidecar file
+#                      source-key (default: payload)
+#                      filename-key (default: payloadFileName)  # file mode
+#                      extension (default: .mobileconfig)       # file mode
+#                      remove-source (default: false)           # file mode
 #
 # Example 1: All transformers with default settings
 # transformers:

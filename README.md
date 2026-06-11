@@ -2,6 +2,14 @@
 
 A powerful command-line tool that downloads Azure resources, transforms them into clean YAML format, and generates Terraform import statements. Built with Go and following the async pipeline pattern for maximum performance.
 
+## ToDo
+
+- Add support for Intune Settings Catalog policies
+- Add old and new device management policies (deviceManagementConfigurationPolicies are the new ones?)
+- Add support for remediation/platform scripts (old and new)
+- Add support for onboarding scrrens/profiles (OOBE settings/profiles, Mac deployment profiles etc) 
+- Add support for Entra Groups incl. dynamic groups
+
 ## 🚀 Features
 
 - **Async Pipeline Architecture**: Parallel processing with configurable worker pools
@@ -88,6 +96,7 @@ The tool uses Azure's DefaultAzureCredential, which supports multiple authentica
 ### Quick Setup
 
 ```bash
+
 # Login via Azure CLI (easiest method)
 az login
 
@@ -197,6 +206,10 @@ azure-rd download \
 # Download all Intune Settings Catalog policies (Microsoft Graph beta)
 azure-rd download \
   --type "Microsoft.Graph/deviceManagementConfigurationPolicies"
+
+# Download all legacy Intune device configuration profiles, incl. Custom/OMA-URI (Microsoft Graph beta)
+azure-rd download \
+  --type "Microsoft.Graph/deviceConfigurations"
 
 # Download a specific conditional access policy by ID
 azure-rd download \
@@ -426,6 +439,39 @@ Each transformer can be independently configured with its own settings. By defau
 
 **`terraform-import`** - Generate Terraform import blocks
 - `target-format` - Template for import address (default: `{resource_type}.{name}`)
+
+**`base64-decode`** - Decode base64-encoded values, either in place or into sidecar files
+- `mode` - `inline` (default) replaces the encoded value with the decoded text in the YAML; `file` writes the decoded value to a sidecar file alongside the YAML instead
+- `source-key` - Top-level property holding the base64 value (default: `payload`)
+- `filename-key` - (file mode) Property holding the target file name for the top-level payload (default: `payloadFileName`)
+- `extension` - (file mode) Extension applied to the decoded payload file; the existing extension on the file name is replaced (default: `.mobileconfig`)
+- `remove-source` - (file mode) Remove the encoded value from the YAML output after decoding (default: `false`)
+
+> Handles two locations in Intune `Microsoft.Graph/deviceConfigurations` profiles:
+> - **macOS `payload`** (`macOSCustomConfiguration`): base64-encoded `.mobileconfig` plist. `inline` replaces `payload` with the decoded XML; `file` writes e.g. `payloadFileName: WindowsDefenderATPOnboarding.xml` to `WindowsDefenderATPOnboarding.mobileconfig`.
+> - **Windows `omaSettings[]`** (`windows10CustomConfiguration`): `omaSettingStringXml` values are base64-encoded XML. `inline` replaces each value with the decoded XML; `file` writes each to its own `fileName` (e.g. `CB_VPN_Profile.xml`) as-is. Plain `omaSettingString` values are left untouched.
+>
+> Note: inline-decoded values are no longer base64, so re-importing to Intune/Terraform requires re-encoding.
+
+#### Encrypted OMA-URI secrets (`--resolve-secrets`)
+
+Some Windows OMA-URI settings are stored as secrets; Microsoft Graph returns their `value` masked as `****` (this is **not** decodable — it's redacted server-side, not encoded). By default the masked value is kept as-is.
+
+Passing `--resolve-secrets` makes the `Microsoft.Graph/deviceConfigurations` handler resolve each masked value to plaintext via the Graph `getOmaSettingPlainTextValue(secretReferenceValueId=...)` function and write it into the output.
+
+```bash
+azure-rd download --type "Microsoft.Graph/deviceConfigurations" \
+  --resolve-secrets \
+  --secrets-client-id "<public-client-app-id>"
+# (optional) --secrets-tenant-id "<tenant-id>"   # defaults to AZURE_TENANT_ID
+```
+
+On start you'll be prompted with a device-code URL + code; sign in as an Intune admin. After consent, downloads proceed and encrypted values are resolved.
+
+- **Delegated device-code auth required:** the Intune backend rejects **app-only** (service principal) tokens for `getOmaSettingPlainTextValue`, even with `DeviceManagementConfiguration.ReadWrite.All`. The Azure CLI's own token also can't carry that scope. Resolution therefore uses an interactive **device-code** sign-in against a public client app you supply via `--secrets-client-id`; normal fetching still uses your service principal.
+- **Public client requirements:** the app registration needs delegated `DeviceManagementConfiguration.ReadWrite.All`, *Allow public client flows* enabled, and the signed-in user must be an Intune admin. Tenant defaults to `AZURE_TENANT_ID` (override with `--secrets-tenant-id`).
+- **Graceful degradation:** if sign-in/consent fails, secret resolution is disabled with a warning and masked values are kept. Per-setting failures are logged and skipped.
+- **Security:** this writes secrets to disk in plaintext. Disabled by default; a warning is logged when enabled.
 
 ### Configuration File
 
@@ -735,8 +781,11 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/conditionalAccessPolicies` | `azuread_conditional_access_policy` | ✅ |
 | `Microsoft.Graph/authenticationStrengthPolicies` | `azuread_authentication_strength_policy` | ✅ |
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy` | ✅ |
+| `Microsoft.Graph/deviceConfigurations` | `microsoft365_graph_beta_device_management_device_configuration` | ✅ |
 
 > **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
+>
+> **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`. The Terraform resource type is polymorphic in practice; verify the emitted import against your provider/profile variant.
 
 ## 🔧 Adding New Resource Types
 

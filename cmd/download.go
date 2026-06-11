@@ -261,6 +261,18 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	if dmcpHandler, err := handlers.NewDeviceManagementConfigurationPolicyHandler(cred); err == nil {
 		registry.Register("Microsoft.Graph/deviceManagementConfigurationPolicies", dmcpHandler)
 	}
+	secretOpts := handlers.SecretResolutionOptions{
+		Enabled:  viper.GetBool("resolve-secrets"),
+		ClientID: viper.GetString("secrets-client-id"),
+		TenantID: viper.GetString("secrets-tenant-id"),
+	}
+	if secretOpts.Enabled {
+		logger.Default.Warn("Secret resolution enabled - encrypted Intune OMA-URI values will be written to output in plaintext; you will be prompted for a delegated device-code sign-in as an Intune admin",
+			"flag", "--resolve-secrets")
+	}
+	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, secretOpts); err == nil {
+		registry.Register("Microsoft.Graph/deviceConfigurations", dcHandler)
+	}
 
 	// Add more handlers here as needed
 	// registry.Register("Microsoft.Network/virtualNetworks", handlers.NewVirtualNetworkHandler(cred, sub))
