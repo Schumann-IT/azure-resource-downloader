@@ -3,8 +3,15 @@
 Tracking checklist for the resource types covered by the reference PowerShell
 exporter (`Export-IntuneEntraDocumentation.ps1`) that are **not yet** implemented
 as Go handlers in this package. Implement one at a time; each gets a real handler
-(no no-op stubs), is registered in `cmd/download.go`, gets a unit test, and is
-added to the README "Supported Resource Types" table.
+(a `GraphCollectionHandler` constructor, no no-op stubs), is registered in
+`cmd/download.go`, gets a unit test, and is added to the README "Supported
+Resource Types" table.
+
+Implemented types and their delegated permissions are **not** tracked here —
+the README "Supported Resource Types" and permission tables are the single
+source of truth. New granular Intune scopes discovered during implementation
+(e.g. `DeviceManagementScripts.Read.All` for script types) must be recorded in
+the README permission table.
 
 ## Legend
 
@@ -13,63 +20,18 @@ added to the README "Supported Resource Types" table.
 - Terraform type = `terraform-provider-microsoft365` resource. Marked **TBD**
   where it must be confirmed against the provider before implementing.
 
-## Already implemented (reference)
-
-| Graph endpoint | Azure type | Handler |
-| --- | --- | --- |
-| `deviceManagement/deviceConfigurations` | `Microsoft.Graph/deviceConfigurations` | `deviceconfiguration.go` |
-| `deviceManagement/configurationPolicies` | `Microsoft.Graph/deviceManagementConfigurationPolicies` | `devicemanagementconfigurationpolicy.go` |
-| `identity/conditionalAccess/policies` | `Microsoft.Graph/conditionalAccessPolicies` | `conditionalaccesspolicy.go` |
-| `policies/authenticationStrengthPolicies` | `Microsoft.Graph/authenticationStrengthPolicies` | `authenticationstrengthpolicy.go` |
-| Phase 1 collections (see below) | `Microsoft.Graph/*` | `graphcollection.go` base + 11 per-resource files |
-
-## Common Graph scopes (delegated/app)
-
-From the exporter; needed depending on which handlers are enabled:
-`DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`,
-`DeviceManagementServiceConfig.Read.All`, `DeviceManagementManagedDevices.Read.All`,
-`DeviceManagementRBAC.Read.All`, `Policy.Read.All`, `Directory.Read.All`,
-`Group.Read.All`, `Organization.Read.All`, `OnPremDirectorySynchronization.Read.All`,
-`Agreement.Read.All`.
+Phases 1 (simple collections) and 2 (scripts) are complete and were removed
+from this backlog; see the README "Supported Resource Types" table.
 
 ---
 
-## Phase 1 — Simple collections (fetch + serialize) — DONE
-
-Implemented via the shared `GraphCollectionHandler` base
-(`internal/handlers/graphcollection.go`) with one constructor file per
-resource. Terraform types confirmed against `deploymenttheory/microsoft365`.
-
-| Status | Resource | Graph endpoint | Azure type | Terraform type |
-| --- | --- | --- | --- | --- |
-| [x] | Assignment filters | `deviceManagement/assignmentFilters` | `Microsoft.Graph/assignmentFilters` | `microsoft365_graph_beta_device_management_assignment_filter` |
-| [x] | Feature update profiles | `deviceManagement/windowsFeatureUpdateProfiles` | `Microsoft.Graph/windowsFeatureUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_feature_update_policy` |
-| [x] | Quality update profiles | `deviceManagement/windowsQualityUpdateProfiles` | `Microsoft.Graph/windowsQualityUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_quality_update_policy` |
-| [x] | Driver update profiles | `deviceManagement/windowsDriverUpdateProfiles` | `Microsoft.Graph/windowsDriverUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_driver_update_profile` |
-| [x] | Device categories | `deviceManagement/deviceCategories` | `Microsoft.Graph/deviceCategories` | `microsoft365_graph_beta_device_management_device_category` |
-| [x] | Scope tags | `deviceManagement/roleScopeTags` | `Microsoft.Graph/roleScopeTags` | `microsoft365_graph_beta_device_management_role_scope_tag` |
-| [x] | Terms & Conditions | `deviceManagement/termsAndConditions` | `Microsoft.Graph/termsAndConditions` | `microsoft365_graph_beta_device_management_terms_and_conditions` |
-| [x] | Branding profiles | `deviceManagement/intuneBrandingProfiles` | `Microsoft.Graph/intuneBrandingProfiles` | `microsoft365_graph_beta_device_management_intune_branding_profile` (name field `profileName`) |
-| [x] | Notification templates | `deviceManagement/notificationMessageTemplates` | `Microsoft.Graph/notificationMessageTemplates` | `microsoft365_graph_beta_device_management_device_compliance_notification_template` |
-| [x] | Named locations | `identity/conditionalAccess/namedLocations` | `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` |
-| [x] | Terms of use agreements | `identityGovernance/termsOfUse/agreements` | `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` |
-
-## Phase 2 — Scripts (base64-decode payloads) — DONE
-
-Implemented on the shared `GraphCollectionHandler` base. The base64 script
-bodies are decoded by the base64-decode transformer (extended in
-`internal/transform/base64.go`): inline by default, sidecar files in `file`
-mode (`fileName` when present, otherwise `<display_name>_<suffix>.ps1`).
-Terraform types confirmed against `deploymenttheory/microsoft365`.
-
-| Status | Resource | Graph endpoint | Azure type | Terraform type |
-| --- | --- | --- | --- | --- |
-| [x] | Windows platform scripts | `deviceManagement/deviceManagementScripts` | `Microsoft.Graph/deviceManagementScripts` | `microsoft365_graph_beta_device_management_windows_platform_script` |
-| [x] | macOS shell scripts | `deviceManagement/deviceShellScripts` | `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` |
-| [x] | macOS custom attribute scripts | `deviceManagement/deviceCustomAttributeShellScripts` | `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` |
-| [x] | Remediations | `deviceManagement/deviceHealthScripts` | `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` |
-
 ## Phase 3 — Policies needing `$expand` / child fetches
+
+Pattern already established: supply a custom `fetchItem` closure to the
+`GraphCollectionHandler` base (see `devicemanagementconfigurationpolicy.go`
+for `$expand=settings` and `deviceconfiguration.go` for post-fetch
+enrichment). Child-collection joins (e.g. intents `settings` + `templates`)
+need an extra request inside the closure.
 
 | Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
 | --- | --- | --- | --- | --- |
@@ -118,13 +80,14 @@ Terraform types confirmed against `deploymenttheory/microsoft365`.
 
 ## Cross-cutting considerations
 
-- **Terraform types are TBD** for all rows and must be confirmed against
+- **Terraform types are TBD** for all pending rows and must be confirmed against
   `terraform-provider-microsoft365` before each handler is finalized (the README
   table requires an accurate Terraform type).
 - **Singletons** need a different handler shape than the list-based ones (single
-  object GET, no per-item ID iteration).
+  object GET, no per-item ID iteration) — either a `listIDs` closure returning a
+  fixed pseudo-ID or a dedicated singleton base.
 - **`$expand` / child collections** (intents, compliance, group policy, DEP) need
-  an extra fetch step inside `Fetch`.
+  an extra fetch step inside the `fetchItem` closure (see Phase 3 note).
 - **Assignments**: the exporter enriches most items with `assignments`. Decide
   whether handlers should also fetch `/{id}/assignments` and inline them.
 - **Groups resolution**: in the exporter this resolves group display names used by
