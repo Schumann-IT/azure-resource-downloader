@@ -149,7 +149,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
 	// Build fetch requests
-	requests, skippedTypes, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub)
+	requests, skippedTypes, emptyTypes, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -238,8 +238,10 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	// Print summary, including resource types that could not be listed
+	// Print summary, including resource types that could not be listed and
+	// types that returned no resources
 	summary.SkippedTypes = skippedTypes
+	summary.EmptyTypes = emptyTypes
 	summary.PrintSummary()
 
 	if summary.FailedResources > 0 {
@@ -296,6 +298,13 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 		handlers.NewApplePushNotificationCertificateHandler,
 		handlers.NewDepOnboardingSettingHandler,
 		handlers.NewAppleUserInitiatedEnrollmentProfileHandler,
+		handlers.NewRoleDefinitionHandler,
+		handlers.NewDeviceManagementSettingsHandler,
+		handlers.NewAuthenticationMethodsPolicyHandler,
+		handlers.NewAuthorizationPolicyHandler,
+		handlers.NewOnPremisesSynchronizationHandler,
+		handlers.NewOrganizationHandler,
+		handlers.NewGroupHandler,
 		handlers.NewAssignmentFilterHandler,
 		handlers.NewWindowsFeatureUpdateProfileHandler,
 		handlers.NewWindowsQualityUpdateProfileHandler,
@@ -330,11 +339,13 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 // handlers: when empty, all registered types are considered.
 //
 // The second return value lists resource types that could not be listed at all
-// (missing permissions or no subscription); callers should surface them in the
-// execution summary because their resource counts are unknown.
-func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup string, resourceTypes []string, subscriptionID string) ([]*models.FetchRequest, []pipeline.SkippedType, error) {
+// (missing permissions or no subscription) and the third lists types whose
+// listing succeeded but returned no resources; callers should surface both in
+// the execution summary.
+func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resourceIDs []string, resourceGroup string, resourceTypes []string, subscriptionID string) ([]*models.FetchRequest, []pipeline.SkippedType, []string, error) {
 	var requests []*models.FetchRequest
 	var skippedTypes []pipeline.SkippedType
+	var emptyTypes []string
 	log := logger.Default
 
 	// If specific resource IDs are provided, use them
@@ -345,7 +356,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 				Subscription: subscriptionID,
 			})
 		}
-		return requests, nil, nil
+		return requests, nil, nil, nil
 	}
 
 	// If resource group is specified, build resource ID
@@ -353,7 +364,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		if subscriptionID == "" {
 			log.Warn("Cannot download ARM resources because of missing subscription, skipping resource group",
 				"resource_group", resourceGroup)
-			return requests, nil, nil
+			return requests, nil, nil, nil
 		}
 		rgID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", subscriptionID, resourceGroup)
 		requests = append(requests, &models.FetchRequest{
@@ -362,7 +373,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 			ResourceGroup: resourceGroup,
 			Subscription:  subscriptionID,
 		})
-		return requests, nil, nil
+		return requests, nil, nil, nil
 	}
 
 	// Otherwise, list resources by type. --type acts as a filter; when no type
@@ -377,7 +388,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		handler, err := registry.Get(resourceType)
 		if err != nil {
 			log.Error("No handler for resource type", "type", resourceType, "error", err)
-			return nil, nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
+			return nil, nil, nil, fmt.Errorf("no handler registered for resource type %s: %w", resourceType, err)
 		}
 
 		// ARM (subscription-scoped) types cannot be listed without a
@@ -409,6 +420,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 			log.Warn("No resources found",
 				"type", resourceType,
 				"note", "This could be due to: (1) No resources of this type exist, (2) Insufficient permissions, or (3) Resources exist in a different scope (e.g., tenant vs subscription)")
+			emptyTypes = append(emptyTypes, resourceType)
 		}
 
 		for _, resourceID := range resourceList {
@@ -420,7 +432,7 @@ func buildFetchRequests(ctx context.Context, registry *handlers.Registry, resour
 		}
 	}
 
-	return requests, skippedTypes, nil
+	return requests, skippedTypes, emptyTypes, nil
 }
 
 // parseResourceType extracts the resource type from a resource ID

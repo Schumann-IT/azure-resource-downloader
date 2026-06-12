@@ -146,8 +146,11 @@ type ExecutionSummary struct {
 	// SkippedTypes lists resource types whose listing failed before the
 	// pipeline ran; their resource counts are not part of the totals above.
 	SkippedTypes []SkippedType
-	Results      []*models.WriteResult
-	Errors       []string
+	// EmptyTypes lists resource types whose listing succeeded but returned no
+	// resources (nothing exists, insufficient permissions, or different scope).
+	EmptyTypes []string
+	Results    []*models.WriteResult
+	Errors     []string
 }
 
 // PrintSummary prints a summary of the execution
@@ -159,7 +162,8 @@ func (s *ExecutionSummary) PrintSummary() {
 		"successful", s.SuccessfulResources,
 		"skipped", s.SkippedResources,
 		"failed", s.FailedResources,
-		"skipped_types", len(s.SkippedTypes))
+		"skipped_types", len(s.SkippedTypes),
+		"empty_types", len(s.EmptyTypes))
 
 	if s.SkippedResources > 0 {
 		log.Warn("Some resources were skipped because the signed-in user is not permitted to read them",
@@ -171,6 +175,14 @@ func (s *ExecutionSummary) PrintSummary() {
 			"count", len(s.SkippedTypes))
 		for _, st := range s.SkippedTypes {
 			log.Warn("Skipped type", "type", st.ResourceType, "reason", st.Reason)
+		}
+	}
+
+	if len(s.EmptyTypes) > 0 {
+		log.Warn("Some resource types returned no resources (nothing exists, insufficient permissions, or a different scope)",
+			"count", len(s.EmptyTypes))
+		for _, t := range s.EmptyTypes {
+			log.Warn("Empty type", "type", t)
 		}
 	}
 

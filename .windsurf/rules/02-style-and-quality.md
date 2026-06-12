@@ -92,4 +92,3 @@ globs: **/*.go
 - When generating new features or commands, Cascade should **update the main README.md** with concise usage notes instead of adding a new file.
 - The README should be treated as the *single source of truth* for onboarding, configuration, and developer reference.
 - Documentation: Never create new markdown files or docs folders. Append all relevant information to the root README.md.
-- **Sole exception**: `docs/graph-endpoints-roadmap.md` is a working backlog of *pending* resource types, not documentation. It must never duplicate README content: completed items are removed from the backlog, and supported types/permissions are documented only in the README tables.

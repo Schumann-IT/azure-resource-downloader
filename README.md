@@ -159,7 +159,12 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceCompliancePolicies`, `compliancePolicies`, `groupPolicyConfigurations`, `deviceManagementIntents` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All` |
 | `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementScripts.Read.All` |
-| `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
+| `Microsoft.Graph/roleScopeTags`, `roleDefinitions` | `DeviceManagementRBAC.Read.All` |
+| `Microsoft.Graph/deviceManagement` (tenant settings) | `DeviceManagementServiceConfig.Read.All` |
+| `Microsoft.Graph/authenticationMethodsPolicy`, `authorizationPolicy` | `Policy.Read.All` |
+| `Microsoft.Graph/onPremisesSynchronization` | `OnPremDirectorySynchronization.Read.All` |
+| `Microsoft.Graph/organization` | `Organization.Read.All` |
+| `Microsoft.Graph/groups` | `Group.Read.All` |
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/windowsAutopilotDeploymentProfiles`, `windowsAutopilotDeviceIdentities`, `deviceEnrollmentConfigurations`, `applePushNotificationCertificate`, `depOnboardingSettings`, `appleUserInitiatedEnrollmentProfiles` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |
@@ -844,6 +849,13 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/applePushNotificationCertificate` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/depOnboardingSettings` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/roleDefinitions` | `microsoft365_graph_beta_device_management_role_definition` | ✅ |
+| `Microsoft.Graph/deviceManagement` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/authenticationMethodsPolicy` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/authorizationPolicy` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/onPremisesSynchronization` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/organization` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/groups` | `azuread_group` | ✅ |
 
 > **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
 >
@@ -871,6 +883,13 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/applePushNotificationCertificate` is a tenant **singleton**: at most one file, named after the Apple ID; tenants without a certificate are skipped.
 > - `Microsoft.Graph/depOnboardingSettings` (Apple ADE/DEP tokens) additionally downloads the `enrollmentProfiles` child collection per token. The provider models only child profiles (`apple_configurator_enrollment_policy`), so no import is emitted.
 > - `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` has no provider resource for the profile itself (only its assignment), so no import is emitted.
+>
+> **Note:** Tenant admin & Entra types:
+> - `Microsoft.Graph/roleDefinitions` exports only **custom** Intune RBAC roles (built-in definitions are skipped during listing).
+> - `Microsoft.Graph/deviceManagement` (Intune tenant settings), `authenticationMethodsPolicy` (v1.0), `authorizationPolicy` (v1.0) are tenant **singletons** — one file each.
+> - `Microsoft.Graph/onPremisesSynchronization` (Entra Connect, v1.0) yields one file in hybrid tenants and none in cloud-only tenants.
+> - `Microsoft.Graph/organization` (v1.0) exports the tenant information object.
+> - `Microsoft.Graph/groups` (v1.0) exports the **full** directory group list incl. dynamic membership rules — this can be very large in big tenants. Terraform type is `azuread_group` (azuread provider).
 
 ### Handler Implementation Notes
 
@@ -879,12 +898,22 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | Handler group | SDK | Transform strategy |
 |---|---|---|
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
-| Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
+| Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`, `groups`, `organization`, `onPremisesSynchronization`, `authenticationMethodsPolicy` + `authorizationPolicy` singletons) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
 | Graph beta with custom fetch (`deviceManagementConfigurationPolicies` + `compliancePolicies` + `deviceCompliancePolicies` via `$expand`, `groupPolicyConfigurations` + `deviceManagementIntents` + `depOnboardingSettings` via child-collection fetches, `deviceConfigurations` with optional OMA secret resolution, `applePushNotificationCertificate` as singleton) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
 | Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements, mobile apps, app protections, WIP policies, app configurations) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 | Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
 
 All Microsoft Graph handlers are thin constructors around the shared `GraphCollectionHandler` (`internal/handlers/graphcollection.go`); only ARM handlers implement the `ResourceHandler` interface directly.
+
+Established `fetchItem` patterns for types needing more than a plain GET:
+
+- **`$expand`** — pass query parameters in the item request config (see `devicecompliancepolicy.go`).
+- **Child-collection fetches** — page the child collection and attach it to the model before serialization (see `grouppolicyconfiguration.go`, `devicemanagementintent.go`, `deponboardingsetting.go`).
+- **Post-fetch enrichment** — mutate the fetched model (see `deviceconfiguration.go` OMA secret resolution).
+- **Singletons** — probe the object in `listIDs` (return at most one ID, empty when absent) and ignore the item ID in `fetchItem` (see `applepushnotificationcertificate.go`).
+- **No Terraform representation** — return an empty `terraformType`; the transformer then skips the import block.
+
+> **Known limitation:** policy/profile **assignments** (`/{id}/assignments`) are not downloaded — exports contain the configuration objects only. Group display names referenced by assignments are likewise not resolved (groups themselves are exported by `Microsoft.Graph/groups`).
 
 ## 🔧 Adding New Resource Types
 
