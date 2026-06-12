@@ -5,8 +5,10 @@ import (
 )
 
 func TestAuthenticationStrengthPolicyHandler_GetType(t *testing.T) {
-	// We can test GetType without a real credential
-	handler := &AuthenticationStrengthPolicyHandler{}
+	handler, err := NewAuthenticationStrengthPolicyHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("NewAuthenticationStrengthPolicyHandler() unexpected error: %v", err)
+	}
 
 	expected := "Microsoft.Graph/authenticationStrengthPolicies"
 	result := handler.GetType()
@@ -17,8 +19,10 @@ func TestAuthenticationStrengthPolicyHandler_GetType(t *testing.T) {
 }
 
 func TestAuthenticationStrengthPolicyHandler_GetTerraformResourceType(t *testing.T) {
-	// We can test GetTerraformResourceType without a real credential
-	handler := &AuthenticationStrengthPolicyHandler{}
+	handler, err := NewAuthenticationStrengthPolicyHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("NewAuthenticationStrengthPolicyHandler() unexpected error: %v", err)
+	}
 
 	expected := "azuread_authentication_strength_policy"
 	result := handler.GetTerraformResourceType()
@@ -53,9 +57,9 @@ func TestExtractAuthStrengthPolicyID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractAuthStrengthPolicyID(tt.resourceID)
+			result := extractGraphItemID(tt.resourceID)
 			if result != tt.expected {
-				t.Errorf("extractAuthStrengthPolicyID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
+				t.Errorf("extractGraphItemID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
 			}
 		})
 	}

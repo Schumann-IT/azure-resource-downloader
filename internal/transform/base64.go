@@ -102,7 +102,7 @@ func decodePayload(properties map[string]interface{}, cfg *models.Base64DecodeCo
 	}
 
 	// Inline mode: replace the encoded value with the decoded text.
-	properties[cfg.SourceKey] = string(decoded)
+	properties[cfg.SourceKey] = normalizeInlineText(decoded)
 	return nil, nil
 }
 
@@ -150,7 +150,7 @@ func decodeOmaSettings(properties map[string]interface{}, cfg *models.Base64Deco
 			continue
 		}
 
-		setting["value"] = string(decoded)
+		setting["value"] = normalizeInlineText(decoded)
 	}
 
 	return artifacts, nil
@@ -192,10 +192,28 @@ func decodeScriptContent(properties map[string]interface{}, cfg *models.Base64De
 			continue
 		}
 
-		properties[sc.key] = string(decoded)
+		properties[sc.key] = normalizeInlineText(decoded)
 	}
 
 	return artifacts, nil
+}
+
+// normalizeInlineText prepares decoded bytes for inline YAML output: it strips
+// a leading UTF-8 BOM, converts CRLF / lone CR line endings to LF and trims
+// trailing spaces/tabs from every line. Without this, Windows-authored scripts
+// (BOM + CRLF) or lines with trailing whitespace force the YAML emitter into
+// double-quoted style with escape sequences, because literal block scalars can
+// represent neither carriage returns nor trailing spaces. File-mode sidecar
+// artifacts are written byte-exact and are not normalized.
+func normalizeInlineText(decoded []byte) string {
+	text := strings.TrimPrefix(string(decoded), "\uFEFF")
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // scriptArtifactFileName resolves the sidecar file name for a decoded script:

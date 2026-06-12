@@ -2,10 +2,15 @@ package handlers
 
 import (
 	"testing"
+
+	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
 func TestDeviceConfigurationHandler_GetType(t *testing.T) {
-	handler := &DeviceConfigurationHandler{}
+	handler, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, false)
+	if err != nil {
+		t.Fatalf("NewDeviceConfigurationHandler() unexpected error: %v", err)
+	}
 
 	expected := "Microsoft.Graph/deviceConfigurations"
 	result := handler.GetType()
@@ -16,7 +21,10 @@ func TestDeviceConfigurationHandler_GetType(t *testing.T) {
 }
 
 func TestDeviceConfigurationHandler_GetTerraformResourceType(t *testing.T) {
-	handler := &DeviceConfigurationHandler{}
+	handler, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, false)
+	if err != nil {
+		t.Fatalf("NewDeviceConfigurationHandler() unexpected error: %v", err)
+	}
 
 	expected := "microsoft365_graph_beta_device_management_device_configuration"
 	result := handler.GetTerraformResourceType()
@@ -51,10 +59,28 @@ func TestExtractDeviceConfigurationID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractDeviceConfigurationID(tt.resourceID)
+			result := extractGraphItemID(tt.resourceID)
 			if result != tt.expected {
-				t.Errorf("extractDeviceConfigurationID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
+				t.Errorf("extractGraphItemID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
 			}
 		})
 	}
+}
+
+func TestApplyPlaintextToOmaSetting(t *testing.T) {
+	t.Run("string setting", func(t *testing.T) {
+		setting := betamodels.NewOmaSettingString()
+		applyPlaintextToOmaSetting(setting, "secret-value")
+		if got := safeStringValue(setting.GetValue()); got != "secret-value" {
+			t.Errorf("OmaSettingString value = %q, want %q", got, "secret-value")
+		}
+	})
+
+	t.Run("xml setting", func(t *testing.T) {
+		setting := betamodels.NewOmaSettingStringXml()
+		applyPlaintextToOmaSetting(setting, "<a/>")
+		if got := string(setting.GetValue()); got != "<a/>" {
+			t.Errorf("OmaSettingStringXml value = %q, want %q", got, "<a/>")
+		}
+	})
 }

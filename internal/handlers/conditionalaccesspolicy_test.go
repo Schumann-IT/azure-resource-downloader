@@ -5,8 +5,10 @@ import (
 )
 
 func TestConditionalAccessPolicyHandler_GetType(t *testing.T) {
-	// We can test GetType without a real credential
-	handler := &ConditionalAccessPolicyHandler{}
+	handler, err := NewConditionalAccessPolicyHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("NewConditionalAccessPolicyHandler() unexpected error: %v", err)
+	}
 
 	expected := "Microsoft.Graph/conditionalAccessPolicies"
 	result := handler.GetType()
@@ -17,8 +19,10 @@ func TestConditionalAccessPolicyHandler_GetType(t *testing.T) {
 }
 
 func TestConditionalAccessPolicyHandler_GetTerraformResourceType(t *testing.T) {
-	// We can test GetTerraformResourceType without a real credential
-	handler := &ConditionalAccessPolicyHandler{}
+	handler, err := NewConditionalAccessPolicyHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("NewConditionalAccessPolicyHandler() unexpected error: %v", err)
+	}
 
 	expected := "azuread_conditional_access_policy"
 	result := handler.GetTerraformResourceType()
@@ -53,9 +57,9 @@ func TestExtractPolicyID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractPolicyID(tt.resourceID)
+			result := extractGraphItemID(tt.resourceID)
 			if result != tt.expected {
-				t.Errorf("extractPolicyID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
+				t.Errorf("extractGraphItemID(%q) = %q, want %q", tt.resourceID, result, tt.expected)
 			}
 		})
 	}
@@ -74,27 +78,22 @@ func TestSafeStringPtr(t *testing.T) {
 		},
 		{
 			name:     "valid string",
-			input:    stringPtr("test value"),
-			expected: "test value",
+			input:    stringPointer("test"),
+			expected: "test",
 		},
 		{
 			name:     "empty string",
-			input:    stringPtr(""),
+			input:    stringPointer(""),
 			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := safeStringPtr(tt.input)
+			result := safeStringValue(tt.input)
 			if result != tt.expected {
-				t.Errorf("safeStringPtr() = %q, want %q", result, tt.expected)
+				t.Errorf("safeStringValue() = %q, want %q", result, tt.expected)
 			}
 		})
 	}
-}
-
-// Helper function to create string pointers for testing
-func stringPtr(s string) *string {
-	return &s
 }

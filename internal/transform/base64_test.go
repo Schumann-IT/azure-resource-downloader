@@ -237,6 +237,40 @@ func TestApplyBase64DecodeScriptContent(t *testing.T) {
 		}
 	})
 
+	t.Run("inline strips BOM, normalizes CRLF and trims trailing whitespace", func(t *testing.T) {
+		windowsScript := "\uFEFF$app = Get-WmiObject -Class Win32_Product  \r\n$app.Uninstall()\t\r"
+		props := map[string]interface{}{
+			"fileName":      "uninstall.ps1",
+			"scriptContent": base64.StdEncoding.EncodeToString([]byte(windowsScript)),
+		}
+		_, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "$app = Get-WmiObject -Class Win32_Product\n$app.Uninstall()\n"
+		if props["scriptContent"] != want {
+			t.Errorf("scriptContent = %q, want normalized %q", props["scriptContent"], want)
+		}
+	})
+
+	t.Run("file mode keeps BOM and CRLF byte-exact", func(t *testing.T) {
+		windowsScript := "\uFEFFWrite-Host 'hi'\r\n"
+		props := map[string]interface{}{
+			"fileName":      "hi.ps1",
+			"scriptContent": base64.StdEncoding.EncodeToString([]byte(windowsScript)),
+		}
+		artifacts, err := ApplyBase64Decode(props, models.ParseBase64DecodeConfig(map[string]interface{}{"mode": "file"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(artifacts) != 1 {
+			t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+		}
+		if string(artifacts[0].Content) != windowsScript {
+			t.Errorf("Content = %q, want byte-exact %q", string(artifacts[0].Content), windowsScript)
+		}
+	})
+
 	t.Run("file mode uses fileName for scriptContent", func(t *testing.T) {
 		props := map[string]interface{}{
 			"fileName":      "hello.sh",

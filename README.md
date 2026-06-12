@@ -2,15 +2,6 @@
 
 A powerful command-line tool that downloads Azure resources, transforms them into clean YAML format, and generates Terraform import statements. Built with Go and following the async pipeline pattern for maximum performance.
 
-## ToDo
-
-- Add support for remediation/platform scripts (old and new)
-- Add support for onboarding screens/profiles (OOBE settings/profiles, Mac deployment profiles etc)
-- Add support for Entra Groups incl. dynamic groups
-- Conditional access handler: map remaining condition fields (device filters, guest/external users, client applications, sign-in frequency interval)
-
-> Done: Intune Settings Catalog policies (`Microsoft.Graph/deviceManagementConfigurationPolicies`) and legacy device configuration profiles incl. Custom/OMA-URI (`Microsoft.Graph/deviceConfigurations`).
-
 ## 🚀 Features
 
 - **Async Pipeline Architecture**: Parallel processing with configurable worker pools
@@ -848,10 +839,12 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | Handler group | SDK | Transform strategy |
 |---|---|---|
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
-| Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | Explicit property mapping (conditions, grant/session controls) |
-| Graph beta (`deviceManagementConfigurationPolicies`, `deviceConfigurations`) | `msgraph-beta-sdk-go` | Full generic serialization of the polymorphic `@odata.type` tree via the Kiota JSON writer — no setting is lost |
+| Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
+| Graph beta (`deviceManagementConfigurationPolicies` with `$expand=settings`, `deviceConfigurations` with optional OMA secret resolution) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
 | Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 | Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
+
+All Microsoft Graph handlers are thin constructors around the shared `GraphCollectionHandler` (`internal/handlers/graphcollection.go`); only ARM handlers implement the `ResourceHandler` interface directly.
 
 ## 🔧 Adding New Resource Types
 
@@ -955,11 +948,11 @@ azure-resource-downloader/
 │   │   ├── resourcegroup.go
 │   │   ├── storageaccount.go
 │   │   ├── virtualmachine.go
-│   │   ├── conditionalaccesspolicy.go              # Graph v1.0
-│   │   ├── authenticationstrengthpolicy.go         # Graph v1.0
-│   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog (Graph beta)
-│   │   ├── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI (Graph beta)
-│   │   ├── graphcollection.go                      # Shared base for simple Graph beta collections
+│   │   ├── graphcollection.go                      # Shared base for ALL Microsoft Graph handlers (v1.0 + beta)
+│   │   ├── conditionalaccesspolicy.go              # Graph v1.0 (on the base)
+│   │   ├── authenticationstrengthpolicy.go         # Graph v1.0 (on the base)
+│   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog, $expand=settings (Graph beta)
+│   │   ├── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI secret resolution (Graph beta)
 │   │   └── assignmentfilter.go, rolescopetag.go, … # 15 collection handlers built on the base (incl. 4 script types)
 │   ├── azure/             # Azure client wrappers
 │   │   ├── client.go      # Auth (az login / device-code) + ARM client
@@ -1051,15 +1044,4 @@ DEBUG Generated Terraform import block resource_type=azurerm_resource_group targ
 ```
 
 Debug logging shows exactly what each transformer does, which keys are removed/preserved/replaced, and why.
-
----
-
-## 🔮 Roadmap
-
-- [ ] Support for more Azure resource types
-- [ ] Bulk download by subscription
-- [ ] Resource filtering by tags
-- [ ] Export to multiple formats (JSON, HCL)
-- [ ] Interactive mode
-- [ ] Unit and integration tests
 

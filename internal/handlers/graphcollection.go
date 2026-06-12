@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,7 +10,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	kjson "github.com/microsoft/kiota-serialization-json-go"
 	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
+	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 )
 
 // GraphCollectionHandler implements models.ResourceHandler for simple Microsoft
@@ -37,6 +40,19 @@ func newBetaGraphClient(credential azcore.TokenCredential) (*msgraphbeta.GraphSe
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create beta Graph client: %w", err)
+	}
+	return client, nil
+}
+
+// newGraphClient creates a Microsoft Graph v1.0 (stable) client for the given
+// credential, requesting the default scope so the token carries all consented
+// delegated permissions.
+func newGraphClient(credential azcore.TokenCredential) (*msgraphsdk.GraphServiceClient, error) {
+	client, err := msgraphsdk.NewGraphServiceClientWithCredentials(credential, []string{
+		"https://graph.microsoft.com/.default",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Graph client: %w", err)
 	}
 	return client, nil
 }
@@ -102,4 +118,37 @@ func extractGraphItemID(resourceID string) string {
 		return parts[len(parts)-1]
 	}
 	return resourceID
+}
+
+// serializeParsableToMap serializes a Kiota Parsable object to a generic map by
+// round-tripping through its JSON representation. This captures the full nested
+// tree (including polymorphic @odata.type discriminated children) without having
+// to manually handle every model type.
+func serializeParsableToMap(parsable serialization.Parsable) (map[string]interface{}, error) {
+	writer := kjson.NewJsonSerializationWriter()
+	defer func() { _ = writer.Close() }()
+
+	if err := writer.WriteObjectValue("", parsable); err != nil {
+		return nil, fmt.Errorf("failed to write object value: %w", err)
+	}
+
+	content, err := writer.GetSerializedContent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get serialized content: %w", err)
+	}
+
+	properties := make(map[string]interface{})
+	if err := json.Unmarshal(content, &properties); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal serialized content: %w", err)
+	}
+
+	return properties, nil
+}
+
+// safeStringValue safely dereferences a string pointer
+func safeStringValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

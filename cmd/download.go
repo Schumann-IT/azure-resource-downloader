@@ -262,29 +262,22 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 	registry.Register("Microsoft.Storage/storageAccounts", handlers.NewStorageAccountHandler(cred, sub))
 	registry.Register("Microsoft.Compute/virtualMachines", handlers.NewVirtualMachineHandler(cred, sub))
 
-	// Register Microsoft Graph handlers (tenant-level resources)
-	if capHandler, err := handlers.NewConditionalAccessPolicyHandler(cred); err == nil {
-		registry.Register("Microsoft.Graph/conditionalAccessPolicies", capHandler)
-	}
-	if aspHandler, err := handlers.NewAuthenticationStrengthPolicyHandler(cred); err == nil {
-		registry.Register("Microsoft.Graph/authenticationStrengthPolicies", aspHandler)
-	}
-
-	// Register Intune (Microsoft Graph beta) handlers
-	if dmcpHandler, err := handlers.NewDeviceManagementConfigurationPolicyHandler(cred); err == nil {
-		registry.Register("Microsoft.Graph/deviceManagementConfigurationPolicies", dmcpHandler)
-	}
+	// Register the Intune device configuration handler separately because of
+	// its extra resolve-secrets option
 	resolveSecrets := viper.GetBool("resolve-secrets")
 	if resolveSecrets {
 		logger.Default.Info("Secret resolution enabled", "flag", "--resolve-secrets")
 		logger.Default.Debug("Secret resolution writes encrypted Intune OMA-URI values to output in plaintext; the signed-in user must hold delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights")
 	}
 	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, resolveSecrets); err == nil {
-		registry.Register("Microsoft.Graph/deviceConfigurations", dcHandler)
+		registry.Register(dcHandler.GetType(), dcHandler)
 	}
 
-	// Register simple Microsoft Graph beta collection handlers
+	// Register Microsoft Graph collection handlers (tenant-level resources)
 	graphCollections := []func(azcore.TokenCredential) (*handlers.GraphCollectionHandler, error){
+		handlers.NewConditionalAccessPolicyHandler,
+		handlers.NewAuthenticationStrengthPolicyHandler,
+		handlers.NewDeviceManagementConfigurationPolicyHandler,
 		handlers.NewAssignmentFilterHandler,
 		handlers.NewWindowsFeatureUpdateProfileHandler,
 		handlers.NewWindowsQualityUpdateProfileHandler,

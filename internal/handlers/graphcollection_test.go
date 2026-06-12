@@ -4,10 +4,21 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
+
+// fakeTokenCredential is an offline azcore.TokenCredential for constructor
+// tests; no network calls are made at client construction time.
+type fakeTokenCredential struct{}
+
+func (fakeTokenCredential) GetToken(_ context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return azcore.AccessToken{Token: "fake-token", ExpiresOn: time.Now().Add(time.Hour)}, nil
+}
 
 // newTestGraphCollectionHandler builds a handler against the DeviceCategory
 // model, which is representative of all simple Graph collections.
