@@ -21,8 +21,9 @@ the README permission table.
   where it must be confirmed against the provider before implementing.
 
 Phases 1 (simple collections), 2 (scripts), 3 ($expand / child-fetch
-policies) and 4 (applications) are complete and were removed from this
-backlog; see the README "Supported Resource Types" table.
+policies), 4 (applications) and 5 (Autopilot & enrollment) are complete and
+were removed from this backlog; see the README "Supported Resource Types"
+table.
 
 For new types needing more than a plain GET, the pattern is established:
 supply a custom `fetchItem` closure to the `GraphCollectionHandler` base —
@@ -31,19 +32,11 @@ to the model before serialization (see `grouppolicyconfiguration.go`,
 `devicemanagementintent.go`), or post-fetch enrichment
 (`deviceconfiguration.go`). Types without a Terraform representation return an
 empty `terraformType`; the transformer then skips the import block.
+Singletons (see `applepushnotificationcertificate.go`) probe the object in
+`listIDs` (returning at most one ID, empty when absent) and ignore the item ID
+in `fetchItem`.
 
 ---
-
-## Phase 5 — Autopilot & Enrollment
-
-| Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
-| --- | --- | --- | --- | --- |
-| [ ] | Autopilot deployment profiles | `deviceManagement/windowsAutopilotDeploymentProfiles` | `Microsoft.Graph/windowsAutopilotDeploymentProfiles` | |
-| [ ] | Autopilot device identities | `deviceManagement/windowsAutopilotDeviceIdentities` | `Microsoft.Graph/windowsAutopilotDeviceIdentities` | potentially large; data not config |
-| [ ] | Enrollment configurations | `deviceManagement/deviceEnrollmentConfigurations` | `Microsoft.Graph/deviceEnrollmentConfigurations` | ESP, restrictions, WHfB |
-| [ ] | Apple MDM push certificate | `deviceManagement/applePushNotificationCertificate` | `Microsoft.Graph/applePushNotificationCertificate` | **singleton** |
-| [ ] | Apple ADE/DEP tokens + profiles | `deviceManagement/depOnboardingSettings` | `Microsoft.Graph/depOnboardingSettings` | child `enrollmentProfiles` |
-| [ ] | Apple user-initiated enrollment | `deviceManagement/appleUserInitiatedEnrollmentProfiles` | `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` | |
 
 ## Phase 6 — Tenant admin & Entra singletons
 
