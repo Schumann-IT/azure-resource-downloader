@@ -177,9 +177,12 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 
 	terraformResourceType := handler.GetTerraformResourceType()
 
-	// Step 4: Generate Terraform import block
+	// Step 4: Generate Terraform import block. Types without a Terraform
+	// representation (empty resource type) are skipped.
 	var terraformImport string
-	if importConfig := models.GetTransformerConfig(t.transformerConfigs, models.TransformerTerraformImport); importConfig != nil {
+	if importConfig := models.GetTransformerConfig(t.transformerConfigs, models.TransformerTerraformImport); importConfig != nil && terraformResourceType == "" {
+		log.Debug("Skipping terraform-import transformer (no Terraform resource type)")
+	} else if importConfig != nil {
 		config := models.ParseTerraformImportConfig(importConfig.Config)
 		terraformImport = transform.GenerateTerraformImportBlock(
 			terraformResourceType,

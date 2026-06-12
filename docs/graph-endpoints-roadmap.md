@@ -20,25 +20,19 @@ the README permission table.
 - Terraform type = `terraform-provider-microsoft365` resource. Marked **TBD**
   where it must be confirmed against the provider before implementing.
 
-Phases 1 (simple collections) and 2 (scripts) are complete and were removed
-from this backlog; see the README "Supported Resource Types" table.
+Phases 1 (simple collections), 2 (scripts) and 3 ($expand / child-fetch
+policies) are complete and were removed from this backlog; see the README
+"Supported Resource Types" table.
+
+For new types needing more than a plain GET, the pattern is established:
+supply a custom `fetchItem` closure to the `GraphCollectionHandler` base —
+`$expand` (see `devicecompliancepolicy.go`), child-collection fetches attached
+to the model before serialization (see `grouppolicyconfiguration.go`,
+`devicemanagementintent.go`), or post-fetch enrichment
+(`deviceconfiguration.go`). Types without a Terraform representation return an
+empty `terraformType`; the transformer then skips the import block.
 
 ---
-
-## Phase 3 — Policies needing `$expand` / child fetches
-
-Pattern already established: supply a custom `fetchItem` closure to the
-`GraphCollectionHandler` base (see `devicemanagementconfigurationpolicy.go`
-for `$expand=settings` and `deviceconfiguration.go` for post-fetch
-enrichment). Child-collection joins (e.g. intents `settings` + `templates`)
-need an extra request inside the closure.
-
-| Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
-| --- | --- | --- | --- | --- |
-| [ ] | Compliance policies (classic) | `deviceManagement/deviceCompliancePolicies` | `Microsoft.Graph/deviceCompliancePolicies` | `$expand=scheduledActionsForRule(...)` |
-| [ ] | Compliance policies (Settings Catalog) | `deviceManagement/compliancePolicies` | `Microsoft.Graph/compliancePolicies` | child `settings` |
-| [ ] | Administrative Templates | `deviceManagement/groupPolicyConfigurations` | `Microsoft.Graph/groupPolicyConfigurations` | child `definitionValues?$expand=definition` |
-| [ ] | Endpoint Security intents (legacy) | `deviceManagement/intents` | `Microsoft.Graph/deviceManagementIntents` | child `settings`; join `templates` |
 
 ## Phase 4 — Applications
 

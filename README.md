@@ -156,6 +156,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceConfigurations` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceConfigurations` + `--resolve-secrets` | `DeviceManagementConfiguration.ReadWrite.All` |
 | `Microsoft.Graph/assignmentFilters`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceCompliancePolicies`, `compliancePolicies`, `groupPolicyConfigurations`, `deviceManagementIntents` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All` |
 | `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementScripts.Read.All` |
 | `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
@@ -823,6 +824,10 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` | ✅ |
 | `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` | ✅ |
 | `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` | ✅ |
+| `Microsoft.Graph/deviceCompliancePolicies` | `microsoft365_graph_beta_device_management_windows_device_compliance_policy` | ✅ |
+| `Microsoft.Graph/compliancePolicies` | `microsoft365_graph_beta_device_management_linux_device_compliance_policy` | ✅ |
+| `Microsoft.Graph/groupPolicyConfigurations` | `microsoft365_graph_beta_device_management_group_policy_configuration` | ✅ |
+| `Microsoft.Graph/deviceManagementIntents` | — (no provider resource; no import emitted) | ✅ |
 
 > **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
 >
@@ -831,6 +836,12 @@ Currently supported Azure resource types:
 > **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
 >
 > **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`. The Terraform resource type is polymorphic in practice; verify the emitted import against your provider/profile variant.
+>
+> **Note:** Compliance, Administrative Templates and Endpoint Security intents need child fetches beyond a plain GET:
+> - `Microsoft.Graph/deviceCompliancePolicies` (classic, platform-polymorphic) is fetched with `$expand=scheduledActionsForRule($expand=scheduledActionConfigurations)`. The provider's compliance resources are per-platform (`windows`/`macos`/`ios`/`android_device_owner`/`aosp` variants); the Windows variant is emitted by default — adjust the import for other platforms.
+> - `Microsoft.Graph/compliancePolicies` (Settings Catalog based, currently Linux) is fetched with `$expand=settings,scheduledActionsForRule(...)` and named via its `name` field.
+> - `Microsoft.Graph/groupPolicyConfigurations` (Administrative Templates) additionally downloads the `definitionValues?$expand=definition` child collection so each configured ADMX setting carries its definition metadata.
+> - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection. The provider has no resource for legacy intents, so no Terraform import is emitted.
 
 ### Handler Implementation Notes
 
@@ -840,7 +851,7 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 |---|---|---|
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
 | Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
-| Graph beta (`deviceManagementConfigurationPolicies` with `$expand=settings`, `deviceConfigurations` with optional OMA secret resolution) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
+| Graph beta with custom fetch (`deviceManagementConfigurationPolicies` + `compliancePolicies` + `deviceCompliancePolicies` via `$expand`, `groupPolicyConfigurations` + `deviceManagementIntents` via child-collection fetches, `deviceConfigurations` with optional OMA secret resolution) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
 | Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 | Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
 
