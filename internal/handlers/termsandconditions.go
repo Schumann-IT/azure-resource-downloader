@@ -49,6 +49,11 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 			if err != nil {
 				return nil, fmt.Errorf("failed to get terms and conditions: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().TermsAndConditions().ByTermsAndConditionsId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/termsAndConditions", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

@@ -912,8 +912,15 @@ Established `fetchItem` patterns for types needing more than a plain GET:
 - **Post-fetch enrichment** — mutate the fetched model (see `deviceconfiguration.go` OMA secret resolution).
 - **Singletons** — probe the object in `listIDs` (return at most one ID, empty when absent) and ignore the item ID in `fetchItem` (see `applepushnotificationcertificate.go`).
 - **No Terraform representation** — return an empty `terraformType`; the transformer then skips the import block.
+- **Assignments** — Intune policies/profiles/apps/scripts fetch the `/{id}/assignments` child collection in `fetchItem` and attach it to the model via `SetAssignments`, so assignments are inlined under `assignments` in the exported YAML. Exception: the Graph beta service has no `/assignments` route for `deviceShellScripts` and `deviceCustomAttributeShellScripts`, so those two handlers read assignments via a second item GET with `$expand=assignments` instead. Assignment reads are best-effort: on failure a warning is logged (`warnAssignmentsFetchFailed` in `graphcollection.go`) and the item is exported without assignments.
 
-> **Known limitation:** policy/profile **assignments** (`/{id}/assignments`) are not downloaded — exports contain the configuration objects only. Group display names referenced by assignments are likewise not resolved (groups themselves are exported by `Microsoft.Graph/groups`).
+> **Known limitation:** group display names referenced by assignment targets are not resolved — assignments carry the target group IDs only (groups themselves are exported by `Microsoft.Graph/groups`).
+
+## 📌 Backlog
+
+Planned but not yet implemented:
+
+- **ID-to-name resolution transformer** — a transformer that replaces attributes referencing object IDs (e.g. `groupId` in assignment targets) with the corresponding display name, resolving the known limitation above.
 
 ## 🔧 Adding New Resource Types
 

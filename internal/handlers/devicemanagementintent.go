@@ -66,6 +66,12 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 			}
 			item.SetSettings(settings)
 
+			if assignments, err := client.DeviceManagement().Intents().ByDeviceManagementIntentId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceManagementIntents", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
+
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

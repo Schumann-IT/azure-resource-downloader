@@ -62,6 +62,11 @@ func NewAndroidManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Android managed app protection: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceAppManagement().AndroidManagedAppProtections().ByAndroidManagedAppProtectionId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/androidManagedAppProtections", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

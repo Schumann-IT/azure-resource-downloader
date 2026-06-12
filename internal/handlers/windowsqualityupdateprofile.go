@@ -50,6 +50,11 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Windows quality update profile: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().WindowsQualityUpdateProfiles().ByWindowsQualityUpdateProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/windowsQualityUpdateProfiles", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

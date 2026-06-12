@@ -59,6 +59,11 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 			if err != nil {
 				return nil, fmt.Errorf("failed to get device enrollment configuration: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().DeviceEnrollmentConfigurations().ByDeviceEnrollmentConfigurationId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceEnrollmentConfigurations", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

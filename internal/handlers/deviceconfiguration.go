@@ -74,6 +74,11 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 			if resolveSecrets {
 				resolveOmaSecrets(ctx, client, itemID, item)
 			}
+			if assignments, err := client.DeviceManagement().DeviceConfigurations().ByDeviceConfigurationId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceConfigurations", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

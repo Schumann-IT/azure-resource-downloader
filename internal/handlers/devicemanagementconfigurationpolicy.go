@@ -60,6 +60,11 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 			if err != nil {
 				return nil, fmt.Errorf("failed to get configuration policy: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().ConfigurationPolicies().ByDeviceManagementConfigurationPolicyId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceManagementConfigurationPolicies", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

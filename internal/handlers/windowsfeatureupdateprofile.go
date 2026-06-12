@@ -50,6 +50,11 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Windows feature update profile: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().WindowsFeatureUpdateProfiles().ByWindowsFeatureUpdateProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/windowsFeatureUpdateProfiles", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

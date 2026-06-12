@@ -50,6 +50,11 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Intune branding profile: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().IntuneBrandingProfiles().ByIntuneBrandingProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/intuneBrandingProfiles", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

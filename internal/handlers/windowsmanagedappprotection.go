@@ -62,6 +62,11 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Windows managed app protection: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceAppManagement().WindowsManagedAppProtections().ByWindowsManagedAppProtectionId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/windowsManagedAppProtections", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

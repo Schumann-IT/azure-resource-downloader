@@ -50,6 +50,11 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Autopilot deployment profile: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().WindowsAutopilotDeploymentProfiles().ByWindowsAutopilotDeploymentProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/windowsAutopilotDeploymentProfiles", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

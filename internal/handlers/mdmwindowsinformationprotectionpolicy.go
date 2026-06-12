@@ -54,6 +54,11 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 			if err != nil {
 				return nil, fmt.Errorf("failed to get MDM Windows Information Protection policy: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceAppManagement().MdmWindowsInformationProtectionPolicies().ByMdmWindowsInformationProtectionPolicyId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/mdmWindowsInformationProtectionPolicies", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

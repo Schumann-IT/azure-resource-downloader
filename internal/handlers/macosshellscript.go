@@ -6,6 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -50,6 +51,16 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 			item, err := client.DeviceManagement().DeviceShellScripts().ByDeviceShellScriptId(itemID).Get(ctx, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get macOS shell script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
+			}
+			requestConfig := &betadevicemanagement.DeviceShellScriptsDeviceShellScriptItemRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadevicemanagement.DeviceShellScriptsDeviceShellScriptItemRequestBuilderGetQueryParameters{
+					Expand: []string{"assignments"},
+				},
+			}
+			if expanded, err := client.DeviceManagement().DeviceShellScripts().ByDeviceShellScriptId(itemID).Get(ctx, requestConfig); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceShellScripts", itemID, err)
+			} else if expanded != nil {
+				item.SetAssignments(expanded.GetAssignments())
 			}
 			return item, nil
 		},

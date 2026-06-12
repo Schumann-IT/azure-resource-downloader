@@ -56,6 +56,11 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			if err != nil {
 				return nil, fmt.Errorf("failed to get mobile app: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceAppManagement().MobileApps().ByMobileAppId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/mobileApps", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

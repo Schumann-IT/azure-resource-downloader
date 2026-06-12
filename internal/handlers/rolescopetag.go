@@ -49,6 +49,11 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			if err != nil {
 				return nil, fmt.Errorf("failed to get role scope tag: %w (hint: requires 'DeviceManagementRBAC.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().RoleScopeTags().ByRoleScopeTagId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/roleScopeTags", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

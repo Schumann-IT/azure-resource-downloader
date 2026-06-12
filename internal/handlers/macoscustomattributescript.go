@@ -6,6 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -51,6 +52,16 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 			item, err := client.DeviceManagement().DeviceCustomAttributeShellScripts().ByDeviceCustomAttributeShellScriptId(itemID).Get(ctx, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get macOS custom attribute script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
+			}
+			requestConfig := &betadevicemanagement.DeviceCustomAttributeShellScriptsDeviceCustomAttributeShellScriptItemRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadevicemanagement.DeviceCustomAttributeShellScriptsDeviceCustomAttributeShellScriptItemRequestBuilderGetQueryParameters{
+					Expand: []string{"assignments"},
+				},
+			}
+			if expanded, err := client.DeviceManagement().DeviceCustomAttributeShellScripts().ByDeviceCustomAttributeShellScriptId(itemID).Get(ctx, requestConfig); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceCustomAttributeShellScripts", itemID, err)
+			} else if expanded != nil {
+				item.SetAssignments(expanded.GetAssignments())
 			}
 			return item, nil
 		},

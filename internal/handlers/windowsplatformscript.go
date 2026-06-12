@@ -51,6 +51,11 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Windows platform script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().DeviceManagementScripts().ByDeviceManagementScriptId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceManagementScripts", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

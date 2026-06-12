@@ -52,6 +52,11 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			if err != nil {
 				return nil, fmt.Errorf("failed to get remediation script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().DeviceHealthScripts().ByDeviceHealthScriptId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/deviceHealthScripts", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

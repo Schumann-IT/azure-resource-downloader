@@ -64,6 +64,12 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 			}
 			item.SetDefinitionValues(values)
 
+			if assignments, err := client.DeviceManagement().GroupPolicyConfigurations().ByGroupPolicyConfigurationId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/groupPolicyConfigurations", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
+
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {

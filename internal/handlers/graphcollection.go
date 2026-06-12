@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -143,6 +145,21 @@ func serializeParsableToMap(parsable serialization.Parsable) (map[string]interfa
 	}
 
 	return properties, nil
+}
+
+// warnAssignmentsFetchFailed logs a warning when the /assignments child
+// collection of an item could not be fetched. Assignment reads are
+// best-effort: the item is still exported, just without its assignments, so a
+// permission or transient failure never aborts the download.
+func warnAssignmentsFetchFailed(resourceType, itemID string, err error) {
+	logger.Default.Warn("Failed to fetch assignments; exporting item without assignments",
+		"type", resourceType,
+		"id", itemID,
+		"reason", azure.ErrorSummary(err))
+	logger.Default.Debug("Assignments fetch failed",
+		"type", resourceType,
+		"id", itemID,
+		"error", err)
 }
 
 // safeStringValue safely dereferences a string pointer

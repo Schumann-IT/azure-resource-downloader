@@ -50,6 +50,11 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 			if err != nil {
 				return nil, fmt.Errorf("failed to get Windows driver update profile: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
+			if assignments, err := client.DeviceManagement().WindowsDriverUpdateProfiles().ByWindowsDriverUpdateProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
+				warnAssignmentsFetchFailed("Microsoft.Graph/windowsDriverUpdateProfiles", itemID, err)
+			} else if assignments != nil {
+				item.SetAssignments(assignments.GetValue())
+			}
 			return item, nil
 		},
 		displayName: func(item serialization.Parsable) string {
