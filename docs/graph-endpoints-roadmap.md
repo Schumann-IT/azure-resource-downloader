@@ -20,9 +20,9 @@ the README permission table.
 - Terraform type = `terraform-provider-microsoft365` resource. Marked **TBD**
   where it must be confirmed against the provider before implementing.
 
-Phases 1 (simple collections), 2 (scripts) and 3 ($expand / child-fetch
-policies) are complete and were removed from this backlog; see the README
-"Supported Resource Types" table.
+Phases 1 (simple collections), 2 (scripts), 3 ($expand / child-fetch
+policies) and 4 (applications) are complete and were removed from this
+backlog; see the README "Supported Resource Types" table.
 
 For new types needing more than a plain GET, the pattern is established:
 supply a custom `fetchItem` closure to the `GraphCollectionHandler` base —
@@ -33,19 +33,6 @@ to the model before serialization (see `grouppolicyconfiguration.go`,
 empty `terraformType`; the transformer then skips the import block.
 
 ---
-
-## Phase 4 — Applications
-
-| Status | Resource | Graph endpoint | Azure type (proposed) | Notes |
-| --- | --- | --- | --- | --- |
-| [ ] | Applications | `deviceAppManagement/mobileApps` | `Microsoft.Graph/mobileApps` | many polymorphic `@odata.type`s |
-| [ ] | App protection (iOS) | `deviceAppManagement/iosManagedAppProtections` | `Microsoft.Graph/iosManagedAppProtections` | |
-| [ ] | App protection (Android) | `deviceAppManagement/androidManagedAppProtections` | `Microsoft.Graph/androidManagedAppProtections` | |
-| [ ] | App protection (Windows) | `deviceAppManagement/windowsManagedAppProtections` | `Microsoft.Graph/windowsManagedAppProtections` | |
-| [ ] | WIP (MDM) | `deviceAppManagement/mdmWindowsInformationProtectionPolicies` | `Microsoft.Graph/mdmWindowsInformationProtectionPolicies` | |
-| [ ] | WIP (no enrollment) | `deviceAppManagement/windowsInformationProtectionPolicies` | `Microsoft.Graph/windowsInformationProtectionPolicies` | |
-| [ ] | App config (managed devices) | `deviceAppManagement/mobileAppConfigurations` | `Microsoft.Graph/mobileAppConfigurations` | |
-| [ ] | App config (managed apps) | `deviceAppManagement/targetedManagedAppConfigurations` | `Microsoft.Graph/targetedManagedAppConfigurations` | |
 
 ## Phase 5 — Autopilot & Enrollment
 

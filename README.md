@@ -162,6 +162,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All` |
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |
+| `Microsoft.Graph/mobileApps`, `iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`, `mobileAppConfigurations`, `targetedManagedAppConfigurations` | `DeviceManagementApps.Read.All` |
 | `Microsoft.Graph/namedLocations` | `Policy.Read.All` |
 | `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` |
 | ARM types (`storageAccounts`, `virtualMachines`, `resourceGroups`) | `Azure Service Management/user_impersonation` (+ your Azure RBAC) |
@@ -828,6 +829,14 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/compliancePolicies` | `microsoft365_graph_beta_device_management_linux_device_compliance_policy` | ✅ |
 | `Microsoft.Graph/groupPolicyConfigurations` | `microsoft365_graph_beta_device_management_group_policy_configuration` | ✅ |
 | `Microsoft.Graph/deviceManagementIntents` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/mobileApps` | `microsoft365_graph_beta_device_and_app_management_win32_app` | ✅ |
+| `Microsoft.Graph/iosManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/androidManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/windowsManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/mdmWindowsInformationProtectionPolicies` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/windowsInformationProtectionPolicies` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/mobileAppConfigurations` | `microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy` | ✅ |
+| `Microsoft.Graph/targetedManagedAppConfigurations` | `microsoft365_graph_beta_device_and_app_management_targeted_managed_app_configuration` | ✅ |
 
 > **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
 >
@@ -842,6 +851,12 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/compliancePolicies` (Settings Catalog based, currently Linux) is fetched with `$expand=settings,scheduledActionsForRule(...)` and named via its `name` field.
 > - `Microsoft.Graph/groupPolicyConfigurations` (Administrative Templates) additionally downloads the `definitionValues?$expand=definition` child collection so each configured ADMX setting carries its definition metadata.
 > - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection. The provider has no resource for legacy intents, so no Terraform import is emitted.
+>
+> **Note:** Application (`deviceAppManagement`) types:
+> - `Microsoft.Graph/mobileApps` is highly polymorphic (`win32LobApp`, `winGetApp`, `macOSPkgApp`, `iosStoreApp`, `officeSuiteApp`, …) and includes Microsoft built-in apps. The provider's app resources are per-type (`win32_app`, `win_get_app`, `macos_pkg_app`, …); the Win32 variant is emitted by default — adjust the import per app's `@odata.type`.
+> - App protection policies (`iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`) and app configurations (`targetedManagedAppConfigurations`) are fetched with `$expand=apps` so the targeted app list is included. The provider has no managed-app-protection resources yet, so those emit no Terraform import.
+> - WIP policies (`mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`) are deprecated by Microsoft and have no provider resource; downloaded for documentation/backup only.
+> - `Microsoft.Graph/mobileAppConfigurations` (managed-device app config) is platform-polymorphic; the iOS provider variant is emitted by default — adjust for Android policies.
 
 ### Handler Implementation Notes
 
@@ -852,7 +867,7 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
 | Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
 | Graph beta with custom fetch (`deviceManagementConfigurationPolicies` + `compliancePolicies` + `deviceCompliancePolicies` via `$expand`, `groupPolicyConfigurations` + `deviceManagementIntents` via child-collection fetches, `deviceConfigurations` with optional OMA secret resolution) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
-| Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
+| Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements, mobile apps, app protections, WIP policies, app configurations) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 | Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
 
 All Microsoft Graph handlers are thin constructors around the shared `GraphCollectionHandler` (`internal/handlers/graphcollection.go`); only ARM handlers implement the `ResourceHandler` interface directly.
