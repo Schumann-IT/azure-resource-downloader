@@ -308,6 +308,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 		handlers.NewAuthorizationPolicyHandler,
 		handlers.NewOnPremisesSynchronizationHandler,
 		handlers.NewOrganizationHandler,
+		handlers.NewOrganizationalBrandingHandler,
 		handlers.NewGroupHandler,
 		handlers.NewAssignmentFilterHandler,
 		handlers.NewWindowsFeatureUpdateProfileHandler,

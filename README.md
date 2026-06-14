@@ -164,6 +164,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/authenticationMethodsPolicy`, `authorizationPolicy` | `Policy.Read.All` |
 | `Microsoft.Graph/onPremisesSynchronization` | `OnPremDirectorySynchronization.Read.All` |
 | `Microsoft.Graph/organization` | `Organization.Read.All` |
+| `Microsoft.Graph/organizationalBranding` | `OrganizationalBranding.Read.All` (+ `Organization.Read.All`) |
 | `Microsoft.Graph/groups` | `Group.Read.All` |
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/windowsAutopilotDeploymentProfiles`, `windowsAutopilotDeviceIdentities`, `deviceEnrollmentConfigurations`, `applePushNotificationCertificate`, `depOnboardingSettings`, `appleUserInitiatedEnrollmentProfiles` | `DeviceManagementServiceConfig.Read.All` |
@@ -888,6 +889,7 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/authorizationPolicy` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/onPremisesSynchronization` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/organization` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/organizationalBranding` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/groups` | `azuread_group` | ✅ |
 
 > **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
@@ -922,6 +924,7 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/deviceManagement` (Intune tenant settings), `authenticationMethodsPolicy` (v1.0), `authorizationPolicy` (v1.0) are tenant **singletons** — one file each.
 > - `Microsoft.Graph/onPremisesSynchronization` (Entra Connect, v1.0) yields one file in hybrid tenants and none in cloud-only tenants.
 > - `Microsoft.Graph/organization` (v1.0) exports the tenant information object.
+> - `Microsoft.Graph/organizationalBranding` (beta) is a tenant **singleton** under the organization (`organization/{id}/branding`); it exports the default Entra company-branding object (incl. per-locale `localizations` via `$expand`) and yields no file when branding has not been configured. Distinct from `intuneBrandingProfiles` (Intune company portal branding).
 > - `Microsoft.Graph/groups` (v1.0) exports the **full** directory group list incl. dynamic membership rules — this can be very large in big tenants. Terraform type is `azuread_group` (azuread provider).
 
 ### Handler Implementation Notes
