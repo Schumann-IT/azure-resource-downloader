@@ -17,8 +17,9 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List supported resource types",
 	Long: `List all Azure resource types that are currently supported by the tool.
-	
-This command shows which resource types have handlers registered and can be downloaded.`,
+
+This command shows which resource types have handlers registered and can be
+downloaded, along with the Terraform resource type each one maps to.`,
 	RunE: runList,
 }
 

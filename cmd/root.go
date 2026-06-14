@@ -36,7 +36,12 @@ var rootCmd = &cobra.Command{
 transforms them into clean YAML format, and generates Terraform import statements.
 
 The tool follows a pipeline pattern with async processing for maximum performance.
-It's designed to be easily extensible with support for multiple Azure resource types.`,
+It's designed to be easily extensible with support for multiple Azure resource types.
+
+Authentication reuses your existing Azure CLI session (run 'az login' first); the
+same delegated token is used for both ARM and Microsoft Graph calls. To download
+Microsoft Graph/Intune types that need scopes the Azure CLI app cannot provide,
+sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	Version: "1.0.0",
 }
 

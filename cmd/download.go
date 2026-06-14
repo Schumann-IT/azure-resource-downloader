@@ -43,6 +43,10 @@ resource types are downloaded.
 
 The subscription ID is optional. If not specified, the default subscription from your 'az login' session will be used.
 
+Authentication reuses your 'az login' session by default. To download Microsoft
+Graph/Intune types that need scopes the Azure CLI app cannot provide, sign in to
+a dedicated app registration with --client-id/--tenant-id (device-code flow).
+
 Examples:
   # Download a specific resource (uses default subscription from az login)
   azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
@@ -58,7 +62,13 @@ Examples:
   azure-rd download --subscription "sub-id" --resource-group "my-rg"
   
   # Dry run to see what would be downloaded
-  azure-rd download --type "Microsoft.Compute/virtualMachines" --dry-run`,
+  azure-rd download --type "Microsoft.Compute/virtualMachines" --dry-run
+
+  # Resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)
+  azure-rd download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
+
+  # Use a dedicated app registration (device-code sign-in) for Graph/Intune scopes
+  azure-rd download --client-id "<app-id>" --tenant-id "<tenant-id>"`,
 	RunE: runDownload,
 }
 

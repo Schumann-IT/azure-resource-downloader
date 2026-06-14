@@ -13,44 +13,17 @@ A powerful command-line tool that downloads Azure resources, transforms them int
 
 ## 📋 Architecture
 
-The tool follows a three-stage async pipeline pattern:
+The tool follows a three-stage async pipeline. The stages run concurrently, connected by Go channels, so resources stream through as soon as they're fetched:
 
 ```
-Fetcher → Transformer → Writer
-  ↓           ↓           ↓
-Azure API   Clean Data   YAML + TF
+[FetchRequest] → Fetcher → [FetchResult] → Transformer → [TransformResult] → Writer → [WriteResult]
 ```
 
-Each stage runs concurrently with configurable worker pools for optimal performance.
+1. **Fetcher** — retrieves resources from Azure with retry logic (5 attempts, exponential backoff).
+2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, base64 decoding, and Terraform import generation.
+3. **Writer** — writes one YAML file per resource plus a consolidated `import.tf` per resource type.
 
-### Pipeline Stages
-
-1. **Fetcher**: Retrieves resources from Azure using the Azure SDK with retry logic
-2. **Transformer**: 
-   - Removes unnecessary properties (provisioningState, etag, etc.)
-   - Resolves resource IDs to names
-   - Sanitizes display names for filenames
-   - Generates Terraform import statements
-3. **Writer**: Saves resources as YAML files and consolidated Terraform import.tf files
-
-### 📚 Pipeline Architecture
-
-The pipeline uses a streaming architecture with three concurrent stages connected via Go channels for maximum parallelism.
-
-**Pipeline Flow:**
-```
-[FetchRequest] → Fetcher (workers) → [FetchResult] → Transformer (workers) → [TransformResult] → Writer (workers) → [WriteResult]
-```
-
-All stages run **concurrently** - resources flow through as soon as they're fetched, enabling true parallelism.
-
-**Stage Details:**
-
-1. **Fetcher** - Retrieves resources from Azure with retry logic (5 attempts, exponential backoff)
-2. **Transformer** - Applies configurable transformations (cleaning, ID resolution, name sanitization, Terraform import generation)
-3. **Writer** - Writes YAML files and consolidated import.tf per resource type
-
-Each stage uses a worker pool for parallel processing. Worker count is configurable via `--workers` flag or API-specific settings in config file.
+Each stage uses its own worker pool; the worker count is configurable via the `--workers` flag or API-specific settings in the config file (see *Worker Count Optimization* below).
 
 ## 🛠️ Installation
 
@@ -78,20 +51,15 @@ go install
 
 ## 🔐 Authentication
 
-The tool authenticates **as the user signed in via the Azure CLI** (`az login`). Service principal / app-only credentials are **not** supported — the tool is intended to be run by a privileged user (e.g. a Global / Intune Administrator). The same delegated token is used for both ARM and Microsoft Graph calls.
+The tool authenticates as the user signed in with the Azure CLI (`az login`) and reuses that session for both ARM and Microsoft Graph calls — there is no separate sign-in or stored credential. Service principal / app-only credentials are **not** supported; run the tool as a privileged user (e.g. a Global / Intune Administrator).
 
 ```bash
-# Sign in (run once)
-az login
-
-# Optionally select a subscription (otherwise a default is auto-detected)
-az account set --subscription "your-subscription-id"
-
-# Run
+az login                                              # sign in once
+az account set --subscription "your-subscription-id"  # optional; a default is auto-detected
 azure-rd download --subscription "your-subscription-id"
 ```
 
-By default no app registration, client ID, or tenant ID is required — the tool reuses your existing `az login` session.
+`--subscription` is optional — when omitted the tool resolves a default subscription the signed-in user can access. No app registration, client ID, or tenant ID is required unless you need Graph scopes the Azure CLI app can't provide (see [dedicated app registration](#optional-dedicated-app-registration-device-code-sign-in)).
 
 ### Required directory / Intune roles for the signed-in user
 
@@ -190,8 +158,6 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 > az logout && az login --scope https://graph.microsoft.com/.default
 > ```
 
-**Note**: The subscription ID is optional. If not specified via CLI flag, config file, or environment variable, the tool resolves a default subscription the signed-in user can access.
-
 ## 📖 Usage
 
 ### Basic Commands
@@ -254,51 +220,17 @@ azure-rd download \
 azure-rd download \
   --resource-group "my-rg" \
   --dry-run
-
-# Specify output directory
-azure-rd download \
-  --resource-group "my-rg" \
-  --output "./azure-resources"
-
-# Adjust worker count for performance
-# Recommended: 3-5 for Graph API, 10-20 for ARM
-azure-rd download \
-  --type "Microsoft.Graph/conditionalAccessPolicies" \
-  --workers 5
-
-azure-rd download \
-  --type "Microsoft.Storage/storageAccounts" \
-  --workers 15
-
-# Control log verbosity
-LOG_LEVEL=debug azure-rd download \
-  --resource-group "my-rg"
-
-# Remove specific keys from output (e.g., for Terraform imports)
-azure-rd download \
-  --resource-group "my-rg" \
-  --remove-keys "id,etag,provisioningState"
 ```
 
-### Log Levels
-
-Control output verbosity with the `LOG_LEVEL` environment variable:
-
-```bash
-# Show only errors (quiet mode)
-LOG_LEVEL=error azure-rd download --resource-group "my-rg"
-
-# Show warnings and above
-LOG_LEVEL=warn azure-rd download --resource-group "my-rg"
-
-# Default: info level (recommended)
-azure-rd download --resource-group "my-rg"
-
-# Show debug information (verbose, includes file paths)
-LOG_LEVEL=debug azure-rd download --resource-group "my-rg"
-```
-
-**Available levels:** `debug`, `info` (default), `warn`, `error`, `fatal`
+> **Flags vs. configuration:** every option can also be set in `~/.azure-rd.yaml`.
+> The flags shown above — `--subscription`, `--output`, `--workers`, `--type`,
+> `--resource-group`, `--dry-run`, `--log-level`, `--timeout`, `--resolve-secrets`,
+> `--client-id`, `--tenant-id` — override the configured value for a single run
+> (see [Configuration File](#configuration-file) for full precedence and the
+> config-only options). For the complete, fully-commented option set — type and
+> per-item filtering, worker tuning, logging, and transformers — see
+> [`.azure-rd.example.yaml`](.azure-rd.example.yaml). Property removal is configured
+> via the `cleaning` transformer (`remove-keys` / `remove-keys-by-type`), not a CLI flag.
 
 ### Download Multiple Resources
 
@@ -335,11 +267,45 @@ azure-rd download --resource-group "my-rg"
 - `AZURE_RD_WORKERS` - Number of concurrent workers
 - `AZURE_RD_TIMEOUT` - Timeout in seconds for the download operation (default 300)
 - `AZURE_RD_TYPE` - Resource type filter (equivalent to `--type`)
-- `AZURE_RD_REMOVE_KEYS` - Comma-separated list of keys to remove from output
 - `AZURE_RD_LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 - `LOG_LEVEL` - Legacy logging verbosity (still supported)
 
 ### Configuration File
+
+**Every option this tool accepts can be set in the configuration file** (`~/.azure-rd.yaml`). A subset of options additionally exposes a CLI flag that *overrides* the configured value for a single run; the remaining options are configured only in the file.
+
+**Precedence (highest to lowest):** CLI flag → environment variable → configuration file → built-in default.
+
+#### Options that can be overridden by a CLI flag
+
+| Config key | CLI flag | Default | Notes |
+|---|---|---|---|
+| `subscription` | `--subscription` | auto-detected from `az login` | |
+| `output` | `--output` | `./output` | |
+| `workers` | `--workers` | API-based (5 Graph / 20 ARM) | overrides `workers-by-api` |
+| `dry-run` | `--dry-run` | `false` | preview without writing files |
+| `log-level` | `--log-level` | `info` | also honors the `LOG_LEVEL` env var |
+| `client-id` | `--client-id` | _(none)_ | dedicated app for device-code sign-in |
+| `tenant-id` | `--tenant-id` | _(none)_ | used with `--client-id` |
+| `type` | `--type` (repeatable) | all registered types | resource-type filter |
+| `resource-group` | `--resource-group` | _(none)_ | |
+| `timeout` | `--timeout` | `300` | seconds |
+| `resolve-secrets` | `--resolve-secrets` | `false` | writes secrets to disk |
+
+#### Options configured only in the file (no CLI flag)
+
+| Config key | Purpose |
+|---|---|
+| `workers-by-api` | Per-API worker counts (`microsoft-graph`, `azure-resource-manager`) |
+| `transformers` | Transformer pipeline and per-transformer settings, including property removal via the `cleaning` transformer's `remove-keys` / `remove-keys-by-type` |
+| `filters` | Per-resource-type property regex filters |
+
+#### CLI-only options (no config-file equivalent)
+
+These scope or bootstrap a single invocation, so they have no config key:
+
+- `--config` — path to the configuration file itself.
+- `--resource-id` — one or more explicit Azure resource IDs to download (repeatable).
 
 Create `~/.azure-rd.yaml`:
 
@@ -363,24 +329,26 @@ timeout: 300
 # Options: debug, info, warn, error
 log-level: "info"
 
-# Global exclusions (apply to all resource types)
-# Specify which keys to remove from output
-remove-keys:
-  - etag
-  - provisioningState
-
-# Resource-type-specific exclusions (merged with global)
-# Useful for Terraform imports where different resources need different exclusions
-remove-keys-by-type:
-  Microsoft.Resources/resourceGroups:
-    - id
-    - managedBy
-  Microsoft.Storage/storageAccounts:
-    - id
-    - primaryEndpoints
+# Property removal is configured on the `cleaning` transformer (see Transformers).
+# Global exclusions apply to all types; per-type exclusions are merged with them.
+transformers:
+  - name: cleaning
+    remove-keys:
+      - etag
+      - provisioningState
+    remove-keys-by-type:
+      Microsoft.Resources/resourceGroups:
+        - id
+        - managedBy
+      Microsoft.Storage/storageAccounts:
+        - id
+        - primaryEndpoints
+  - name: id-resolution
+  - name: name-sanitization
+  - name: terraform-import
 ```
 
-You can also copy the example configuration:
+The repository ships a fully-commented [`.azure-rd.example.yaml`](.azure-rd.example.yaml) documenting **every** option (type/item filtering, workers, logging, transformers). Copy it as a starting point:
 
 ```bash
 cp .azure-rd.example.yaml ~/.azure-rd.yaml
@@ -392,77 +360,21 @@ Then run:
 azure-rd download --resource-group "my-rg"
 ```
 
-### Logging Configuration
+### Logging
 
-Control the verbosity of output with the `log-level` setting. Available in **three ways** (priority order):
+Control verbosity with `log-level` (`debug`, `info` default, `warn`, `error`). Set it via the `--log-level` flag, the `log-level` config key, or the `AZURE_RD_LOG_LEVEL` / `LOG_LEVEL` environment variable (precedence: flag → env → config → default).
 
-#### **1. CLI Flag (Highest Priority)**
 ```bash
-# Debug mode - see all details
-azure-rd download --resource-group "my-rg" --log-level debug
-
-# Quiet mode - errors only
-azure-rd download --resource-group "my-rg" --log-level error
-
-# Warnings and errors only
-azure-rd download --resource-group "my-rg" --log-level warn
+azure-rd download --resource-group "my-rg" --log-level debug   # verbose, per-resource detail
+azure-rd download --resource-group "my-rg" --log-level error   # errors only (CI/cron)
 ```
 
-#### **2. Configuration File**
-In `~/.azure-rd.yaml`:
-```yaml
-log-level: "info"  # debug, info, warn, or error
-```
-
-#### **3. Environment Variable (Lowest Priority)**
-```bash
-# Option 1: Use AZURE_RD_LOG_LEVEL (recommended)
-export AZURE_RD_LOG_LEVEL=debug
-azure-rd download --resource-group "my-rg"
-
-# Option 2: Use legacy LOG_LEVEL (still supported)
-export LOG_LEVEL=debug
-azure-rd download --resource-group "my-rg"
-```
-
-#### **Available Log Levels**
-
-| Level | What You See | Use Case |
-|-------|--------------|----------|
-| `debug` | All messages including detailed debug info | Troubleshooting, development |
-| `info` | Progress, metrics, warnings, errors | **Default** - normal operation |
-| `warn` | Warnings and errors only | Reduce noise, still see issues |
-| `error` | Errors only | CI/CD, cron jobs, silent mode |
-
-**Examples of what you'll see:**
-
-**`debug` level:**
-- DEBUG: Fetching resource X
-- DEBUG: Resource fetched successfully
-- DEBUG: Transforming resource X
-- DEBUG: Resource transformed successfully
-- DEBUG: Writing resource files
-- DEBUG: Resource files written successfully
-- INFO: Progress updates (every 10%)
-- WARN: Retry attempts
-- INFO: Performance metrics
-
-**`info` level (default):**
-- INFO: Progress updates (every 10%)
-- INFO: Retry succeeded messages (when retries work)
-- WARN: Retry attempts
-- ERROR: Any errors
-- INFO: Performance summary
-- (No per-resource details - keeps output clean!)
-
-**`warn` level:**
-- WARN: Retry warnings
-- ERROR: Errors
-- (Progress updates hidden)
-
-**`error` level:**
-- ERROR: Only errors that occurred
-- (Minimal output for automation)
+| Level | What you see |
+|-------|--------------|
+| `debug` | All messages incl. per-resource fetch/transform/write detail |
+| `info` | Progress (every 10%), retries, warnings, errors, summary (**default**) |
+| `warn` | Warnings and errors only |
+| `error` | Errors only |
 
 ## 🔍 Resource Filters
 
@@ -554,7 +466,7 @@ Secret resolution reuses the **same** `az login` session as everything else — 
 - **Graceful degradation:** per-setting resolution failures are logged and skipped; the masked value is kept.
 - **Security:** this writes secrets to disk in plaintext. Disabled by default; a warning is logged when enabled.
 
-### Configuration File
+### Transformer Configuration Examples
 
 Add to `~/.azure-rd.yaml`:
 
@@ -610,158 +522,24 @@ transformers:
 
 ### Worker Count Optimization
 
-The optimal number of workers depends on **which API** the resources use, not individual resource types.
+Optimal worker count depends on the **API**, not the resource type. The tool auto-selects sensible defaults (5 for Microsoft Graph, 20 for ARM) and warns when `--workers` is too high for the target API — too many Graph workers actually *slows* downloads (rate limiting + backoff).
 
-#### **API-Based Recommendations**
+| API | Resource types | Recommended | Rate limits |
+|-----|----------------|-------------|-------------|
+| Microsoft Graph | `Microsoft.Graph/*` | 3–5 | Strict (~7 req/sec) |
+| Azure Resource Manager | `Microsoft.Storage/*`, `Microsoft.Compute/*`, `Microsoft.Resources/*`, … | 10–20 | Generous (1000s/min) |
 
-| API Type | Resource Types | Recommended Workers | Rate Limits |
-|----------|----------------|---------------------|-------------|
-| **Microsoft Graph** | `Microsoft.Graph/*` | **3-5 workers** | Strict (~7 req/sec) |
-| **Azure Resource Manager** | `Microsoft.Storage/*`<br>`Microsoft.Compute/*`<br>`Microsoft.Resources/*`<br>`Microsoft.Network/*`<br>etc. | **10-20 workers** | Generous (1000s/min) |
+Override the defaults with `workers-by-api` (per API) or `workers` (global) in `~/.azure-rd.yaml`, or `--workers` for a single run. Precedence: `--workers` → `workers-by-api` → `workers` → auto-default. See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the worker config block.
 
-**Why this matters:**
-- ✅ **5 workers + Graph API** = 33s for 54 resources (optimal!)
-- ❌ **20 workers + Graph API** = 165s for 54 resources (5x slower!)
-- ✅ **15 workers + ARM** = Fast downloads without rate limiting
+### Customizing Output
 
-**The tool will warn you if you use too many workers:**
-```bash
-./azure-rd download --type Microsoft.Graph/conditionalAccessPolicies --workers 20
+Which properties land in the YAML is controlled by the `cleaning` transformer (see [Transformers](#-transformers)):
 
-WARN Worker count exceeds recommendation for this API
-  workers=20
-  api=Microsoft.Graph
-  recommended_workers=5
-  rate_limit=~2000 requests per 300 seconds (~6.67 req/sec)
-  note=More workers can SLOW DOWN downloads due to rate limits
-```
+- `remove-keys` drops keys globally (recursive); `remove-keys-by-type` adds per-type removals — the two lists are **merged** for each type.
+- `preserve-keys` keeps specific nested paths even if their key is in a remove list.
+- By default the transformer only removes empty values; nothing else is dropped unless you configure `remove-keys`.
 
-#### **Configuration Examples**
-
-**Option 1: Automatic API-based defaults (RECOMMENDED)**
-```yaml
-# ~/.azure-rd.yaml
-# Don't specify 'workers' - the tool automatically uses optimal counts:
-#   - 5 workers for Microsoft Graph API
-#   - 20 workers for Azure Resource Manager
-
-log-level: "info"
-output: "./azure-resources"
-```
-
-Then simply run:
-```bash
-# Automatically uses 5 workers (optimal for Graph API)
-azure-rd download --type Microsoft.Graph/conditionalAccessPolicies
-
-# Automatically uses 20 workers (optimal for ARM)
-azure-rd download --type Microsoft.Storage/storageAccounts
-```
-
-**Option 2: Fine-tune per API (ADVANCED)**
-```yaml
-# ~/.azure-rd.yaml
-workers-by-api:
-  microsoft-graph: 3        # Custom: more conservative for Graph
-  azure-resource-manager: 15  # Custom: moderate for ARM
-
-log-level: "info"
-```
-
-**Option 3: Override all APIs globally**
-```yaml
-# ~/.azure-rd.yaml
-workers: 10  # Use 10 workers for ALL APIs (overrides automatic detection)
-```
-
-**Option 4: CLI flag override (one-time)**
-```bash
-# Override for a specific command (highest priority)
-azure-rd download --type Microsoft.Graph/conditionalAccessPolicies --workers 3
-```
-
-#### **Configuration Priority**
-
-The tool uses this priority order (highest to lowest):
-
-1. **`--workers` CLI flag** - Explicitly set for this command
-2. **`workers-by-api`** config - API-specific settings in config file
-3. **`workers`** config - General setting in config file
-4. **Automatic defaults** - 5 for Graph, 20 for ARM (no config needed)
-
-### Customizing Output for Different Use Cases
-
-The tool allows you to customize which properties are included in the output YAML files:
-
-#### Default Behavior
-
-You can configure which keys to remove from the output using the cleaning transformer:
-- `provisioningState` - Azure provisioning status
-- `creationTime` - Resource creation timestamp
-- `changedTime` - Last modification timestamp
-- `correlationId` - Azure correlation ID
-- `etag` - Entity tag for versioning
-- `managedBy` - Management metadata
-- `sku.tier` - Auto-derived SKU tier
-
-#### For Terraform Imports
-
-When generating resources for Terraform imports, you typically don't need the `id` property since Terraform will manage it. You can remove additional keys globally or per resource type:
-
-**Global Exclusions** (apply to all resource types):
-```bash
-# Remove id and other Terraform-managed properties globally
-azure-rd download \
-  --type "Microsoft.Resources/resourceGroups" \
-  --remove-keys "id,etag,provisioningState"
-```
-
-**Resource-Type-Specific Exclusions** (using config file):
-```yaml
-# Global exclusions (apply to all resources)
-remove-keys:
-  - etag
-  - provisioningState
-  - creationTime
-  - changedTime
-
-# Resource-type-specific exclusions
-# These are merged with global exclusions
-remove-keys-by-type:
-  Microsoft.Resources/resourceGroups:
-    - id
-    - managedBy
-  Microsoft.Storage/storageAccounts:
-    - id
-    - primaryEndpoints
-    - secondaryEndpoints
-  Microsoft.Compute/virtualMachines:
-    - id
-    - vmId
-```
-
-This allows you to fine-tune which properties are removed for each resource type while maintaining common removals globally.
-
-**How It Works:**
-- Global `remove-keys` apply to ALL resource types
-- Type-specific keys in `remove-keys-by-type` are MERGED with global keys
-- The final exclusion list for each resource type is: `global keys + type-specific keys`
-
-**Example:** With the config above:
-- Resource Groups will remove: `etag`, `provisioningState`, `id`, `managedBy`
-- Storage Accounts will remove: `etag`, `provisioningState`, `id`, `primaryEndpoints`
-- All other types will only remove: `etag`, `provisioningState`
-
-#### For Documentation
-
-If you want complete resource information for documentation purposes, you can remove fewer keys:
-
-```bash
-# Keep most properties
-azure-rd download \
-  --resource-group "my-rg" \
-  --remove-keys "correlationId"
-```
+Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`, `correlationId`, `managedBy`, `sku.tier`. For Terraform imports, also drop `id` (Terraform manages it). See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for ready-to-use `cleaning` examples.
 
 ## 📂 Output Structure
 
@@ -820,7 +598,7 @@ import {
 
 #### Configurable Import Target Format
 
-The `to` address in import blocks is configurable via the `--import-target-format` flag or `import-target-format` config option:
+The `to` address in import blocks is configurable via the `terraform-import` transformer's `target-format` option (see [Transformers](#-transformers)):
 
 **Default format** (`{resource_type}.{name}`):
 ```hcl
