@@ -130,14 +130,6 @@ func max(a, b int) int {
 	return b
 }
 
-// SkippedType describes a resource type that could not be listed at all (e.g.
-// missing permissions or no subscription). Because listing failed, the number
-// of resources of this type is unknown and none of them were downloaded.
-type SkippedType struct {
-	ResourceType string
-	Reason       string
-}
-
 // ExecutionSummary contains the results of a pipeline execution
 type ExecutionSummary struct {
 	TotalResources      int
@@ -151,7 +143,7 @@ type ExecutionSummary struct {
 	FilteredResources int
 	// SkippedTypes lists resource types whose listing failed before the
 	// pipeline ran; their resource counts are not part of the totals above.
-	SkippedTypes []SkippedType
+	SkippedTypes []models.SkippedType
 	// EmptyTypes lists resource types whose listing succeeded but returned no
 	// resources (nothing exists, insufficient permissions, or different scope).
 	EmptyTypes []string

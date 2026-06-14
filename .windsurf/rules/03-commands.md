@@ -34,7 +34,7 @@ modifies any of the following:
   pattern (`chan struct{}{}`).
 - Worker-pool or pipeline code: anything under `internal/pipeline/` (fetcher,
   transformer, writer, metrics) or the concurrent listing in
-  `cmd/download.go` → `buildFetchRequests`.
+  `internal/handlers/requests.go` → `Registry.BuildFetchRequests`.
 - Shared state written from more than one goroutine (maps, slices, struct
   fields, package-level vars), or changes to the handler `Registry`'s locking.
 

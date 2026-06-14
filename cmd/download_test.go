@@ -68,28 +68,28 @@ func TestBuildFetchRequests(t *testing.T) {
 				t.Skip("Skipping test that requires Azure client")
 			}
 
-			result, _, _, err := buildFetchRequests(context.Background(), tt.registry, tt.resourceIDs, tt.resourceGroup, tt.resourceTypes, tt.subscriptionID, 4)
+			result, _, _, err := tt.registry.BuildFetchRequests(context.Background(), tt.resourceIDs, tt.resourceGroup, tt.resourceTypes, tt.subscriptionID, 4)
 
 			if tt.expectError && err == nil {
-				t.Errorf("buildFetchRequests() expected error but got none")
+				t.Errorf("BuildFetchRequests() expected error but got none")
 			}
 
 			if !tt.expectError && err != nil {
-				t.Errorf("buildFetchRequests() unexpected error: %v", err)
+				t.Errorf("BuildFetchRequests() unexpected error: %v", err)
 			}
 
 			if len(result) != tt.expectedCount {
-				t.Errorf("buildFetchRequests() returned %d requests, want %d", len(result), tt.expectedCount)
+				t.Errorf("BuildFetchRequests() returned %d requests, want %d", len(result), tt.expectedCount)
 			}
 
 			// Verify resource IDs case
 			if len(tt.resourceIDs) > 0 {
 				for i, req := range result {
 					if req.ResourceID != tt.resourceIDs[i] {
-						t.Errorf("buildFetchRequests() request %d has ResourceID %q, want %q", i, req.ResourceID, tt.resourceIDs[i])
+						t.Errorf("BuildFetchRequests() request %d has ResourceID %q, want %q", i, req.ResourceID, tt.resourceIDs[i])
 					}
 					if req.Subscription != tt.subscriptionID {
-						t.Errorf("buildFetchRequests() request %d has Subscription %q, want %q", i, req.Subscription, tt.subscriptionID)
+						t.Errorf("BuildFetchRequests() request %d has Subscription %q, want %q", i, req.Subscription, tt.subscriptionID)
 					}
 				}
 			}
@@ -99,13 +99,13 @@ func TestBuildFetchRequests(t *testing.T) {
 				req := result[0]
 				expectedID := "/subscriptions/" + tt.subscriptionID + "/resourceGroups/" + tt.resourceGroup
 				if req.ResourceID != expectedID {
-					t.Errorf("buildFetchRequests() ResourceID = %q, want %q", req.ResourceID, expectedID)
+					t.Errorf("BuildFetchRequests() ResourceID = %q, want %q", req.ResourceID, expectedID)
 				}
 				if req.ResourceGroup != tt.resourceGroup {
-					t.Errorf("buildFetchRequests() ResourceGroup = %q, want %q", req.ResourceGroup, tt.resourceGroup)
+					t.Errorf("BuildFetchRequests() ResourceGroup = %q, want %q", req.ResourceGroup, tt.resourceGroup)
 				}
 				if req.ResourceType != "Microsoft.Resources/resourceGroups" {
-					t.Errorf("buildFetchRequests() ResourceType = %q, want %q", req.ResourceType, "Microsoft.Resources/resourceGroups")
+					t.Errorf("BuildFetchRequests() ResourceType = %q, want %q", req.ResourceType, "Microsoft.Resources/resourceGroups")
 				}
 			}
 		})
@@ -172,18 +172,19 @@ func TestBuildFetchRequestsValidation(t *testing.T) {
 	}
 	subscriptionID := "sub-123"
 
-	requests, _, _, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", nil, subscriptionID, 4)
+	var registry *handlers.Registry
+	requests, _, _, err := registry.BuildFetchRequests(context.Background(), resourceIDs, "", nil, subscriptionID, 4)
 	if err != nil {
-		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
+		t.Fatalf("BuildFetchRequests() unexpected error: %v", err)
 	}
 
 	if len(requests) != 1 {
-		t.Fatalf("buildFetchRequests() returned %d requests, want 1", len(requests))
+		t.Fatalf("BuildFetchRequests() returned %d requests, want 1", len(requests))
 	}
 
 	req := requests[0]
 	if req.Subscription != subscriptionID {
-		t.Errorf("buildFetchRequests() Subscription = %q, want %q", req.Subscription, subscriptionID)
+		t.Errorf("BuildFetchRequests() Subscription = %q, want %q", req.Subscription, subscriptionID)
 	}
 }
 
@@ -191,13 +192,14 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	subscriptionID := "sub-123"
 	resourceGroup := "my-rg"
 
-	requests, _, _, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, nil, subscriptionID, 4)
+	var registry *handlers.Registry
+	requests, _, _, err := registry.BuildFetchRequests(context.Background(), []string{}, resourceGroup, nil, subscriptionID, 4)
 	if err != nil {
-		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
+		t.Fatalf("BuildFetchRequests() unexpected error: %v", err)
 	}
 
 	if len(requests) != 1 {
-		t.Fatalf("buildFetchRequests() returned %d requests, want 1", len(requests))
+		t.Fatalf("BuildFetchRequests() returned %d requests, want 1", len(requests))
 	}
 
 	expected := &models.FetchRequest{
@@ -208,6 +210,6 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(requests[0], expected) {
-		t.Errorf("buildFetchRequests() = %+v, want %+v", requests[0], expected)
+		t.Errorf("BuildFetchRequests() = %+v, want %+v", requests[0], expected)
 	}
 }

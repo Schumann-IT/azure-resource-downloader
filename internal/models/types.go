@@ -14,6 +14,14 @@ type FetchRequest struct {
 	ResourceGroup string
 }
 
+// SkippedType describes a resource type that could not be listed at all (e.g.
+// missing permissions or no subscription). Because listing failed, the number
+// of resources of this type is unknown and none of them were downloaded.
+type SkippedType struct {
+	ResourceType string
+	Reason       string
+}
+
 // FetchResult represents the result of fetching a resource
 type FetchResult struct {
 	ResourceID   string
