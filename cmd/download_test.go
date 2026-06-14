@@ -68,7 +68,7 @@ func TestBuildFetchRequests(t *testing.T) {
 				t.Skip("Skipping test that requires Azure client")
 			}
 
-			result, _, _, err := buildFetchRequests(context.Background(), tt.registry, tt.resourceIDs, tt.resourceGroup, tt.resourceTypes, tt.subscriptionID)
+			result, _, _, err := buildFetchRequests(context.Background(), tt.registry, tt.resourceIDs, tt.resourceGroup, tt.resourceTypes, tt.subscriptionID, 4)
 
 			if tt.expectError && err == nil {
 				t.Errorf("buildFetchRequests() expected error but got none")
@@ -172,7 +172,7 @@ func TestBuildFetchRequestsValidation(t *testing.T) {
 	}
 	subscriptionID := "sub-123"
 
-	requests, _, _, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", nil, subscriptionID)
+	requests, _, _, err := buildFetchRequests(context.Background(), nil, resourceIDs, "", nil, subscriptionID, 4)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	subscriptionID := "sub-123"
 	resourceGroup := "my-rg"
 
-	requests, _, _, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, nil, subscriptionID)
+	requests, _, _, err := buildFetchRequests(context.Background(), nil, []string{}, resourceGroup, nil, subscriptionID, 4)
 	if err != nil {
 		t.Fatalf("buildFetchRequests() unexpected error: %v", err)
 	}

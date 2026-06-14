@@ -19,6 +19,28 @@ When providing instructions or examples:
 - ✅ `make check` — Run fmt + lint + test
 - ✅ `make all` — Run fmt + lint + test + build
 - ✅ `make ci` — For CI/CD pipelines
+- ✅ `make test-race` — Run tests with the Go race detector
+
+## When to run `make test-race`
+
+`make test-race` MUST be run (in addition to `make test`) whenever a change
+touches concurrent code. Detect this by checking whether the diff adds or
+modifies any of the following:
+
+- The `go` keyword (new or changed goroutines).
+- Channel operations: `chan`, `<-`, `close(`, or `select` blocks.
+- Synchronization primitives from `sync`/`sync/atomic`: `sync.WaitGroup`,
+  `sync.Mutex`, `sync.RWMutex`, `sync.Once`, `atomic.*`, or a semaphore
+  pattern (`chan struct{}{}`).
+- Worker-pool or pipeline code: anything under `internal/pipeline/` (fetcher,
+  transformer, writer, metrics) or the concurrent listing in
+  `cmd/download.go` → `buildFetchRequests`.
+- Shared state written from more than one goroutine (maps, slices, struct
+  fields, package-level vars), or changes to the handler `Registry`'s locking.
+
+If none of the above appear in the diff, `make test` is sufficient. When in
+doubt, run `make test-race`. CI for concurrency-touching changes should run it
+too.
 
 ## In Documentation and Instructions
 

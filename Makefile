@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-coverage run help lint fmt deps check all ci loc
+.PHONY: build install clean test test-race test-coverage run help lint fmt deps check all ci loc
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -33,6 +33,11 @@ clean:
 test:
 	@echo "🧪 Running tests..."
 	@$(GOTEST) -v ./...
+
+# Run tests with the race detector
+test-race:
+	@echo "🏁 Running tests with race detector..."
+	@$(GOTEST) -race ./...
 
 # Run tests with coverage
 test-coverage:
@@ -94,6 +99,7 @@ help:
 	@echo "  make install        - Install globally to GOPATH/bin"
 	@echo "  make clean          - Remove build artifacts"
 	@echo "  make test           - Run tests"
+	@echo "  make test-race      - Run tests with the race detector"
 	@echo "  make test-coverage  - Run tests with coverage report"
 	@echo "  make deps           - Download and tidy dependencies"
 	@echo "  make run            - Run the application"
