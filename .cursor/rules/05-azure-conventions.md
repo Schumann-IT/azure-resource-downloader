@@ -165,19 +165,16 @@ func (h *XHandler) Transform(resource interface{}) (*models.TransformedResource,
 ## Registration
 
 ### Adding to Registry
-In `cmd/download.go` → `registerHandlers()`:
+In `internal/handlers/defaults.go` → `registerDefaults()` (package `handlers`). `handlers.NewRegistry(cred, subscriptionID, resolveSecrets)` builds a registry pre-populated by this function, so `cmd` needs no edits:
 ```go
-func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
-    cred := azureClient.GetCredential()
-    sub := azureClient.GetSubscriptionID()
-    
-    // Existing handlers
-    registry.Register("Microsoft.Resources/resourceGroups", 
-        handlers.NewResourceGroupHandler(cred, sub))
-    
+func registerDefaults(r *Registry, cred azcore.TokenCredential, subscriptionID string, resolveSecrets bool) {
+    // Existing ARM handlers (from the arm subpackage)
+    r.Register("Microsoft.Resources/resourceGroups",
+        arm.NewResourceGroupHandler(cred, subscriptionID))
+
     // Add new handler here
-    registry.Register("Microsoft.KeyVault/vaults", 
-        handlers.NewKeyVaultHandler(cred, sub))
+    r.Register("Microsoft.KeyVault/vaults",
+        arm.NewKeyVaultHandler(cred, subscriptionID))
 }
 ```
 

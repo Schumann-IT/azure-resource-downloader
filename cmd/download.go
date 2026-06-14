@@ -14,7 +14,6 @@ import (
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -146,9 +145,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	sub = azureClient.GetSubscriptionID()
 	log.Info("Authentication successful", "subscription", sub)
 
-	// Create handler registry and register handlers
-	registry := handlers.NewRegistry()
-	registerHandlers(registry, azureClient)
+	// Create handler registry pre-populated with all supported resource types
+	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), viper.GetBool("resolve-secrets"))
 
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
@@ -265,90 +263,6 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Download completed successfully")
 	return nil
-}
-
-// registerHandlers registers all available resource handlers
-func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
-	cred := azureClient.GetCredential()
-	sub := azureClient.GetSubscriptionID()
-
-	// Register handlers for supported resource types
-	registry.Register("Microsoft.Resources/resourceGroups", handlers.NewResourceGroupHandler(cred, sub))
-	registry.Register("Microsoft.Storage/storageAccounts", handlers.NewStorageAccountHandler(cred, sub))
-	registry.Register("Microsoft.Compute/virtualMachines", handlers.NewVirtualMachineHandler(cred, sub))
-
-	// Register the Intune device configuration handler separately because of
-	// its extra resolve-secrets option
-	resolveSecrets := viper.GetBool("resolve-secrets")
-	if resolveSecrets {
-		logger.Default.Info("Secret resolution enabled", "flag", "--resolve-secrets")
-		logger.Default.Debug("Secret resolution writes encrypted Intune OMA-URI values to output in plaintext; the signed-in user must hold delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights")
-	}
-	if dcHandler, err := handlers.NewDeviceConfigurationHandler(cred, resolveSecrets); err == nil {
-		registry.Register(dcHandler.GetType(), dcHandler)
-	}
-
-	// Register Microsoft Graph collection handlers (tenant-level resources)
-	graphCollections := []func(azcore.TokenCredential) (*handlers.GraphCollectionHandler, error){
-		handlers.NewConditionalAccessPolicyHandler,
-		handlers.NewAuthenticationStrengthPolicyHandler,
-		handlers.NewDeviceManagementConfigurationPolicyHandler,
-		handlers.NewDeviceCompliancePolicyHandler,
-		handlers.NewCompliancePolicyHandler,
-		handlers.NewGroupPolicyConfigurationHandler,
-		handlers.NewDeviceManagementIntentHandler,
-		handlers.NewMobileAppHandler,
-		handlers.NewIosManagedAppProtectionHandler,
-		handlers.NewAndroidManagedAppProtectionHandler,
-		handlers.NewWindowsManagedAppProtectionHandler,
-		handlers.NewMdmWindowsInformationProtectionPolicyHandler,
-		handlers.NewWindowsInformationProtectionPolicyHandler,
-		handlers.NewMobileAppConfigurationHandler,
-		handlers.NewTargetedManagedAppConfigurationHandler,
-		handlers.NewWindowsAutopilotDeploymentProfileHandler,
-		handlers.NewWindowsAutopilotDeviceIdentityHandler,
-		handlers.NewDeviceEnrollmentConfigurationHandler,
-		handlers.NewApplePushNotificationCertificateHandler,
-		handlers.NewDepOnboardingSettingHandler,
-		handlers.NewAppleUserInitiatedEnrollmentProfileHandler,
-		handlers.NewRoleDefinitionHandler,
-		handlers.NewDeviceManagementSettingsHandler,
-		handlers.NewAuthenticationMethodsPolicyHandler,
-		handlers.NewAuthorizationPolicyHandler,
-		handlers.NewOnPremisesSynchronizationHandler,
-		handlers.NewOrganizationHandler,
-		handlers.NewOrganizationalBrandingHandler,
-		handlers.NewGroupHandler,
-		handlers.NewAssignmentFilterHandler,
-		handlers.NewWindowsFeatureUpdateProfileHandler,
-		handlers.NewWindowsQualityUpdateProfileHandler,
-		handlers.NewWindowsDriverUpdateProfileHandler,
-		handlers.NewDeviceCategoryHandler,
-		handlers.NewRoleScopeTagHandler,
-		handlers.NewTermsAndConditionsHandler,
-		handlers.NewIntuneBrandingProfileHandler,
-		handlers.NewNotificationMessageTemplateHandler,
-		handlers.NewNamedLocationHandler,
-		handlers.NewTermsOfUseAgreementHandler,
-		handlers.NewWindowsPlatformScriptHandler,
-		handlers.NewMacOSShellScriptHandler,
-		handlers.NewMacOSCustomAttributeScriptHandler,
-		handlers.NewWindowsRemediationScriptHandler,
-		handlers.NewDeviceComplianceScriptHandler,
-		handlers.NewReusablePolicySettingHandler,
-		handlers.NewVppTokenHandler,
-		handlers.NewMobileThreatDefenseConnectorHandler,
-		handlers.NewNdesConnectorHandler,
-	}
-	for _, newHandler := range graphCollections {
-		if h, err := newHandler(cred); err == nil {
-			registry.Register(h.GetType(), h)
-		}
-	}
-
-	// Add more handlers here as needed
-	// registry.Register("Microsoft.Network/virtualNetworks", handlers.NewVirtualNetworkHandler(cred, sub))
-	// registry.Register("Microsoft.Sql/servers", handlers.NewSqlServerHandler(cred, sub))
 }
 
 // buildFetchRequests creates fetch requests from command-line arguments.

@@ -52,7 +52,7 @@ func TestBuildFetchRequests(t *testing.T) {
 		},
 		{
 			name:           "no inputs with empty registry yields no requests",
-			registry:       handlers.NewRegistry(),
+			registry:       handlers.NewEmptyRegistry(),
 			resourceIDs:    []string{},
 			resourceGroup:  "",
 			subscriptionID: "sub-123",

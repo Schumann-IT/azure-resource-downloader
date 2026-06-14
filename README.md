@@ -949,10 +949,10 @@ Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerrafo
 | ARM (`resourceGroups`, `storageAccounts`, `virtualMachines`) | Azure SDK (`armresources`, `armstorage`, `armcompute`) | Hand-picked property set; secrets (`adminPassword`, access keys, connection strings) are **never** written to output |
 | Graph v1.0 (`conditionalAccessPolicies`, `authenticationStrengthPolicies`, `groups`, `organization`, `onPremisesSynchronization`, `authenticationMethodsPolicy` + `authorizationPolicy` singletons) | `msgraph-sdk-go` (stable) | `GraphCollectionHandler` base; full generic serialization of the model tree via the Kiota JSON writer |
 | Graph beta with custom fetch (`deviceManagementConfigurationPolicies` + `compliancePolicies` + `deviceCompliancePolicies` via `$expand`, `groupPolicyConfigurations` + `deviceManagementIntents` + `depOnboardingSettings` via child-collection fetches, `deviceConfigurations` with optional OMA secret resolution, `applePushNotificationCertificate` as singleton) | `msgraph-beta-sdk-go` | `GraphCollectionHandler` base with custom `fetchItem` closures; full generic serialization of the polymorphic `@odata.type` tree — no setting is lost |
-| Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements, mobile apps, app protections, WIP policies, app configurations) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graphcollection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
+| Graph beta collections (assignment filters, update profiles, device categories, scope tags, T&C, branding, notification templates, named locations, ToU agreements, mobile apps, app protections, WIP policies, app configurations) | `msgraph-beta-sdk-go` | Shared `GraphCollectionHandler` base (`graph/collection.go`): per-resource constructors supply list/fetch/name closures; transform is full generic serialization |
 | Graph beta scripts (Windows platform, macOS shell, macOS custom attribute, Remediations) | `msgraph-beta-sdk-go` | Same `GraphCollectionHandler` base; base64 script bodies are decoded by the base64-decode transformer (inline or `.ps1`/`.sh` sidecar files) |
 
-All Microsoft Graph handlers are thin constructors around the shared `GraphCollectionHandler` (`internal/handlers/graphcollection.go`); only ARM handlers implement the `ResourceHandler` interface directly.
+Handlers are split into two subpackages: ARM handlers live in `internal/handlers/arm` (package `arm`) and implement the `ResourceHandler` interface directly; Microsoft Graph handlers live in `internal/handlers/graph` (package `graph`) as thin constructors around the shared `GraphCollectionHandler` (`internal/handlers/graph/collection.go`). The `Registry` itself lives in `internal/handlers` (`registry.go`, package `handlers`).
 
 Established `fetchItem` patterns for types needing more than a plain GET:
 
@@ -961,7 +961,7 @@ Established `fetchItem` patterns for types needing more than a plain GET:
 - **Post-fetch enrichment** — mutate the fetched model (see `deviceconfiguration.go` OMA secret resolution).
 - **Singletons** — probe the object in `listIDs` (return at most one ID, empty when absent) and ignore the item ID in `fetchItem` (see `applepushnotificationcertificate.go`).
 - **No Terraform representation** — return an empty `terraformType`; the transformer then skips the import block.
-- **Assignments** — Intune policies/profiles/apps/scripts fetch the `/{id}/assignments` child collection in `fetchItem` and attach it to the model via `SetAssignments`, so assignments are inlined under `assignments` in the exported YAML. Exception: the Graph beta service has no `/assignments` route for `deviceShellScripts` and `deviceCustomAttributeShellScripts`, so those two handlers read assignments via a second item GET with `$expand=assignments` instead. Assignment reads are best-effort: on failure a warning is logged (`warnAssignmentsFetchFailed` in `graphcollection.go`) and the item is exported without assignments.
+- **Assignments** — Intune policies/profiles/apps/scripts fetch the `/{id}/assignments` child collection in `fetchItem` and attach it to the model via `SetAssignments`, so assignments are inlined under `assignments` in the exported YAML. Exception: the Graph beta service has no `/assignments` route for `deviceShellScripts` and `deviceCustomAttributeShellScripts`, so those two handlers read assignments via a second item GET with `$expand=assignments` instead. Assignment reads are best-effort: on failure a warning is logged (`warnAssignmentsFetchFailed` in `graph/collection.go`) and the item is exported without assignments.
 
 > **Known limitation:** group display names referenced by assignment targets are not resolved — assignments carry the target group IDs only (groups themselves are exported by `Microsoft.Graph/groups`).
 
@@ -977,10 +977,10 @@ The tool is designed to be easily extensible. To add support for a new resource 
 
 ### 1. Create a Handler
 
-Create a new file in `internal/handlers/` (e.g., `keyvault.go`):
+Create a new file in the appropriate subpackage — `internal/handlers/arm/` for ARM types or `internal/handlers/graph/` for Microsoft Graph types. For an ARM type (e.g., `internal/handlers/arm/keyvault.go`):
 
 ```go
-package handlers
+package arm
 
 import (
     "context"
@@ -1025,19 +1025,16 @@ func (h *KeyVaultHandler) Transform(resource interface{}) (*models.TransformedRe
 
 ### 2. Register the Handler
 
-Add the handler registration in `cmd/download.go`:
+Add the handler registration in `internal/handlers/defaults.go` → `registerDefaults()`. This is the single place where all handlers are wired; `handlers.NewRegistry(cred, subscriptionID, resolveSecrets)` builds a registry pre-populated by this function, so the `cmd` commands need no changes.
 
 ```go
-func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
-    cred := azureClient.GetCredential()
-    sub := azureClient.GetSubscriptionID()
+func registerDefaults(r *Registry, cred azcore.TokenCredential, subscriptionID string, resolveSecrets bool) {
+    // Existing ARM handlers (from the arm subpackage)
+    r.Register("Microsoft.Resources/resourceGroups", arm.NewResourceGroupHandler(cred, subscriptionID))
+    r.Register("Microsoft.Storage/storageAccounts", arm.NewStorageAccountHandler(cred, subscriptionID))
 
-    // Existing handlers
-    registry.Register("Microsoft.Resources/resourceGroups", handlers.NewResourceGroupHandler(cred, sub))
-    registry.Register("Microsoft.Storage/storageAccounts", handlers.NewStorageAccountHandler(cred, sub))
-    
     // Add your new handler
-    registry.Register("Microsoft.KeyVault/vaults", handlers.NewKeyVaultHandler(cred, sub))
+    r.Register("Microsoft.KeyVault/vaults", arm.NewKeyVaultHandler(cred, subscriptionID))
 }
 ```
 
@@ -1068,17 +1065,19 @@ azure-resource-downloader/
 │   │   ├── transformer.go # Transform stage
 │   │   ├── writer.go      # Write stage
 │   │   └── metrics.go     # Execution metrics
-│   ├── handlers/          # Resource handlers
-│   │   ├── handler.go     # Registry
-│   │   ├── resourcegroup.go
-│   │   ├── storageaccount.go
-│   │   ├── virtualmachine.go
-│   │   ├── graphcollection.go                      # Shared base for ALL Microsoft Graph handlers (v1.0 + beta)
-│   │   ├── conditionalaccesspolicy.go              # Graph v1.0 (on the base)
-│   │   ├── authenticationstrengthpolicy.go         # Graph v1.0 (on the base)
-│   │   ├── devicemanagementconfigurationpolicy.go  # Intune Settings Catalog, $expand=settings (Graph beta)
-│   │   ├── deviceconfiguration.go                  # Legacy Intune profiles incl. OMA-URI secret resolution (Graph beta)
-│   │   └── assignmentfilter.go, rolescopetag.go, … # 15 collection handlers built on the base (incl. 4 script types)
+│   ├── handlers/          # Handler registry + handler subpackages
+│   │   ├── registry.go    # Registry (package handlers)
+│   │   ├── arm/           # ARM handlers (package arm)
+│   │   │   ├── resourcegroup.go
+│   │   │   ├── storageaccount.go
+│   │   │   └── virtualmachine.go
+│   │   └── graph/         # Microsoft Graph handlers (package graph)
+│   │       ├── collection.go                          # Shared base for ALL Microsoft Graph handlers (v1.0 + beta)
+│   │       ├── conditionalaccesspolicy.go             # Graph v1.0 (on the base)
+│   │       ├── authenticationstrengthpolicy.go        # Graph v1.0 (on the base)
+│   │       ├── devicemanagementconfigurationpolicy.go # Intune Settings Catalog, $expand=settings (Graph beta)
+│   │       ├── deviceconfiguration.go                 # Legacy Intune profiles incl. OMA-URI secret resolution (Graph beta)
+│   │       └── assignmentfilter.go, rolescopetag.go, … # collection handlers built on the base (incl. 4 script types)
 │   ├── azure/             # Azure client wrappers
 │   │   ├── client.go      # Auth (az login / device-code) + ARM client
 │   │   ├── errors.go      # Permission-error detection (warn & skip)

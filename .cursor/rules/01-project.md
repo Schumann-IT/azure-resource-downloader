@@ -6,7 +6,7 @@
     - `cmd/`                    → Cobra CLI commands (root, download, list)
     - `internal/models/`        → Core types, interfaces, config structs
     - `internal/pipeline/`      → 3-stage async pipeline (fetcher, transformer, writer)
-    - `internal/handlers/`      → Resource type handlers with registry pattern
+    - `internal/handlers/`      → Handler registry (package handlers); ARM handlers in `arm/`, Microsoft Graph handlers in `graph/`
     - `internal/azure/`         → Azure SDK wrappers and utilities
     - `internal/transform/`     → Transformation utilities (cleaner, sanitizer, terraform)
     - `main.go`                 → Entry point (calls cmd.Execute())
@@ -47,7 +47,7 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
   - `GetTerraformResourceType() string` - Terraform resource type
   - `Fetch(ctx context.Context, resourceID string) (interface{}, error)`
   - `Transform(resource interface{}) (*models.TransformedResource, error)`
-- Register new handlers in `cmd/download.go` → `registerHandlers()` function
+- Register new handlers in `internal/handlers/defaults.go` → `registerDefaults()` function (NOT in `cmd`; `handlers.NewRegistry` pre-populates from there)
 - ALWAYS update the "Supported Resource Types" table in `README.md` when adding (or removing) a resource type handler — this is mandatory, not optional. Include the Azure type, the Terraform resource type, and any required permissions/API notes. The README is the single source of truth.
 - Avoid global state; handlers get credential + subscriptionID via constructor
 - Pipeline stages communicate via channels only (no shared state)
