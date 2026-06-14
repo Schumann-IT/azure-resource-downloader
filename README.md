@@ -333,6 +333,8 @@ azure-rd download --resource-group "my-rg"
 - `AZURE_RD_TENANT_ID` - Entra tenant ID for device-code sign-in (used with `AZURE_RD_CLIENT_ID`)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
+- `AZURE_RD_TIMEOUT` - Timeout in seconds for the download operation (default 300)
+- `AZURE_RD_TYPE` - Resource type filter (equivalent to `--type`)
 - `AZURE_RD_REMOVE_KEYS` - Comma-separated list of keys to remove from output
 - `AZURE_RD_LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 - `LOG_LEVEL` - Legacy logging verbosity (still supported)
@@ -346,6 +348,16 @@ Create `~/.azure-rd.yaml`:
 # subscription: "your-subscription-id"  # Optional - uses the signed-in user's default subscription if not specified
 output: "./azure-resources"
 workers: 10
+
+# Timeout in seconds for the download operation (default: 300)
+# Equivalent to --timeout; the flag overrides this value.
+timeout: 300
+
+# Resource type filter (optional) - equivalent to repeating --type.
+# The flag overrides this value. Omit to download every registered type.
+# type:
+#   - Microsoft.Resources/resourceGroups
+#   - Microsoft.Storage/storageAccounts
 
 # Log level - controls verbosity (default: info)
 # Options: debug, info, warn, error

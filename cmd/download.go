@@ -18,11 +18,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Download-specific flag variables are prefixed with "flag" so they never
+// collide with (and shadow) local variables/params in command code that read
+// the same settings back from Viper using natural names like timeout. These
+// are referenced only for flag binding (and resourceIDs in runDownload).
 var (
-	resourceIDs   []string
-	resourceTypes []string
-	resourceGroup string
-	timeout       int
+	flagResourceIDs    []string
+	flagTimeout        int
+	flagResolveSecrets bool
 )
 
 // downloadCmd represents the download command
@@ -65,10 +68,14 @@ func init() {
 	rootCmd.AddCommand(downloadCmd)
 
 	// Download-specific flags
-	downloadCmd.Flags().StringSliceVar(&resourceIDs, "resource-id", []string{}, "Azure resource IDs to download (can be specified multiple times)")
-	downloadCmd.Flags().StringSliceVar(&resourceTypes, "type", []string{}, "Azure resource type(s) to download; repeatable. Acts as a filter \u2014 if omitted, all registered types are downloaded")
-	downloadCmd.Flags().StringVar(&resourceGroup, "resource-group", "", "Resource group name")
-	downloadCmd.Flags().IntVar(&timeout, "timeout", 300, "timeout in seconds for the download operation")
+	downloadCmd.Flags().StringSliceVar(&flagResourceIDs, "resource-id", []string{}, "Azure resource IDs to download (can be specified multiple times)")
+	downloadCmd.Flags().IntVar(&flagTimeout, "timeout", 300, "timeout in seconds for the download operation")
+	downloadCmd.Flags().BoolVar(&flagResolveSecrets, "resolve-secrets", false, "resolve masked (encrypted) Intune OMA-URI secret values to plaintext (writes secrets to output)")
+
+	// Bind config-backed flags to viper so they can also be set via the config
+	// file or AZURE_RD_* env vars (precedence: flag > env > config > default).
+	_ = viper.BindPFlag("timeout", downloadCmd.Flags().Lookup("timeout"))
+	_ = viper.BindPFlag("resolve-secrets", downloadCmd.Flags().Lookup("resolve-secrets"))
 }
 
 func runDownload(cmd *cobra.Command, args []string) error {
@@ -79,6 +86,11 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	output := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
 	workersFlag := viper.GetInt("workers")
+
+	// Selection/tuning options are config-backed (flag > env > config > default).
+	selectedTypes := viper.GetStringSlice("type")
+	resourceGroup := viper.GetString("resource-group")
+	timeout := viper.GetInt("timeout")
 
 	// Build worker configuration
 	workerConfig := buildWorkerConfig()
@@ -159,7 +171,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build fetch requests
-	requests, skippedTypes, emptyTypes, err := buildFetchRequests(ctx, registry, resourceIDs, resourceGroup, resourceTypes, sub, listConcurrency)
+	requests, skippedTypes, emptyTypes, err := buildFetchRequests(ctx, registry, flagResourceIDs, resourceGroup, selectedTypes, sub, listConcurrency)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -177,8 +189,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Worker tuning is API-specific and only meaningful when a single type is
 	// targeted. With multiple types (or all registered types), treat as mixed.
 	effectiveType := ""
-	if len(resourceTypes) == 1 {
-		effectiveType = resourceTypes[0]
+	if len(selectedTypes) == 1 {
+		effectiveType = selectedTypes[0]
 	}
 
 	// Determine worker count based on resource type and API

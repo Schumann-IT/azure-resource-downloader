@@ -29,6 +29,18 @@ workers-by-api:
 # Dry run mode - preview without writing files (default: false)
 dry-run: false
 
+# Timeout in seconds for the download operation (default: 300)
+# Equivalent to the --timeout flag. Flag overrides this value.
+# timeout: 300
+
+# Resource type filter (optional)
+# Restrict the download to one or more registered resource types.
+# Equivalent to repeating the --type flag. Flag overrides this value.
+# If omitted, all registered resource types are downloaded.
+# type:
+#   - Microsoft.Resources/resourceGroups
+#   - Microsoft.Storage/storageAccounts
+
 # Log level - controls verbosity (default: info)
 # Options: debug, info, warn, error
 # - debug: Maximum verbosity (all messages)

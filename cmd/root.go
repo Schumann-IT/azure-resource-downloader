@@ -10,16 +10,22 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Package-level flag variables are prefixed with "flag" so they never collide
+// with (and shadow) local variables in command implementations, which commonly
+// read the same settings back from Viper using natural names like dryRun or
+// resourceGroup. These are referenced only here in root.go for flag binding;
+// command code reads values via viper.Get*.
 var (
-	cfgFile        string
-	subscriptionID string
-	outputDir      string
-	workerCount    int
-	dryRun         bool
-	logLevel       string
-	resolveSecrets bool
-	clientID       string
-	tenantID       string
+	flagConfigFile    string
+	flagSubscription  string
+	flagOutput        string
+	flagWorkers       int
+	flagDryRun        bool
+	flagLogLevel      string
+	flagClientID      string
+	flagTenantID      string
+	flagResourceTypes []string
+	flagResourceGroup string
 )
 
 // rootCmd represents the base command
@@ -46,15 +52,16 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.azure-rd.yaml)")
-	rootCmd.PersistentFlags().StringVar(&subscriptionID, "subscription", "", "Azure subscription ID (optional, uses default from az login if not specified)")
-	rootCmd.PersistentFlags().StringVar(&outputDir, "output", "./output", "output directory for downloaded resources")
-	rootCmd.PersistentFlags().IntVar(&workerCount, "workers", 5, "number of concurrent workers")
-	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "dry run mode (don't write files)")
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
-	rootCmd.PersistentFlags().BoolVar(&resolveSecrets, "resolve-secrets", false, "resolve masked (encrypted) Intune OMA-URI secret values to plaintext (writes secrets to output)")
-	rootCmd.PersistentFlags().StringVar(&clientID, "client-id", "", "app registration (client) ID for device-code sign-in (optional; defaults to the az login session). Enables Graph scopes the Azure CLI app cannot obtain, e.g. DeviceManagementConfiguration.ReadWrite.All")
-	rootCmd.PersistentFlags().StringVar(&tenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (used with --client-id)")
+	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "config file (default is $HOME/.azure-rd.yaml)")
+	rootCmd.PersistentFlags().StringVar(&flagSubscription, "subscription", "", "Azure subscription ID (optional, uses default from az login if not specified)")
+	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "output directory for downloaded resources")
+	rootCmd.PersistentFlags().IntVar(&flagWorkers, "workers", 5, "number of concurrent workers")
+	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "dry run mode (don't write files)")
+	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&flagClientID, "client-id", "", "app registration (client) ID for device-code sign-in (optional; defaults to the az login session). Enables Graph scopes the Azure CLI app cannot obtain, e.g. DeviceManagementConfiguration.ReadWrite.All")
+	rootCmd.PersistentFlags().StringVar(&flagTenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (used with --client-id)")
+	rootCmd.PersistentFlags().StringSliceVar(&flagResourceTypes, "type", []string{}, "Azure resource type(s) to download; repeatable. Acts as a filter \u2014 if omitted, all registered types are downloaded")
+	rootCmd.PersistentFlags().StringVar(&flagResourceGroup, "resource-group", "", "Resource group name")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
@@ -62,16 +69,17 @@ func init() {
 	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
-	_ = viper.BindPFlag("resolve-secrets", rootCmd.PersistentFlags().Lookup("resolve-secrets"))
 	_ = viper.BindPFlag("client-id", rootCmd.PersistentFlags().Lookup("client-id"))
 	_ = viper.BindPFlag("tenant-id", rootCmd.PersistentFlags().Lookup("tenant-id"))
+	_ = viper.BindPFlag("type", rootCmd.PersistentFlags().Lookup("type"))
+	_ = viper.BindPFlag("resource-group", rootCmd.PersistentFlags().Lookup("resource-group"))
 }
 
 // initConfig reads in config file and ENV variables if set
 func initConfig() {
-	if cfgFile != "" {
+	if flagConfigFile != "" {
 		// Use config file from the flag
-		viper.SetConfigFile(cfgFile)
+		viper.SetConfigFile(flagConfigFile)
 	} else {
 		// Find home directory
 		home, err := os.UserHomeDir()

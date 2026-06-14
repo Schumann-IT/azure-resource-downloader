@@ -45,8 +45,9 @@ func runList(cmd *cobra.Command, args []string) error {
 	sub = azureClient.GetSubscriptionID()
 	log.Info("Using subscription", "subscription", sub)
 
-	// Create handler registry pre-populated with all supported resource types
-	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), viper.GetBool("resolve-secrets"))
+	// Create handler registry pre-populated with all supported resource types.
+	// Secret resolution is a download-only concern, so it is always disabled here.
+	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), false)
 
 	// Get and display all registered types
 	types := registry.GetAllTypes()
