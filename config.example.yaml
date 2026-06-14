@@ -1,13 +1,25 @@
 # Example configuration file for Azure Resource Downloader
-# Copy this to ~/.azure-rd.yaml or specify with --config flag
+# Save it anywhere and load it explicitly with --config, e.g.:
+#   azure-rd download --config ~/.azure-rd.yaml
+# Without --config no config file is read and the built-in defaults apply.
 
 # Azure subscription ID (optional)
 # If not specified, the default subscription from 'az login' will be used
 # You can override this with the --subscription CLI flag
 # subscription: "00000000-0000-0000-0000-000000000000"
 
+# Authentication (optional)
+# By default the tool reuses your existing Azure CLI session (run 'az login').
+# To download Microsoft Graph/Intune types that need scopes the Azure CLI app
+# cannot provide, sign in to a dedicated app registration via the device-code
+# flow by setting both client-id and tenant-id.
+# Equivalent to the --client-id / --tenant-id flags. Flags override these values.
+# client-id: "00000000-0000-0000-0000-000000000000"  # app (client) ID
+# tenant-id: "00000000-0000-0000-0000-000000000000"  # Entra tenant ID (required with client-id)
+
 # Output directory for downloaded resources (default: ./output)
-output: "./azure-resources"
+# Uncomment to override the default output directory.
+# output: "./azure-resources"
 
 # Number of concurrent workers for parallel processing
 # Option 1: Use API-specific defaults (RECOMMENDED)
@@ -21,13 +33,14 @@ output: "./azure-resources"
 # workers: 10
 
 # Option 3: Configure workers per API (ADVANCED)
-# Fine-tune worker count for each API independently
-workers-by-api:
-  microsoft-graph: 5        # For Microsoft.Graph/* resources
-  azure-resource-manager: 20  # For Microsoft.* ARM resources
+# Fine-tune worker count for each API independently.
+# The values below are the built-in defaults; uncomment only to override them.
+# workers-by-api:
+#   microsoft-graph: 5         # For Microsoft.Graph/* resources (default: 5)
+#   azure-resource-manager: 20 # For Microsoft.* ARM resources (default: 20)
 
 # Dry run mode - preview without writing files (default: false)
-dry-run: false
+# dry-run: false
 
 # Timeout in seconds for the download operation (default: 300)
 # Equivalent to the --timeout flag. Flag overrides this value.
@@ -41,13 +54,24 @@ dry-run: false
 #   - Microsoft.Resources/resourceGroups
 #   - Microsoft.Storage/storageAccounts
 
+# Resource group filter (optional)
+# Download the named resource group itself (ARM only).
+# Equivalent to the --resource-group flag. Flag overrides this value.
+# resource-group: "my-resource-group"
+
+# Resolve masked Intune OMA-URI secrets to plaintext (default: false)
+# WARNING: writes decrypted secret values to the output files on disk.
+# Requires DeviceManagementConfiguration.ReadWrite.All in the token.
+# Equivalent to the --resolve-secrets flag. Flag overrides this value.
+# resolve-secrets: false
+
 # Log level - controls verbosity (default: info)
 # Options: debug, info, warn, error
 # - debug: Maximum verbosity (all messages)
 # - info: Normal operation (progress, metrics, warnings, errors)
 # - warn: Warnings and errors only
 # - error: Errors only
-log-level: "info"
+# log-level: "info"
 
 # Note: Terraform import format is now configured per-transformer
 # See the terraform-import transformer configuration above

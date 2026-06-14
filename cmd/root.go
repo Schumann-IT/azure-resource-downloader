@@ -57,16 +57,16 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "config file (default is $HOME/.azure-rd.yaml)")
-	rootCmd.PersistentFlags().StringVar(&flagSubscription, "subscription", "", "Azure subscription ID (optional, uses default from az login if not specified)")
-	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "output directory for downloaded resources")
+	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "path to a YAML config file; if omitted, no config file is loaded and defaults apply")
+	rootCmd.PersistentFlags().StringVar(&flagSubscription, "subscription", "", "Azure subscription ID (default: your az login default subscription)")
+	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "directory to write downloaded resources into")
 	rootCmd.PersistentFlags().IntVar(&flagWorkers, "workers", 5, "number of concurrent workers")
-	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "dry run mode (don't write files)")
-	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "info", "log level (debug, info, warn, error)")
-	rootCmd.PersistentFlags().StringVar(&flagClientID, "client-id", "", "app registration (client) ID for device-code sign-in (optional; defaults to the az login session). Enables Graph scopes the Azure CLI app cannot obtain, e.g. DeviceManagementConfiguration.ReadWrite.All")
-	rootCmd.PersistentFlags().StringVar(&flagTenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (used with --client-id)")
-	rootCmd.PersistentFlags().StringSliceVar(&flagResourceTypes, "type", []string{}, "Azure resource type(s) to download; repeatable. Acts as a filter \u2014 if omitted, all registered types are downloaded")
-	rootCmd.PersistentFlags().StringVar(&flagResourceGroup, "resource-group", "", "Resource group name")
+	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "preview what would be downloaded without writing files")
+	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "info", "log verbosity: debug, info, warn, or error")
+	rootCmd.PersistentFlags().StringVar(&flagClientID, "client-id", "", "app registration (client) ID for device-code sign-in; use to obtain Graph scopes the az login app lacks (e.g. DeviceManagementConfiguration.ReadWrite.All)")
+	rootCmd.PersistentFlags().StringVar(&flagTenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (required with --client-id)")
+	rootCmd.PersistentFlags().StringSliceVar(&flagResourceTypes, "type", []string{}, "resource type to download; repeatable, acts as a filter (default: all registered types)")
+	rootCmd.PersistentFlags().StringVar(&flagResourceGroup, "resource-group", "", "download resources in this resource group")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
@@ -80,33 +80,24 @@ func init() {
 	_ = viper.BindPFlag("resource-group", rootCmd.PersistentFlags().Lookup("resource-group"))
 }
 
-// initConfig reads in config file and ENV variables if set
+// initConfig reads environment variables and, only when --config is given, the
+// specified configuration file. Without --config, no config file is loaded and
+// the built-in defaults apply (still overridable by flags and AZURE_RD_* env
+// vars). An explicitly requested config file that cannot be read is fatal.
 func initConfig() {
-	if flagConfigFile != "" {
-		// Use config file from the flag
-		viper.SetConfigFile(flagConfigFile)
-	} else {
-		// Find home directory
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".azure-rd" (without extension)
-		viper.AddConfigPath(home)
-		viper.AddConfigPath(".")
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".azure-rd")
-	}
-
 	// Read in environment variables that match
 	viper.SetEnvPrefix("AZURE_RD")
 	viper.AutomaticEnv()
 
-	// If a config file is found, read it in
 	configFileUsed := ""
-	if err := viper.ReadInConfig(); err == nil {
+	if flagConfigFile != "" {
+		// A config file was explicitly requested; load it or fail loudly so a
+		// mistyped path is never silently ignored.
+		viper.SetConfigFile(flagConfigFile)
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to read config file %q: %v\n", flagConfigFile, err)
+			os.Exit(1)
+		}
 		configFileUsed = viper.ConfigFileUsed()
 	}
 

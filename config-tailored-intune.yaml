@@ -1,0 +1,68 @@
+log-level: "info"
+
+# Resource type filter - restrict the download to these registered types.
+# Derived from the resource types present in ./output. Equivalent to repeating
+# --type; the flag overrides this value.
+type:
+  - Microsoft.Graph/applePushNotificationCertificate
+  - Microsoft.Graph/assignmentFilters
+  - Microsoft.Graph/authenticationMethodsPolicy
+  - Microsoft.Graph/authenticationStrengthPolicies
+  - Microsoft.Graph/authorizationPolicy
+  - Microsoft.Graph/conditionalAccessPolicies
+  - Microsoft.Graph/depOnboardingSettings
+  - Microsoft.Graph/deviceCompliancePolicies
+  - Microsoft.Graph/deviceConfigurations
+  - Microsoft.Graph/deviceCustomAttributeShellScripts
+  - Microsoft.Graph/deviceEnrollmentConfigurations
+  - Microsoft.Graph/deviceHealthScripts
+  - Microsoft.Graph/deviceManagement
+  - Microsoft.Graph/deviceManagementConfigurationPolicies
+  - Microsoft.Graph/deviceManagementScripts
+  - Microsoft.Graph/deviceShellScripts
+  - Microsoft.Graph/groupPolicyConfigurations
+  - Microsoft.Graph/groups
+  - Microsoft.Graph/intuneBrandingProfiles
+  - Microsoft.Graph/mobileApps
+  - Microsoft.Graph/mobileThreatDefenseConnectors
+  - Microsoft.Graph/notificationMessageTemplates
+  - Microsoft.Graph/onPremisesSynchronization
+  - Microsoft.Graph/organization
+  - Microsoft.Graph/roleScopeTags
+  - Microsoft.Graph/windowsAutopilotDeploymentProfiles
+  - Microsoft.Graph/windowsAutopilotDeviceIdentities
+  - Microsoft.Graph/windowsDriverUpdateProfiles
+  - Microsoft.Graph/windowsFeatureUpdateProfiles
+  - Microsoft.Graph/windowsQualityUpdateProfiles
+
+transformers:
+  - name: base64-decode
+  - name: name-sanitization
+
+filters:
+  # Only export resources whose name starts with "GBL_"
+  Microsoft.Graph/assignmentFilters:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceCompliancePolicies:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceConfigurations:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceCustomAttributeShellScripts:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceEnrollmentConfigurations:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceHealthScripts:
+    displayName: "GBL_.*"
+  # Settings catalog policies expose the title via "name", not "displayName"
+  Microsoft.Graph/deviceManagementConfigurationPolicies:
+    name: "GBL_.*"
+  Microsoft.Graph/deviceManagementScripts:
+    displayName: "GBL_.*"
+  Microsoft.Graph/deviceShellScripts:
+    displayName: "GBL_.*"
+  Microsoft.Graph/groupPolicyConfigurations:
+    displayName: "GBL_.*"
+  Microsoft.Graph/notificationMessageTemplates:
+    displayName: "GBL_.*"
+  Microsoft.Graph/windowsAutopilotDeploymentProfiles:
+    displayName: "GBL_.*"

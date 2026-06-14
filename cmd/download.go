@@ -48,26 +48,25 @@ Graph/Intune types that need scopes the Azure CLI app cannot provide, sign in to
 a dedicated app registration with --client-id/--tenant-id (device-code flow).
 
 Examples:
-  # Download a specific resource (uses default subscription from az login)
+  # Download a specific resource by ID
   azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
-  
-  # Download all resources of one or more types
-  azure-rd download --type "Microsoft.Resources/resourceGroups"
+
+  # Download one or more resource types (--type is repeatable)
   azure-rd download --type "Microsoft.Storage/storageAccounts" --type "Microsoft.Compute/virtualMachines"
 
   # Download every registered resource type (no --type filter)
   azure-rd download
-  
-  # Download all resources in a resource group with explicit subscription
+
+  # Download all resources in a resource group with an explicit subscription
   azure-rd download --subscription "sub-id" --resource-group "my-rg"
-  
-  # Dry run to see what would be downloaded
+
+  # Preview without writing files
   azure-rd download --type "Microsoft.Compute/virtualMachines" --dry-run
 
   # Resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)
   azure-rd download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
 
-  # Use a dedicated app registration (device-code sign-in) for Graph/Intune scopes
+  # Sign in to a dedicated app registration (device-code) for Graph/Intune scopes
   azure-rd download --client-id "<app-id>" --tenant-id "<tenant-id>"`,
 	RunE: runDownload,
 }
@@ -76,9 +75,9 @@ func init() {
 	rootCmd.AddCommand(downloadCmd)
 
 	// Download-specific flags
-	downloadCmd.Flags().StringSliceVar(&flagResourceIDs, "resource-id", []string{}, "Azure resource IDs to download (can be specified multiple times)")
-	downloadCmd.Flags().IntVar(&flagTimeout, "timeout", 300, "timeout in seconds for the download operation")
-	downloadCmd.Flags().BoolVar(&flagResolveSecrets, "resolve-secrets", false, "resolve masked (encrypted) Intune OMA-URI secret values to plaintext (writes secrets to output)")
+	downloadCmd.Flags().StringSliceVar(&flagResourceIDs, "resource-id", []string{}, "explicit Azure resource ID to download; repeatable")
+	downloadCmd.Flags().IntVar(&flagTimeout, "timeout", 300, "per-operation timeout in seconds")
+	downloadCmd.Flags().BoolVar(&flagResolveSecrets, "resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
 
 	// Bind config-backed flags to viper so they can also be set via the config
 	// file or AZURE_RD_* env vars (precedence: flag > env > config > default).

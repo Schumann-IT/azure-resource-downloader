@@ -222,15 +222,15 @@ azure-rd download \
   --dry-run
 ```
 
-> **Flags vs. configuration:** every option can also be set in `~/.azure-rd.yaml`.
-> The flags shown above — `--subscription`, `--output`, `--workers`, `--type`,
-> `--resource-group`, `--dry-run`, `--log-level`, `--timeout`, `--resolve-secrets`,
-> `--client-id`, `--tenant-id` — override the configured value for a single run
-> (see [Configuration File](#configuration-file) for full precedence and the
-> config-only options). For the complete, fully-commented option set — type and
-> per-item filtering, worker tuning, logging, and transformers — see
-> [`.azure-rd.example.yaml`](.azure-rd.example.yaml). Property removal is configured
-> via the `cleaning` transformer (`remove-keys` / `remove-keys-by-type`), not a CLI flag.
+> **Flags vs. configuration:** run `azure-rd --help` (or `download`/`list --help`)
+> for the full, authoritative list of CLI flags and their defaults. Every flag can
+> also be set in a config file loaded with `--config` under a config key of the same
+> name; the flag overrides the configured value for a single run (see
+> [Configuration File](#configuration-file) for precedence). Options with **no**
+> CLI flag — `workers-by-api`, `transformers` (including property removal via the
+> `cleaning` transformer's `remove-keys` / `remove-keys-by-type`), and `filters` —
+> are config-only; see [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the
+> fully-commented schema.
 
 ### Download Multiple Resources
 
@@ -272,42 +272,23 @@ azure-rd download --resource-group "my-rg"
 
 ### Configuration File
 
-**Every option this tool accepts can be set in the configuration file** (`~/.azure-rd.yaml`). A subset of options additionally exposes a CLI flag that *overrides* the configured value for a single run; the remaining options are configured only in the file.
+**Every option this tool accepts can be set in a configuration file** that you load explicitly with `--config` (e.g. `--config ~/.azure-rd.yaml`). Most options also expose a CLI flag that *overrides* the configured value for a single run. **A config file is read only when you pass `--config`** — without it, the built-in defaults apply (a mistyped `--config` path is a fatal error rather than being silently ignored).
 
 **Precedence (highest to lowest):** CLI flag → environment variable → configuration file → built-in default.
 
-#### Options that can be overridden by a CLI flag
+> **CLI flags are documented by the tool itself** — run `azure-rd --help`, `azure-rd download --help`, or `azure-rd list --help` for the full list with defaults. Each flag maps to a config key of the same name (e.g. `--resource-group` → `resource-group`). This section documents only the options that have **no** CLI flag and can therefore be set **only** in the configuration file.
 
-| Config key | CLI flag | Default | Notes |
-|---|---|---|---|
-| `subscription` | `--subscription` | auto-detected from `az login` | |
-| `output` | `--output` | `./output` | |
-| `workers` | `--workers` | API-based (5 Graph / 20 ARM) | overrides `workers-by-api` |
-| `dry-run` | `--dry-run` | `false` | preview without writing files |
-| `log-level` | `--log-level` | `info` | also honors the `LOG_LEVEL` env var |
-| `client-id` | `--client-id` | _(none)_ | dedicated app for device-code sign-in |
-| `tenant-id` | `--tenant-id` | _(none)_ | used with `--client-id` |
-| `type` | `--type` (repeatable) | all registered types | resource-type filter |
-| `resource-group` | `--resource-group` | _(none)_ | |
-| `timeout` | `--timeout` | `300` | seconds |
-| `resolve-secrets` | `--resolve-secrets` | `false` | writes secrets to disk |
-
-#### Options configured only in the file (no CLI flag)
+#### Config-only options (no CLI flag)
 
 | Config key | Purpose |
 |---|---|
-| `workers-by-api` | Per-API worker counts (`microsoft-graph`, `azure-resource-manager`) |
+| `workers-by-api` | Per-API worker counts (`microsoft-graph`, `azure-resource-manager`); overridden by `--workers` / `workers` |
 | `transformers` | Transformer pipeline and per-transformer settings, including property removal via the `cleaning` transformer's `remove-keys` / `remove-keys-by-type` |
 | `filters` | Per-resource-type property regex filters |
 
-#### CLI-only options (no config-file equivalent)
+See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the fully-commented schema of these options.
 
-These scope or bootstrap a single invocation, so they have no config key:
-
-- `--config` — path to the configuration file itself.
-- `--resource-id` — one or more explicit Azure resource IDs to download (repeatable).
-
-Create `~/.azure-rd.yaml`:
+Create a config file (e.g. `~/.azure-rd.yaml`) and load it with `--config`:
 
 ```yaml
 # All fields are optional
@@ -354,10 +335,10 @@ The repository ships a fully-commented [`.azure-rd.example.yaml`](.azure-rd.exam
 cp .azure-rd.example.yaml ~/.azure-rd.yaml
 ```
 
-Then run:
+Then run, passing the file with `--config`:
 
 ```bash
-azure-rd download --resource-group "my-rg"
+azure-rd download --config ~/.azure-rd.yaml --resource-group "my-rg"
 ```
 
 ### Logging
