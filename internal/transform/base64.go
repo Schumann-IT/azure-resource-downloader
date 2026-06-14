@@ -24,6 +24,7 @@ var scriptContentKeys = []struct {
 	suffix string
 }{
 	{key: "scriptContent", suffix: ""},
+	{key: "configurationXml", suffix: ""},
 	{key: "detectionScriptContent", suffix: "_detection"},
 	{key: "remediationScriptContent", suffix: "_remediation"},
 }

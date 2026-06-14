@@ -18,14 +18,16 @@ type Transformer struct {
 	registry           *handlers.Registry
 	workerCount        int
 	transformerConfigs []models.TransformerConfig
+	resourceFilters    []models.ResourceFilter
 }
 
 // NewTransformer creates a new transformer
-func NewTransformer(registry *handlers.Registry, workerCount int, transformerConfigs []models.TransformerConfig) *Transformer {
+func NewTransformer(registry *handlers.Registry, workerCount int, transformerConfigs []models.TransformerConfig, resourceFilters []models.ResourceFilter) *Transformer {
 	return &Transformer{
 		registry:           registry,
 		workerCount:        workerCount,
 		transformerConfigs: transformerConfigs,
+		resourceFilters:    resourceFilters,
 	}
 }
 
@@ -120,6 +122,23 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		return &models.TransformResult{
 			ResourceID: fetchResult.ResourceID,
 			Error:      fmt.Errorf("failed to transform resource: %w", err),
+		}
+	}
+
+	// Apply resource-type filters against the raw properties (before cleaning,
+	// which may rename or remove the matched keys). A resource that does not
+	// match every configured property filter is dropped and never written.
+	if filter := models.GetResourceFilter(t.resourceFilters, fetchResult.ResourceType); filter != nil {
+		if !filter.Matches(transformed.Properties) {
+			log.Debug("Resource filtered out by property filter",
+				"resource_id", fetchResult.ResourceID,
+				"type", fetchResult.ResourceType,
+				"name", transformed.DisplayName)
+			return &models.TransformResult{
+				ResourceID:   fetchResult.ResourceID,
+				ResourceType: fetchResult.ResourceType,
+				Filtered:     true,
+			}
 		}
 	}
 

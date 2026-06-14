@@ -38,7 +38,7 @@ func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config 
 
 	return &Pipeline{
 		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount),
-		transformer: NewTransformer(registry, config.WorkerCount, transformerConfigs),
+		transformer: NewTransformer(registry, config.WorkerCount, transformerConfigs, config.ResourceFilters),
 		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun),
 		config:      config,
 	}
@@ -93,6 +93,8 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 		metrics.RecordResult()
 
 		switch {
+		case writeResult.Filtered:
+			summary.FilteredResources++
 		case writeResult.Skipped:
 			summary.SkippedResources++
 		case writeResult.Error != nil:
@@ -111,6 +113,7 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 				"percentage", fmt.Sprintf("%.1f%%", float64(processedCount)/float64(len(requests))*100),
 				"successful", summary.SuccessfulResources,
 				"skipped", summary.SkippedResources,
+				"filtered", summary.FilteredResources,
 				"failed", summary.FailedResources,
 				"elapsed", time.Since(metrics.StartTime).Round(time.Second))
 		}
@@ -143,6 +146,9 @@ type ExecutionSummary struct {
 	// SkippedResources counts resources the signed-in user was not permitted to
 	// read. They are reported as warnings and do not cause a non-zero exit.
 	SkippedResources int
+	// FilteredResources counts resources excluded by a configured resource
+	// filter. They are not written and do not cause a non-zero exit.
+	FilteredResources int
 	// SkippedTypes lists resource types whose listing failed before the
 	// pipeline ran; their resource counts are not part of the totals above.
 	SkippedTypes []SkippedType
@@ -161,9 +167,15 @@ func (s *ExecutionSummary) PrintSummary() {
 		"total", s.TotalResources,
 		"successful", s.SuccessfulResources,
 		"skipped", s.SkippedResources,
+		"filtered", s.FilteredResources,
 		"failed", s.FailedResources,
 		"skipped_types", len(s.SkippedTypes),
 		"empty_types", len(s.EmptyTypes))
+
+	if s.FilteredResources > 0 {
+		log.Info("Some resources were excluded by configured resource filters",
+			"filtered", s.FilteredResources)
+	}
 
 	if s.SkippedResources > 0 {
 		log.Warn("Some resources were skipped because the signed-in user is not permitted to read them",

@@ -121,6 +121,36 @@ log-level: "info"
 # Example 6: Disable ALL transformers (raw Azure data)
 # transformers: []
 
+# Filters (optional)
+# Restrict which resources are downloaded per resource type by matching one or
+# more properties against a regular expression (Go RE2 syntax).
+#
+# Structure: filters.<resourceType>.<propertyPath>: <regex>
+#   - <resourceType>  matches a registered handler type (case-insensitive)
+#   - <propertyPath>  is a dot-separated path into the resource's raw
+#                     properties (e.g. displayName or properties.subnet.id)
+#   - <regex>         is a Go regular expression matched against the value
+#
+# A resource is downloaded only when EVERY listed property regex for its type
+# matches (logical AND). Resources of types without a filter are unaffected.
+# Filters are evaluated after fetch (against the raw Azure properties), so the
+# resource is still read from Azure but excluded resources are never written.
+#
+# Examples:
+# filters:
+#   # Only export device configurations whose displayName starts with "GBL_"
+#   Microsoft.Graph/deviceConfigurations:
+#     displayName: "GBL_.*"
+#
+#   # Combine multiple properties (both must match)
+#   Microsoft.Graph/groups:
+#     displayName: "^IT-.*"
+#     mailEnabled: "true"
+#
+#   # Anchor a regex for an exact prefix on storage accounts
+#   Microsoft.Storage/storageAccounts:
+#     name: "^prod"
+
 # Note: Property exclusions are now configured per-transformer
 # See the cleaning transformer configuration above
 

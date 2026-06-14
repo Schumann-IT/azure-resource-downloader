@@ -88,6 +88,16 @@ func (w *Writer) writeWorker(ctx context.Context, transformResults <-chan *model
 				continue
 			}
 
+			// Propagate resources excluded by a configured filter; nothing is
+			// written for them.
+			if transformResult.Filtered {
+				writeResults <- &models.WriteResult{
+					ResourceID: transformResult.ResourceID,
+					Filtered:   true,
+				}
+				continue
+			}
+
 			// Check if transform had an error
 			if transformResult.Error != nil {
 				writeResults <- &models.WriteResult{

@@ -88,6 +88,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Build transformer configurations
 	transformerConfigs := buildTransformerConfigs()
 
+	// Build per-resource-type property filters
+	resourceFilters := buildResourceFilters()
+
 	// Log which transformers will be used
 	if len(transformerConfigs) == 0 {
 		log.Info("No transformers enabled - raw Azure data will be output")
@@ -225,6 +228,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		DryRun:             dryRun,
 		SubscriptionID:     sub,
 		TransformerConfigs: transformerConfigs,
+		ResourceFilters:    resourceFilters,
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
@@ -491,6 +495,40 @@ func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string
 
 	// Priority 3: For mixed resource types, use safe default
 	return workerConfig.Default
+}
+
+// buildResourceFilters constructs per-resource-type property filters from the
+// "filters" config key (resourceType -> {property -> regex}). A resource is
+// kept only when every property regex for its type matches. Invalid entries are
+// logged and skipped so the run proceeds with the valid filters.
+func buildResourceFilters() []models.ResourceFilter {
+	log := logger.Default
+
+	if !viper.IsSet("filters") {
+		return nil
+	}
+
+	raw, ok := viper.Get("filters").(map[string]interface{})
+	if !ok {
+		log.Warn("Ignoring 'filters' config: expected a map of resource type to property filters",
+			"type", fmt.Sprintf("%T", viper.Get("filters")))
+		return nil
+	}
+
+	filters, err := models.ParseResourceFilters(raw)
+	if err != nil {
+		log.Warn("Some resource filters were skipped", "error", err)
+	}
+
+	for _, f := range filters {
+		matchers := make([]string, len(f.Properties))
+		for i, p := range f.Properties {
+			matchers[i] = fmt.Sprintf("%s=~%s", p.Property, p.Pattern.String())
+		}
+		log.Info("Resource filter active", "type", f.ResourceType, "match", matchers)
+	}
+
+	return filters
 }
 
 // buildTransformerConfigs constructs transformer configurations from viper

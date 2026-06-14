@@ -450,6 +450,39 @@ azure-rd download --resource-group "my-rg"
 - ERROR: Only errors that occurred
 - (Minimal output for automation)
 
+## 🔍 Resource Filters
+
+Restrict which resources are downloaded per resource type by matching one or more properties against a regular expression (Go [RE2](https://github.com/google/re2/wiki/Syntax) syntax). This is useful to export only a naming-convention subset, e.g. all Intune device configurations prefixed `GBL_`.
+
+Add a `filters` block to `~/.azure-rd.yaml`:
+
+```yaml
+filters:
+  # Only export device configurations whose displayName starts with "GBL_"
+  Microsoft.Graph/deviceConfigurations:
+    displayName: "GBL_.*"
+
+  # Multiple properties on one type must ALL match (logical AND)
+  Microsoft.Graph/groups:
+    displayName: "^IT-.*"
+    mailEnabled: "true"
+
+  # Anchor a regex for an exact prefix on storage accounts
+  Microsoft.Storage/storageAccounts:
+    name: "^prod"
+```
+
+**How it works**
+
+- **Structure:** `filters.<resourceType>.<propertyPath>: <regex>`.
+- **`<resourceType>`** matches a registered handler type (case-insensitive).
+- **`<propertyPath>`** is a dot-separated path into the resource's raw properties (e.g. `displayName` or `properties.subnet.id`); path segments are matched case-insensitively.
+- **`<regex>`** is a Go regular expression matched against the property value (use `^`/`$` to anchor).
+- A resource is kept only when **every** property regex configured for its type matches. Use `^X$` for an exact match.
+- Resource types **without** a filter are unaffected and download normally.
+- Filters are evaluated **after fetch**, against the raw Azure properties (before the cleaning transformer can rename or remove keys). Excluded resources are still read from Azure but never written to disk; they are reported as `filtered` in the execution summary and do not affect the exit code.
+- Invalid regular expressions are logged and skipped so the run proceeds with the remaining valid filters.
+
 ## 🎛️ Transformers
 
 Each transformer can be independently configured with its own settings. By default, all transformers are applied. Set `transformers: []` to disable all and get raw Azure data.

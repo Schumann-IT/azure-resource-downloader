@@ -42,6 +42,9 @@ type TransformResult struct {
 	// user is not permitted to read.
 	Skipped    bool
 	SkipReason string
+	// Filtered marks a resource that was excluded by a configured resource
+	// filter. Filtered resources are neither written nor counted as failures.
+	Filtered bool
 }
 
 // FileArtifact represents an additional file to be written alongside a
@@ -61,6 +64,9 @@ type WriteResult struct {
 	// user is not permitted to read (no file is written).
 	Skipped    bool
 	SkipReason string
+	// Filtered is propagated from the transform stage for resources excluded by
+	// a configured resource filter (no file is written).
+	Filtered bool
 }
 
 // TransformedResource represents a fully transformed Azure resource
@@ -102,6 +108,7 @@ type PipelineConfig struct {
 	DryRun             bool
 	SubscriptionID     string
 	TransformerConfigs []TransformerConfig // List of transformer configurations
+	ResourceFilters    []ResourceFilter    // Per-resource-type property regex filters
 }
 
 // TransformerType represents a transformer step name
