@@ -159,7 +159,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceCompliancePolicies`, `compliancePolicies`, `groupPolicyConfigurations`, `deviceManagementIntents` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All` |
 | `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementScripts.Read.All` |
-| `Microsoft.Graph/deviceComplianceScripts`, `reusablePolicySettings`, `mobileThreatDefenseConnectors` | `DeviceManagementConfiguration.Read.All` |
+| `Microsoft.Graph/deviceComplianceScripts`, `reusablePolicySettings`, `mobileThreatDefenseConnectors`, `ndesConnectors` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/roleScopeTags`, `roleDefinitions` | `DeviceManagementRBAC.Read.All` |
 | `Microsoft.Graph/deviceManagement` (tenant settings) | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/authenticationMethodsPolicy`, `authorizationPolicy` | `Policy.Read.All` |
@@ -870,6 +870,7 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/reusablePolicySettings` | `microsoft365_graph_beta_device_management_reuseable_policy_setting` | ✅ |
 | `Microsoft.Graph/vppTokens` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/mobileThreatDefenseConnectors` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/ndesConnectors` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/deviceCompliancePolicies` | `microsoft365_graph_beta_device_management_windows_device_compliance_policy` | ✅ |
 | `Microsoft.Graph/compliancePolicies` | `microsoft365_graph_beta_device_management_linux_device_compliance_policy` | ✅ |
 | `Microsoft.Graph/groupPolicyConfigurations` | `microsoft365_graph_beta_device_management_group_policy_configuration` | ✅ |
@@ -903,6 +904,8 @@ Currently supported Azure resource types:
 
 > **Note:** `Microsoft.Graph/deviceManagementConfigurationPolicies` (Intune Settings Catalog) uses the Microsoft Graph **beta** API and downloads the full settings tree via `$expand=settings`.
 >
+> **Note:** macOS/iOS **DDM (Declarative Device Management)** policies have no dedicated Graph endpoint — they are Settings Catalog policies and are exported by `Microsoft.Graph/deviceManagementConfigurationPolicies`. A policy delivered via DDM is identifiable in the exported YAML by its `technologies` field containing `appleRemoteManagement` (the Graph DDM delivery channel). No separate handler or resource type is required.
+>
 > **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`. The Terraform resource type is polymorphic in practice; verify the emitted import against your provider/profile variant.
 >
 > **Note:** Compliance, Administrative Templates and Endpoint Security intents need child fetches beyond a plain GET:
@@ -913,6 +916,7 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/deviceComplianceScripts` (Windows **custom compliance** scripts) carry a single base64 `detectionScriptContent`, decoded by the base64-decode transformer (inline by default, or a `*_detection.ps1` sidecar in file mode). Assignments are inlined. Distinct from `deviceHealthScripts` (Remediations); the provider has no resource, so no Terraform import is emitted.
 > - `Microsoft.Graph/reusablePolicySettings` are reusable settings (e.g. firewall rule groups, certificates) referenced **by ID** from Endpoint Security / Settings Catalog policies; exporting them keeps those references resolvable. A plain GET returns the full `settingInstance` tree.
 > - `Microsoft.Graph/mobileThreatDefenseConnectors` configure MTD partner integrations (e.g. Microsoft Defender for Endpoint) across Windows/macOS/iOS/Android. Connectors have no display name, so the item ID (partner identifier) is used as the name; no provider resource, so no Terraform import is emitted.
+> - `Microsoft.Graph/ndesConnectors` expose the on-premises NDES/SCEP certificate connector state/metadata (certificate-based Windows config). Named by friendly name, falling back to the item ID; no provider resource, so no Terraform import is emitted.
 >
 > **Note:** Application (`deviceAppManagement`) types:
 > - `Microsoft.Graph/mobileApps` is highly polymorphic (`win32LobApp`, `winGetApp`, `macOSPkgApp`, `iosStoreApp`, `officeSuiteApp`, …) and includes Microsoft built-in apps. The provider's app resources are per-type (`win32_app`, `win_get_app`, `macos_pkg_app`, …); the Win32 variant is emitted by default — adjust the import per app's `@odata.type`.

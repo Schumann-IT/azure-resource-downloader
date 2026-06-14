@@ -329,6 +329,7 @@ func registerHandlers(registry *handlers.Registry, azureClient *azure.Client) {
 		handlers.NewReusablePolicySettingHandler,
 		handlers.NewVppTokenHandler,
 		handlers.NewMobileThreatDefenseConnectorHandler,
+		handlers.NewNdesConnectorHandler,
 	}
 	for _, newHandler := range graphCollections {
 		if h, err := newHandler(cred); err == nil {
