@@ -28,6 +28,7 @@ type:
   - Microsoft.Graph/notificationMessageTemplates
   - Microsoft.Graph/onPremisesSynchronization
   - Microsoft.Graph/organization
+  - Microsoft.Graph/organizationalBranding
   - Microsoft.Graph/roleScopeTags
   - Microsoft.Graph/windowsAutopilotDeploymentProfiles
   - Microsoft.Graph/windowsAutopilotDeviceIdentities
