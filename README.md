@@ -159,6 +159,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/deviceCompliancePolicies`, `compliancePolicies`, `groupPolicyConfigurations`, `deviceManagementIntents` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All` |
 | `Microsoft.Graph/deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` | `DeviceManagementScripts.Read.All` |
+| `Microsoft.Graph/deviceComplianceScripts`, `reusablePolicySettings`, `mobileThreatDefenseConnectors` | `DeviceManagementConfiguration.Read.All` |
 | `Microsoft.Graph/roleScopeTags`, `roleDefinitions` | `DeviceManagementRBAC.Read.All` |
 | `Microsoft.Graph/deviceManagement` (tenant settings) | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/authenticationMethodsPolicy`, `authorizationPolicy` | `Policy.Read.All` |
@@ -169,7 +170,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/termsAndConditions`, `notificationMessageTemplates` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/windowsAutopilotDeploymentProfiles`, `windowsAutopilotDeviceIdentities`, `deviceEnrollmentConfigurations`, `applePushNotificationCertificate`, `depOnboardingSettings`, `appleUserInitiatedEnrollmentProfiles` | `DeviceManagementServiceConfig.Read.All` |
 | `Microsoft.Graph/intuneBrandingProfiles` | `DeviceManagementApps.Read.All` |
-| `Microsoft.Graph/mobileApps`, `iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`, `mobileAppConfigurations`, `targetedManagedAppConfigurations` | `DeviceManagementApps.Read.All` |
+| `Microsoft.Graph/mobileApps`, `iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`, `mobileAppConfigurations`, `targetedManagedAppConfigurations`, `vppTokens` | `DeviceManagementApps.Read.All` |
 | `Microsoft.Graph/namedLocations` | `Policy.Read.All` |
 | `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` |
 | ARM types (`storageAccounts`, `virtualMachines`, `resourceGroups`) | `Azure Service Management/user_impersonation` (+ your Azure RBAC) |
@@ -865,6 +866,10 @@ Currently supported Azure resource types:
 | `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` | ✅ |
 | `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` | ✅ |
 | `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` | ✅ |
+| `Microsoft.Graph/deviceComplianceScripts` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/reusablePolicySettings` | `microsoft365_graph_beta_device_management_reuseable_policy_setting` | ✅ |
+| `Microsoft.Graph/vppTokens` | — (no provider resource; no import emitted) | ✅ |
+| `Microsoft.Graph/mobileThreatDefenseConnectors` | — (no provider resource; no import emitted) | ✅ |
 | `Microsoft.Graph/deviceCompliancePolicies` | `microsoft365_graph_beta_device_management_windows_device_compliance_policy` | ✅ |
 | `Microsoft.Graph/compliancePolicies` | `microsoft365_graph_beta_device_management_linux_device_compliance_policy` | ✅ |
 | `Microsoft.Graph/groupPolicyConfigurations` | `microsoft365_graph_beta_device_management_group_policy_configuration` | ✅ |
@@ -905,12 +910,16 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/compliancePolicies` (Settings Catalog based, currently Linux) is fetched with `$expand=settings,scheduledActionsForRule(...)` and named via its `name` field.
 > - `Microsoft.Graph/groupPolicyConfigurations` (Administrative Templates) additionally downloads the `definitionValues?$expand=definition` child collection so each configured ADMX setting carries its definition metadata.
 > - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection. The provider has no resource for legacy intents, so no Terraform import is emitted.
+> - `Microsoft.Graph/deviceComplianceScripts` (Windows **custom compliance** scripts) carry a single base64 `detectionScriptContent`, decoded by the base64-decode transformer (inline by default, or a `*_detection.ps1` sidecar in file mode). Assignments are inlined. Distinct from `deviceHealthScripts` (Remediations); the provider has no resource, so no Terraform import is emitted.
+> - `Microsoft.Graph/reusablePolicySettings` are reusable settings (e.g. firewall rule groups, certificates) referenced **by ID** from Endpoint Security / Settings Catalog policies; exporting them keeps those references resolvable. A plain GET returns the full `settingInstance` tree.
+> - `Microsoft.Graph/mobileThreatDefenseConnectors` configure MTD partner integrations (e.g. Microsoft Defender for Endpoint) across Windows/macOS/iOS/Android. Connectors have no display name, so the item ID (partner identifier) is used as the name; no provider resource, so no Terraform import is emitted.
 >
 > **Note:** Application (`deviceAppManagement`) types:
 > - `Microsoft.Graph/mobileApps` is highly polymorphic (`win32LobApp`, `winGetApp`, `macOSPkgApp`, `iosStoreApp`, `officeSuiteApp`, …) and includes Microsoft built-in apps. The provider's app resources are per-type (`win32_app`, `win_get_app`, `macos_pkg_app`, …); the Win32 variant is emitted by default — adjust the import per app's `@odata.type`.
 > - App protection policies (`iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`) and app configurations (`targetedManagedAppConfigurations`) are fetched with `$expand=apps` so the targeted app list is included. The provider has no managed-app-protection resources yet, so those emit no Terraform import.
 > - WIP policies (`mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`) are deprecated by Microsoft and have no provider resource; downloaded for documentation/backup only.
 > - `Microsoft.Graph/mobileAppConfigurations` (managed-device app config) is platform-polymorphic; the iOS provider variant is emitted by default — adjust for Android policies.
+> - `Microsoft.Graph/vppTokens` are Apple Volume Purchase Program tokens used to license store apps to macOS/iOS; the token secret is masked by the service (metadata only). Named by friendly name, falling back to organization name then Apple ID. No provider resource, so no Terraform import is emitted.
 >
 > **Note:** Autopilot & enrollment types:
 > - `Microsoft.Graph/windowsAutopilotDeviceIdentities` is registered device *data* rather than configuration and can be a large collection; identities without a display name are named by serial number.
