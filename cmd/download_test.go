@@ -3,11 +3,25 @@ package cmd
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
 )
+
+// parseResourceType extracts the resource type from a resource ID
+func parseResourceType(resourceID string) string {
+	parts := strings.Split(strings.Trim(resourceID, "/"), "/")
+
+	for i, part := range parts {
+		if strings.EqualFold(part, "providers") && i+2 < len(parts) {
+			return parts[i+1] + "/" + parts[i+2]
+		}
+	}
+
+	return ""
+}
 
 func TestBuildFetchRequests(t *testing.T) {
 	tests := []struct {

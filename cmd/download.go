@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"azure-resource-downloader/internal/azure"
@@ -274,19 +273,6 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Download completed successfully")
 	return nil
-}
-
-// parseResourceType extracts the resource type from a resource ID
-func parseResourceType(resourceID string) string {
-	parts := strings.Split(strings.Trim(resourceID, "/"), "/")
-
-	for i, part := range parts {
-		if strings.EqualFold(part, "providers") && i+2 < len(parts) {
-			return parts[i+1] + "/" + parts[i+2]
-		}
-	}
-
-	return ""
 }
 
 // buildWorkerConfig constructs worker configuration from config file
