@@ -21,7 +21,7 @@ The tool follows a three-stage async pipeline. The stages run concurrently, conn
 
 1. **Fetcher** — retrieves resources from Azure with retry logic (5 attempts, exponential backoff).
 2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, base64 decoding, and Terraform import generation.
-3. **Writer** — writes one YAML file per resource and a consolidated `import.tf` per resource type. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`<type>.prompt.md`) per resource type.
+3. **Writer** — writes one YAML file per resource and a consolidated `import.tf` per resource type. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`doc-prompt.md`) per resource type.
 
 Each stage uses its own worker pool; the worker count is configurable via the `--workers` flag or API-specific settings in the config file (see *Worker Count Optimization* below).
 
@@ -524,26 +524,33 @@ Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`,
 
 ## 📂 Output Structure
 
-The tool creates the following directory structure (the `*.prompt.md` files are written only when `--write-prompts` / `write-prompts: true` is set):
+The tool creates the following directory structure (the `doc-prompt.md` files are written only when `--write-prompts` / `write-prompts: true` is set):
+
+Resources are written under a per-tenant directory named after the tenant's
+Entra default domain (e.g. `contoso.onmicrosoft.com`), so downloads from
+different tenants never collide. The domain is resolved via the ARM Tenants API;
+if it cannot be resolved (e.g. insufficient permissions), the tool logs a
+warning and writes directly into the base `--output` directory.
 
 ```
 output/
-├── Microsoft.Resources/
-│   └── resourceGroups/
-│       ├── my-resource-group.yaml
-│       ├── another-resource-group.yaml
-│       ├── import.tf
-│       └── resourceGroups.prompt.md      # only with --write-prompts
-├── Microsoft.Storage/
-│   └── storageAccounts/
-│       ├── mystorageaccount.yaml
-│       ├── import.tf
-│       └── storageAccounts.prompt.md     # only with --write-prompts
-└── Microsoft.Compute/
-    └── virtualMachines/
-        ├── my_vm.yaml
-        ├── import.tf
-        └── virtualMachines.prompt.md     # only with --write-prompts
+└── contoso.onmicrosoft.com/            # tenant default domain
+    ├── Microsoft.Resources/
+    │   └── resourceGroups/
+    │       ├── my-resource-group.yaml
+    │       ├── another-resource-group.yaml
+    │       ├── import.tf
+    │       └── doc-prompt.md            # only with --write-prompts
+    ├── Microsoft.Storage/
+    │   └── storageAccounts/
+    │       ├── mystorageaccount.yaml
+    │       ├── import.tf
+    │       └── doc-prompt.md            # only with --write-prompts
+    └── Microsoft.Compute/
+        └── virtualMachines/
+            ├── my_vm.yaml
+            ├── import.tf
+            └── doc-prompt.md            # only with --write-prompts
 ```
 
 ### YAML File
@@ -582,7 +589,7 @@ import {
 
 ### Documentation Prompt File
 
-When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `<type>.prompt.md` documentation prompt (e.g. `resourceGroups.prompt.md`). It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
+When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
 
 - **Document every setting** — one row per YAML property (path, configured value, what it does, recommended value, reference).
 - **Link best practices and Microsoft docs** — Microsoft Learn URLs plus hardening baselines (Microsoft security baselines, CIS) where relevant.

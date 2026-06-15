@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"azure-resource-downloader/internal/azure"
@@ -166,6 +167,18 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Get the actual subscription ID being used (may have been auto-detected)
 	sub = azureClient.GetSubscriptionID()
 	log.Info("Authentication successful", "subscription", sub)
+
+	// Scope the output under the tenant's default domain so downloads from
+	// different tenants never collide. Resolution is best-effort: if it fails
+	// (e.g. insufficient permissions), warn and keep the base output path.
+	if tenantDomain, err := azureClient.GetTenantDomain(ctx); err != nil {
+		log.Warn("Could not resolve tenant domain; output path will not include the tenant",
+			"reason", azure.ErrorSummary(err))
+		log.Debug("Tenant domain resolution failed", "error", err)
+	} else {
+		output = filepath.Join(output, tenantDomain)
+		log.Info("Scoping output under tenant", "tenant", tenantDomain, "output", output)
+	}
 
 	// Create handler registry pre-populated with all supported resource types
 	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), viper.GetBool("resolve-secrets"))

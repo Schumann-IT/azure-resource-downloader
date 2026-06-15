@@ -34,7 +34,7 @@ type importStatement struct {
 }
 
 // NewWriter creates a new writer. When writePrompts is true, a per-resource-type
-// documentation LLM prompt file (<type>.prompt.md) is written alongside the YAML
+// documentation LLM prompt file (doc-prompt.md) is written alongside the YAML
 // and import.tf files.
 func NewWriter(outputDir string, workerCount int, dryRun, writePrompts bool) *Writer {
 	return &Writer{
@@ -306,7 +306,7 @@ func (w *Writer) writeImportFiles(writeResults chan<- *models.WriteResult) {
 // The prompt instructs a model to document every setting of a resource of that
 // type, including best-practice references, Microsoft documentation links and
 // fully expanded embedded payloads (e.g. configurationXml). The file is named
-// "<type-leaf>.prompt.md" inside the resource type directory.
+// "doc-prompt.md" inside the resource type directory.
 func (w *Writer) writePromptFiles() {
 	log := logger.Default
 
@@ -323,8 +323,7 @@ func (w *Writer) writePromptFiles() {
 		}
 
 		resourceTypeDir := filepath.Join(w.outputDir, resourceType)
-		promptName := filepath.Base(resourceType) + ".prompt.md"
-		promptPath := filepath.Join(resourceTypeDir, promptName)
+		promptPath := filepath.Join(resourceTypeDir, "doc-prompt.md")
 
 		if w.dryRun {
 			log.Info("Would write documentation prompt file",

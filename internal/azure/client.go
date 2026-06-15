@@ -3,6 +3,7 @@ package azure
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"azure-resource-downloader/internal/logger"
 
@@ -16,6 +17,7 @@ import (
 type Client struct {
 	credential      azcore.TokenCredential
 	subscriptionID  string
+	tenantID        string
 	resourcesClient *armresources.Client
 }
 
@@ -61,6 +63,7 @@ func NewClient(ctx context.Context, subscriptionID, clientID, tenantID string) (
 	return &Client{
 		credential:      cred,
 		subscriptionID:  subscriptionID,
+		tenantID:        tenantID,
 		resourcesClient: resourcesClient,
 	}, nil
 }
@@ -192,6 +195,75 @@ func (c *Client) GetResource(ctx context.Context, resourceID, apiVersion string)
 // GetSubscriptionID returns the subscription ID
 func (c *Client) GetSubscriptionID() string {
 	return c.subscriptionID
+}
+
+// GetTenantDomain resolves the Entra tenant's default domain (e.g.
+// "contoso.onmicrosoft.com") using the ARM Tenants API. When the signed-in
+// identity can access multiple tenants, the tenant matching the configured
+// tenant ID (or, failing that, the active subscription's tenant) is preferred;
+// otherwise the first tenant with a default domain is returned.
+func (c *Client) GetTenantDomain(ctx context.Context) (string, error) {
+	tenantsClient, err := armsubscriptions.NewTenantsClient(c.credential, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create tenants client: %w", err)
+	}
+
+	// Disambiguate when several tenants are accessible: prefer an explicit
+	// tenant, then the active subscription's tenant.
+	targetTenantID := c.tenantID
+	if targetTenantID == "" && c.subscriptionID != "" {
+		if id, err := c.getSubscriptionTenantID(ctx); err != nil {
+			logger.Default.Debug("Could not resolve subscription tenant ID", "error", err)
+		} else {
+			targetTenantID = id
+		}
+	}
+
+	pager := tenantsClient.NewListPager(nil)
+	firstDomain := ""
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return "", fmt.Errorf("failed to list tenants: %w", err)
+		}
+
+		for _, tenant := range page.Value {
+			if tenant == nil || tenant.DefaultDomain == nil || *tenant.DefaultDomain == "" {
+				continue
+			}
+			domain := *tenant.DefaultDomain
+
+			if targetTenantID != "" && tenant.TenantID != nil && strings.EqualFold(*tenant.TenantID, targetTenantID) {
+				return domain, nil
+			}
+			if firstDomain == "" {
+				firstDomain = domain
+			}
+		}
+	}
+
+	if firstDomain != "" {
+		return firstDomain, nil
+	}
+	return "", fmt.Errorf("no tenant default domain found")
+}
+
+// getSubscriptionTenantID returns the tenant ID that owns the active
+// subscription, used to pick the correct tenant when several are accessible.
+func (c *Client) getSubscriptionTenantID(ctx context.Context) (string, error) {
+	client, err := armsubscriptions.NewClient(c.credential, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create subscriptions client: %w", err)
+	}
+
+	resp, err := client.Get(ctx, c.subscriptionID, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get subscription: %w", err)
+	}
+	if resp.TenantID == nil {
+		return "", fmt.Errorf("subscription %q has no tenant ID", c.subscriptionID)
+	}
+	return *resp.TenantID, nil
 }
 
 // GetCredential returns the Azure credential
