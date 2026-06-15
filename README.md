@@ -21,7 +21,7 @@ The tool follows a three-stage async pipeline. The stages run concurrently, conn
 
 1. **Fetcher** — retrieves resources from Azure with retry logic (5 attempts, exponential backoff).
 2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, base64 decoding, and Terraform import generation.
-3. **Writer** — writes one YAML file per resource plus a consolidated `import.tf` per resource type.
+3. **Writer** — writes one YAML file per resource and a consolidated `import.tf` per resource type. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`<type>.prompt.md`) per resource type.
 
 Each stage uses its own worker pool; the worker count is configurable via the `--workers` flag or API-specific settings in the config file (see *Worker Count Optimization* below).
 
@@ -524,7 +524,7 @@ Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`,
 
 ## 📂 Output Structure
 
-The tool creates the following directory structure:
+The tool creates the following directory structure (the `*.prompt.md` files are written only when `--write-prompts` / `write-prompts: true` is set):
 
 ```
 output/
@@ -532,15 +532,18 @@ output/
 │   └── resourceGroups/
 │       ├── my-resource-group.yaml
 │       ├── another-resource-group.yaml
-│       └── import.tf
+│       ├── import.tf
+│       └── resourceGroups.prompt.md      # only with --write-prompts
 ├── Microsoft.Storage/
 │   └── storageAccounts/
 │       ├── mystorageaccount.yaml
-│       └── import.tf
+│       ├── import.tf
+│       └── storageAccounts.prompt.md     # only with --write-prompts
 └── Microsoft.Compute/
     └── virtualMachines/
         ├── my_vm.yaml
-        └── import.tf
+        ├── import.tf
+        └── virtualMachines.prompt.md     # only with --write-prompts
 ```
 
 ### YAML File
@@ -576,6 +579,17 @@ import {
   id = "/subscriptions/.../resourceGroups/another-rg"
 }
 ```
+
+### Documentation Prompt File
+
+When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `<type>.prompt.md` documentation prompt (e.g. `resourceGroups.prompt.md`). It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
+
+- **Document every setting** — one row per YAML property (path, configured value, what it does, recommended value, reference).
+- **Link best practices and Microsoft docs** — Microsoft Learn URLs plus hardening baselines (Microsoft security baselines, CIS) where relevant.
+- **Expand embedded payloads** — decode and document encoded/embedded properties such as `configurationXml`, `omaSettings`, `payloadJson` and base64 `payload` blobs.
+- **Flag security-sensitive settings** — secrets, certificates, encryption, conditional-access conditions, and deviations from baselines.
+
+Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph types are tailored through the `graphResourceDocs` table in `internal/handlers/graph/documentation.go`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
 
 #### Configurable Import Target Format
 
@@ -777,6 +791,18 @@ func (h *KeyVaultHandler) GetType() string {
 
 func (h *KeyVaultHandler) GetTerraformResourceType() string {
     return "azurerm_key_vault"
+}
+
+// GetDocumentationPrompt returns the dedicated LLM documentation prompt for
+// this type. Supply type-specific metadata (Purpose, KeySettings,
+// EmbeddedPayloads) so the prompt is tailored to this resource type.
+func (h *KeyVaultHandler) GetDocumentationPrompt() string {
+    return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+        AzureType:     h.GetType(),
+        TerraformType: h.GetTerraformResourceType(),
+        Purpose:       "An Azure Key Vault that stores secrets, keys and certificates, with its access and network configuration.",
+        KeySettings:   []string{"enableRbacAuthorization", "networkAcls", "enableSoftDelete", "enablePurgeProtection"},
+    })
 }
 
 // List enumerates all resource IDs of this type. ARM handlers delegate to the

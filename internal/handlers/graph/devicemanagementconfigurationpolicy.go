@@ -26,6 +26,11 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/deviceManagementConfigurationPolicies",
 		terraformType: "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy",
+		documentation: docMeta(
+			"An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
+			nil,
+			[]string{"settings (settingInstance / settingDefinition values, including secret settings)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().ConfigurationPolicies()

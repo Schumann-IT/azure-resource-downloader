@@ -39,6 +39,11 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/authorizationPolicy",
 		terraformType: "",
+		documentation: docMeta(
+			"The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
+			[]string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)
 			if err != nil {

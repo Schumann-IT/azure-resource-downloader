@@ -28,6 +28,11 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/groupPolicyConfigurations",
 		terraformType: "microsoft365_graph_beta_device_management_group_policy_configuration",
+		documentation: docMeta(
+			"An Intune Administrative Templates (ADMX-backed) group policy configuration.",
+			nil,
+			[]string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().GroupPolicyConfigurations()

@@ -44,6 +44,7 @@ type TransformResult struct {
 	CleanedData           map[string]interface{}
 	TerraformImport       string
 	TerraformResourceType string         // The Terraform resource type (e.g., "azurerm_resource_group")
+	DocumentationPrompt   string         // LLM prompt for generating documentation for this resource type
 	Artifacts             []FileArtifact // Extra sidecar files to write alongside the YAML (e.g., decoded payloads)
 	Error                 error
 	// Skipped is propagated from the fetch stage for resources the signed-in
@@ -106,6 +107,12 @@ type ResourceHandler interface {
 
 	// GetTerraformResourceType returns the Terraform resource type (e.g., "azurerm_storage_account")
 	GetTerraformResourceType() string
+
+	// GetDocumentationPrompt returns an LLM prompt that, given a resource of
+	// this type, instructs a model to generate end-user documentation covering
+	// every setting with best-practice guidance, Microsoft documentation links,
+	// and fully expanded embedded payloads (e.g. configurationXml).
+	GetDocumentationPrompt() string
 }
 
 // PipelineConfig holds configuration for the pipeline
@@ -117,6 +124,7 @@ type PipelineConfig struct {
 	SubscriptionID     string
 	TransformerConfigs []TransformerConfig // List of transformer configurations
 	ResourceFilters    []ResourceFilter    // Per-resource-type property regex filters
+	WritePrompts       bool                // If true, write a per-type documentation LLM prompt file (<type>.prompt.md)
 }
 
 // TransformerType represents a transformer step name

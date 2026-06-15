@@ -21,6 +21,11 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsAutopilotDeploymentProfiles",
 		terraformType: "microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile",
+		documentation: docMeta(
+			"A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.",
+			[]string{"outOfBoxExperienceSettings", "deviceType", "enrollmentStatusScreenSettings"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsAutopilotDeploymentProfiles()

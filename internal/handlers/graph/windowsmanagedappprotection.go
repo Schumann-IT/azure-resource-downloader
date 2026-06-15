@@ -28,6 +28,11 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsManagedAppProtections",
 		terraformType: "",
+		documentation: docMeta(
+			"An Intune Windows App Protection (MAM) policy controlling data protection for managed apps on Windows.",
+			[]string{"allowedInboundDataTransferSources", "allowedOutboundDataTransferDestinations"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().WindowsManagedAppProtections()

@@ -42,6 +42,11 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/deviceConfigurations",
 		terraformType: "microsoft365_graph_beta_device_management_device_configuration",
+		documentation: docMeta(
+			"A legacy Intune device configuration profile (templates), including Custom OMA-URI profiles for Windows, iOS, Android and macOS.",
+			[]string{"omaSettings", "encrypted/secret values"},
+			[]string{"omaSettings (custom OMA-URI values, decode encrypted/secret values)", "payload (base64 .mobileconfig for Apple custom profiles)", "configurationXml"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceConfigurations()

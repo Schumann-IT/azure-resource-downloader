@@ -38,6 +38,11 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/authenticationMethodsPolicy",
 		terraformType: "",
+		documentation: docMeta(
+			"The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
+			[]string{"authenticationMethodConfigurations", "registrationEnforcement"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)
 			if err != nil {

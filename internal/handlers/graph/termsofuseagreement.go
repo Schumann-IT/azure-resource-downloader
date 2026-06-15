@@ -20,6 +20,11 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/termsOfUseAgreements",
 		terraformType: "microsoft365_graph_identity_and_access_conditional_access_terms_of_use",
+		documentation: docMeta(
+			"An Entra ID Terms of Use agreement presented via Conditional Access.",
+			[]string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
+			[]string{"files (the uploaded ToU PDF documents, base64)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.IdentityGovernance().TermsOfUse().Agreements()

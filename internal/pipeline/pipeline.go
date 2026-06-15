@@ -39,7 +39,7 @@ func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config 
 	return &Pipeline{
 		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount),
 		transformer: NewTransformer(registry, config.WorkerCount, transformerConfigs, config.ResourceFilters),
-		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun),
+		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun, config.WritePrompts),
 		config:      config,
 	}
 }

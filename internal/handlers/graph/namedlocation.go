@@ -21,6 +21,11 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/namedLocations",
 		terraformType: "microsoft365_graph_beta_identity_and_access_named_location",
+		documentation: docMeta(
+			"An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
+			[]string{"ipRanges", "countriesAndRegions", "isTrusted"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.Identity().ConditionalAccess().NamedLocations()

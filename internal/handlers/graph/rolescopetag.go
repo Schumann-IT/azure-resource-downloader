@@ -20,6 +20,11 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/roleScopeTags",
 		terraformType: "microsoft365_graph_beta_device_management_role_scope_tag",
+		documentation: docMeta(
+			"An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
+			nil,
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().RoleScopeTags()

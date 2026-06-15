@@ -24,6 +24,7 @@ var (
 	flagResourceIDs    []string
 	flagTimeout        int
 	flagResolveSecrets bool
+	flagWritePrompts   bool
 )
 
 // downloadCmd represents the download command
@@ -78,11 +79,13 @@ func init() {
 	downloadCmd.Flags().StringSliceVar(&flagResourceIDs, "resource-id", []string{}, "explicit Azure resource ID to download; repeatable")
 	downloadCmd.Flags().IntVar(&flagTimeout, "timeout", 300, "per-operation timeout in seconds")
 	downloadCmd.Flags().BoolVar(&flagResolveSecrets, "resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
+	downloadCmd.Flags().BoolVar(&flagWritePrompts, "write-prompts", false, "write a per-type documentation LLM prompt file (<type>.prompt.md) into each resource type directory")
 
 	// Bind config-backed flags to viper so they can also be set via the config
 	// file or AZURE_RD_* env vars (precedence: flag > env > config > default).
 	_ = viper.BindPFlag("timeout", downloadCmd.Flags().Lookup("timeout"))
 	_ = viper.BindPFlag("resolve-secrets", downloadCmd.Flags().Lookup("resolve-secrets"))
+	_ = viper.BindPFlag("write-prompts", downloadCmd.Flags().Lookup("write-prompts"))
 }
 
 func runDownload(cmd *cobra.Command, args []string) error {
@@ -255,6 +258,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		SubscriptionID:     sub,
 		TransformerConfigs: transformerConfigs,
 		ResourceFilters:    resourceFilters,
+		WritePrompts:       viper.GetBool("write-prompts"),
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)

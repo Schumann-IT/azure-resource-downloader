@@ -21,6 +21,11 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsQualityUpdateProfiles",
 		terraformType: "microsoft365_graph_beta_device_management_windows_quality_update_policy",
+		documentation: docMeta(
+			"An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
+			[]string{"expeditedUpdateSettings", "releaseDateDisplayName"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsQualityUpdateProfiles()

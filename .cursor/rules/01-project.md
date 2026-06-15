@@ -45,6 +45,8 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - New handlers MUST implement all interface methods:
   - `GetType() string` - Azure resource type
   - `GetTerraformResourceType() string` - Terraform resource type
+  - `GetDocumentationPrompt() string` - dedicated per-type LLM documentation prompt; build via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})` (ARM: inline metadata; Graph: add an entry to `graphResourceDocs` in `internal/handlers/graph/documentation.go`)
+  - `List(ctx context.Context) ([]string, error)`
   - `Fetch(ctx context.Context, resourceID string) (interface{}, error)`
   - `Transform(resource interface{}) (*models.TransformedResource, error)`
 - Register new handlers in `internal/handlers/defaults.go` → `registerDefaults()` function (NOT in `cmd`; `handlers.NewRegistry` pre-populates from there)

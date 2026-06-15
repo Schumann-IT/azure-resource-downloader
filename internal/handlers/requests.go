@@ -110,7 +110,7 @@ func (r *Registry) BuildFetchRequests(ctx context.Context, resourceIDs []string,
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			log.Info("Listing all resources of type", "type", resourceType)
+			log.Debug("Listing all resources of type", "type", resourceType)
 
 			resourceList, err := handler.List(ctx)
 			if err != nil {

@@ -24,6 +24,11 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/reusablePolicySettings",
 		terraformType: "microsoft365_graph_beta_device_management_reuseable_policy_setting",
+		documentation: docMeta(
+			"An Intune reusable policy setting (e.g. reusable certificate/trusted-root settings) referenced by multiple policies.",
+			nil,
+			[]string{"settingInstance"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().ReusablePolicySettings()

@@ -30,6 +30,11 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/deviceEnrollmentConfigurations",
 		terraformType: "microsoft365_graph_beta_device_management_windows_enrollment_status_page",
+		documentation: docMeta(
+			"An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
+			[]string{"priority", "platformRestrictions", "blockUntilComplete"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceEnrollmentConfigurations()

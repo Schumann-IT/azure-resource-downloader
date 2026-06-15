@@ -40,6 +40,11 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/deviceManagement",
 		terraformType: "",
+		documentation: docMeta(
+			"Tenant-wide Intune device management settings and configuration.",
+			[]string{"settings", "intuneAccountId"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			_, id, err := getSingleton(ctx)
 			if err != nil {

@@ -21,6 +21,11 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/notificationMessageTemplates",
 		terraformType: "microsoft365_graph_beta_device_management_device_compliance_notification_template",
+		documentation: docMeta(
+			"An Intune notification message template used for compliance and other notifications.",
+			nil,
+			[]string{"localizedNotificationMessages (per-locale subject and message body)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().NotificationMessageTemplates()

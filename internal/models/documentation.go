@@ -1,0 +1,77 @@
+package models
+
+import (
+	"fmt"
+	"strings"
+)
+
+// ResourceDocumentation holds the per-resource-type metadata used to build a
+// dedicated documentation LLM prompt. AzureType and TerraformType identify the
+// resource type; Purpose, KeySettings and EmbeddedPayloads tailor the prompt so
+// each resource type gets its own prompt rather than a single generic one.
+type ResourceDocumentation struct {
+	// AzureType is the Azure/Microsoft Graph resource type (e.g. "Microsoft.Graph/deviceConfigurations").
+	AzureType string
+	// TerraformType is the Terraform resource type; empty when the type has no Terraform representation.
+	TerraformType string
+	// Purpose is a short, type-specific description of what the resource is and what it controls.
+	Purpose string
+	// KeySettings lists the settings most important for this type, to be given particular attention.
+	KeySettings []string
+	// EmbeddedPayloads lists the encoded/embedded properties this type carries that must be decoded and expanded
+	// (e.g. "omaSettings", "configurationXml", base64 "payload").
+	EmbeddedPayloads []string
+}
+
+// BuildDocumentationPrompt returns a dedicated LLM prompt for the given resource
+// type. The prompt is tailored using the type's Purpose, KeySettings and
+// EmbeddedPayloads so every resource type produces its own prompt. It asks the
+// model to document every setting with best-practice guidance, Microsoft
+// documentation links, and fully expanded embedded payloads.
+//
+// TerraformType may be empty for resource types with no Terraform
+// representation; the corresponding line is then omitted.
+func BuildDocumentationPrompt(doc ResourceDocumentation) string {
+	var b strings.Builder
+
+	b.WriteString("You are a senior Microsoft cloud and endpoint-management consultant. ")
+	b.WriteString("Generate clear, accurate end-user documentation for the attached resource configuration.\n\n")
+
+	fmt.Fprintf(&b, "Azure resource type: %s\n", doc.AzureType)
+	if doc.TerraformType != "" {
+		fmt.Fprintf(&b, "Terraform resource type: %s\n", doc.TerraformType)
+	}
+	if doc.Purpose != "" {
+		fmt.Fprintf(&b, "About this resource type: %s\n", doc.Purpose)
+	}
+	b.WriteString("\n")
+
+	b.WriteString("The configuration is provided as a YAML file exported by azure-resource-downloader. ")
+	b.WriteString("Produce well-structured Markdown documentation that:\n\n")
+
+	b.WriteString("1. Opens with a short summary of what this specific resource is and its purpose within a tenant.\n")
+	b.WriteString("2. Documents EVERY setting/property present in the YAML in a table with the columns: ")
+	b.WriteString("Setting (YAML path), Configured value, What it does, Recommended/best-practice value, Reference. ")
+	b.WriteString("Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.\n")
+	b.WriteString("3. Links each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline ")
+	b.WriteString("(e.g. Microsoft security baselines, CIS Benchmarks). Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
+
+	b.WriteString("4. Fully expands and explains any embedded or encoded payloads")
+	if len(doc.EmbeddedPayloads) > 0 {
+		fmt.Fprintf(&b, " — for this resource type pay particular attention to: %s", strings.Join(doc.EmbeddedPayloads, ", "))
+	} else {
+		b.WriteString(" — for example `configurationXml`, `omaSettings`, `payloadJson`, custom OMA-URI values and base64/`payload` blobs")
+	}
+	b.WriteString(". Decode and pretty-print them, then document each contained key/value the same way as the top-level settings.\n")
+
+	b.WriteString("5. Calls out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.) and any deviations from recommended baselines, including the security impact.")
+	if len(doc.KeySettings) > 0 {
+		fmt.Fprintf(&b, " For this resource type, give particular attention to: %s.", strings.Join(doc.KeySettings, ", "))
+	}
+	b.WriteString("\n")
+	b.WriteString("6. Notes any assignments/targeting present and explains what they mean.\n\n")
+
+	b.WriteString("Only describe settings that are actually present; never invent values. Where a value is masked or redacted, state that explicitly.")
+
+	return b.String()
+}

@@ -49,6 +49,13 @@ func (m *MockHandler) GetTerraformResourceType() string {
 	return m.terraformResourceType
 }
 
+func (m *MockHandler) GetDocumentationPrompt() string {
+	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+		AzureType:     m.resourceType,
+		TerraformType: m.terraformResourceType,
+	})
+}
+
 func TestNewEmptyRegistry(t *testing.T) {
 	registry := NewEmptyRegistry()
 

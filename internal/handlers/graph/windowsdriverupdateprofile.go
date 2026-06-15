@@ -21,6 +21,11 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsDriverUpdateProfiles",
 		terraformType: "microsoft365_graph_beta_device_management_windows_driver_update_profile",
+		documentation: docMeta(
+			"An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
+			[]string{"approvalType", "deploymentDeferralInDays"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsDriverUpdateProfiles()

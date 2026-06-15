@@ -27,6 +27,11 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/mobileApps",
 		terraformType: "microsoft365_graph_beta_device_and_app_management_win32_app",
+		documentation: docMeta(
+			"An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
+			[]string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},
+			[]string{"detectionRules", "requirementRules", "installExperience", "returnCodes", "largeIcon (base64 image)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().MobileApps()

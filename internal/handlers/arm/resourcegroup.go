@@ -35,6 +35,16 @@ func (h *ResourceGroupHandler) GetTerraformResourceType() string {
 	return "azurerm_resource_group"
 }
 
+// GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
+func (h *ResourceGroupHandler) GetDocumentationPrompt() string {
+	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+		AzureType:     h.GetType(),
+		TerraformType: h.GetTerraformResourceType(),
+		Purpose:       "An Azure Resource Group, the logical container that holds related Azure resources and governs their lifecycle, location and tags.",
+		KeySettings:   []string{"location", "tags", "provisioningState"},
+	})
+}
+
 // List returns the IDs of all resource groups in the subscription.
 func (h *ResourceGroupHandler) List(ctx context.Context) ([]string, error) {
 	return azure.ListResourceGroups(ctx, h.credential, h.subscriptionID)

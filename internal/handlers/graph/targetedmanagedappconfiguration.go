@@ -24,6 +24,11 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/targetedManagedAppConfigurations",
 		terraformType: "microsoft365_graph_beta_device_and_app_management_targeted_managed_app_configuration",
+		documentation: docMeta(
+			"An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
+			[]string{"customSettings", "appGroupType"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().TargetedManagedAppConfigurations()

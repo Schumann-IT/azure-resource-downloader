@@ -26,6 +26,11 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/vppTokens",
 		terraformType: "",
+		documentation: docMeta(
+			"An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
+			[]string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().VppTokens()

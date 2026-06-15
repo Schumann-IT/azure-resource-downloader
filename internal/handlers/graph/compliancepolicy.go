@@ -27,6 +27,11 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/compliancePolicies",
 		terraformType: "microsoft365_graph_beta_device_management_linux_device_compliance_policy",
+		documentation: docMeta(
+			"An Intune (settings-catalog based) device compliance policy, e.g. for Linux.",
+			nil,
+			[]string{"settings (settingInstance values)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().CompliancePolicies()

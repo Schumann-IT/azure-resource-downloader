@@ -67,3 +67,5 @@ filters:
     displayName: "GBL_.*"
   Microsoft.Graph/windowsAutopilotDeploymentProfiles:
     displayName: "GBL_.*"
+
+write-prompts: true

@@ -30,6 +30,11 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/depOnboardingSettings",
 		terraformType: "",
+		documentation: docMeta(
+			"Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
+			[]string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DepOnboardingSettings()

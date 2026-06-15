@@ -26,6 +26,11 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
 		terraformType: "",
+		documentation: docMeta(
+			"An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
+			[]string{"platform", "enrollmentType", "priority"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().AppleUserInitiatedEnrollmentProfiles()

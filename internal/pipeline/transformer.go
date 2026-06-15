@@ -233,6 +233,7 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		CleanedData:           processedData,
 		TerraformImport:       terraformImport,
 		TerraformResourceType: terraformResourceType,
+		DocumentationPrompt:   handler.GetDocumentationPrompt(),
 		Artifacts:             artifacts,
 		Error:                 nil,
 	}

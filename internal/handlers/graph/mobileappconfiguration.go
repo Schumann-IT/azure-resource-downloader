@@ -29,6 +29,11 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/mobileAppConfigurations",
 		terraformType: "microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy",
+		documentation: docMeta(
+			"An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
+			nil,
+			[]string{"encodedSettingXml (base64)", "settings"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().MobileAppConfigurations()

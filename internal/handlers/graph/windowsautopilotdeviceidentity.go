@@ -25,6 +25,11 @@ func NewWindowsAutopilotDeviceIdentityHandler(credential azcore.TokenCredential)
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsAutopilotDeviceIdentities",
 		terraformType: "microsoft365_graph_beta_device_management_windows_autopilot_device_identity",
+		documentation: docMeta(
+			"A Windows Autopilot device identity (hardware hash registration) for zero-touch provisioning.",
+			nil,
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsAutopilotDeviceIdentities()

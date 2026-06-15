@@ -65,6 +65,18 @@
 # Equivalent to the --resolve-secrets flag. Flag overrides this value.
 # resolve-secrets: false
 
+# Generate documentation prompts (default: false)
+# When enabled, the writer creates one dedicated LLM documentation prompt per
+# resource type, written as "<type>.prompt.md" inside each resource type's
+# output directory (e.g. output/Microsoft.Graph/deviceConfigurations/
+# deviceConfigurations.prompt.md). Each prompt is tailored to its resource type
+# and asks an LLM to document every setting with best-practice guidance,
+# Microsoft Learn links and fully expanded embedded payloads (e.g.
+# configurationXml, omaSettings). Paste the prompt together with a resource YAML
+# from the same directory into an LLM to generate the documentation.
+# Equivalent to the --write-prompts flag. Flag overrides this value.
+# write-prompts: true
+
 # Log level - controls verbosity (default: info)
 # Options: debug, info, warn, error
 # - debug: Maximum verbosity (all messages)

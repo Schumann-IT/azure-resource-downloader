@@ -25,6 +25,11 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/windowsInformationProtectionPolicies",
 		terraformType: "",
+		documentation: docMeta(
+			"A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
+			[]string{"enforcementLevel", "protectedApps", "exemptApps"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().WindowsInformationProtectionPolicies()

@@ -30,6 +30,11 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/deviceManagementIntents",
 		terraformType: "",
+		documentation: docMeta(
+			"An Intune security baseline / template intent and its configured setting values.",
+			nil,
+			[]string{"settings (settingsDelta / setting instance values)"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().Intents()

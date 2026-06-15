@@ -49,6 +49,11 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/organizationalBranding",
 		terraformType: "",
+		documentation: docMeta(
+			"The Entra ID company branding shown on sign-in pages.",
+			nil,
+			[]string{"backgroundImage / bannerLogo / squareLogo (base64 images)", "signInPageText", "usernameHintText"},
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			orgID, err := getOrganizationID(ctx)
 			if err != nil {

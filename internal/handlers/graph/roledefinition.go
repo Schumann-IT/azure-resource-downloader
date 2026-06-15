@@ -22,6 +22,11 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 	return &GraphCollectionHandler{
 		azureType:     "Microsoft.Graph/roleDefinitions",
 		terraformType: "microsoft365_graph_beta_device_management_role_definition",
+		documentation: docMeta(
+			"An Intune RBAC role definition listing the permissions granted by the role.",
+			[]string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
+			nil,
+		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().RoleDefinitions()
