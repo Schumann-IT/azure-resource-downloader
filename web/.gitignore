@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.DS_Store
+
+# docgen artifacts are written next to source YAML in ../output, not here

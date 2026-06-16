@@ -1,0 +1,36 @@
+{
+  "name": "@ard/api",
+  "version": "0.1.0",
+  "description": "Read-only NestJS API over the azure-resource-downloader output/ tree, plus the docgen CLI.",
+  "scripts": {
+    "build": "nest build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "docgen": "ts-node -r tsconfig-paths/register src/docgen/docgen.cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ard/core": "*",
+    "@anthropic-ai/sdk": "^0.27.3",
+    "@nestjs/common": "^10.4.4",
+    "@nestjs/core": "^10.4.4",
+    "@nestjs/platform-express": "^10.4.4",
+    "nest-commander": "^3.15.0",
+    "p-limit": "^6.1.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.5",
+    "@nestjs/schematics": "^10.1.4",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.5.5",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}

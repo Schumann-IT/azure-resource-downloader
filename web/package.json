@@ -1,0 +1,23 @@
+{
+  "name": "ard-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tenant Configuration Explorer & Documentation Portal over azure-resource-downloader output",
+  "workspaces": [
+    "packages/*",
+    "api",
+    "app"
+  ],
+  "scripts": {
+    "build": "npm run build -w @ard/core && npm run build -w @ard/api && npm run build -w @ard/app",
+    "test": "npm run test -w @ard/core",
+    "test:core": "npm run test -w @ard/core",
+    "dev:api": "npm run start:dev -w @ard/api",
+    "dev:app": "npm run dev -w @ard/app",
+    "docgen": "npm run docgen -w @ard/api --",
+    "typecheck": "npm run typecheck -w @ard/core && npm run typecheck -w @ard/api && npm run typecheck -w @ard/app"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
