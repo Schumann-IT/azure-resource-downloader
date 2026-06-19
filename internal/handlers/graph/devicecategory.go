@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 			"An Intune device category used to group and target devices at enrollment.",
 			nil,
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

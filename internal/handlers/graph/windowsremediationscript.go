@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -27,6 +28,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			"An Intune Windows remediation script package (detection + remediation).",
 			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
 			[]string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

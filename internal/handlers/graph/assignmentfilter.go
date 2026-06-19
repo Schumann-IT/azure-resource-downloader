@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 			"An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
 			[]string{"platform", "rule"},
 			[]string{"rule (filter rule expression)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

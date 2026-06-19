@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -29,6 +30,7 @@ func NewWindowsAutopilotDeviceIdentityHandler(credential azcore.TokenCredential)
 			"A Windows Autopilot device identity (hardware hash registration) for zero-touch provisioning.",
 			nil,
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

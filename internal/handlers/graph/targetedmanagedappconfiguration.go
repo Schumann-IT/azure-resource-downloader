@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -28,6 +29,7 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 			"An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
 			[]string{"customSettings", "appGroupType"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

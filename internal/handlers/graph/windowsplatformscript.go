@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -26,6 +27,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			"An Intune Windows PowerShell platform script run on managed devices.",
 			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
 			[]string{"scriptContent (base64 PowerShell)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

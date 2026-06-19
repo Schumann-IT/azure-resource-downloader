@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -33,6 +34,7 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 			"The tenant Entra ID on-premises directory synchronization (Azure AD Connect) configuration and features.",
 			[]string{"features", "configuration"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			resp, err := client.Directory().OnPremisesSynchronization().Get(ctx, nil)

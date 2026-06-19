@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -26,6 +27,7 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 			"An Intune RBAC role definition listing the permissions granted by the role.",
 			[]string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

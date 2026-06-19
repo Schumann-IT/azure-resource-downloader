@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -30,6 +31,7 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 			"An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
 			[]string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

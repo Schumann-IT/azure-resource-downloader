@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 			"An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
 			[]string{"allowedCombinations"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

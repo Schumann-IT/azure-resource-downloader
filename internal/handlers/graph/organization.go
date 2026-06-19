@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -28,6 +29,7 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 			"The Entra ID tenant (organization) profile and tenant-wide settings.",
 			[]string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			resp, err := client.Organization().Get(ctx, nil)

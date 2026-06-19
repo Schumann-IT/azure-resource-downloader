@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 			"An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
 			[]string{"expeditedUpdateSettings", "releaseDateDisplayName"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -44,6 +45,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 			"Tenant-wide Intune device management settings and configuration.",
 			[]string{"settings", "intuneAccountId"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			_, id, err := getSingleton(ctx)

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 			"An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
 			[]string{"state", "grantControls.builtInControls", "conditions.users"},
 			[]string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

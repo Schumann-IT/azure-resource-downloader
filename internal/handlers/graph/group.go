@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -27,6 +28,7 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			"An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.",
 			[]string{"groupTypes", "membershipRule (for dynamic groups)", "securityEnabled", "mailEnabled"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

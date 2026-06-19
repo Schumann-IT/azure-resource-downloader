@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 			"An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
 			[]string{"approvalType", "deploymentDeferralInDays"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -53,6 +54,7 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			"The Entra ID company branding shown on sign-in pages.",
 			nil,
 			[]string{"backgroundImage / bannerLogo / squareLogo (base64 images)", "signInPageText", "usernameHintText"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			orgID, err := getOrganizationID(ctx)

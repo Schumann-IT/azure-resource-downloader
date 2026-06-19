@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 			"An Intune Terms and Conditions policy presented to users at enrollment.",
 			nil,
 			[]string{"bodyText", "acceptanceStatement"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

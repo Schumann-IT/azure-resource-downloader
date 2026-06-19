@@ -5,10 +5,34 @@ import (
 	"strings"
 )
 
+// ResourceLinks holds curated reference URLs for a resource type. All fields
+// are optional; empty strings and nil slices are silently omitted from the
+// generated prompt.
+type ResourceLinks struct {
+	// EndpointDocs is the canonical Microsoft Learn / Graph REST API reference
+	// URL for this resource type.
+	EndpointDocs string
+	// BestPractices are links to hardening guides, security baselines, CIS
+	// benchmarks, or any other best-practice documentation relevant to this
+	// resource type.
+	BestPractices []string
+	// TerraformDocs is the Terraform Registry page for the corresponding
+	// azurerm or microsoft365 provider resource.
+	TerraformDocs string
+	// SchemaReference is the OData $metadata endpoint, ARM type schema, or
+	// Graph schema explorer URL for this resource type. Helps the LLM resolve
+	// unfamiliar properties to their canonical type definitions.
+	SchemaReference string
+	// Permissions is the Microsoft Learn page that lists the API permissions
+	// and RBAC roles required to read/write this resource type.
+	Permissions string
+}
+
 // ResourceDocumentation holds the per-resource-type metadata used to build a
 // dedicated documentation LLM prompt. AzureType and TerraformType identify the
-// resource type; Purpose, KeySettings and EmbeddedPayloads tailor the prompt so
-// each resource type gets its own prompt rather than a single generic one.
+// resource type; Purpose, KeySettings, EmbeddedPayloads and Links tailor the
+// prompt so each resource type gets its own prompt rather than a single generic
+// one.
 type ResourceDocumentation struct {
 	// AzureType is the Azure/Microsoft Graph resource type (e.g. "Microsoft.Graph/deviceConfigurations").
 	AzureType string
@@ -21,16 +45,20 @@ type ResourceDocumentation struct {
 	// EmbeddedPayloads lists the encoded/embedded properties this type carries that must be decoded and expanded
 	// (e.g. "omaSettings", "configurationXml", base64 "payload").
 	EmbeddedPayloads []string
+	// Links holds curated reference URLs for this resource type. All subfields
+	// are optional and are omitted from the prompt when empty.
+	Links ResourceLinks
 }
 
 // BuildDocumentationPrompt returns a dedicated LLM prompt for the given resource
-// type. The prompt is tailored using the type's Purpose, KeySettings and
-// EmbeddedPayloads so every resource type produces its own prompt. It asks the
-// model to document every setting with best-practice guidance, Microsoft
-// documentation links, and fully expanded embedded payloads.
+// type. The prompt is tailored using the type's Purpose, KeySettings,
+// EmbeddedPayloads and Links so every resource type produces its own prompt. It
+// asks the model to document every setting with best-practice guidance,
+// Microsoft documentation links, and fully expanded embedded payloads.
 //
 // TerraformType may be empty for resource types with no Terraform
-// representation; the corresponding line is then omitted.
+// representation; the corresponding line is then omitted. All fields of Links
+// are optional and are omitted from the prompt when empty.
 func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	var b strings.Builder
 
@@ -44,6 +72,26 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	if doc.Purpose != "" {
 		fmt.Fprintf(&b, "About this resource type: %s\n", doc.Purpose)
 	}
+
+	if l := doc.Links; l.EndpointDocs != "" || l.TerraformDocs != "" || l.SchemaReference != "" || l.Permissions != "" || len(l.BestPractices) > 0 {
+		b.WriteString("\nReference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):\n")
+		if l.EndpointDocs != "" {
+			fmt.Fprintf(&b, "- API reference: %s\n", l.EndpointDocs)
+		}
+		if l.TerraformDocs != "" {
+			fmt.Fprintf(&b, "- Terraform registry: %s\n", l.TerraformDocs)
+		}
+		if l.SchemaReference != "" {
+			fmt.Fprintf(&b, "- Schema reference: %s\n", l.SchemaReference)
+		}
+		if l.Permissions != "" {
+			fmt.Fprintf(&b, "- Required permissions: %s\n", l.Permissions)
+		}
+		for _, bp := range l.BestPractices {
+			fmt.Fprintf(&b, "- Best-practice baseline: %s\n", bp)
+		}
+	}
+
 	b.WriteString("\n")
 
 	b.WriteString("The configuration is provided as a YAML file exported by azure-resource-downloader. ")

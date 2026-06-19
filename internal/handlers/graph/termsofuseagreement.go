@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 			"An Entra ID Terms of Use agreement presented via Conditional Access.",
 			[]string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
 			[]string{"files (the uploaded ToU PDF documents, base64)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			"An Intune notification message template used for compliance and other notifications.",
 			nil,
 			[]string{"localizedNotificationMessages (per-locale subject and message body)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

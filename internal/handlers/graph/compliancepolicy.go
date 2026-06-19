@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -31,6 +32,7 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 			"An Intune (settings-catalog based) device compliance policy, e.g. for Linux.",
 			nil,
 			[]string{"settings (settingInstance values)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

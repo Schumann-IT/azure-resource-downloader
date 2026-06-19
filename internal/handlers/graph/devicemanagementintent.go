@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -34,6 +35,7 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 			"An Intune security baseline / template intent and its configured setting values.",
 			nil,
 			[]string{"settings (settingsDelta / setting instance values)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

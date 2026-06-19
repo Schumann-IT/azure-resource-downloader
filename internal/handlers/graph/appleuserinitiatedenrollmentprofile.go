@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -30,6 +31,7 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 			"An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
 			[]string{"platform", "enrollmentType", "priority"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

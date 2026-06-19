@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -29,6 +30,7 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 			"A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
 			[]string{"enforcementLevel", "protectedApps", "exemptApps"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

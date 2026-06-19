@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -36,6 +37,7 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 			"An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
 			[]string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

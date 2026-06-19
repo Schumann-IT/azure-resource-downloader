@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -27,6 +28,7 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 			"An Intune macOS shell script run on managed Macs.",
 			[]string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
 			[]string{"scriptContent (base64 shell script)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

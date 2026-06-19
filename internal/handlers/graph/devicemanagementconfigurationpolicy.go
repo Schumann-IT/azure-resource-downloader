@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -30,6 +31,7 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 			"An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
 			nil,
 			[]string{"settings (settingInstance / settingDefinition values, including secret settings)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

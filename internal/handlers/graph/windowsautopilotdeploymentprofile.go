@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 			"A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.",
 			[]string{"outOfBoxExperienceSettings", "deviceType", "enrollmentStatusScreenSettings"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

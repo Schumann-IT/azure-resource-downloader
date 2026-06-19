@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -31,6 +32,7 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			"An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
 			[]string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},
 			[]string{"detectionRules", "requirementRules", "installExperience", "returnCodes", "largeIcon (base64 image)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

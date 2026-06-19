@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -43,6 +44,7 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 			"The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
 			[]string{"expirationDateTime", "appleIdentifier"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			cert, err := getSingleton(ctx)

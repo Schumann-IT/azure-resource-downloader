@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 			"An Intune Windows feature update profile that controls the targeted Windows feature update version.",
 			[]string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

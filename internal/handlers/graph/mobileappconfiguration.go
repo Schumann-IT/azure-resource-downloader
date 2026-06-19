@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -33,6 +34,7 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 			"An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
 			nil,
 			[]string{"encodedSettingXml (base64)", "settings"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

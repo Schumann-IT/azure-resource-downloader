@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -32,6 +33,7 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 			"An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
 			[]string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -43,6 +44,7 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 			"The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
 			[]string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -32,6 +33,7 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 			"An Intune Windows App Protection (MAM) policy controlling data protection for managed apps on Windows.",
 			[]string{"allowedInboundDataTransferSources", "allowedOutboundDataTransferDestinations"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

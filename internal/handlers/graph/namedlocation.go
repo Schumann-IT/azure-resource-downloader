@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 			"An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
 			[]string{"ipRanges", "countriesAndRegions", "isTrusted"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

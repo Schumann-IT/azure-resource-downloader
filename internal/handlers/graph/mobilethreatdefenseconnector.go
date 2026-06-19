@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -30,6 +31,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 			"An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
 			[]string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -42,6 +43,7 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 			"The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
 			[]string{"authenticationMethodConfigurations", "registrationEnforcement"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)

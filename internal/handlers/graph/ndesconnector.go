@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -30,6 +31,7 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 			"An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.",
 			[]string{"state", "lastConnectionDateTime"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

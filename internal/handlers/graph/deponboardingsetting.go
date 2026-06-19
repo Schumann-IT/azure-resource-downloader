@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -34,6 +35,7 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 			"Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
 			[]string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

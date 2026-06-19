@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -32,6 +33,7 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 			"An Intune Administrative Templates (ADMX-backed) group policy configuration.",
 			nil,
 			[]string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

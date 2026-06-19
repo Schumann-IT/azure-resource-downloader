@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -28,6 +29,7 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 			"An Intune reusable policy setting (e.g. reusable certificate/trusted-root settings) referenced by multiple policies.",
 			nil,
 			[]string{"settingInstance"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

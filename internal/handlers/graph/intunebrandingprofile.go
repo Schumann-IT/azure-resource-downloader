@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -25,6 +26,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 			"An Intune Company Portal branding profile controlling the end-user portal appearance.",
 			nil,
 			[]string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

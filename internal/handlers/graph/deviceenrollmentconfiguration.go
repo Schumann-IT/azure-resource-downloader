@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -34,6 +35,7 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 			"An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
 			[]string{"priority", "platformRestrictions", "blockUntilComplete"},
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

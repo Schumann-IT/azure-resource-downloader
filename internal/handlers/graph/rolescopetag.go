@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -24,6 +25,7 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			"An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
 			nil,
 			nil,
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

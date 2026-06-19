@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -28,6 +29,7 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 			"An Intune macOS custom attribute shell script that collects a custom attribute from managed Macs.",
 			[]string{"customAttributeType", "runAsAccount"},
 			[]string{"scriptContent (base64 shell script)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
 
@@ -31,6 +32,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 			"An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			[]string{"runAsAccount", "enforceSignatureCheck"},
 			[]string{"detectionScriptContent (base64 PowerShell)"},
+			models.ResourceLinks{},
 		),
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
