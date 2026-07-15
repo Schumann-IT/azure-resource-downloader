@@ -21,12 +21,10 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/organization",
-		documentation: docMeta(
-			"The Entra ID tenant (organization) profile and tenant-wide settings.",
-			[]string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "The Entra ID tenant (organization) profile and tenant-wide settings.",
+			KeySettings: []string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			resp, err := client.Organization().Get(ctx, nil)
 			if err != nil {

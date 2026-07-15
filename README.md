@@ -580,7 +580,7 @@ When enabled with `--write-prompts` (or `write-prompts: true` in the config file
 - **Expand embedded payloads** — decode and document encoded/embedded properties such as `configurationXml`, `omaSettings`, `payloadJson` and base64 `payload` blobs.
 - **Flag security-sensitive settings** — secrets, certificates, encryption, conditional-access conditions, and deviations from baselines.
 
-Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph constructors supply it via the `docMeta` helper in `internal/handlers/graph/documentation.go`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
+Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph constructors set it as a `models.ResourceDocumentation{...}` literal on the shared `GraphCollectionHandler`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
 
 ## 🎯 Supported Resource Types
 

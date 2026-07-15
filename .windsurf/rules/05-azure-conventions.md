@@ -22,7 +22,7 @@ func NewXHandler(credential azcore.TokenCredential, subscriptionID string) *XHan
     }
 }
 ```
-Microsoft Graph handlers do not define their own struct: their constructor `NewXHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error)` configures the shared `GraphCollectionHandler` base (`internal/handlers/graph/collection.go`) with closures (`listIDs`, `fetchItem`, `displayName`) and `docMeta(...)` documentation metadata.
+Microsoft Graph handlers do not define their own struct: their constructor `NewXHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error)` configures the shared `GraphCollectionHandler` base (`internal/handlers/graph/collection.go`) with closures (`listIDs`, `fetchItem`, `displayName`) and a `models.ResourceDocumentation{...}` literal for the `documentation` field (leave `AzureType` unset — it is filled in from the handler at prompt-build time).
 
 ### List Implementation
 - Every handler implements `List(ctx) ([]string, error)` — listing is handler-driven, there is no central listing switch

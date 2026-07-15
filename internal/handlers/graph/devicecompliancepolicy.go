@@ -27,12 +27,10 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceCompliancePolicies",
-		documentation: docMeta(
-			"An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
-			[]string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
+			KeySettings: []string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceCompliancePolicies()

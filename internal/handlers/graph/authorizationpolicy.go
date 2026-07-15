@@ -36,12 +36,10 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authorizationPolicy",
-		documentation: docMeta(
-			"The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
-			[]string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
+			KeySettings: []string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)
 			if err != nil {

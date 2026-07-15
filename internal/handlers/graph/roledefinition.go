@@ -22,12 +22,10 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/roleDefinitions",
-		documentation: docMeta(
-			"An Intune RBAC role definition listing the permissions granted by the role.",
-			[]string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune RBAC role definition listing the permissions granted by the role.",
+			KeySettings: []string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().RoleDefinitions()

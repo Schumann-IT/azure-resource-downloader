@@ -36,12 +36,10 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/applePushNotificationCertificate",
-		documentation: docMeta(
-			"The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
-			[]string{"expirationDateTime", "appleIdentifier"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
+			KeySettings: []string{"expirationDateTime", "appleIdentifier"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			cert, err := getSingleton(ctx)
 			if err != nil {

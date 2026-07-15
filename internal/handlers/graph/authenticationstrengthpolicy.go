@@ -21,12 +21,10 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationStrengthPolicies",
-		documentation: docMeta(
-			"An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
-			[]string{"allowedCombinations"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
+			KeySettings: []string{"allowedCombinations"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.Policies().AuthenticationStrengthPolicies()

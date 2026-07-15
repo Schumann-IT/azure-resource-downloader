@@ -23,12 +23,10 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/groups",
-		documentation: docMeta(
-			"An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.",
-			[]string{"groupTypes", "membershipRule (for dynamic groups)", "securityEnabled", "mailEnabled"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.",
+			KeySettings: []string{"groupTypes", "membershipRule (for dynamic groups)", "securityEnabled", "mailEnabled"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.Groups()

@@ -21,12 +21,10 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/intuneBrandingProfiles",
-		documentation: docMeta(
-			"An Intune Company Portal branding profile controlling the end-user portal appearance.",
-			nil,
-			[]string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune Company Portal branding profile controlling the end-user portal appearance.",
+			EmbeddedPayloads: []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().IntuneBrandingProfiles()

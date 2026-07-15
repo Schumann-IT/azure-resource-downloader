@@ -24,12 +24,11 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceCustomAttributeShellScripts",
-		documentation: docMeta(
-			"An Intune macOS custom attribute shell script that collects a custom attribute from managed Macs.",
-			[]string{"customAttributeType", "runAsAccount"},
-			[]string{"scriptContent (base64 shell script)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune macOS custom attribute shell script that collects a custom attribute from managed Macs.",
+			KeySettings:      []string{"customAttributeType", "runAsAccount"},
+			EmbeddedPayloads: []string{"scriptContent (base64 shell script)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceCustomAttributeShellScripts()

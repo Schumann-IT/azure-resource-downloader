@@ -22,12 +22,11 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceManagementScripts",
-		documentation: docMeta(
-			"An Intune Windows PowerShell platform script run on managed devices.",
-			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
-			[]string{"scriptContent (base64 PowerShell)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune Windows PowerShell platform script run on managed devices.",
+			KeySettings:      []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
+			EmbeddedPayloads: []string{"scriptContent (base64 PowerShell)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceManagementScripts()

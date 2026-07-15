@@ -52,7 +52,7 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Use interfaces for extensibility (`ResourceHandler`)
 - New handlers MUST implement all interface methods:
   - `GetType() string` - Azure resource type
-  - `GetDocumentationPrompt() string` - dedicated per-type LLM documentation prompt; build via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})` (ARM: inline metadata; Graph: pass metadata via the `docMeta` helper from `internal/handlers/graph/documentation.go` in the constructor)
+  - `GetDocumentationPrompt() string` - dedicated per-type LLM documentation prompt; build via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})` (ARM: inline metadata; Graph: set the `documentation` field to a `models.ResourceDocumentation{...}` literal in the constructor — leave `AzureType` unset, it is filled in at prompt-build time)
   - `List(ctx context.Context) ([]string, error)`
   - `Fetch(ctx context.Context, resourceID string) (interface{}, error)`
   - `Transform(resource interface{}) (*models.TransformedResource, error)`

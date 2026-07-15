@@ -24,12 +24,11 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceComplianceScripts",
-		documentation: docMeta(
-			"An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
-			[]string{"runAsAccount", "enforceSignatureCheck"},
-			[]string{"detectionScriptContent (base64 PowerShell)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
+			KeySettings:      []string{"runAsAccount", "enforceSignatureCheck"},
+			EmbeddedPayloads: []string{"detectionScriptContent (base64 PowerShell)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceComplianceScripts()

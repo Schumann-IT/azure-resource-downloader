@@ -23,12 +23,11 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceHealthScripts",
-		documentation: docMeta(
-			"An Intune Windows remediation script package (detection + remediation).",
-			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
-			[]string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune Windows remediation script package (detection + remediation).",
+			KeySettings:      []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
+			EmbeddedPayloads: []string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceHealthScripts()

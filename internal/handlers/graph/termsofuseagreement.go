@@ -20,12 +20,11 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/termsOfUseAgreements",
-		documentation: docMeta(
-			"An Entra ID Terms of Use agreement presented via Conditional Access.",
-			[]string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
-			[]string{"files (the uploaded ToU PDF documents, base64)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Entra ID Terms of Use agreement presented via Conditional Access.",
+			KeySettings:      []string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
+			EmbeddedPayloads: []string{"files (the uploaded ToU PDF documents, base64)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.IdentityGovernance().TermsOfUse().Agreements()

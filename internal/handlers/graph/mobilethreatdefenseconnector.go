@@ -22,12 +22,10 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
-		documentation: docMeta(
-			"An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
-			[]string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
+			KeySettings: []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().MobileThreatDefenseConnectors()

@@ -24,12 +24,10 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/reusablePolicySettings",
-		documentation: docMeta(
-			"An Intune reusable policy setting (e.g. reusable certificate/trusted-root settings) referenced by multiple policies.",
-			nil,
-			[]string{"settingInstance"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune reusable policy setting (e.g. reusable certificate/trusted-root settings) referenced by multiple policies.",
+			EmbeddedPayloads: []string{"settingInstance"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().ReusablePolicySettings()

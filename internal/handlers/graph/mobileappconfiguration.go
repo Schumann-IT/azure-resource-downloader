@@ -24,12 +24,10 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileAppConfigurations",
-		documentation: docMeta(
-			"An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
-			nil,
-			[]string{"encodedSettingXml (base64)", "settings"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
+			EmbeddedPayloads: []string{"encodedSettingXml (base64)", "settings"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().MobileAppConfigurations()

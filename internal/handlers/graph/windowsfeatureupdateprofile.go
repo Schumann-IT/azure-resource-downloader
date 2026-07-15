@@ -21,12 +21,10 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/windowsFeatureUpdateProfiles",
-		documentation: docMeta(
-			"An Intune Windows feature update profile that controls the targeted Windows feature update version.",
-			[]string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
+			KeySettings: []string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsFeatureUpdateProfiles()

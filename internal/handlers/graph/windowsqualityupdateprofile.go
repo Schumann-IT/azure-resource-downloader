@@ -21,12 +21,10 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/windowsQualityUpdateProfiles",
-		documentation: docMeta(
-			"An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
-			[]string{"expeditedUpdateSettings", "releaseDateDisplayName"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
+			KeySettings: []string{"expeditedUpdateSettings", "releaseDateDisplayName"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsQualityUpdateProfiles()

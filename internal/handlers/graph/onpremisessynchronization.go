@@ -26,12 +26,10 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/onPremisesSynchronization",
-		documentation: docMeta(
-			"The tenant Entra ID on-premises directory synchronization (Azure AD Connect) configuration and features.",
-			[]string{"features", "configuration"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "The tenant Entra ID on-premises directory synchronization (Azure AD Connect) configuration and features.",
+			KeySettings: []string{"features", "configuration"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			resp, err := client.Directory().OnPremisesSynchronization().Get(ctx, nil)
 			if err != nil {

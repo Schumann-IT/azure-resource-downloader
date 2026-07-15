@@ -22,12 +22,10 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/ndesConnectors",
-		documentation: docMeta(
-			"An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.",
-			[]string{"state", "lastConnectionDateTime"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.",
+			KeySettings: []string{"state", "lastConnectionDateTime"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().NdesConnectors()

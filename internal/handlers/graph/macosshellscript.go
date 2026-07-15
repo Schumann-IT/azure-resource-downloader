@@ -23,12 +23,11 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceShellScripts",
-		documentation: docMeta(
-			"An Intune macOS shell script run on managed Macs.",
-			[]string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
-			[]string{"scriptContent (base64 shell script)"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune macOS shell script run on managed Macs.",
+			KeySettings:      []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
+			EmbeddedPayloads: []string{"scriptContent (base64 shell script)"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().DeviceShellScripts()

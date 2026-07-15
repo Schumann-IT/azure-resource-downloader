@@ -20,12 +20,10 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/termsAndConditions",
-		documentation: docMeta(
-			"An Intune Terms and Conditions policy presented to users at enrollment.",
-			nil,
-			[]string{"bodyText", "acceptanceStatement"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Intune Terms and Conditions policy presented to users at enrollment.",
+			EmbeddedPayloads: []string{"bodyText", "acceptanceStatement"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().TermsAndConditions()

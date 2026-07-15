@@ -21,12 +21,10 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/windowsDriverUpdateProfiles",
-		documentation: docMeta(
-			"An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
-			[]string{"approvalType", "deploymentDeferralInDays"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
+			KeySettings: []string{"approvalType", "deploymentDeferralInDays"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().WindowsDriverUpdateProfiles()

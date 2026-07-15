@@ -20,12 +20,9 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/roleScopeTags",
-		documentation: docMeta(
-			"An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
-			nil,
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose: "An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceManagement().RoleScopeTags()

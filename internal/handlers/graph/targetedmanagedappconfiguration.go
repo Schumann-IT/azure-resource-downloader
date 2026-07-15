@@ -24,12 +24,10 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/targetedManagedAppConfigurations",
-		documentation: docMeta(
-			"An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
-			[]string{"customSettings", "appGroupType"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
+			KeySettings: []string{"customSettings", "appGroupType"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().TargetedManagedAppConfigurations()

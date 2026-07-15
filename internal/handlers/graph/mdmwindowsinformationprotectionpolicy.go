@@ -22,12 +22,10 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mdmWindowsInformationProtectionPolicies",
-		documentation: docMeta(
-			"An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
-			[]string{"enforcementLevel", "protectedApps", "exemptApps", "enterpriseProtectedDomainNames"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
+			KeySettings: []string{"enforcementLevel", "protectedApps", "exemptApps", "enterpriseProtectedDomainNames"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.DeviceAppManagement().MdmWindowsInformationProtectionPolicies()

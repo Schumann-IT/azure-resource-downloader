@@ -35,12 +35,10 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationMethodsPolicy",
-		documentation: docMeta(
-			"The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
-			[]string{"authenticationMethodConfigurations", "registrationEnforcement"},
-			nil,
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:     "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
+			KeySettings: []string{"authenticationMethodConfigurations", "registrationEnforcement"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)
 			if err != nil {

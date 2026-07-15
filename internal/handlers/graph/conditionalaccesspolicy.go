@@ -20,12 +20,11 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/conditionalAccessPolicies",
-		documentation: docMeta(
-			"An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
-			[]string{"state", "grantControls.builtInControls", "conditions.users"},
-			[]string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
-			models.ResourceLinks{},
-		),
+		documentation: models.ResourceDocumentation{
+			Purpose:          "An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
+			KeySettings:      []string{"state", "grantControls.builtInControls", "conditions.users"},
+			EmbeddedPayloads: []string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
+		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
 			builder := client.Identity().ConditionalAccess().Policies()
