@@ -41,7 +41,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 			Purpose:             "Tenant-wide Intune device management settings and configuration.",
 			KeySettings:         []string{"settings", "intuneAccountId"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "Tenant-wide Intune settings singleton; changes apply to the whole tenant immediately.",
+			Lifecycle:           []string{"Tenant-wide Intune settings singleton; changes apply to the whole tenant immediately."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicemanagementsettings?view=graph-rest-beta",
 			},

@@ -28,7 +28,7 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 			KeySettings:         []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
 			EmbeddedPayloads:    []string{"scriptContent (base64 shell script)"},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           "Shell scripts run per their schedule/frequency; deleting a script does not undo changes it already made on devices.",
+			Lifecycle:           []string{"Shell scripts run per their schedule/frequency; deleting a script does not undo changes it already made on devices."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-deviceshellscript?view=graph-rest-beta",

@@ -29,7 +29,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck"},
 			EmbeddedPayloads:    []string{"detectionScriptContent (base64 PowerShell)"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Custom compliance scripts are referenced by Windows compliance policies; deleting a script breaks policies that reference it. Script changes apply at the next compliance evaluation.",
+			Lifecycle:           []string{"Custom compliance scripts are referenced by Windows compliance policies; deleting a script breaks policies that reference it.", "Script changes apply at the next compliance evaluation."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecompliancescript?view=graph-rest-beta",

@@ -25,7 +25,7 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 			KeySettings:         []string{"state", "grantControls.builtInControls", "conditions.users"},
 			EmbeddedPayloads:    []string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
 			RequiredPermissions: []string{"Policy.Read.All"},
-			Lifecycle:           "Policy changes take effect within minutes tenant-wide; validate with report-only mode before enforcing and always exclude break-glass accounts. Deleting a policy immediately removes its enforcement.",
+			Lifecycle:           []string{"Policy changes take effect within minutes tenant-wide; validate with report-only mode before enforcing and always exclude break-glass accounts.", "Deleting a policy immediately removes its enforcement."},
 			RelatedTypes:        []string{"Microsoft.Graph/namedLocations", "Microsoft.Graph/authenticationStrengthPolicies", "Microsoft.Graph/termsOfUseAgreements", "Microsoft.Graph/groups (include/exclude targets)"},
 			Links: models.ResourceLinks{
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccesspolicy?view=graph-rest-1.0",

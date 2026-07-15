@@ -28,7 +28,7 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 			Purpose:             "An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
 			EmbeddedPayloads:    []string{"encodedSettingXml (base64)", "settings"},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           "Configuration applies at app install or next check-in; deleting the configuration leaves already-delivered settings in place until the app is reinstalled.",
+			Lifecycle:           []string{"Configuration applies at app install or next check-in; deleting the configuration leaves already-delivered settings in place until the app is reinstalled."},
 			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (targeted apps)", "Microsoft.Graph/groups (assignment target groups)"},
 			SubtypeNote:         "Platform-polymorphic managed-device app configuration (iosMobileAppConfiguration, androidManagedStoreAppConfiguration) - identify the platform from @odata.type.",
 			Links: models.ResourceLinks{

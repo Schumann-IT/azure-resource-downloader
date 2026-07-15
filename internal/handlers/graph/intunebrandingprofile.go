@@ -25,7 +25,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 			Purpose:             "An Intune Company Portal branding profile controlling the end-user portal appearance.",
 			EmbeddedPayloads:    []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           "Company Portal branding; changes appear when the portal refreshes. Distinct from Entra sign-in branding (organizationalBranding).",
+			Lifecycle:           []string{"Company Portal branding; changes appear when the portal refreshes.", "Distinct from Entra sign-in branding (organizationalBranding)."},
 			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding (Entra sign-in branding)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-wip-intunebrandingprofile?view=graph-rest-beta",

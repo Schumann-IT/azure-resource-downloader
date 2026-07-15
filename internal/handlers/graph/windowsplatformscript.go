@@ -27,7 +27,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
 			EmbeddedPayloads:    []string{"scriptContent (base64 PowerShell)"},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           "Platform scripts run ONCE per device/user and re-run only when the script changes; deleting a script does not undo changes it made. For recurring logic use Remediations (deviceHealthScripts).",
+			Lifecycle:           []string{"Platform scripts run ONCE per device/user and re-run only when the script changes; deleting a script does not undo changes it made.", "For recurring logic use Remediations (deviceHealthScripts)."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceHealthScripts (Remediations, for recurring scripts)", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicemanagementscript?view=graph-rest-beta",

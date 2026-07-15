@@ -26,7 +26,7 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 			Purpose:             "An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
 			KeySettings:         []string{"platform", "enrollmentType", "priority"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "Profile changes affect only future user-initiated enrollments; already-enrolled devices keep their enrollment type.",
+			Lifecycle:           []string{"Profile changes affect only future user-initiated enrollments; already-enrolled devices keep their enrollment type."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleuserinitiatedenrollmentprofile?view=graph-rest-beta",

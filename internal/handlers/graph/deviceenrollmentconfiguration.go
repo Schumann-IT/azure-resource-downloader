@@ -28,7 +28,7 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 			Purpose:             "An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
 			KeySettings:         []string{"priority", "platformRestrictions", "blockUntilComplete"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "Changes affect only future enrollments; existing devices keep their applied configuration. Priority order matters when multiple configurations target a user.",
+			Lifecycle:           []string{"Changes affect only future enrollments; existing devices keep their applied configuration.", "Priority order matters when multiple configurations target a user."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/windowsAutopilotDeploymentProfiles (ESP applies during Autopilot)"},
 			SubtypeNote:         "Polymorphic (@odata.type): enrollment limits, platform restrictions, Windows Hello for Business, ESP (windows10EnrollmentCompletionPageConfiguration), enrollment notifications - identify the concrete type first.",
 			Links: models.ResourceLinks{

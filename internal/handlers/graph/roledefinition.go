@@ -26,7 +26,7 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 			Purpose:             "An Intune RBAC role definition listing the permissions granted by the role.",
 			KeySettings:         []string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
-			Lifecycle:           "Only custom Intune roles are exported; deleting a role definition removes the delegated permissions of its role assignments. Review custom roles against least privilege regularly.",
+			Lifecycle:           []string{"Only custom Intune roles are exported; deleting a role definition removes the delegated permissions of its role assignments.", "Review custom roles against least privilege regularly."},
 			RelatedTypes:        []string{"Microsoft.Graph/roleScopeTags"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-roledefinition?view=graph-rest-beta",

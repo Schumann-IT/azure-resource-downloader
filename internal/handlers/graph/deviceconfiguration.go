@@ -47,7 +47,7 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 			KeySettings:         []string{"omaSettings", "encrypted/secret values"},
 			EmbeddedPayloads:    []string{"omaSettings (custom OMA-URI values, decode encrypted/secret values)", "payload (base64 .mobileconfig for Apple custom profiles)", "configurationXml"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Legacy template profiles are progressively superseded by the Settings Catalog (deviceManagementConfigurationPolicies); prefer Settings Catalog for new configurations. Unassigning or deleting removes settings at next check-in, though some CSP-backed settings persist by design.",
+			Lifecycle:           []string{"Legacy template profiles are progressively superseded by the Settings Catalog (deviceManagementConfigurationPolicies); prefer Settings Catalog for new configurations.", "Unassigning or deleting removes settings at next check-in, though some CSP-backed settings persist by design."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
 			SubtypeNote:         "Legacy profiles are heavily polymorphic (windows10CustomConfiguration, macOSCustomConfiguration, windows10EndpointProtectionConfiguration, ...) - identify the concrete profile type from @odata.type first.",
 			Links: models.ResourceLinks{

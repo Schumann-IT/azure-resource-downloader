@@ -31,7 +31,7 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 			Purpose:             "An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
 			KeySettings:         []string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Compliance re-evaluates at each device check-in; deleting or unassigning the policy changes device compliance state and can alter Conditional Access outcomes. scheduledActionsForRule defines grace periods and noncompliance actions.",
+			Lifecycle:           []string{"Compliance re-evaluates at each device check-in; deleting or unassigning the policy changes device compliance state and can alter Conditional Access outcomes.", "scheduledActionsForRule defines grace periods and noncompliance actions."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)", "Microsoft.Graph/notificationMessageTemplates (noncompliance notifications)", "Microsoft.Graph/conditionalAccessPolicies (compliance-based grants)"},
 			SubtypeNote:         "Classic compliance policies are platform-polymorphic (windows10CompliancePolicy, iosCompliancePolicy, androidDeviceOwnerCompliancePolicy, ...) - identify the platform from @odata.type first.",
 			Links: models.ResourceLinks{

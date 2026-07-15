@@ -25,7 +25,7 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 			Purpose:             "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
 			KeySettings:         []string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Holds devices on the specified Windows feature version; deleting or unassigning releases devices to other update policies. Track end-of-service dates of the pinned version.",
+			Lifecycle:           []string{"Holds devices on the specified Windows feature version; deleting or unassigning releases devices to other update policies.", "Track end-of-service dates of the pinned version."},
 			RelatedTypes:        []string{"Microsoft.Graph/windowsQualityUpdateProfiles", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsfeatureupdateprofile?view=graph-rest-beta",

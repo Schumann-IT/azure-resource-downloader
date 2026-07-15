@@ -28,7 +28,7 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 			Purpose:             "An Intune reusable policy setting (e.g. reusable certificate/trusted-root settings) referenced by multiple policies.",
 			EmbeddedPayloads:    []string{"settingInstance"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Referenced BY ID from Endpoint Security / Settings Catalog policies; edits propagate to all referencing policies and deleting a setting in use breaks those references.",
+			Lifecycle:           []string{"Referenced BY ID from Endpoint Security / Settings Catalog policies; edits propagate to all referencing policies and deleting a setting in use breaks those references."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementreusablepolicysetting?view=graph-rest-beta",

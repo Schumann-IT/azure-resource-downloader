@@ -46,7 +46,7 @@ type ResourceDocumentation struct {
 	// Lifecycle describes type-specific lifecycle and operational facts the
 	// model cannot infer from the YAML: deprecation/migration status, effect of
 	// deleting or unassigning the resource, renewal/expiry obligations, etc.
-	Lifecycle string
+	Lifecycle []string
 	// RelatedTypes lists other exported resource types this type references or
 	// is referenced by (e.g. assignment target groups), so documentation can
 	// cross-reference sibling exports instead of guessing.
@@ -82,10 +82,16 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 		fmt.Fprintf(&b, "Subtype guidance: %s\n", doc.SubtypeNote)
 	}
 	if len(doc.RequiredPermissions) > 0 {
-		fmt.Fprintf(&b, "Permissions required to read this resource type: %s\n", strings.Join(doc.RequiredPermissions, ", "))
+		b.WriteString("Permissions required to read this resource type:\n")
+		for _, p := range doc.RequiredPermissions {
+			fmt.Fprintf(&b, "- %s\n", p)
+		}
 	}
-	if doc.Lifecycle != "" {
-		fmt.Fprintf(&b, "Lifecycle notes for this resource type: %s\n", doc.Lifecycle)
+	if len(doc.Lifecycle) > 0 {
+		b.WriteString("Lifecycle notes for this resource type:\n")
+		for _, p := range doc.Lifecycle {
+			fmt.Fprintf(&b, "- %s\n", p)
+		}
 	}
 
 	if l := doc.Links; l.EndpointDocs != "" || l.SchemaReference != "" || l.Permissions != "" || len(l.BestPractices) > 0 {
@@ -115,18 +121,25 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 
 	b.WriteString("The configuration is provided as a YAML file exported by azure-resource-downloader. ")
 	b.WriteString("Produce well-structured Markdown documentation with this layout: an H1 title set to the resource's display name, ")
-	b.WriteString("a metadata line stating the resource type, the concrete subtype (`@odata.type`, if present) and the resource ID, ")
+	b.WriteString("a metadata table stating the resource type, the concrete subtype (`@odata.type`, if present) and the resource ID, ")
 	b.WriteString("followed by the numbered items below as H2 sections:\n\n")
 
 	b.WriteString("1. Summary — a short description of what this specific resource is and its purpose within the tenant.\n")
-	b.WriteString("2. Settings — document EVERY setting/property present in the YAML in a table with the columns: ")
+	b.WriteString("2. Lifecycle & operations — document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned, ")
+	b.WriteString("renewal/expiry obligations, and a recommended review cadence.\n")
+	b.WriteString("3. References — link each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline ")
+	b.WriteString("(e.g. Microsoft security baselines, CIS Benchmarks). Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
+	b.WriteString("4. Security — call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.) and any deviations from recommended baselines, including the security impact.")
+	if len(doc.KeySettings) > 0 {
+		fmt.Fprintf(&b, " For this resource type, give particular attention to: %s.", strings.Join(doc.KeySettings, ", "))
+	}
+	b.WriteString("\n")
+	b.WriteString("5. Settings — document EVERY setting/property present in the YAML in a table with the columns: ")
 	b.WriteString("Setting (YAML path), Configured value, What it does, Recommended/best-practice value, Reference. ")
 	b.WriteString("If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema. ")
 	b.WriteString("Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.\n")
-	b.WriteString("3. References — link each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline ")
-	b.WriteString("(e.g. Microsoft security baselines, CIS Benchmarks). Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
 
-	b.WriteString("4. Embedded payloads — fully expand and explain any embedded or encoded payloads")
+	b.WriteString("6. Embedded payloads — fully expand and explain any embedded or encoded payloads")
 	if len(doc.EmbeddedPayloads) > 0 {
 		fmt.Fprintf(&b, " — for this resource type pay particular attention to: %s", strings.Join(doc.EmbeddedPayloads, ", "))
 	} else {
@@ -135,13 +148,6 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	b.WriteString(". Decode and pretty-print them, then document each contained key/value the same way as the top-level settings. ")
 	b.WriteString("If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents as part of the resource.\n")
 
-	b.WriteString("5. Security — call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.) and any deviations from recommended baselines, including the security impact.")
-	if len(doc.KeySettings) > 0 {
-		fmt.Fprintf(&b, " For this resource type, give particular attention to: %s.", strings.Join(doc.KeySettings, ", "))
-	}
-	b.WriteString("\n")
-	b.WriteString("6. Lifecycle & operations — document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned, ")
-	b.WriteString("renewal/expiry obligations, and a recommended review cadence.\n")
 	b.WriteString("7. Assignments — note any assignments/targeting present and explain what they mean (include/exclude targets, assignment filters). ")
 	b.WriteString("Assignment targets contain group IDs only — group names are NOT resolved in the export (groups are exported separately as Microsoft.Graph/groups); never invent group names.\n\n")
 

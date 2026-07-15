@@ -39,7 +39,7 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 			Purpose:             "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
 			KeySettings:         []string{"authenticationMethodConfigurations", "registrationEnforcement"},
 			RequiredPermissions: []string{"Policy.Read.All"},
-			Lifecycle:           "Tenant-wide singleton controlling which authentication methods are enabled for MFA/SSPR/passwordless; changes take effect tenant-wide within minutes. Microsoft is migrating the legacy MFA and SSPR policies into this policy.",
+			Lifecycle:           []string{"Tenant-wide singleton controlling which authentication methods are enabled for MFA/SSPR/passwordless; changes take effect tenant-wide within minutes.", "Microsoft is migrating the legacy MFA and SSPR policies into this policy."},
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies", "Microsoft.Graph/authenticationStrengthPolicies"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodspolicy?view=graph-rest-1.0",

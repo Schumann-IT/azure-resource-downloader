@@ -50,7 +50,7 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			Purpose:             "The Entra ID company branding shown on sign-in pages.",
 			EmbeddedPayloads:    []string{"backgroundImage / bannerLogo / squareLogo (base64 images)", "signInPageText", "usernameHintText"},
 			RequiredPermissions: []string{"OrganizationalBranding.Read.All", "Organization.Read.All"},
-			Lifecycle:           "Default Entra sign-in branding plus per-locale overrides; changes can take up to an hour to appear on the sign-in page.",
+			Lifecycle:           []string{"Default Entra sign-in branding plus per-locale overrides; changes can take up to an hour to appear on the sign-in page."},
 			RelatedTypes:        []string{"Microsoft.Graph/organization", "Microsoft.Graph/intuneBrandingProfiles (Company Portal branding)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organizationalbranding?view=graph-rest-beta",

@@ -29,7 +29,7 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 			KeySettings:         []string{"customAttributeType", "runAsAccount"},
 			EmbeddedPayloads:    []string{"scriptContent (base64 shell script)"},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           "Custom attribute scripts run per schedule and report a per-device value; deleting the script stops collection but previously reported values remain until overwritten.",
+			Lifecycle:           []string{"Custom attribute scripts run per schedule and report a per-device value; deleting the script stops collection but previously reported values remain until overwritten."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecustomattributeshellscript?view=graph-rest-beta",

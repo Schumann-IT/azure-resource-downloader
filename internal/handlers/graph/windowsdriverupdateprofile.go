@@ -25,7 +25,7 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 			Purpose:             "An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
 			KeySettings:         []string{"approvalType", "deploymentDeferralInDays"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Driver approvals are per profile; pausing or deleting a profile stops offering its drivers. Review pending driver approvals regularly when using manual approval mode.",
+			Lifecycle:           []string{"Driver approvals are per profile; pausing or deleting a profile stops offering its drivers.", "Review pending driver approvals regularly when using manual approval mode."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsdriverupdateprofile?view=graph-rest-beta",

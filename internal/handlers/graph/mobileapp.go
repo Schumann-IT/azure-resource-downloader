@@ -27,7 +27,7 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			KeySettings:         []string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},
 			EmbeddedPayloads:    []string{"detectionRules", "requirementRules", "installExperience", "returnCodes", "largeIcon (base64 image)"},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           "Deleting an app from Intune does not uninstall it from devices (assign an uninstall intent first); Win32 apps follow supersedence rules when updated.",
+			Lifecycle:           []string{"Deleting an app from Intune does not uninstall it from devices (assign an uninstall intent first); Win32 apps follow supersedence rules when updated."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)", "Microsoft.Graph/mobileAppConfigurations (app configuration policies)"},
 			SubtypeNote:         "Highly polymorphic (win32LobApp, winGetApp, macOSPkgApp, iosStoreApp, officeSuiteApp, ...) - identify the concrete app type from @odata.type first; detection/requirement rules and install experience are subtype-specific.",
 			Links: models.ResourceLinks{

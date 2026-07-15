@@ -27,7 +27,7 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			Purpose:             "An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.",
 			KeySettings:         []string{"groupTypes", "membershipRule (for dynamic groups)", "securityEnabled", "mailEnabled"},
 			RequiredPermissions: []string{"Group.Read.All"},
-			Lifecycle:           "Deleted groups are soft-deleted and restorable for 30 days; dynamic membership rules re-evaluate automatically as attributes change. Groups referenced by policy assignments should not be deleted while in use.",
+			Lifecycle:           []string{"Deleted groups are soft-deleted and restorable for 30 days; dynamic membership rules re-evaluate automatically as attributes change.", "Groups referenced by policy assignments should not be deleted while in use."},
 			RelatedTypes:        []string{"all assignable types (groups are the assignment targets referenced by ID)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0",

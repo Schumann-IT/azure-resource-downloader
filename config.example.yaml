@@ -19,7 +19,7 @@
 
 # Output directory for downloaded resources (default: ./output)
 # Uncomment to override the default output directory.
-# output: "./azure-resources"
+# output: "./output"
 
 # Number of concurrent workers for parallel processing
 # Option 1: Use API-specific defaults (RECOMMENDED)

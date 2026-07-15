@@ -25,7 +25,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			Purpose:             "An Intune notification message template used for compliance and other notifications.",
 			EmbeddedPayloads:    []string{"localizedNotificationMessages (per-locale subject and message body)"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "Referenced by compliance policies noncompliance actions; deleting a template breaks those actions. Localized messages fall back to the default locale.",
+			Lifecycle:           []string{"Referenced by compliance policies noncompliance actions; deleting a template breaks those actions.", "Localized messages fall back to the default locale."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta",

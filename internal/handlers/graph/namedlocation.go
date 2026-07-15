@@ -25,7 +25,7 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 			Purpose:             "An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
 			KeySettings:         []string{"ipRanges", "countriesAndRegions", "isTrusted"},
 			RequiredPermissions: []string{"Policy.Read.All"},
-			Lifecycle:           "Referenced by Conditional Access conditions; deletion fails while a Conditional Access policy references the location. Keep trusted-IP ranges current.",
+			Lifecycle:           []string{"Referenced by Conditional Access conditions; deletion fails while a Conditional Access policy references the location.", "Keep trusted-IP ranges current."},
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
 			SubtypeNote:         "Polymorphic: ipNamedLocation (CIDR ranges, trusted flag) vs countryNamedLocation (country list, unknown-area handling) - identify the concrete type from @odata.type.",
 			Links: models.ResourceLinks{

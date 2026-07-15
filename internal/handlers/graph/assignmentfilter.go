@@ -25,7 +25,7 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 			KeySettings:         []string{"platform", "rule"},
 			EmbeddedPayloads:    []string{"rule (filter rule expression)"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           "Filters are referenced by assignments across many policy and app types; deleting a filter breaks the assignments that reference it. Rule changes re-evaluate at the next device/app check-in.",
+			Lifecycle:           []string{"Filters are referenced by assignments across many policy and app types; deleting a filter breaks the assignments that reference it.", "Rule changes re-evaluate at the next device/app check-in."},
 			RelatedTypes:        []string{"all assignable Intune types (policies, profiles and apps reference filters by ID in their assignments)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-policyset-deviceandappmanagementassignmentfilter?view=graph-rest-beta",

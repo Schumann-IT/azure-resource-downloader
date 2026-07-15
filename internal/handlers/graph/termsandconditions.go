@@ -24,7 +24,7 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 			Purpose:             "An Intune Terms and Conditions policy presented to users at enrollment.",
 			EmbeddedPayloads:    []string{"bodyText", "acceptanceStatement"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "Incrementing the version forces users to re-accept at next Company Portal sign-in; acceptance statuses are recorded per user.",
+			Lifecycle:           []string{"Incrementing the version forces users to re-accept at next Company Portal sign-in; acceptance statuses are recorded per user."},
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-companyterms-termsandconditions?view=graph-rest-beta",

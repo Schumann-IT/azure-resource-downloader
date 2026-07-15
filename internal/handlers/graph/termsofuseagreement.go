@@ -25,7 +25,7 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 			KeySettings:         []string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
 			EmbeddedPayloads:    []string{"files (the uploaded ToU PDF documents, base64)"},
 			RequiredPermissions: []string{"Agreement.Read.All"},
-			Lifecycle:           "Enforced via Conditional Access grant controls; re-acceptance can be required on a schedule or when the PDF changes. Acceptance records are retained for compliance.",
+			Lifecycle:           []string{"Enforced via Conditional Access grant controls; re-acceptance can be required on a schedule or when the PDF changes.", "Acceptance records are retained for compliance."},
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-1.0",

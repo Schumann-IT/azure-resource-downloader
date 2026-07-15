@@ -40,7 +40,7 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 			Purpose:             "The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
 			KeySettings:         []string{"expirationDateTime", "appleIdentifier"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           "The Apple MDM push certificate expires yearly and must be renewed with the SAME Apple ID; letting it expire or renewing with a different Apple ID forces re-enrollment of all Apple devices.",
+			Lifecycle:           []string{"The Apple MDM push certificate expires yearly and must be renewed with the SAME Apple ID; letting it expire or renewing with a different Apple ID forces re-enrollment of all Apple devices."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-applepushnotificationcertificate?view=graph-rest-beta",
 			},
