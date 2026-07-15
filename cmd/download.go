@@ -32,7 +32,9 @@ var (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download Azure resources",
-	Long: `Download Azure resources and transform them into YAML format.
+	Long: `Download Azure resources and transform them into YAML format. With
+--write-prompts, each resource type directory also receives a dedicated AI
+documentation prompt (doc-prompt.md).
 
 You can specify resources in multiple ways:
   - By resource ID: --resource-id "/subscriptions/.../resourceGroups/my-rg"

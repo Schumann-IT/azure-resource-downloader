@@ -4,7 +4,7 @@ trigger: always_on
 
 # Project Context
 - **Language**: Go 1.24, Module mode
-- **Target**: CLI tool for downloading and transforming Azure resources to YAML
+- **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (`--write-prompts`)
 - **Architecture**: Async pipeline pattern with worker pools
 - **Repo layout**:
     - `cmd/`                    → Cobra CLI commands (root, download, list)

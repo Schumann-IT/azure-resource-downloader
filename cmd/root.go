@@ -32,8 +32,9 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "azure-rd",
 	Short: "Azure Resource Downloader - Download and transform Azure resources",
-	Long: `Azure Resource Downloader is a CLI tool that downloads Azure resources
-and transforms them into clean YAML format.
+	Long: `Azure Resource Downloader is a CLI tool that downloads Azure resources,
+transforms them into clean YAML format, and can generate per-resource-type AI
+documentation prompts (--write-prompts).
 
 The tool follows a pipeline pattern with async processing for maximum performance.
 It's designed to be easily extensible with support for multiple Azure resource types.

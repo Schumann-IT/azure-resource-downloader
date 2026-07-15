@@ -1,6 +1,11 @@
 # Azure Resource Downloader
 
-A powerful command-line tool that downloads Azure resources and transforms them into clean YAML format. Built with Go and following the async pipeline pattern for maximum performance.
+This is a command line tool to 
+- download Azure resources 
+- transform them into clean YAML format 
+- create AI Prompts to be able to create documentation for each resource type
+
+Built with Go and following the async pipeline pattern for maximum performance.
 
 ## 🚀 Features
 
