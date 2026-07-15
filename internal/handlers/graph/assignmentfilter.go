@@ -19,8 +19,7 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/assignmentFilters",
-		terraformType: "microsoft365_graph_beta_device_management_assignment_filter",
+		azureType: "Microsoft.Graph/assignmentFilters",
 		documentation: docMeta(
 			"An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
 			[]string{"platform", "rule"},

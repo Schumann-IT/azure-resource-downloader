@@ -13,9 +13,6 @@ import (
 // NewOrganizationHandler creates a handler for the Entra organization
 // (tenant) information (organization, Microsoft Graph v1.0). The collection
 // holds exactly one object per tenant.
-//
-// There is no Terraform resource for the organization object, so no Terraform
-// import is emitted.
 func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newGraphClient(credential)
 	if err != nil {
@@ -23,8 +20,7 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/organization",
-		terraformType: "",
+		azureType: "Microsoft.Graph/organization",
 		documentation: docMeta(
 			"The Entra ID tenant (organization) profile and tenant-wide settings.",
 			[]string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},

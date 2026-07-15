@@ -19,9 +19,6 @@ import (
 // The configured settings are not part of the intent object: they live in the
 // child collection settings, so Fetch retrieves them separately and attaches
 // them to the model before serialization.
-//
-// terraform-provider-microsoft365 has no resource for legacy intents (they are
-// superseded by Settings Catalog policies), so no Terraform import is emitted.
 func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -29,8 +26,7 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceManagementIntents",
-		terraformType: "",
+		azureType: "Microsoft.Graph/deviceManagementIntents",
 		documentation: docMeta(
 			"An Intune security baseline / template intent and its configured setting values.",
 			nil,

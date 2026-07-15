@@ -19,7 +19,7 @@ var listCmd = &cobra.Command{
 	Long: `List all Azure resource types that are currently supported by the tool.
 
 This command shows which resource types have handlers registered and can be
-downloaded, along with the Terraform resource type each one maps to.`,
+downloaded.`,
 	RunE: runList,
 }
 
@@ -57,12 +57,9 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// List each type
 	for i, resourceType := range types {
-		handler, _ := registry.Get(resourceType)
-		terraformType := handler.GetTerraformResourceType()
 		log.Info("",
 			"number", i+1,
-			"azure_type", resourceType,
-			"terraform_type", terraformType)
+			"azure_type", resourceType)
 	}
 
 	log.Info("To add more resource types, implement a new handler and register it in internal/handlers/defaults.go")

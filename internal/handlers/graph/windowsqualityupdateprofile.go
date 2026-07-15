@@ -20,8 +20,7 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/windowsQualityUpdateProfiles",
-		terraformType: "microsoft365_graph_beta_device_management_windows_quality_update_policy",
+		azureType: "Microsoft.Graph/windowsQualityUpdateProfiles",
 		documentation: docMeta(
 			"An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
 			[]string{"expeditedUpdateSettings", "releaseDateDisplayName"},

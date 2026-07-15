@@ -26,11 +26,10 @@ import (
 // listing, fetching and naming, keeping all Graph SDK builder specifics in the
 // per-resource constructor.
 type GraphCollectionHandler struct {
-	azureType     string
-	terraformType string
+	azureType string
 	// documentation holds the per-type metadata used to build this type's
 	// dedicated documentation prompt. Each constructor sets it so every resource
-	// type carries its own prompt; AzureType/TerraformType are filled in from the
+	// type carries its own prompt; AzureType is filled in from the
 	// handler at prompt-build time.
 	documentation models.ResourceDocumentation
 	listIDs       func(ctx context.Context) ([]string, error)
@@ -69,18 +68,12 @@ func (h *GraphCollectionHandler) GetType() string {
 	return h.azureType
 }
 
-// GetTerraformResourceType returns the Terraform resource type
-func (h *GraphCollectionHandler) GetTerraformResourceType() string {
-	return h.terraformType
-}
-
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for
 // this resource type, tailored via the per-type metadata set by the type's
 // constructor.
 func (h *GraphCollectionHandler) GetDocumentationPrompt() string {
 	doc := h.documentation
 	doc.AzureType = h.azureType
-	doc.TerraformType = h.terraformType
 	return models.BuildDocumentationPrompt(doc)
 }
 

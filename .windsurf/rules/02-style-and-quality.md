@@ -1,5 +1,6 @@
 ---
 trigger: glob
+description: 
 globs: **/*.go
 ---
 

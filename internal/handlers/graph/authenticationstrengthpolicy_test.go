@@ -18,20 +18,6 @@ func TestAuthenticationStrengthPolicyHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestAuthenticationStrengthPolicyHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewAuthenticationStrengthPolicyHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewAuthenticationStrengthPolicyHandler() unexpected error: %v", err)
-	}
-
-	expected := "azuread_authentication_strength_policy"
-	result := handler.GetTerraformResourceType()
-
-	if result != expected {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", result, expected)
-	}
-}
-
 func TestExtractAuthStrengthPolicyID(t *testing.T) {
 	tests := []struct {
 		name       string

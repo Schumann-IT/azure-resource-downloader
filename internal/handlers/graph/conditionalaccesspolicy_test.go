@@ -18,20 +18,6 @@ func TestConditionalAccessPolicyHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestConditionalAccessPolicyHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewConditionalAccessPolicyHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewConditionalAccessPolicyHandler() unexpected error: %v", err)
-	}
-
-	expected := "azuread_conditional_access_policy"
-	result := handler.GetTerraformResourceType()
-
-	if result != expected {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", result, expected)
-	}
-}
-
 func TestExtractPolicyID(t *testing.T) {
 	tests := []struct {
 		name       string

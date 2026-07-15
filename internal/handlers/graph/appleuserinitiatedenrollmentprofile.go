@@ -14,10 +14,6 @@ import (
 // user-initiated enrollment profiles
 // (deviceManagement/appleUserInitiatedEnrollmentProfiles, Microsoft Graph
 // beta).
-//
-// terraform-provider-microsoft365 models only the profile assignment
-// (apple_user_initiated_enrollment_profile_assignment), not the profile
-// itself, so no Terraform import is emitted.
 func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -25,8 +21,7 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
-		terraformType: "",
+		azureType: "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
 		documentation: docMeta(
 			"An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
 			[]string{"platform", "enrollmentType", "priority"},

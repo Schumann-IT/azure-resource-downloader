@@ -16,9 +16,6 @@ import (
 // carries a single base64 detection script (detectionScriptContent), decoded by
 // the base64-decode transformer (inline by default, or to a *_detection.ps1
 // sidecar file in file mode).
-//
-// The deploymenttheory/microsoft365 provider has no resource for custom
-// compliance scripts, so no Terraform import is emitted.
 func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -26,8 +23,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceComplianceScripts",
-		terraformType: "",
+		azureType: "Microsoft.Graph/deviceComplianceScripts",
 		documentation: docMeta(
 			"An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			[]string{"runAsAccount", "enforceSignatureCheck"},

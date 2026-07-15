@@ -17,9 +17,6 @@ const deviceManagementSettingsName = "Intune Tenant Settings"
 // settings (the deviceManagement root object, Microsoft Graph beta). This is a
 // tenant **singleton**: List probes the object and returns at most one
 // pseudo-ID, and Fetch retrieves the singleton regardless of the requested ID.
-//
-// terraform-provider-microsoft365 has no resource for the tenant settings
-// object, so no Terraform import is emitted.
 func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -39,8 +36,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceManagement",
-		terraformType: "",
+		azureType: "Microsoft.Graph/deviceManagement",
 		documentation: docMeta(
 			"Tenant-wide Intune device management settings and configuration.",
 			[]string{"settings", "intuneAccountId"},

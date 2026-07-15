@@ -14,9 +14,6 @@ import (
 // Information Protection policies for devices without MDM enrollment
 // (deviceAppManagement/windowsInformationProtectionPolicies, Microsoft Graph
 // beta). WIP is deprecated by Microsoft but may still exist in tenants.
-//
-// terraform-provider-microsoft365 has no resource for WIP policies, so no
-// Terraform import is emitted.
 func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -24,8 +21,7 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/windowsInformationProtectionPolicies",
-		terraformType: "",
+		azureType: "Microsoft.Graph/windowsInformationProtectionPolicies",
 		documentation: docMeta(
 			"A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
 			[]string{"enforcementLevel", "protectedApps", "exemptApps"},

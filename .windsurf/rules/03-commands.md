@@ -72,7 +72,6 @@ make check
 ## "Create a new resource handler"
 1. Create the handler in the right subpackage — `internal/handlers/arm/<resource>.go` (package `arm`) for ARM types or `internal/handlers/graph/<resource>.go` (package `graph`) for Microsoft Graph types — implementing `ResourceHandler` interface:
    - `GetType()` - Return Azure resource type (e.g., "Microsoft.KeyVault/vaults")
-   - `GetTerraformResourceType()` - Return Terraform type (e.g., "azurerm_key_vault")
    - `Fetch(ctx, resourceID)` - Use Azure SDK to fetch resource
    - `Transform(resource)` - Convert to `*models.TransformedResource`
 2. Add constructor: `NewXHandler(credential, subscriptionID)`

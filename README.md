@@ -1,13 +1,12 @@
 # Azure Resource Downloader
 
-A powerful command-line tool that downloads Azure resources, transforms them into clean YAML format, and generates Terraform import statements. Built with Go and following the async pipeline pattern for maximum performance.
+A powerful command-line tool that downloads Azure resources and transforms them into clean YAML format. Built with Go and following the async pipeline pattern for maximum performance.
 
 ## 🚀 Features
 
 - **Async Pipeline Architecture**: Parallel processing with configurable worker pools
 - **Resource Transformation**: Clean YAML output with unnecessary Azure metadata removed
 - **ID Resolution**: Automatically resolves Azure resource IDs to friendly names
-- **Terraform Integration**: Generates import statements for easy Terraform adoption
 - **Extensible Design**: Easy to add support for new Azure resource types
 - **Multiple Resource Types**: Support for Resource Groups, Storage Accounts, Virtual Machines, and more
 
@@ -20,8 +19,8 @@ The tool follows a three-stage async pipeline. The stages run concurrently, conn
 ```
 
 1. **Fetcher** — retrieves resources from Azure with retry logic (5 attempts, exponential backoff).
-2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, base64 decoding, and Terraform import generation.
-3. **Writer** — writes one YAML file per resource and a consolidated `import.tf` per resource type. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`doc-prompt.md`) per resource type.
+2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, and base64 decoding.
+3. **Writer** — writes one YAML file per resource. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`doc-prompt.md`) per resource type.
 
 Each stage uses its own worker pool; the worker count is configurable via the `--workers` flag or API-specific settings in the config file (see *Worker Count Optimization* below).
 
@@ -79,20 +78,45 @@ To download resource types that need scopes the Azure CLI app can't provide, reg
 
 **One-time app setup** (requires a privileged admin):
 
+This grants every delegated scope the tool can use, so **all** supported resource types download with a single consent. Scope IDs are resolved by name from the Microsoft Graph service principal, so the script stays correct as Graph evolves.
+
 ```bash
 GRAPH="00000003-0000-0000-c000-000000000000"
-POLICY_READ_ALL="572fea84-0151-49b2-9301-11cb16974376"   # Policy.Read.All (delegated)
-DMC_READWRITE="0883f392-0a7a-443d-8c76-16a6d39c7b63"     # DeviceManagementConfiguration.ReadWrite.All (delegated)
 ARM="797f4846-ba00-4fd7-ba43-dac1f8f63013"
 ARM_USER_IMP="41094075-9dad-400e-a0bd-54e686782033"      # user_impersonation (delegated)
+
+# Delegated Microsoft Graph scopes covering every supported resource type.
+# DeviceManagementConfiguration.ReadWrite.All is only needed for --resolve-secrets;
+# all other scopes are read-only. Drop any you don't need (those types are skipped).
+GRAPH_SCOPES=(
+  Policy.Read.All
+  DeviceManagementConfiguration.Read.All
+  DeviceManagementConfiguration.ReadWrite.All
+  DeviceManagementManagedDevices.Read.All
+  DeviceManagementScripts.Read.All
+  DeviceManagementRBAC.Read.All
+  DeviceManagementServiceConfig.Read.All
+  DeviceManagementApps.Read.All
+  Organization.Read.All
+  OrganizationalBranding.Read.All
+  OnPremDirectorySynchronization.Read.All
+  Group.Read.All
+  Agreement.Read.All
+)
 
 # Create the app with public-client (device-code) flow enabled
 APP_ID=$(az ad app create --display-name "azure-resource-downloader" \
   --is-fallback-public-client true --query appId -o tsv)
 
-# Add delegated permissions
-az ad app permission add --id "$APP_ID" --api "$GRAPH" \
-  --api-permissions "$POLICY_READ_ALL=Scope" "$DMC_READWRITE=Scope"
+# Resolve each Graph scope name to its delegated permission ID and add it
+for scope in "${GRAPH_SCOPES[@]}"; do
+  SCOPE_ID=$(az ad sp show --id "$GRAPH" \
+    --query "oauth2PermissionScopes[?value=='$scope'].id" -o tsv)
+  az ad app permission add --id "$APP_ID" --api "$GRAPH" \
+    --api-permissions "$SCOPE_ID=Scope"
+done
+
+# Add the ARM delegated permission (storageAccounts, virtualMachines, resourceGroups)
 az ad app permission add --id "$APP_ID" --api "$ARM" \
   --api-permissions "$ARM_USER_IMP=Scope"
 
@@ -143,7 +167,7 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 | `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` |
 | ARM types (`storageAccounts`, `virtualMachines`, `resourceGroups`) | `Azure Service Management/user_impersonation` (+ your Azure RBAC) |
 
-> To add further delegated scopes to the app, look up the permission ID by name and grant it:
+> The one-time setup above already grants every scope in this table. To add a scope later (e.g. a new resource type, or one you dropped from `GRAPH_SCOPES`), look up its permission ID by name and grant it:
 > ```bash
 > SCOPE_ID=$(az ad sp show --id "$GRAPH" --query "oauth2PermissionScopes[?value=='DeviceManagementRBAC.Read.All'].id" -o tsv)
 > az ad app permission add --id "$APP_ID" --api "$GRAPH" --api-permissions "$SCOPE_ID=Scope"
@@ -326,7 +350,6 @@ transformers:
         - primaryEndpoints
   - name: id-resolution
   - name: name-sanitization
-  - name: terraform-import
 ```
 
 The repository ships a fully-commented [`.azure-rd.example.yaml`](.azure-rd.example.yaml) documenting **every** option (type/item filtering, workers, logging, transformers). Copy it as a starting point:
@@ -397,7 +420,7 @@ Each transformer can be independently configured with its own settings. By defau
 Listing a transformer in the config **enables** it; omitting it disables it. Regardless of the order in the config file, transformers always execute in this fixed pipeline order:
 
 ```
-cleaning → id-resolution → base64-decode → name-sanitization → terraform-import
+cleaning → id-resolution → base64-decode → name-sanitization
 ```
 
 ### Available Transformers
@@ -411,10 +434,7 @@ cleaning → id-resolution → base64-decode → name-sanitization → terraform
 
 **`id-resolution`** - Convert Azure resource IDs to friendly names
 
-**`name-sanitization`** - Sanitize names for files/Terraform
-
-**`terraform-import`** - Generate Terraform import blocks
-- `target-format` - Template for import address (default: `{resource_type}.{name}`)
+**`name-sanitization`** - Sanitize names for files
 
 **`base64-decode`** - Decode base64-encoded values, either in place or into sidecar files
 - `mode` - `inline` (default) replaces the encoded value with the decoded text in the YAML; `file` writes the decoded value to a sidecar file alongside the YAML instead
@@ -427,7 +447,7 @@ cleaning → id-resolution → base64-decode → name-sanitization → terraform
 > - **macOS `payload`** (`macOSCustomConfiguration`): base64-encoded `.mobileconfig` plist. `inline` replaces `payload` with the decoded XML; `file` writes e.g. `payloadFileName: WindowsDefenderATPOnboarding.xml` to `WindowsDefenderATPOnboarding.mobileconfig`.
 > - **Windows `omaSettings[]`** (`windows10CustomConfiguration`): `omaSettingStringXml` values are base64-encoded XML. `inline` replaces each value with the decoded XML; `file` writes each to its own `fileName` (e.g. `CB_VPN_Profile.xml`) as-is. Plain `omaSettingString` values are left untouched.
 >
-> Note: inline-decoded values are no longer base64, so re-importing to Intune/Terraform requires re-encoding.
+> Note: inline-decoded values are no longer base64, so re-importing to Intune requires re-encoding.
 
 #### Encrypted OMA-URI secrets (`--resolve-secrets`)
 
@@ -452,7 +472,7 @@ Secret resolution reuses the **same** `az login` session as everything else — 
 Add to `~/.azure-rd.yaml`:
 
 ```yaml
-# Example 1: Typical Terraform workflow
+# Example 1: Typical workflow
 transformers:
   - name: cleaning
     remove-keys:
@@ -462,7 +482,6 @@ transformers:
     clean-empty: true
   - name: id-resolution
   - name: name-sanitization
-  - name: terraform-import
 
 # Example 2: Remove ID everywhere except specific paths
 transformers:
@@ -474,29 +493,13 @@ transformers:
     clean-empty: true
   - name: id-resolution
   - name: name-sanitization
-  - name: terraform-import
-
-# Example 3: Documentation only (no Terraform)
-transformers:
-  - name: cleaning
-  - name: id-resolution
-  - name: name-sanitization
-
-# Example 4: Module-based Terraform imports
-transformers:
-  - name: cleaning
-  - name: id-resolution
-  - name: name-sanitization
-  - name: terraform-import
-    target-format: 'module["{name}"].{resource_type}.this'
 ```
 
 ### Common Use Cases
 
 | Configuration | Output | Use Case |
 |---------------|--------|----------|
-| All transformers (default) | Clean data, resolved IDs, sanitized names, Terraform imports | **Default** - Ready for Terraform import |
-| Omit `terraform-import` | Clean data without Terraform files | Documentation generation |
+| All transformers (default) | Clean data, resolved IDs, sanitized names | **Default** |
 | Only `id-resolution` | Raw Azure data with resolved IDs | Debugging, keeping all metadata |
 | Custom `remove-keys` | Selective property filtering | Fine-tuned data export |
 
@@ -520,7 +523,7 @@ Which properties land in the YAML is controlled by the `cleaning` transformer (s
 - `preserve-keys` keeps specific nested paths even if their key is in a remove list.
 - By default the transformer only removes empty values; nothing else is dropped unless you configure `remove-keys`.
 
-Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`, `correlationId`, `managedBy`, `sku.tier`. For Terraform imports, also drop `id` (Terraform manages it). See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for ready-to-use `cleaning` examples.
+Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`, `correlationId`, `managedBy`, `sku.tier`. See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for ready-to-use `cleaning` examples.
 
 ## 📂 Output Structure
 
@@ -539,17 +542,14 @@ output/
     │   └── resourceGroups/
     │       ├── my-resource-group.yaml
     │       ├── another-resource-group.yaml
-    │       ├── import.tf
     │       └── doc-prompt.md            # only with --write-prompts
     ├── Microsoft.Storage/
     │   └── storageAccounts/
     │       ├── mystorageaccount.yaml
-    │       ├── import.tf
     │       └── doc-prompt.md            # only with --write-prompts
     └── Microsoft.Compute/
         └── virtualMachines/
             ├── my_vm.yaml
-            ├── import.tf
             └── doc-prompt.md            # only with --write-prompts
 ```
 
@@ -566,27 +566,6 @@ tags:
   owner: team-platform
 ```
 
-### Terraform Import File
-
-A single `import.tf` file per resource type containing all import blocks (Terraform 1.5+ format):
-
-```hcl
-# Terraform import statements
-# Generated by azure-resource-downloader
-
-# Import for my-rg
-import {
-  to = azurerm_resource_group.my_rg
-  id = "/subscriptions/.../resourceGroups/my-rg"
-}
-
-# Import for another-rg
-import {
-  to = azurerm_resource_group.another_rg
-  id = "/subscriptions/.../resourceGroups/another-rg"
-}
-```
-
 ### Documentation Prompt File
 
 When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
@@ -598,99 +577,67 @@ When enabled with `--write-prompts` (or `write-prompts: true` in the config file
 
 Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph types are tailored through the `graphResourceDocs` table in `internal/handlers/graph/documentation.go`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
 
-#### Configurable Import Target Format
-
-The `to` address in import blocks is configurable via the `terraform-import` transformer's `target-format` option (see [Transformers](#-transformers)):
-
-**Default format** (`{resource_type}.{name}`):
-```hcl
-import {
-  to = azurerm_resource_group.my_rg
-  id = "/subscriptions/.../resourceGroups/my-rg"
-}
-```
-
-**Module format** (`module["{name}"].{resource_type}.this`):
-```hcl
-import {
-  to = module["my_rg"].azurerm_resource_group.this
-  id = "/subscriptions/.../resourceGroups/my-rg"
-}
-```
-
-**Custom nested format** (`module.infrastructure.{resource_type}.{name}`):
-```hcl
-import {
-  to = module.infrastructure.azurerm_resource_group.my_rg
-  id = "/subscriptions/.../resourceGroups/my-rg"
-}
-```
-
-Available template variables:
-- `{resource_type}` - The Terraform resource type (e.g., `azurerm_resource_group`)
-- `{name}` - The sanitized resource name (e.g., `my_rg`)
-
 ## 🎯 Supported Resource Types
 
 Currently supported Azure resource types:
 
-| Azure Resource Type | Terraform Resource Type | Handler |
-|---------------------|-------------------------|---------|
-| `Microsoft.Resources/resourceGroups` | `azurerm_resource_group` | ✅ |
-| `Microsoft.Storage/storageAccounts` | `azurerm_storage_account` | ✅ |
-| `Microsoft.Compute/virtualMachines` | `azurerm_virtual_machine` | ✅ |
-| `Microsoft.Graph/conditionalAccessPolicies` | `azuread_conditional_access_policy` | ✅ |
-| `Microsoft.Graph/authenticationStrengthPolicies` | `azuread_authentication_strength_policy` | ✅ |
-| `Microsoft.Graph/deviceManagementConfigurationPolicies` | `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy` | ✅ |
-| `Microsoft.Graph/deviceConfigurations` | `microsoft365_graph_beta_device_management_device_configuration` | ✅ |
-| `Microsoft.Graph/assignmentFilters` | `microsoft365_graph_beta_device_management_assignment_filter` | ✅ |
-| `Microsoft.Graph/windowsFeatureUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_feature_update_policy` | ✅ |
-| `Microsoft.Graph/windowsQualityUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_quality_update_policy` | ✅ |
-| `Microsoft.Graph/windowsDriverUpdateProfiles` | `microsoft365_graph_beta_device_management_windows_driver_update_profile` | ✅ |
-| `Microsoft.Graph/deviceCategories` | `microsoft365_graph_beta_device_management_device_category` | ✅ |
-| `Microsoft.Graph/roleScopeTags` | `microsoft365_graph_beta_device_management_role_scope_tag` | ✅ |
-| `Microsoft.Graph/termsAndConditions` | `microsoft365_graph_beta_device_management_terms_and_conditions` | ✅ |
-| `Microsoft.Graph/intuneBrandingProfiles` | `microsoft365_graph_beta_device_management_intune_branding_profile` | ✅ |
-| `Microsoft.Graph/notificationMessageTemplates` | `microsoft365_graph_beta_device_management_device_compliance_notification_template` | ✅ |
-| `Microsoft.Graph/namedLocations` | `microsoft365_graph_beta_identity_and_access_named_location` | ✅ |
-| `Microsoft.Graph/termsOfUseAgreements` | `microsoft365_graph_identity_and_access_conditional_access_terms_of_use` | ✅ |
-| `Microsoft.Graph/deviceManagementScripts` | `microsoft365_graph_beta_device_management_windows_platform_script` | ✅ |
-| `Microsoft.Graph/deviceShellScripts` | `microsoft365_graph_beta_device_management_macos_platform_script` | ✅ |
-| `Microsoft.Graph/deviceCustomAttributeShellScripts` | `microsoft365_graph_beta_device_management_macos_custom_attribute_script` | ✅ |
-| `Microsoft.Graph/deviceHealthScripts` | `microsoft365_graph_beta_device_management_windows_remediation_script` | ✅ |
-| `Microsoft.Graph/deviceComplianceScripts` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/reusablePolicySettings` | `microsoft365_graph_beta_device_management_reuseable_policy_setting` | ✅ |
-| `Microsoft.Graph/vppTokens` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/mobileThreatDefenseConnectors` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/ndesConnectors` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/deviceCompliancePolicies` | `microsoft365_graph_beta_device_management_windows_device_compliance_policy` | ✅ |
-| `Microsoft.Graph/compliancePolicies` | `microsoft365_graph_beta_device_management_linux_device_compliance_policy` | ✅ |
-| `Microsoft.Graph/groupPolicyConfigurations` | `microsoft365_graph_beta_device_management_group_policy_configuration` | ✅ |
-| `Microsoft.Graph/deviceManagementIntents` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/mobileApps` | `microsoft365_graph_beta_device_and_app_management_win32_app` | ✅ |
-| `Microsoft.Graph/iosManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/androidManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/windowsManagedAppProtections` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/mdmWindowsInformationProtectionPolicies` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/windowsInformationProtectionPolicies` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/mobileAppConfigurations` | `microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy` | ✅ |
-| `Microsoft.Graph/targetedManagedAppConfigurations` | `microsoft365_graph_beta_device_and_app_management_targeted_managed_app_configuration` | ✅ |
-| `Microsoft.Graph/windowsAutopilotDeploymentProfiles` | `microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile` | ✅ |
-| `Microsoft.Graph/windowsAutopilotDeviceIdentities` | `microsoft365_graph_beta_device_management_windows_autopilot_device_identity` | ✅ |
-| `Microsoft.Graph/deviceEnrollmentConfigurations` | `microsoft365_graph_beta_device_management_windows_enrollment_status_page` | ✅ |
-| `Microsoft.Graph/applePushNotificationCertificate` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/depOnboardingSettings` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/roleDefinitions` | `microsoft365_graph_beta_device_management_role_definition` | ✅ |
-| `Microsoft.Graph/deviceManagement` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/authenticationMethodsPolicy` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/authorizationPolicy` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/onPremisesSynchronization` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/organization` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/organizationalBranding` | — (no provider resource; no import emitted) | ✅ |
-| `Microsoft.Graph/groups` | `azuread_group` | ✅ |
+| Azure Resource Type | Handler |
+|---------------------|---------|
+| `Microsoft.Resources/resourceGroups` | ✅ |
+| `Microsoft.Storage/storageAccounts` | ✅ |
+| `Microsoft.Compute/virtualMachines` | ✅ |
+| `Microsoft.Graph/conditionalAccessPolicies` | ✅ |
+| `Microsoft.Graph/authenticationStrengthPolicies` | ✅ |
+| `Microsoft.Graph/deviceManagementConfigurationPolicies` | ✅ |
+| `Microsoft.Graph/deviceConfigurations` | ✅ |
+| `Microsoft.Graph/assignmentFilters` | ✅ |
+| `Microsoft.Graph/windowsFeatureUpdateProfiles` | ✅ |
+| `Microsoft.Graph/windowsQualityUpdateProfiles` | ✅ |
+| `Microsoft.Graph/windowsDriverUpdateProfiles` | ✅ |
+| `Microsoft.Graph/deviceCategories` | ✅ |
+| `Microsoft.Graph/roleScopeTags` | ✅ |
+| `Microsoft.Graph/termsAndConditions` | ✅ |
+| `Microsoft.Graph/intuneBrandingProfiles` | ✅ |
+| `Microsoft.Graph/notificationMessageTemplates` | ✅ |
+| `Microsoft.Graph/namedLocations` | ✅ |
+| `Microsoft.Graph/termsOfUseAgreements` | ✅ |
+| `Microsoft.Graph/deviceManagementScripts` | ✅ |
+| `Microsoft.Graph/deviceShellScripts` | ✅ |
+| `Microsoft.Graph/deviceCustomAttributeShellScripts` | ✅ |
+| `Microsoft.Graph/deviceHealthScripts` | ✅ |
+| `Microsoft.Graph/deviceComplianceScripts` | ✅ |
+| `Microsoft.Graph/reusablePolicySettings` | ✅ |
+| `Microsoft.Graph/vppTokens` | ✅ |
+| `Microsoft.Graph/mobileThreatDefenseConnectors` | ✅ |
+| `Microsoft.Graph/ndesConnectors` | ✅ |
+| `Microsoft.Graph/deviceCompliancePolicies` | ✅ |
+| `Microsoft.Graph/compliancePolicies` | ✅ |
+| `Microsoft.Graph/groupPolicyConfigurations` | ✅ |
+| `Microsoft.Graph/deviceManagementIntents` | ✅ |
+| `Microsoft.Graph/mobileApps` | ✅ |
+| `Microsoft.Graph/iosManagedAppProtections` | ✅ |
+| `Microsoft.Graph/androidManagedAppProtections` | ✅ |
+| `Microsoft.Graph/windowsManagedAppProtections` | ✅ |
+| `Microsoft.Graph/mdmWindowsInformationProtectionPolicies` | ✅ |
+| `Microsoft.Graph/windowsInformationProtectionPolicies` | ✅ |
+| `Microsoft.Graph/mobileAppConfigurations` | ✅ |
+| `Microsoft.Graph/targetedManagedAppConfigurations` | ✅ |
+| `Microsoft.Graph/windowsAutopilotDeploymentProfiles` | ✅ |
+| `Microsoft.Graph/windowsAutopilotDeviceIdentities` | ✅ |
+| `Microsoft.Graph/deviceEnrollmentConfigurations` | ✅ |
+| `Microsoft.Graph/applePushNotificationCertificate` | ✅ |
+| `Microsoft.Graph/depOnboardingSettings` | ✅ |
+| `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` | ✅ |
+| `Microsoft.Graph/roleDefinitions` | ✅ |
+| `Microsoft.Graph/deviceManagement` | ✅ |
+| `Microsoft.Graph/authenticationMethodsPolicy` | ✅ |
+| `Microsoft.Graph/authorizationPolicy` | ✅ |
+| `Microsoft.Graph/onPremisesSynchronization` | ✅ |
+| `Microsoft.Graph/organization` | ✅ |
+| `Microsoft.Graph/organizationalBranding` | ✅ |
+| `Microsoft.Graph/groups` | ✅ |
 
-> **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization). Terraform type caveats: the provider names Windows feature/quality update *profiles* as `..._update_policy` resources, and `notificationMessageTemplates` maps to `..._device_compliance_notification_template`.
+> **Note:** The 15 collection types above (assignment filters through remediation scripts) all use the Microsoft Graph **beta** API via the shared `GraphCollectionHandler` (simple GET collection + GET item, full generic serialization).
 >
 > **Note:** Script resources (`deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts`) carry base64-encoded script bodies (`scriptContent`, or `detectionScriptContent`/`remediationScriptContent` for Remediations). The base64-decode transformer decodes them inline by default; in `file` mode the decoded script is written as a sidecar file named after the resource's `fileName` (`.ps1`/`.sh`), or `<display_name>_detection.ps1` / `<display_name>_remediation.ps1` for Remediations.
 
@@ -698,31 +645,31 @@ Currently supported Azure resource types:
 >
 > **Note:** macOS/iOS **DDM (Declarative Device Management)** policies have no dedicated Graph endpoint — they are Settings Catalog policies and are exported by `Microsoft.Graph/deviceManagementConfigurationPolicies`. A policy delivered via DDM is identifiable in the exported YAML by its `technologies` field containing `appleRemoteManagement` (the Graph DDM delivery channel). No separate handler or resource type is required.
 >
-> **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`. The Terraform resource type is polymorphic in practice; verify the emitted import against your provider/profile variant.
+> **Note:** `Microsoft.Graph/deviceConfigurations` (legacy Intune device configuration profiles) uses the Microsoft Graph **beta** API and covers the polymorphic profile types, including Custom/OMA-URI profiles (`windows10CustomConfiguration`, `androidCustomConfiguration`, `iosCustomConfiguration`, `macOSCustomConfiguration`). This is distinct from the Settings Catalog endpoint above. Requires `DeviceManagementConfiguration.Read.All`.
 >
 > **Note:** Compliance, Administrative Templates and Endpoint Security intents need child fetches beyond a plain GET:
 > - `Microsoft.Graph/deviceCompliancePolicies` (classic, platform-polymorphic) is fetched with `$expand=scheduledActionsForRule($expand=scheduledActionConfigurations)`. The provider's compliance resources are per-platform (`windows`/`macos`/`ios`/`android_device_owner`/`aosp` variants); the Windows variant is emitted by default — adjust the import for other platforms.
 > - `Microsoft.Graph/compliancePolicies` (Settings Catalog based, currently Linux) is fetched with `$expand=settings,scheduledActionsForRule(...)` and named via its `name` field.
 > - `Microsoft.Graph/groupPolicyConfigurations` (Administrative Templates) additionally downloads the `definitionValues?$expand=definition` child collection so each configured ADMX setting carries its definition metadata.
-> - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection. The provider has no resource for legacy intents, so no Terraform import is emitted.
-> - `Microsoft.Graph/deviceComplianceScripts` (Windows **custom compliance** scripts) carry a single base64 `detectionScriptContent`, decoded by the base64-decode transformer (inline by default, or a `*_detection.ps1` sidecar in file mode). Assignments are inlined. Distinct from `deviceHealthScripts` (Remediations); the provider has no resource, so no Terraform import is emitted.
+> - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection.
+> - `Microsoft.Graph/deviceComplianceScripts` (Windows **custom compliance** scripts) carry a single base64 `detectionScriptContent`, decoded by the base64-decode transformer (inline by default, or a `*_detection.ps1` sidecar in file mode). Assignments are inlined. Distinct from `deviceHealthScripts` (Remediations).
 > - `Microsoft.Graph/reusablePolicySettings` are reusable settings (e.g. firewall rule groups, certificates) referenced **by ID** from Endpoint Security / Settings Catalog policies; exporting them keeps those references resolvable. A plain GET returns the full `settingInstance` tree.
-> - `Microsoft.Graph/mobileThreatDefenseConnectors` configure MTD partner integrations (e.g. Microsoft Defender for Endpoint) across Windows/macOS/iOS/Android. Connectors have no display name, so the item ID (partner identifier) is used as the name; no provider resource, so no Terraform import is emitted.
-> - `Microsoft.Graph/ndesConnectors` expose the on-premises NDES/SCEP certificate connector state/metadata (certificate-based Windows config). Named by friendly name, falling back to the item ID; no provider resource, so no Terraform import is emitted.
+> - `Microsoft.Graph/mobileThreatDefenseConnectors` configure MTD partner integrations (e.g. Microsoft Defender for Endpoint) across Windows/macOS/iOS/Android. Connectors have no display name, so the item ID (partner identifier) is used as the name.
+> - `Microsoft.Graph/ndesConnectors` expose the on-premises NDES/SCEP certificate connector state/metadata (certificate-based Windows config). Named by friendly name, falling back to the item ID.
 >
 > **Note:** Application (`deviceAppManagement`) types:
-> - `Microsoft.Graph/mobileApps` is highly polymorphic (`win32LobApp`, `winGetApp`, `macOSPkgApp`, `iosStoreApp`, `officeSuiteApp`, …) and includes Microsoft built-in apps. The provider's app resources are per-type (`win32_app`, `win_get_app`, `macos_pkg_app`, …); the Win32 variant is emitted by default — adjust the import per app's `@odata.type`.
-> - App protection policies (`iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`) and app configurations (`targetedManagedAppConfigurations`) are fetched with `$expand=apps` so the targeted app list is included. The provider has no managed-app-protection resources yet, so those emit no Terraform import.
-> - WIP policies (`mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`) are deprecated by Microsoft and have no provider resource; downloaded for documentation/backup only.
-> - `Microsoft.Graph/mobileAppConfigurations` (managed-device app config) is platform-polymorphic; the iOS provider variant is emitted by default — adjust for Android policies.
-> - `Microsoft.Graph/vppTokens` are Apple Volume Purchase Program tokens used to license store apps to macOS/iOS; the token secret is masked by the service (metadata only). Named by friendly name, falling back to organization name then Apple ID. No provider resource, so no Terraform import is emitted.
+> - `Microsoft.Graph/mobileApps` is highly polymorphic (`win32LobApp`, `winGetApp`, `macOSPkgApp`, `iosStoreApp`, `officeSuiteApp`, …) and includes Microsoft built-in apps.
+> - App protection policies (`iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`) and app configurations (`targetedManagedAppConfigurations`) are fetched with `$expand=apps` so the targeted app list is included.
+> - WIP policies (`mdmWindowsInformationProtectionPolicies`, `windowsInformationProtectionPolicies`) are deprecated by Microsoft; downloaded for documentation/backup only.
+> - `Microsoft.Graph/mobileAppConfigurations` (managed-device app config) is platform-polymorphic.
+> - `Microsoft.Graph/vppTokens` are Apple Volume Purchase Program tokens used to license store apps to macOS/iOS; the token secret is masked by the service (metadata only). Named by friendly name, falling back to organization name then Apple ID.
 >
 > **Note:** Autopilot & enrollment types:
 > - `Microsoft.Graph/windowsAutopilotDeviceIdentities` is registered device *data* rather than configuration and can be a large collection; identities without a display name are named by serial number.
-> - `Microsoft.Graph/deviceEnrollmentConfigurations` is polymorphic (enrollment limits, platform restrictions, ESP, Windows Hello for Business, enrollment notifications, incl. tenant defaults). The provider covers only some types (`windows_enrollment_status_page`, `device_enrollment_limit_configuration`, `device_enrollment_notification`); the ESP variant is emitted by default — adjust per `@odata.type`.
+> - `Microsoft.Graph/deviceEnrollmentConfigurations` is polymorphic (enrollment limits, platform restrictions, ESP, Windows Hello for Business, enrollment notifications, incl. tenant defaults).
 > - `Microsoft.Graph/applePushNotificationCertificate` is a tenant **singleton**: at most one file, named after the Apple ID; tenants without a certificate are skipped.
-> - `Microsoft.Graph/depOnboardingSettings` (Apple ADE/DEP tokens) additionally downloads the `enrollmentProfiles` child collection per token. The provider models only child profiles (`apple_configurator_enrollment_policy`), so no import is emitted.
-> - `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` has no provider resource for the profile itself (only its assignment), so no import is emitted.
+> - `Microsoft.Graph/depOnboardingSettings` (Apple ADE/DEP tokens) additionally downloads the `enrollmentProfiles` child collection per token.
+> - `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` has no provider resource for the profile itself (only its assignment).
 >
 > **Note:** Tenant admin & Entra types:
 > - `Microsoft.Graph/roleDefinitions` exports only **custom** Intune RBAC roles (built-in definitions are skipped during listing).
@@ -730,11 +677,11 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/onPremisesSynchronization` (Entra Connect, v1.0) yields one file in hybrid tenants and none in cloud-only tenants.
 > - `Microsoft.Graph/organization` (v1.0) exports the tenant information object.
 > - `Microsoft.Graph/organizationalBranding` (beta) is a tenant **singleton** under the organization (`organization/{id}/branding`); it exports the default Entra company-branding object (incl. per-locale `localizations` via `$expand`) and yields no file when branding has not been configured. Distinct from `intuneBrandingProfiles` (Intune company portal branding).
-> - `Microsoft.Graph/groups` (v1.0) exports the **full** directory group list incl. dynamic membership rules — this can be very large in big tenants. Terraform type is `azuread_group` (azuread provider).
+> - `Microsoft.Graph/groups` (v1.0) exports the **full** directory group list incl. dynamic membership rules — this can be very large in big tenants.
 
 ### Handler Implementation Notes
 
-Every handler implements the `ResourceHandler` interface (`GetType`, `GetTerraformResourceType`, `List`, `Fetch`, `Transform`). Listing is handler-driven: ARM handlers delegate to shared pagers in `internal/azure/list.go`, Graph handlers page their own collection via `@odata.nextLink`.
+Every handler implements the `ResourceHandler` interface (`GetType`, `List`, `Fetch`, `Transform`). Listing is handler-driven: ARM handlers delegate to shared pagers in `internal/azure/list.go`, Graph handlers page their own collection via `@odata.nextLink`.
 
 | Handler group | SDK | Transform strategy |
 |---|---|---|
@@ -752,7 +699,6 @@ Established `fetchItem` patterns for types needing more than a plain GET:
 - **Child-collection fetches** — page the child collection and attach it to the model before serialization (see `grouppolicyconfiguration.go`, `devicemanagementintent.go`, `deponboardingsetting.go`).
 - **Post-fetch enrichment** — mutate the fetched model (see `deviceconfiguration.go` OMA secret resolution).
 - **Singletons** — probe the object in `listIDs` (return at most one ID, empty when absent) and ignore the item ID in `fetchItem` (see `applepushnotificationcertificate.go`).
-- **No Terraform representation** — return an empty `terraformType`; the transformer then skips the import block.
 - **Assignments** — Intune policies/profiles/apps/scripts fetch the `/{id}/assignments` child collection in `fetchItem` and attach it to the model via `SetAssignments`, so assignments are inlined under `assignments` in the exported YAML. Exception: the Graph beta service has no `/assignments` route for `deviceShellScripts` and `deviceCustomAttributeShellScripts`, so those two handlers read assignments via a second item GET with `$expand=assignments` instead. Assignment reads are best-effort: on failure a warning is logged (`warnAssignmentsFetchFailed` in `graph/collection.go`) and the item is exported without assignments.
 
 > **Known limitation:** group display names referenced by assignment targets are not resolved — assignments carry the target group IDs only (groups themselves are exported by `Microsoft.Graph/groups`).
@@ -796,17 +742,12 @@ func (h *KeyVaultHandler) GetType() string {
     return "Microsoft.KeyVault/vaults"
 }
 
-func (h *KeyVaultHandler) GetTerraformResourceType() string {
-    return "azurerm_key_vault"
-}
-
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for
 // this type. Supply type-specific metadata (Purpose, KeySettings,
 // EmbeddedPayloads) so the prompt is tailored to this resource type.
 func (h *KeyVaultHandler) GetDocumentationPrompt() string {
     return models.BuildDocumentationPrompt(models.ResourceDocumentation{
         AzureType:     h.GetType(),
-        TerraformType: h.GetTerraformResourceType(),
         Purpose:       "An Azure Key Vault that stores secrets, keys and certificates, with its access and network configuration.",
         KeySettings:   []string{"enableRbacAuthorization", "networkAcls", "enableSoftDelete", "enablePurgeProtection"},
     })
@@ -891,8 +832,7 @@ azure-resource-downloader/
 │   ├── retry/             # Exponential backoff for transient errors
 │   └── transform/         # Transformation utilities
 │       ├── cleaner.go     # Key removal / empty-value cleanup
-│       ├── sanitizer.go   # Filename & Terraform name sanitizer
-│       ├── terraform.go   # Terraform import generator
+│       ├── sanitizer.go   # Filename sanitizer
 │       └── base64.go      # Base64 payload decoding (inline / sidecar files)
 ├── go.mod
 ├── main.go
@@ -964,11 +904,6 @@ DEBUG Resolved resource IDs to names ids_resolved=[virtualNetworkId subnet.id] c
 **Name sanitization transformer:**
 ```
 DEBUG Sanitized name original="My-Resource@Group!" sanitized=my_resource_group
-```
-
-**Terraform import transformer:**
-```
-DEBUG Generated Terraform import block resource_type=azurerm_resource_group target_address=azurerm_resource_group.my_rg
 ```
 
 Debug logging shows exactly what each transformer does, which keys are removed/preserved/replaced, and why.

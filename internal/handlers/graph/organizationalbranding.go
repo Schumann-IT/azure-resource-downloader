@@ -23,9 +23,6 @@ const organizationalBrandingFallbackName = "Organizational Branding"
 // ID, and Fetch retrieves the branding regardless of the requested ID. When no
 // branding has been configured the Graph API returns an empty body, so List
 // yields no IDs and nothing is exported.
-//
-// There is no Terraform resource for organizational branding in the project's
-// providers, so no Terraform import is emitted.
 func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -48,8 +45,7 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/organizationalBranding",
-		terraformType: "",
+		azureType: "Microsoft.Graph/organizationalBranding",
 		documentation: docMeta(
 			"The Entra ID company branding shown on sign-in pages.",
 			nil,

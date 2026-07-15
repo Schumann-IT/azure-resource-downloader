@@ -18,9 +18,6 @@ const onPremisesSynchronizationName = "Entra Connect Synchronization"
 // (on-premises directory) synchronization configuration
 // (directory/onPremisesSynchronization, Microsoft Graph v1.0). The collection
 // holds at most one object per tenant; cloud-only tenants yield an empty list.
-//
-// There is no Terraform resource for the synchronization configuration, so no
-// Terraform import is emitted.
 func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newGraphClient(credential)
 	if err != nil {
@@ -28,8 +25,7 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/onPremisesSynchronization",
-		terraformType: "",
+		azureType: "Microsoft.Graph/onPremisesSynchronization",
 		documentation: docMeta(
 			"The tenant Entra ID on-premises directory synchronization (Azure AD Connect) configuration and features.",
 			[]string{"features", "configuration"},

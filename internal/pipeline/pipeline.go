@@ -203,8 +203,7 @@ func (s *ExecutionSummary) PrintSummary() {
 		for _, result := range s.Results {
 			if result.Error == nil {
 				log.Debug("Resource files",
-					"yaml", result.YAMLPath,
-					"terraform", result.TerraformPath)
+					"yaml", result.YAMLPath)
 			}
 		}
 	}

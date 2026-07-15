@@ -4,7 +4,7 @@ trigger: always_on
 
 # Project Context
 - **Language**: Go 1.24, Module mode
-- **Target**: CLI tool for downloading and transforming Azure resources to YAML + Terraform imports
+- **Target**: CLI tool for downloading and transforming Azure resources to YAML
 - **Architecture**: Async pipeline pattern with worker pools
 - **Repo layout**:
     - `cmd/`                    → Cobra CLI commands (root, download, list)
@@ -12,7 +12,7 @@ trigger: always_on
     - `internal/pipeline/`      → 3-stage async pipeline (fetcher, transformer, writer)
     - `internal/handlers/`      → Handler registry (package handlers); ARM handlers in `arm/`, Microsoft Graph handlers in `graph/`
     - `internal/azure/`         → Azure SDK wrappers and utilities
-    - `internal/transform/`     → Transformation utilities (cleaner, sanitizer, terraform)
+    - `internal/transform/`     → Transformation utilities (cleaner, sanitizer)
     - `main.go`                 → Entry point (calls cmd.Execute())
     - `Makefile`                → Build automation
 - **External dependencies**:
@@ -33,7 +33,7 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 ```
 
 ## Handler Registry Pattern
-- Interface: `ResourceHandler` (GetType, Fetch, Transform, GetTerraformResourceType)
+- Interface: `ResourceHandler` (GetType, Fetch, Transform)
 - Registry: Central handler registry with `Register()` and `Get()` methods
 - Extensibility: Add new resource types by implementing interface + registering
 
@@ -49,13 +49,12 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Use interfaces for extensibility (`ResourceHandler`)
 - New handlers MUST implement all interface methods:
   - `GetType() string` - Azure resource type
-  - `GetTerraformResourceType() string` - Terraform resource type
   - `GetDocumentationPrompt() string` - dedicated per-type LLM documentation prompt; build via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})` (ARM: inline metadata; Graph: add an entry to `graphResourceDocs` in `internal/handlers/graph/documentation.go`)
   - `List(ctx context.Context) ([]string, error)`
   - `Fetch(ctx context.Context, resourceID string) (interface{}, error)`
   - `Transform(resource interface{}) (*models.TransformedResource, error)`
 - Register new handlers in `internal/handlers/defaults.go` → `registerDefaults()` function (NOT in `cmd`; `handlers.NewRegistry` pre-populates from there)
-- ALWAYS update the "Supported Resource Types" table in `README.md` when adding (or removing) a resource type handler — this is mandatory, not optional. Include the Azure type, the Terraform resource type, and any required permissions/API notes. The README is the single source of truth.
+- ALWAYS update the "Supported Resource Types" table in `README.md` when adding (or removing) a resource type handler — this is mandatory, not optional. Include the Azure type and any required permissions/API notes. The README is the single source of truth.
 - Avoid global state; handlers get credential + subscriptionID via constructor
 - Pipeline stages communicate via channels only (no shared state)
 - Use `sync.RWMutex` for thread-safe registry access

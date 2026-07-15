@@ -21,8 +21,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceManagementScripts",
-		terraformType: "microsoft365_graph_beta_device_management_windows_platform_script",
+		azureType: "Microsoft.Graph/deviceManagementScripts",
 		documentation: docMeta(
 			"An Intune Windows PowerShell platform script run on managed devices.",
 			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},

@@ -103,15 +103,6 @@ func (h *XHandler) Transform(resource interface{}) (*models.TransformedResource,
 - Azure format: `Microsoft.Service/resourceType` (e.g., `Microsoft.Storage/storageAccounts`)
 - Use exact Azure naming (case-sensitive)
 
-### Terraform Types
-- Format: `azurerm_resource_type` (lowercase, underscores)
-- Follow official Azure Terraform provider naming
-- Examples:
-  - `azurerm_resource_group`
-  - `azurerm_storage_account`
-  - `azurerm_virtual_machine`
-  - `azurerm_key_vault`
-
 ### File Names
 - Handler files: `<resourcetype>.go` (lowercase, no underscores)
   - ✅ `resourcegroup.go`
@@ -200,12 +191,11 @@ func registerDefaults(r *Registry, cred azcore.TokenCredential, subscriptionID s
 - Mock Azure SDK responses
 - Test error cases: nil names, failed API calls, invalid type assertions
 - Test property mapping completeness
-- Verify Terraform type correctness
 
 ### Integration Tests (future)
 - Use Azure SDK test recorder
 - Test against real Azure resources in test subscription
-- Validate end-to-end: Fetch → Transform → Write → Import
+- Validate end-to-end: Fetch → Transform → Write
 
 ## Documentation Updates
 

@@ -19,8 +19,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceCategories",
-		terraformType: "microsoft365_graph_beta_device_management_device_category",
+		azureType: "Microsoft.Graph/deviceCategories",
 		documentation: docMeta(
 			"An Intune device category used to group and target devices at enrollment.",
 			nil,

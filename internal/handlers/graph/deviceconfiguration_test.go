@@ -20,20 +20,6 @@ func TestDeviceConfigurationHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestDeviceConfigurationHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, false)
-	if err != nil {
-		t.Fatalf("NewDeviceConfigurationHandler() unexpected error: %v", err)
-	}
-
-	expected := "microsoft365_graph_beta_device_management_device_configuration"
-	result := handler.GetTerraformResourceType()
-
-	if result != expected {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", result, expected)
-	}
-}
-
 func TestExtractDeviceConfigurationID(t *testing.T) {
 	tests := []struct {
 		name       string

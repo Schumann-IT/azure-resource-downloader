@@ -27,8 +27,7 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/groupPolicyConfigurations",
-		terraformType: "microsoft365_graph_beta_device_management_group_policy_configuration",
+		azureType: "Microsoft.Graph/groupPolicyConfigurations",
 		documentation: docMeta(
 			"An Intune Administrative Templates (ADMX-backed) group policy configuration.",
 			nil,

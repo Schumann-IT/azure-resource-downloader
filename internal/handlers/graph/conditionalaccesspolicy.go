@@ -19,8 +19,7 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/conditionalAccessPolicies",
-		terraformType: "azuread_conditional_access_policy",
+		azureType: "Microsoft.Graph/conditionalAccessPolicies",
 		documentation: docMeta(
 			"An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
 			[]string{"state", "grantControls.builtInControls", "conditions.users"},

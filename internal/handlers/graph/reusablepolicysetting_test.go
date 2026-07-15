@@ -18,18 +18,6 @@ func TestReusablePolicySettingHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestReusablePolicySettingHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewReusablePolicySettingHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewReusablePolicySettingHandler() unexpected error: %v", err)
-	}
-
-	expected := "microsoft365_graph_beta_device_management_reuseable_policy_setting"
-	if result := handler.GetTerraformResourceType(); result != expected {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", result, expected)
-	}
-}
-
 func TestReusablePolicySettingHandler_Transform(t *testing.T) {
 	handler, err := NewReusablePolicySettingHandler(fakeTokenCredential{})
 	if err != nil {

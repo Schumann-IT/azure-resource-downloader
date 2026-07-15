@@ -18,10 +18,6 @@ import (
 // The enrollment profiles tied to a token are not part of the token object:
 // they live in the child collection enrollmentProfiles, so Fetch retrieves
 // them separately and attaches them to the model before serialization.
-//
-// terraform-provider-microsoft365 models only the child enrollment profiles
-// (apple_configurator_enrollment_policy), not the token itself, so no
-// Terraform import is emitted.
 func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -29,8 +25,7 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/depOnboardingSettings",
-		terraformType: "",
+		azureType: "Microsoft.Graph/depOnboardingSettings",
 		documentation: docMeta(
 			"Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
 			[]string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},

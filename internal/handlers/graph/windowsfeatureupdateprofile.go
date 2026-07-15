@@ -20,8 +20,7 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/windowsFeatureUpdateProfiles",
-		terraformType: "microsoft365_graph_beta_device_management_windows_feature_update_policy",
+		azureType: "Microsoft.Graph/windowsFeatureUpdateProfiles",
 		documentation: docMeta(
 			"An Intune Windows feature update profile that controls the targeted Windows feature update version.",
 			[]string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},

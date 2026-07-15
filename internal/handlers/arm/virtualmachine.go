@@ -30,18 +30,12 @@ func (h *VirtualMachineHandler) GetType() string {
 	return "Microsoft.Compute/virtualMachines"
 }
 
-// GetTerraformResourceType returns the Terraform resource type
-func (h *VirtualMachineHandler) GetTerraformResourceType() string {
-	return "azurerm_virtual_machine"
-}
-
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *VirtualMachineHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
-		AzureType:     h.GetType(),
-		TerraformType: h.GetTerraformResourceType(),
-		Purpose:       "An Azure Virtual Machine, including its compute size, OS profile, storage, networking and security configuration.",
-		KeySettings:   []string{"hardwareProfile.vmSize", "storageProfile.osDisk", "osProfile", "networkProfile", "securityProfile"},
+		AzureType:   h.GetType(),
+		Purpose:     "An Azure Virtual Machine, including its compute size, OS profile, storage, networking and security configuration.",
+		KeySettings: []string{"hardwareProfile.vmSize", "storageProfile.osDisk", "osProfile", "networkProfile", "securityProfile"},
 	})
 }
 

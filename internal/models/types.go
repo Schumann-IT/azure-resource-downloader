@@ -37,16 +37,14 @@ type FetchResult struct {
 
 // TransformResult represents the result of transforming a resource
 type TransformResult struct {
-	ResourceID            string
-	ResourceType          string
-	DisplayName           string
-	SanitizedName         string
-	CleanedData           map[string]interface{}
-	TerraformImport       string
-	TerraformResourceType string         // The Terraform resource type (e.g., "azurerm_resource_group")
-	DocumentationPrompt   string         // LLM prompt for generating documentation for this resource type
-	Artifacts             []FileArtifact // Extra sidecar files to write alongside the YAML (e.g., decoded payloads)
-	Error                 error
+	ResourceID          string
+	ResourceType        string
+	DisplayName         string
+	SanitizedName       string
+	CleanedData         map[string]interface{}
+	DocumentationPrompt string         // LLM prompt for generating documentation for this resource type
+	Artifacts           []FileArtifact // Extra sidecar files to write alongside the YAML (e.g., decoded payloads)
+	Error               error
 	// Skipped is propagated from the fetch stage for resources the signed-in
 	// user is not permitted to read.
 	Skipped    bool
@@ -65,10 +63,9 @@ type FileArtifact struct {
 
 // WriteResult represents the result of writing files
 type WriteResult struct {
-	ResourceID    string
-	YAMLPath      string
-	TerraformPath string
-	Error         error
+	ResourceID string
+	YAMLPath   string
+	Error      error
 	// Skipped is propagated from earlier stages for resources the signed-in
 	// user is not permitted to read (no file is written).
 	Skipped    bool
@@ -80,13 +77,12 @@ type WriteResult struct {
 
 // TransformedResource represents a fully transformed Azure resource
 type TransformedResource struct {
-	ID              string
-	Type            string
-	Name            string
-	DisplayName     string
-	SanitizedName   string
-	Properties      map[string]interface{}
-	TerraformImport string
+	ID            string
+	Type          string
+	Name          string
+	DisplayName   string
+	SanitizedName string
+	Properties    map[string]interface{}
 }
 
 // ResourceHandler defines the interface for handling specific Azure resource types
@@ -104,9 +100,6 @@ type ResourceHandler interface {
 
 	// Transform converts the raw resource into a cleaned, transformed version
 	Transform(resource interface{}) (*TransformedResource, error)
-
-	// GetTerraformResourceType returns the Terraform resource type (e.g., "azurerm_storage_account")
-	GetTerraformResourceType() string
 
 	// GetDocumentationPrompt returns an LLM prompt that, given a resource of
 	// this type, instructs a model to generate end-user documentation covering
@@ -134,7 +127,6 @@ const (
 	TransformerCleaning         TransformerType = "cleaning"
 	TransformerIDResolution     TransformerType = "id-resolution"
 	TransformerNameSanitization TransformerType = "name-sanitization"
-	TransformerTerraformImport  TransformerType = "terraform-import"
 	TransformerBase64Decode     TransformerType = "base64-decode"
 )
 
@@ -157,11 +149,6 @@ type CleaningConfig struct {
 type KeyReplacement struct {
 	From string // Source path (e.g., "grantControls.authenticationStrength.displayName")
 	To   string // Destination path (e.g., "grantControls.authenticationStrength")
-}
-
-// TerraformImportConfig holds configuration for the terraform-import transformer
-type TerraformImportConfig struct {
-	TargetFormat string // Format template for 'to' address
 }
 
 // Base64 decode transformer modes
@@ -187,7 +174,6 @@ func DefaultTransformerConfigs() []TransformerConfig {
 		{Name: string(TransformerCleaning), Config: map[string]interface{}{}},
 		{Name: string(TransformerIDResolution), Config: map[string]interface{}{}},
 		{Name: string(TransformerNameSanitization), Config: map[string]interface{}{}},
-		{Name: string(TransformerTerraformImport), Config: map[string]interface{}{}},
 		{Name: string(TransformerBase64Decode), Config: map[string]interface{}{}},
 	}
 }
@@ -267,19 +253,6 @@ func ParseCleaningConfig(config map[string]interface{}) *CleaningConfig {
 
 	if cleanEmpty, ok := config["clean-empty"].(bool); ok {
 		result.CleanEmpty = cleanEmpty
-	}
-
-	return result
-}
-
-// ParseTerraformImportConfig extracts terraform-import configuration
-func ParseTerraformImportConfig(config map[string]interface{}) *TerraformImportConfig {
-	result := &TerraformImportConfig{
-		TargetFormat: "{resource_type}.{name}", // Default
-	}
-
-	if targetFormat, ok := config["target-format"].(string); ok && targetFormat != "" {
-		result.TargetFormat = targetFormat
 	}
 
 	return result

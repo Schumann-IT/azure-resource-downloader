@@ -21,8 +21,7 @@ func (stubCredential) GetToken(_ context.Context, _ policy.TokenRequestOptions) 
 
 // MockHandler is a mock implementation of ResourceHandler for testing
 type MockHandler struct {
-	resourceType          string
-	terraformResourceType string
+	resourceType string
 }
 
 func (m *MockHandler) GetType() string {
@@ -45,14 +44,9 @@ func (m *MockHandler) Transform(resource interface{}) (*models.TransformedResour
 	}, nil
 }
 
-func (m *MockHandler) GetTerraformResourceType() string {
-	return m.terraformResourceType
-}
-
 func (m *MockHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
-		AzureType:     m.resourceType,
-		TerraformType: m.terraformResourceType,
+		AzureType: m.resourceType,
 	})
 }
 
@@ -102,8 +96,7 @@ func TestNewRegistryRegistersDefaults(t *testing.T) {
 func TestRegister(t *testing.T) {
 	registry := NewEmptyRegistry()
 	handler := &MockHandler{
-		resourceType:          "Microsoft.Storage/storageAccounts",
-		terraformResourceType: "azurerm_storage_account",
+		resourceType: "Microsoft.Storage/storageAccounts",
 	}
 
 	registry.Register("Microsoft.Storage/storageAccounts", handler)
@@ -116,8 +109,7 @@ func TestRegister(t *testing.T) {
 func TestGet(t *testing.T) {
 	registry := NewEmptyRegistry()
 	handler := &MockHandler{
-		resourceType:          "Microsoft.Storage/storageAccounts",
-		terraformResourceType: "azurerm_storage_account",
+		resourceType: "Microsoft.Storage/storageAccounts",
 	}
 
 	registry.Register("Microsoft.Storage/storageAccounts", handler)

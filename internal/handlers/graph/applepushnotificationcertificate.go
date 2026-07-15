@@ -20,9 +20,6 @@ const applePushCertificateFallbackName = "Apple MDM Push Certificate"
 // object and returns at most one pseudo-ID, and Fetch retrieves the singleton
 // regardless of the requested ID. Tenants without an Apple certificate are
 // listed as empty instead of failing.
-//
-// terraform-provider-microsoft365 has no resource for the Apple MDM push
-// certificate, so no Terraform import is emitted.
 func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -38,8 +35,7 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/applePushNotificationCertificate",
-		terraformType: "",
+		azureType: "Microsoft.Graph/applePushNotificationCertificate",
 		documentation: docMeta(
 			"The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
 			[]string{"expirationDateTime", "appleIdentifier"},

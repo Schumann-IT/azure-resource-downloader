@@ -22,8 +22,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceHealthScripts",
-		terraformType: "microsoft365_graph_beta_device_management_windows_remediation_script",
+		azureType: "Microsoft.Graph/deviceHealthScripts",
 		documentation: docMeta(
 			"An Intune Windows remediation script package (detection + remediation).",
 			[]string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},

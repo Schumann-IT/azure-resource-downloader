@@ -20,8 +20,7 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/authenticationStrengthPolicies",
-		terraformType: "azuread_authentication_strength_policy",
+		azureType: "Microsoft.Graph/authenticationStrengthPolicies",
 		documentation: docMeta(
 			"An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
 			[]string{"allowedCombinations"},

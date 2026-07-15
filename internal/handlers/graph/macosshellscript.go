@@ -22,8 +22,7 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceShellScripts",
-		terraformType: "microsoft365_graph_beta_device_management_macos_platform_script",
+		azureType: "Microsoft.Graph/deviceShellScripts",
 		documentation: docMeta(
 			"An Intune macOS shell script run on managed Macs.",
 			[]string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},

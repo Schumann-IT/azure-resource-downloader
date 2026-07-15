@@ -19,8 +19,7 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/termsOfUseAgreements",
-		terraformType: "microsoft365_graph_identity_and_access_conditional_access_terms_of_use",
+		azureType: "Microsoft.Graph/termsOfUseAgreements",
 		documentation: docMeta(
 			"An Entra ID Terms of Use agreement presented via Conditional Access.",
 			[]string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},

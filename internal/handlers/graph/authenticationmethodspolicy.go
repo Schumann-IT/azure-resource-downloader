@@ -19,9 +19,6 @@ const authenticationMethodsPolicyFallbackName = "Authentication Methods Policy"
 // Microsoft Graph v1.0), including the per-method configurations. This is a
 // tenant **singleton**: List probes the object and returns at most one
 // pseudo-ID, and Fetch retrieves the singleton regardless of the requested ID.
-//
-// There is no Terraform resource for the authentication methods policy in the
-// project's providers, so no Terraform import is emitted.
 func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newGraphClient(credential)
 	if err != nil {
@@ -37,8 +34,7 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/authenticationMethodsPolicy",
-		terraformType: "",
+		azureType: "Microsoft.Graph/authenticationMethodsPolicy",
 		documentation: docMeta(
 			"The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
 			[]string{"authenticationMethodConfigurations", "registrationEnforcement"},

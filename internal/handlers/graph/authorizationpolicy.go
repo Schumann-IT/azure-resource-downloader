@@ -20,9 +20,6 @@ const authorizationPolicyFallbackName = "Authorization Policy"
 // This is a tenant **singleton**: List probes the object and returns at most
 // one pseudo-ID, and Fetch retrieves the singleton regardless of the requested
 // ID.
-//
-// There is no Terraform resource for the authorization policy in the project's
-// providers, so no Terraform import is emitted.
 func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newGraphClient(credential)
 	if err != nil {
@@ -38,8 +35,7 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/authorizationPolicy",
-		terraformType: "",
+		azureType: "Microsoft.Graph/authorizationPolicy",
 		documentation: docMeta(
 			"The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
 			[]string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},

@@ -20,8 +20,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/intuneBrandingProfiles",
-		terraformType: "microsoft365_graph_beta_device_management_intune_branding_profile",
+		azureType: "Microsoft.Graph/intuneBrandingProfiles",
 		documentation: docMeta(
 			"An Intune Company Portal branding profile controlling the end-user portal appearance.",
 			nil,

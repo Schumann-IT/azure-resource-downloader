@@ -25,8 +25,7 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceManagementConfigurationPolicies",
-		terraformType: "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy",
+		azureType: "Microsoft.Graph/deviceManagementConfigurationPolicies",
 		documentation: docMeta(
 			"An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
 			nil,

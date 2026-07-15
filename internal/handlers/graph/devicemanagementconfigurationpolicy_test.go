@@ -20,20 +20,6 @@ func TestDeviceManagementConfigurationPolicyHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestDeviceManagementConfigurationPolicyHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewDeviceManagementConfigurationPolicyHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewDeviceManagementConfigurationPolicyHandler() unexpected error: %v", err)
-	}
-
-	expected := "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy"
-	result := handler.GetTerraformResourceType()
-
-	if result != expected {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", result, expected)
-	}
-}
-
 // TestDeviceManagementConfigurationPolicyHandler_Transform verifies that
 // Settings Catalog policies are named via their `name` field (these policies
 // have no `displayName`).

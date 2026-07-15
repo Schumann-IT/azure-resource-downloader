@@ -30,18 +30,12 @@ func (h *StorageAccountHandler) GetType() string {
 	return "Microsoft.Storage/storageAccounts"
 }
 
-// GetTerraformResourceType returns the Terraform resource type
-func (h *StorageAccountHandler) GetTerraformResourceType() string {
-	return "azurerm_storage_account"
-}
-
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *StorageAccountHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
-		AzureType:     h.GetType(),
-		TerraformType: h.GetTerraformResourceType(),
-		Purpose:       "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
-		KeySettings:   []string{"enableHttpsTrafficOnly", "minimumTlsVersion", "allowBlobPublicAccess", "allowSharedKeyAccess", "networkRuleSet", "encryption"},
+		AzureType:   h.GetType(),
+		Purpose:     "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
+		KeySettings: []string{"enableHttpsTrafficOnly", "minimumTlsVersion", "allowBlobPublicAccess", "allowSharedKeyAccess", "networkRuleSet", "encryption"},
 	})
 }
 

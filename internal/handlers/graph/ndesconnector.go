@@ -14,10 +14,6 @@ import (
 // connectors (deviceManagement/ndesConnectors, Microsoft Graph beta). These
 // expose the connection state/metadata of the on-premises NDES connector used
 // for SCEP certificate issuance; relevant to certificate-based Windows config.
-//
-// The deploymenttheory/microsoft365 provider has no NDES connector resource, so
-// no Terraform import is emitted. Connectors are named by their friendly name,
-// falling back to the item ID.
 func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -25,8 +21,7 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/ndesConnectors",
-		terraformType: "",
+		azureType: "Microsoft.Graph/ndesConnectors",
 		documentation: docMeta(
 			"An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.",
 			[]string{"state", "lastConnectionDateTime"},

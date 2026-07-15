@@ -14,10 +14,6 @@ import (
 // Defense connectors (deviceManagement/mobileThreatDefenseConnectors, Microsoft
 // Graph beta), which wire Intune to MTD partners (e.g. Microsoft Defender for
 // Endpoint) across Windows, macOS, iOS and Android.
-//
-// The deploymenttheory/microsoft365 provider has no MTD connector resource, so
-// no Terraform import is emitted. Connectors carry no display name; the item ID
-// (the partner identifier) is used as the name.
 func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -25,8 +21,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/mobileThreatDefenseConnectors",
-		terraformType: "",
+		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
 		documentation: docMeta(
 			"An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
 			[]string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},

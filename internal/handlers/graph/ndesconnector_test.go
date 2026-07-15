@@ -18,17 +18,6 @@ func TestNdesConnectorHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestNdesConnectorHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewNdesConnectorHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewNdesConnectorHandler() unexpected error: %v", err)
-	}
-
-	if result := handler.GetTerraformResourceType(); result != "" {
-		t.Errorf("GetTerraformResourceType() = %q, want empty (no provider resource)", result)
-	}
-}
-
 func TestNdesConnectorHandler_Transform(t *testing.T) {
 	handler, err := NewNdesConnectorHandler(fakeTokenCredential{})
 	if err != nil {

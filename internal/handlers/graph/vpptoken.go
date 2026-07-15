@@ -14,10 +14,6 @@ import (
 // tokens (deviceAppManagement/vppTokens, Microsoft Graph beta), used to license
 // store apps to macOS/iOS devices. The token secret itself is masked by the
 // service; only metadata is exported.
-//
-// The deploymenttheory/microsoft365 provider has no VPP token resource, so no
-// Terraform import is emitted. Tokens are named by their admin friendly name,
-// falling back to the organization name and then the Apple ID.
 func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -25,8 +21,7 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/vppTokens",
-		terraformType: "",
+		azureType: "Microsoft.Graph/vppTokens",
 		documentation: docMeta(
 			"An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
 			[]string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},

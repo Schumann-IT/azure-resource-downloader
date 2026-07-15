@@ -16,11 +16,6 @@ import (
 // collection is polymorphic per platform (iosMobileAppConfiguration,
 // androidManagedStoreAppConfiguration, ...); the settings payload is part of
 // the object, so no $expand is required.
-//
-// The Terraform resource type is platform-specific in
-// terraform-provider-microsoft365 (ios/android managed-device app
-// configuration policy variants); the iOS variant is emitted as the default —
-// verify the import against the policy's @odata.type.
 func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -28,8 +23,7 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/mobileAppConfigurations",
-		terraformType: "microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy",
+		azureType: "Microsoft.Graph/mobileAppConfigurations",
 		documentation: docMeta(
 			"An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
 			nil,

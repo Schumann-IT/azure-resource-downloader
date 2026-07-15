@@ -24,8 +24,7 @@ func (fakeTokenCredential) GetToken(_ context.Context, _ policy.TokenRequestOpti
 // model, which is representative of all simple Graph collections.
 func newTestGraphCollectionHandler() *GraphCollectionHandler {
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceCategories",
-		terraformType: "microsoft365_graph_beta_device_management_device_category",
+		azureType: "Microsoft.Graph/deviceCategories",
 		listIDs: func(_ context.Context) ([]string, error) {
 			return []string{"id-1", "id-2"}, nil
 		},
@@ -48,9 +47,6 @@ func TestGraphCollectionHandlerGetters(t *testing.T) {
 
 	if got := h.GetType(); got != "Microsoft.Graph/deviceCategories" {
 		t.Errorf("GetType() = %q, want %q", got, "Microsoft.Graph/deviceCategories")
-	}
-	if got := h.GetTerraformResourceType(); got != "microsoft365_graph_beta_device_management_device_category" {
-		t.Errorf("GetTerraformResourceType() = %q, want %q", got, "microsoft365_graph_beta_device_management_device_category")
 	}
 }
 

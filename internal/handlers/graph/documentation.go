@@ -7,7 +7,7 @@ import "azure-resource-downloader/internal/models"
 // calls this to set the GraphCollectionHandler.documentation field, so every
 // type carries (and can override) its own prompt with a type-specific purpose,
 // notable settings, embedded payloads to expand and curated reference links.
-// AzureType/TerraformType are filled in from the handler when the prompt is
+// AzureType is filled in from the handler when the prompt is
 // built. Pass nil for keySettings/embeddedPayloads and a zero ResourceLinks
 // when not relevant.
 func docMeta(purpose string, keySettings, embeddedPayloads []string, links models.ResourceLinks) models.ResourceDocumentation {

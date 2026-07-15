@@ -85,9 +85,6 @@
 # - error: Errors only
 # log-level: "info"
 
-# Note: Terraform import format is now configured per-transformer
-# See the terraform-import transformer configuration above
-
 # Transformers (optional)
 # List of transformers to apply with their configurations
 # Default: all transformers are applied with default settings
@@ -95,8 +92,7 @@
 # Available transformers:
 #   - cleaning: Clean properties and apply exclusions
 #   - id-resolution: Resolve Azure resource IDs to friendly names  
-#   - name-sanitization: Sanitize resource names for files/Terraform
-#   - terraform-import: Generate Terraform import blocks
+#   - name-sanitization: Sanitize resource names for files
 #   - base64-decode: Decode a base64 property (e.g. Intune macOS profile payload).
 #                    Options:
 #                      mode (default: inline)  # inline = replace value in YAML;
@@ -113,7 +109,6 @@
 #     # To remove Azure metadata, specify remove-keys explicitly
 #   - name: id-resolution
 #   - name: name-sanitization
-#   - name: terraform-import
 #
 # Example 2: Cleaning transformer with remove-keys, preserve-keys, and replace
 # transformers:
@@ -142,31 +137,14 @@
 #     clean-empty: true           # Remove keys with empty values (null, [], "", {}). Default: true
 #   - name: id-resolution
 #   - name: name-sanitization
-#   - name: terraform-import
-#     target-format: "{resource_type}.{name}"
 #
-# Example 3: Skip Terraform imports
-# transformers:
-#   - name: cleaning
-#   - name: id-resolution
-#   - name: name-sanitization
-#
-# Example 4: Module-based Terraform imports
-# transformers:
-#   - name: cleaning
-#   - name: id-resolution
-#   - name: name-sanitization
-#   - name: terraform-import
-#     target-format: 'module["{name}"].{resource_type}.this'
-#
-# Example 5: Simple list format (no custom config)
+# Example 3: Simple list format (no custom config)
 # transformers:
 #   - cleaning
 #   - id-resolution
 #   - name-sanitization
-#   - terraform-import
 #
-# Example 6: Disable ALL transformers (raw Azure data)
+# Example 4: Disable ALL transformers (raw Azure data)
 # transformers: []
 
 # Filters (optional)

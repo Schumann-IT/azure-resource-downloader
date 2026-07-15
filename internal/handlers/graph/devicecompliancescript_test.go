@@ -18,17 +18,6 @@ func TestDeviceComplianceScriptHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestDeviceComplianceScriptHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewDeviceComplianceScriptHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewDeviceComplianceScriptHandler() unexpected error: %v", err)
-	}
-
-	if result := handler.GetTerraformResourceType(); result != "" {
-		t.Errorf("GetTerraformResourceType() = %q, want empty (no provider resource)", result)
-	}
-}
-
 func TestDeviceComplianceScriptHandler_Transform(t *testing.T) {
 	handler, err := NewDeviceComplianceScriptHandler(fakeTokenCredential{})
 	if err != nil {

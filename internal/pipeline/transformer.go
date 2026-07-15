@@ -184,7 +184,7 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		log.Debug("Skipping base64-decode transformer (not configured)")
 	}
 
-	// Step 3: Sanitize name for file/Terraform compatibility
+	// Step 3: Sanitize name for file compatibility
 	var sanitizedName string
 	if models.HasTransformer(t.transformerConfigs, models.TransformerNameSanitization) {
 		sanitizedName = transform.SanitizeFileName(transformed.DisplayName)
@@ -192,25 +192,6 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		sanitizedName = transformed.DisplayName
 		log.Debug("Skipping name-sanitization transformer (not configured)",
 			"using_original_name", sanitizedName)
-	}
-
-	terraformResourceType := handler.GetTerraformResourceType()
-
-	// Step 4: Generate Terraform import block. Types without a Terraform
-	// representation (empty resource type) are skipped.
-	var terraformImport string
-	if importConfig := models.GetTransformerConfig(t.transformerConfigs, models.TransformerTerraformImport); importConfig != nil && terraformResourceType == "" {
-		log.Debug("Skipping terraform-import transformer (no Terraform resource type)")
-	} else if importConfig != nil {
-		config := models.ParseTerraformImportConfig(importConfig.Config)
-		terraformImport = transform.GenerateTerraformImportBlock(
-			terraformResourceType,
-			sanitizedName,
-			fetchResult.ResourceID,
-			config.TargetFormat,
-		)
-	} else {
-		log.Debug("Skipping terraform-import transformer (not configured)")
 	}
 
 	// Build list of active transformers for logging
@@ -226,15 +207,13 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 		"transformers", strings.Join(activeTransformers, ", "))
 
 	return &models.TransformResult{
-		ResourceID:            fetchResult.ResourceID,
-		ResourceType:          fetchResult.ResourceType,
-		DisplayName:           transformed.DisplayName,
-		SanitizedName:         sanitizedName,
-		CleanedData:           processedData,
-		TerraformImport:       terraformImport,
-		TerraformResourceType: terraformResourceType,
-		DocumentationPrompt:   handler.GetDocumentationPrompt(),
-		Artifacts:             artifacts,
-		Error:                 nil,
+		ResourceID:          fetchResult.ResourceID,
+		ResourceType:        fetchResult.ResourceType,
+		DisplayName:         transformed.DisplayName,
+		SanitizedName:       sanitizedName,
+		CleanedData:         processedData,
+		DocumentationPrompt: handler.GetDocumentationPrompt(),
+		Artifacts:           artifacts,
+		Error:               nil,
 	}
 }

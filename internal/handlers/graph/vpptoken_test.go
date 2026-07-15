@@ -18,17 +18,6 @@ func TestVppTokenHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestVppTokenHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewVppTokenHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewVppTokenHandler() unexpected error: %v", err)
-	}
-
-	if result := handler.GetTerraformResourceType(); result != "" {
-		t.Errorf("GetTerraformResourceType() = %q, want empty (no provider resource)", result)
-	}
-}
-
 // VPP tokens have no displayName in many tenants; the handler falls back to the
 // organization name (then the Apple ID) so the export still gets a stable name.
 func TestVppTokenHandler_Transform_OrganizationNameFallback(t *testing.T) {

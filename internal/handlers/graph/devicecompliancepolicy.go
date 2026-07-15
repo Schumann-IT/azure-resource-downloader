@@ -19,11 +19,6 @@ import (
 // Fetch uses $expand=scheduledActionsForRule($expand=scheduledActionConfigurations)
 // so the noncompliance action rules are included (they are not returned by a
 // plain GET).
-//
-// The Terraform resource type is platform-specific in
-// terraform-provider-microsoft365 (windows/macos/ios/android_device_owner/aosp
-// variants); the Windows variant is emitted as the default — verify the import
-// against the policy's platform.
 func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -31,8 +26,7 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceCompliancePolicies",
-		terraformType: "microsoft365_graph_beta_device_management_windows_device_compliance_policy",
+		azureType: "Microsoft.Graph/deviceCompliancePolicies",
 		documentation: docMeta(
 			"An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
 			[]string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},

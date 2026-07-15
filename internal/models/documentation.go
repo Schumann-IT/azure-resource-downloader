@@ -16,9 +16,6 @@ type ResourceLinks struct {
 	// benchmarks, or any other best-practice documentation relevant to this
 	// resource type.
 	BestPractices []string
-	// TerraformDocs is the Terraform Registry page for the corresponding
-	// azurerm or microsoft365 provider resource.
-	TerraformDocs string
 	// SchemaReference is the OData $metadata endpoint, ARM type schema, or
 	// Graph schema explorer URL for this resource type. Helps the LLM resolve
 	// unfamiliar properties to their canonical type definitions.
@@ -29,15 +26,12 @@ type ResourceLinks struct {
 }
 
 // ResourceDocumentation holds the per-resource-type metadata used to build a
-// dedicated documentation LLM prompt. AzureType and TerraformType identify the
-// resource type; Purpose, KeySettings, EmbeddedPayloads and Links tailor the
-// prompt so each resource type gets its own prompt rather than a single generic
-// one.
+// dedicated documentation LLM prompt. AzureType identifies the resource type;
+// Purpose, KeySettings, EmbeddedPayloads and Links tailor the prompt so each
+// resource type gets its own prompt rather than a single generic one.
 type ResourceDocumentation struct {
 	// AzureType is the Azure/Microsoft Graph resource type (e.g. "Microsoft.Graph/deviceConfigurations").
 	AzureType string
-	// TerraformType is the Terraform resource type; empty when the type has no Terraform representation.
-	TerraformType string
 	// Purpose is a short, type-specific description of what the resource is and what it controls.
 	Purpose string
 	// KeySettings lists the settings most important for this type, to be given particular attention.
@@ -56,9 +50,7 @@ type ResourceDocumentation struct {
 // asks the model to document every setting with best-practice guidance,
 // Microsoft documentation links, and fully expanded embedded payloads.
 //
-// TerraformType may be empty for resource types with no Terraform
-// representation; the corresponding line is then omitted. All fields of Links
-// are optional and are omitted from the prompt when empty.
+// All fields of Links are optional and are omitted from the prompt when empty.
 func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	var b strings.Builder
 
@@ -66,20 +58,14 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	b.WriteString("Generate clear, accurate end-user documentation for the attached resource configuration.\n\n")
 
 	fmt.Fprintf(&b, "Azure resource type: %s\n", doc.AzureType)
-	if doc.TerraformType != "" {
-		fmt.Fprintf(&b, "Terraform resource type: %s\n", doc.TerraformType)
-	}
 	if doc.Purpose != "" {
 		fmt.Fprintf(&b, "About this resource type: %s\n", doc.Purpose)
 	}
 
-	if l := doc.Links; l.EndpointDocs != "" || l.TerraformDocs != "" || l.SchemaReference != "" || l.Permissions != "" || len(l.BestPractices) > 0 {
+	if l := doc.Links; l.EndpointDocs != "" || l.SchemaReference != "" || l.Permissions != "" || len(l.BestPractices) > 0 {
 		b.WriteString("\nReference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):\n")
 		if l.EndpointDocs != "" {
 			fmt.Fprintf(&b, "- API reference: %s\n", l.EndpointDocs)
-		}
-		if l.TerraformDocs != "" {
-			fmt.Fprintf(&b, "- Terraform registry: %s\n", l.TerraformDocs)
 		}
 		if l.SchemaReference != "" {
 			fmt.Fprintf(&b, "- Schema reference: %s\n", l.SchemaReference)

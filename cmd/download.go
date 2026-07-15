@@ -32,7 +32,7 @@ var (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download Azure resources",
-	Long: `Download Azure resources and transform them into YAML format with Terraform import statements.
+	Long: `Download Azure resources and transform them into YAML format.
 
 You can specify resources in multiple ways:
   - By resource ID: --resource-id "/subscriptions/.../resourceGroups/my-rg"

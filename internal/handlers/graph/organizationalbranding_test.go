@@ -18,17 +18,6 @@ func TestOrganizationalBrandingHandler_GetType(t *testing.T) {
 	}
 }
 
-func TestOrganizationalBrandingHandler_GetTerraformResourceType(t *testing.T) {
-	handler, err := NewOrganizationalBrandingHandler(fakeTokenCredential{})
-	if err != nil {
-		t.Fatalf("NewOrganizationalBrandingHandler() unexpected error: %v", err)
-	}
-
-	if result := handler.GetTerraformResourceType(); result != "" {
-		t.Errorf("GetTerraformResourceType() = %q, want empty (no provider resource)", result)
-	}
-}
-
 func TestOrganizationalBrandingHandler_Transform(t *testing.T) {
 	handler, err := NewOrganizationalBrandingHandler(fakeTokenCredential{})
 	if err != nil {

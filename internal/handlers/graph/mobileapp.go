@@ -14,11 +14,6 @@ import (
 // (deviceAppManagement/mobileApps, Microsoft Graph beta). The collection is
 // highly polymorphic (win32LobApp, winGetApp, macOSPkgApp, iosStoreApp,
 // officeSuiteApp, ...) and includes Microsoft built-in apps.
-//
-// The Terraform resource type is app-type-specific in
-// terraform-provider-microsoft365 (win32_app, win_get_app, macos_pkg_app,
-// ios_store_app, ... variants); the Win32 variant is emitted as the default —
-// verify the import against the app's @odata.type.
 func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -26,8 +21,7 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/mobileApps",
-		terraformType: "microsoft365_graph_beta_device_and_app_management_win32_app",
+		azureType: "Microsoft.Graph/mobileApps",
 		documentation: docMeta(
 			"An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
 			[]string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},

@@ -17,9 +17,6 @@ import (
 //
 // Fetch uses $expand=apps so the targeted app list is included (it is not
 // returned by a plain GET).
-//
-// terraform-provider-microsoft365 has no resource for managed app protection
-// policies yet, so no Terraform import is emitted.
 func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -27,8 +24,7 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/iosManagedAppProtections",
-		terraformType: "",
+		azureType: "Microsoft.Graph/iosManagedAppProtections",
 		documentation: docMeta(
 			"An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
 			[]string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},

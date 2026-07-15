@@ -16,12 +16,6 @@ import (
 // The collection is polymorphic: enrollment limits, platform restrictions,
 // Enrollment Status Page (ESP), Windows Hello for Business and enrollment
 // notification configurations, including the tenant defaults.
-//
-// The Terraform resource type is per-configuration-type in
-// terraform-provider-microsoft365 (windows_enrollment_status_page,
-// device_enrollment_limit_configuration, device_enrollment_notification);
-// the ESP variant is emitted as the default — verify the import against the
-// configuration's @odata.type.
 func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -29,8 +23,7 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/deviceEnrollmentConfigurations",
-		terraformType: "microsoft365_graph_beta_device_management_windows_enrollment_status_page",
+		azureType: "Microsoft.Graph/deviceEnrollmentConfigurations",
 		documentation: docMeta(
 			"An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
 			[]string{"priority", "platformRestrictions", "blockUntilComplete"},

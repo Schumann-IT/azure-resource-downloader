@@ -20,8 +20,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType:     "Microsoft.Graph/notificationMessageTemplates",
-		terraformType: "microsoft365_graph_beta_device_management_device_compliance_notification_template",
+		azureType: "Microsoft.Graph/notificationMessageTemplates",
 		documentation: docMeta(
 			"An Intune notification message template used for compliance and other notifications.",
 			nil,
