@@ -253,7 +253,7 @@ azure-rd download \
 > [Configuration File](#configuration-file) for precedence). Options with **no**
 > CLI flag — `workers-by-api`, `transformers` (including property removal via the
 > `cleaning` transformer's `remove-keys` / `remove-keys-by-type`), and `filters` —
-> are config-only; see [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the
+> are config-only; see [`config.example.yaml`](config.example.yaml) for the
 > fully-commented schema.
 
 ### Download Multiple Resources
@@ -310,7 +310,7 @@ azure-rd download --resource-group "my-rg"
 | `transformers` | Transformer pipeline and per-transformer settings, including property removal via the `cleaning` transformer's `remove-keys` / `remove-keys-by-type` |
 | `filters` | Per-resource-type property regex filters |
 
-See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the fully-commented schema of these options.
+See [`config.example.yaml`](config.example.yaml) for the fully-commented schema of these options.
 
 Create a config file (e.g. `~/.azure-rd.yaml`) and load it with `--config`:
 
@@ -352,10 +352,10 @@ transformers:
   - name: name-sanitization
 ```
 
-The repository ships a fully-commented [`.azure-rd.example.yaml`](.azure-rd.example.yaml) documenting **every** option (type/item filtering, workers, logging, transformers). Copy it as a starting point:
+The repository ships a fully-commented [`config.example.yaml`](config.example.yaml) documenting **every** option (type/item filtering, workers, logging, transformers). Copy it as a starting point:
 
 ```bash
-cp .azure-rd.example.yaml ~/.azure-rd.yaml
+cp config.example.yaml ~/.azure-rd.yaml
 ```
 
 Then run, passing the file with `--config`:
@@ -513,7 +513,7 @@ Optimal worker count depends on the **API**, not the resource type. The tool aut
 | Microsoft Graph | `Microsoft.Graph/*` | 3–5 | Strict (~7 req/sec) |
 | Azure Resource Manager | `Microsoft.Storage/*`, `Microsoft.Compute/*`, `Microsoft.Resources/*`, … | 10–20 | Generous (1000s/min) |
 
-Override the defaults with `workers-by-api` (per API) or `workers` (global) in `~/.azure-rd.yaml`, or `--workers` for a single run. Precedence: `--workers` → `workers-by-api` → `workers` → auto-default. See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for the worker config block.
+Override the defaults with `workers-by-api` (per API) or `workers` (global) in `~/.azure-rd.yaml`, or `--workers` for a single run. Precedence: `--workers` → `workers-by-api` → `workers` → auto-default. See [`config.example.yaml`](config.example.yaml) for the worker config block.
 
 ### Customizing Output
 
@@ -523,7 +523,7 @@ Which properties land in the YAML is controlled by the `cleaning` transformer (s
 - `preserve-keys` keeps specific nested paths even if their key is in a remove list.
 - By default the transformer only removes empty values; nothing else is dropped unless you configure `remove-keys`.
 
-Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`, `correlationId`, `managedBy`, `sku.tier`. See [`.azure-rd.example.yaml`](.azure-rd.example.yaml) for ready-to-use `cleaning` examples.
+Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`, `correlationId`, `managedBy`, `sku.tier`. See [`config.example.yaml`](config.example.yaml) for ready-to-use `cleaning` examples.
 
 ## 📂 Output Structure
 
@@ -575,7 +575,7 @@ When enabled with `--write-prompts` (or `write-prompts: true` in the config file
 - **Expand embedded payloads** — decode and document encoded/embedded properties such as `configurationXml`, `omaSettings`, `payloadJson` and base64 `payload` blobs.
 - **Flag security-sensitive settings** — secrets, certificates, encryption, conditional-access conditions, and deviations from baselines.
 
-Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph types are tailored through the `graphResourceDocs` table in `internal/handlers/graph/documentation.go`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
+Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph constructors supply it via the `docMeta` helper in `internal/handlers/graph/documentation.go`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
 
 ## 🎯 Supported Resource Types
 
@@ -841,20 +841,17 @@ azure-resource-downloader/
 
 ## 🤖 Editor & AI Assistant Rules
 
-This repo ships machine-readable coding conventions for AI pair-programming tools. The same rule set is maintained for both editors:
+This repo ships machine-readable coding conventions for AI pair-programming tools in `.windsurf/rules/*.md` (with activation frontmatter):
 
-- **Cursor**: `.cursor/rules/*.md`
-- **Windsurf**: `.windsurf/rules/*.md` (with activation frontmatter)
-
-| File | Purpose | Windsurf activation |
-|------|---------|---------------------|
+| File | Purpose | Activation |
+|------|---------|------------|
 | `01-project.md` | Project context, architecture & non-negotiables | `always_on` |
 | `02-style-and-quality.md` | Go style, errors, testing philosophy, logging, docs policy | `glob` (`**/*.go`) |
 | `03-commands.md` | Makefile-first workflow & generation recipes | `always_on` |
 | `04-security-and-ops.md` | Secrets, config precedence, ops & production readiness | `always_on` |
 | `05-azure-conventions.md` | Handler structure, Graph/Intune SDK usage, naming | `glob` (`internal/handlers/**`, `internal/azure/**`) |
 
-When changing project conventions, update the rule files in **both** directories so Cursor and Windsurf stay in sync.
+When changing project conventions, update these rule files so they stay in sync with the code.
 
 ## 🤝 Contributing
 

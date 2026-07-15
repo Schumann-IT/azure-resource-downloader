@@ -8,20 +8,26 @@ globs: internal/handlers/**/*.go,internal/azure/**/*.go
 ## Resource Handlers
 
 ### Structure
-Every handler follows this pattern:
+Every ARM handler follows this pattern (credentials are ALWAYS the `azcore.TokenCredential` interface, never a concrete azidentity type):
 ```go
 type XHandler struct {
-    credential     *azidentity.DefaultAzureCredential
+    credential     azcore.TokenCredential
     subscriptionID string
 }
 
-func NewXHandler(credential *azidentity.DefaultAzureCredential, subscriptionID string) *XHandler {
+func NewXHandler(credential azcore.TokenCredential, subscriptionID string) *XHandler {
     return &XHandler{
         credential:     credential,
         subscriptionID: subscriptionID,
     }
 }
 ```
+Microsoft Graph handlers do not define their own struct: their constructor `NewXHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error)` configures the shared `GraphCollectionHandler` base (`internal/handlers/graph/collection.go`) with closures (`listIDs`, `fetchItem`, `displayName`) and `docMeta(...)` documentation metadata.
+
+### List Implementation
+- Every handler implements `List(ctx) ([]string, error)` — listing is handler-driven, there is no central listing switch
+- ARM: delegate to the shared pagers `azure.ListResourcesByType(ctx, cred, sub, type)` / `azure.ListResourceGroups(ctx, cred, sub)` in `internal/azure/list.go`
+- Graph: page the collection in the `listIDs` closure, following `@odata.nextLink`; singletons probe the object and return at most one pseudo-ID
 
 ### Fetch Implementation
 - Use appropriate Azure SDK client for the resource type
@@ -92,10 +98,16 @@ func (h *XHandler) Transform(resource interface{}) (*models.TransformedResource,
   `github.com/microsoftgraph/msgraph-sdk-go`.
 - Beta-only endpoints (e.g. Intune `deviceManagement/configurationPolicies` Settings Catalog) use the beta SDK
   `github.com/microsoftgraph/msgraph-beta-sdk-go`. Document why a handler needs the beta SDK in a doc comment.
-- Graph handlers receive only the credential via constructor (no subscription ID) and create their own Graph client.
+- Graph handlers receive only the credential via constructor (no subscription ID) and create their own Graph client (`newGraphClient` / `newBetaGraphClient` in `internal/handlers/graph/collection.go`).
 - For deeply nested / polymorphic Graph objects, prefer serializing the whole object to a generic map via the
-  Kiota `JsonSerializationWriter` rather than hand-coding every `@odata.type` variant.
-- List Graph resources in `internal/azure/client.go` → `listGraphResources()`, following `@odata.nextLink` pagination.
+  Kiota `JsonSerializationWriter` (`serializeParsableToMap`) rather than hand-coding every `@odata.type` variant.
+- Established `fetchItem` patterns for types needing more than a plain GET:
+  - `$expand` query parameters in the item request config (e.g. `devicecompliancepolicy.go`)
+  - Child-collection fetches attached to the model before serialization (e.g. `grouppolicyconfiguration.go`, `devicemanagementintent.go`)
+  - Post-fetch enrichment (e.g. `deviceconfiguration.go` OMA secret resolution)
+  - Singletons: probe in `listIDs`, ignore the item ID in `fetchItem` (e.g. `applepushnotificationcertificate.go`)
+  - Assignments: fetch `/{id}/assignments` and attach via `SetAssignments`; reads are best-effort — on failure call `warnAssignmentsFetchFailed` and export the item without assignments
+- Permission errors (missing scopes, Forbidden) must never fail the run: detection via `azure.IsPermissionError`, the resource/type is warned about and skipped.
 
 ## Naming Conventions
 

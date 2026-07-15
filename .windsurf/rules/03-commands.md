@@ -72,9 +72,11 @@ make check
 ## "Create a new resource handler"
 1. Create the handler in the right subpackage — `internal/handlers/arm/<resource>.go` (package `arm`) for ARM types or `internal/handlers/graph/<resource>.go` (package `graph`) for Microsoft Graph types — implementing `ResourceHandler` interface:
    - `GetType()` - Return Azure resource type (e.g., "Microsoft.KeyVault/vaults")
+   - `GetDocumentationPrompt()` - Dedicated per-type LLM documentation prompt (ARM: inline `models.ResourceDocumentation`; Graph: `docMeta` helper)
+   - `List(ctx)` - Enumerate all resource IDs of this type (ARM: shared pagers in `internal/azure/list.go`; Graph: page the collection via `@odata.nextLink`)
    - `Fetch(ctx, resourceID)` - Use Azure SDK to fetch resource
    - `Transform(resource)` - Convert to `*models.TransformedResource`
-2. Add constructor: `NewXHandler(credential, subscriptionID)`
+2. Add constructor: ARM `NewXHandler(credential, subscriptionID)`; Graph `NewXHandler(credential)` (Graph handlers build on the shared `GraphCollectionHandler`)
 3. Register in `internal/handlers/defaults.go` → `registerDefaults()` function
 4. Add unit tests in the same subpackage (`internal/handlers/{arm,graph}/<resource>_test.go`)
 5. Update README.md "Supported Resource Types" table
@@ -103,7 +105,7 @@ make check
 2. Add flag in `cmd/root.go` → `PersistentFlags`
 3. Bind to Viper: `viper.BindPFlag()`
 4. Use in pipeline/command
-5. Update `.azure-rd.example.yaml`
+5. Update `config.example.yaml`
 6. Document in README.md
 
 # Output shape
@@ -114,10 +116,10 @@ make check
 - End with checklist of manual steps:
   ```
   ✅ Handler created
-  ✅ Registered in cmd/download.go
+  ✅ Registered in internal/handlers/defaults.go
   ✅ Dependencies updated: make deps
   ✅ Built successfully: make build
   ✅ All checks passed: make check
   ⚠️  Manual: Add to README.md supported types table
-  ⚠️  Manual: Test with: ./azure-rd list --subscription "SUB_ID"
+  ⚠️  Manual: Test with: ./azure-rd list
   ```
