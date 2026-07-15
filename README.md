@@ -575,12 +575,14 @@ tags:
 
 When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
 
-- **Document every setting** — one row per YAML property (path, configured value, what it does, recommended value, reference).
+- **Document every setting** — one row per YAML property (path, configured value, what it does, recommended value, reference), identifying the concrete `@odata.type` subtype first for polymorphic types.
 - **Link best practices and Microsoft docs** — Microsoft Learn URLs plus hardening baselines (Microsoft security baselines, CIS) where relevant.
-- **Expand embedded payloads** — decode and document encoded/embedded properties such as `configurationXml`, `omaSettings`, `payloadJson` and base64 `payload` blobs.
+- **Expand embedded payloads** — decode and document encoded/embedded properties such as `configurationXml`, `omaSettings`, `payloadJson` and base64 `payload` blobs, including decoded sidecar script files.
 - **Flag security-sensitive settings** — secrets, certificates, encryption, conditional-access conditions, and deviations from baselines.
+- **Document lifecycle & operations** — deprecation/migration status, effect of deleting or unassigning the resource, renewal/expiry obligations, and a recommended review cadence.
+- **Explain assignments accurately** — include/exclude targets and filters; the prompt states that targets carry group IDs only (names are exported separately via `Microsoft.Graph/groups`), so the model never invents group names.
 
-Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings and embedded payloads to expand. It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph constructors set it as a `models.ResourceDocumentation{...}` literal on the shared `GraphCollectionHandler`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
+Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings, embedded payloads to expand, required read permissions, lifecycle notes, related exported types, subtype guidance for polymorphic types, and a **verified Microsoft Learn API-reference link** (plus best-practice baselines for security-sensitive types). It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`. ARM handlers supply this metadata inline; Microsoft Graph constructors set it as a `models.ResourceDocumentation{...}` literal on the shared `GraphCollectionHandler`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
 
 ## 🎯 Supported Resource Types
 

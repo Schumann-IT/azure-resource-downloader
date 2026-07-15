@@ -24,9 +24,15 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceHealthScripts",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune Windows remediation script package (detection + remediation).",
-			KeySettings:      []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
-			EmbeddedPayloads: []string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
+			Purpose:             "An Intune Windows remediation script package (detection + remediation).",
+			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
+			EmbeddedPayloads:    []string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
+			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
+			Lifecycle:           "Remediations run detection on a schedule and remediate on failure; deleting a script stops the schedule but does not revert previous remediations.",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicehealthscript?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

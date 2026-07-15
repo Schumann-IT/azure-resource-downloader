@@ -22,8 +22,14 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/organization",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "The Entra ID tenant (organization) profile and tenant-wide settings.",
-			KeySettings: []string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
+			Purpose:             "The Entra ID tenant (organization) profile and tenant-wide settings.",
+			KeySettings:         []string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
+			RequiredPermissions: []string{"Organization.Read.All"},
+			Lifecycle:           "Tenant information object; some properties are Microsoft-managed. Verified domains and technical notification contacts should be reviewed periodically.",
+			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organization?view=graph-rest-1.0",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			resp, err := client.Organization().Get(ctx, nil)

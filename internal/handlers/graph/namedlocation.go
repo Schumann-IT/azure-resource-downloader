@@ -22,8 +22,15 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/namedLocations",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
-			KeySettings: []string{"ipRanges", "countriesAndRegions", "isTrusted"},
+			Purpose:             "An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
+			KeySettings:         []string{"ipRanges", "countriesAndRegions", "isTrusted"},
+			RequiredPermissions: []string{"Policy.Read.All"},
+			Lifecycle:           "Referenced by Conditional Access conditions; deletion fails while a Conditional Access policy references the location. Keep trusted-IP ranges current.",
+			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
+			SubtypeNote:         "Polymorphic: ipNamedLocation (CIDR ranges, trusted flag) vs countryNamedLocation (country list, unknown-area handling) - identify the concrete type from @odata.type.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-1.0",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

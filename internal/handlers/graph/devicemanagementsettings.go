@@ -38,8 +38,13 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceManagement",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "Tenant-wide Intune device management settings and configuration.",
-			KeySettings: []string{"settings", "intuneAccountId"},
+			Purpose:             "Tenant-wide Intune device management settings and configuration.",
+			KeySettings:         []string{"settings", "intuneAccountId"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			Lifecycle:           "Tenant-wide Intune settings singleton; changes apply to the whole tenant immediately.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicemanagementsettings?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			_, id, err := getSingleton(ctx)

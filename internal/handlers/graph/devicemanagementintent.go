@@ -28,8 +28,14 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceManagementIntents",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune security baseline / template intent and its configured setting values.",
-			EmbeddedPayloads: []string{"settings (settingsDelta / setting instance values)"},
+			Purpose:             "An Intune security baseline / template intent and its configured setting values.",
+			EmbeddedPayloads:    []string{"settings (settingsDelta / setting instance values)"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "Legacy Endpoint Security templates (intents) are being replaced by Settings Catalog based policies; plan migration. Deleting an intent removes its settings enforcement at next check-in.",
+			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

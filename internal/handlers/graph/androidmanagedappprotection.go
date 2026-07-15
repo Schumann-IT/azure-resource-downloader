@@ -26,8 +26,14 @@ func NewAndroidManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/androidManagedAppProtections",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune Android App Protection (MAM) policy controlling data protection for managed apps.",
-			KeySettings: []string{"dataBackupBlocked", "screenCaptureBlocked", "pinRequired", "allowedOutboundDataTransferDestinations"},
+			Purpose:             "An Intune Android App Protection (MAM) policy controlling data protection for managed apps.",
+			KeySettings:         []string{"dataBackupBlocked", "screenCaptureBlocked", "pinRequired", "allowedOutboundDataTransferDestinations"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Policy changes apply at the protected app's next check-in; deleting a policy removes app protection from targeted apps (protected data remains until a selective wipe is issued).",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-androidmanagedappprotection?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

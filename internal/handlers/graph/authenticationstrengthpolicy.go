@@ -22,8 +22,14 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationStrengthPolicies",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
-			KeySettings: []string{"allowedCombinations"},
+			Purpose:             "An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
+			KeySettings:         []string{"allowedCombinations"},
+			RequiredPermissions: []string{"Policy.Read.All"},
+			Lifecycle:           "Referenced by Conditional Access grant controls; built-in strengths are immutable, custom ones are editable. Deleting a custom strength fails while any Conditional Access policy references it.",
+			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationstrengthpolicy?view=graph-rest-1.0",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

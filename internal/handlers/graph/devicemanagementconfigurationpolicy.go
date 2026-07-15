@@ -27,8 +27,15 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceManagementConfigurationPolicies",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
-			EmbeddedPayloads: []string{"settings (settingInstance / settingDefinition values, including secret settings)"},
+			Purpose:             "An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
+			EmbeddedPayloads:    []string{"settings (settingInstance / settingDefinition values, including secret settings)"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "The Settings Catalog is the strategic replacement for legacy templates; settings re-apply at each check-in and are removed (where supported) when the policy is unassigned or deleted.",
+			RelatedTypes:        []string{"Microsoft.Graph/reusablePolicySettings (referenced by ID)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Links: models.ResourceLinks{
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationpolicy?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines"},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

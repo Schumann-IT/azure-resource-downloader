@@ -29,8 +29,14 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/groupPolicyConfigurations",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
-			EmbeddedPayloads: []string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},
+			Purpose:             "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
+			EmbeddedPayloads:    []string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "ADMX-backed (Administrative Templates) settings; Microsoft recommends the Settings Catalog where parity exists. Removing a definition value reverts the setting to not-configured at next check-in.",
+			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-grouppolicy-grouppolicyconfiguration?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -27,8 +27,13 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/depOnboardingSettings",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
-			KeySettings: []string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
+			Purpose:             "Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
+			KeySettings:         []string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			Lifecycle:           "Apple ADE (DEP) tokens expire yearly and must be renewed in Apple Business Manager; an expired token stops device syncs and automated enrollment.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-deponboardingsetting?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

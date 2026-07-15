@@ -22,8 +22,14 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/intuneBrandingProfiles",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune Company Portal branding profile controlling the end-user portal appearance.",
-			EmbeddedPayloads: []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
+			Purpose:             "An Intune Company Portal branding profile controlling the end-user portal appearance.",
+			EmbeddedPayloads:    []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Company Portal branding; changes appear when the portal refreshes. Distinct from Entra sign-in branding (organizationalBranding).",
+			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding (Entra sign-in branding)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-wip-intunebrandingprofile?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

@@ -21,7 +21,12 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceCategories",
 		documentation: models.ResourceDocumentation{
-			Purpose: "An Intune device category used to group and target devices at enrollment.",
+			Purpose:             "An Intune device category used to group and target devices at enrollment.",
+			RequiredPermissions: []string{"DeviceManagementManagedDevices.Read.All"},
+			Lifecycle:           "Categories are chosen by users during enrollment or set by admins; deleting a category leaves devices without a category but does not affect their management.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicecategory?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

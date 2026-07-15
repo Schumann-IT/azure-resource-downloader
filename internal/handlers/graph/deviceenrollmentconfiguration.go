@@ -25,8 +25,15 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceEnrollmentConfigurations",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
-			KeySettings: []string{"priority", "platformRestrictions", "blockUntilComplete"},
+			Purpose:             "An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
+			KeySettings:         []string{"priority", "platformRestrictions", "blockUntilComplete"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			Lifecycle:           "Changes affect only future enrollments; existing devices keep their applied configuration. Priority order matters when multiple configurations target a user.",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/windowsAutopilotDeploymentProfiles (ESP applies during Autopilot)"},
+			SubtypeNote:         "Polymorphic (@odata.type): enrollment limits, platform restrictions, Windows Hello for Business, ESP (windows10EnrollmentCompletionPageConfiguration), enrollment notifications - identify the concrete type first.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-deviceenrollmentconfiguration?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

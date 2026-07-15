@@ -37,8 +37,13 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authorizationPolicy",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
-			KeySettings: []string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
+			Purpose:             "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
+			KeySettings:         []string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
+			RequiredPermissions: []string{"Policy.Read.All"},
+			Lifecycle:           "Tenant-wide singleton controlling default user role permissions, guest access levels and consent defaults; changes apply tenant-wide immediately and should be reviewed regularly.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)

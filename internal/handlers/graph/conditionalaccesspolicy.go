@@ -21,9 +21,16 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/conditionalAccessPolicies",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
-			KeySettings:      []string{"state", "grantControls.builtInControls", "conditions.users"},
-			EmbeddedPayloads: []string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
+			Purpose:             "An Entra ID Conditional Access policy that enforces access controls based on signals (users, apps, conditions).",
+			KeySettings:         []string{"state", "grantControls.builtInControls", "conditions.users"},
+			EmbeddedPayloads:    []string{"conditions (users, applications, platforms, locations, risk levels)", "grantControls", "sessionControls"},
+			RequiredPermissions: []string{"Policy.Read.All"},
+			Lifecycle:           "Policy changes take effect within minutes tenant-wide; validate with report-only mode before enforcing and always exclude break-glass accounts. Deleting a policy immediately removes its enforcement.",
+			RelatedTypes:        []string{"Microsoft.Graph/namedLocations", "Microsoft.Graph/authenticationStrengthPolicies", "Microsoft.Graph/termsOfUseAgreements", "Microsoft.Graph/groups (include/exclude targets)"},
+			Links: models.ResourceLinks{
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccesspolicy?view=graph-rest-1.0",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access"},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

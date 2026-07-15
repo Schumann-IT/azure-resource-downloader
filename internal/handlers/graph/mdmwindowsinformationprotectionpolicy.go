@@ -23,8 +23,13 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mdmWindowsInformationProtectionPolicies",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
-			KeySettings: []string{"enforcementLevel", "protectedApps", "exemptApps", "enterpriseProtectedDomainNames"},
+			Purpose:             "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
+			KeySettings:         []string{"enforcementLevel", "protectedApps", "exemptApps", "enterpriseProtectedDomainNames"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Windows Information Protection is DEPRECATED by Microsoft (sunset began July 2022) and unsupported on Windows 11; keep for historical reference and plan migration to Microsoft Purview DLP.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-mdmwindowsinformationprotectionpolicy?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

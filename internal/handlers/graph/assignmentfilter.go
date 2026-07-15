@@ -21,9 +21,15 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/assignmentFilters",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
-			KeySettings:      []string{"platform", "rule"},
-			EmbeddedPayloads: []string{"rule (filter rule expression)"},
+			Purpose:             "An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
+			KeySettings:         []string{"platform", "rule"},
+			EmbeddedPayloads:    []string{"rule (filter rule expression)"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "Filters are referenced by assignments across many policy and app types; deleting a filter breaks the assignments that reference it. Rule changes re-evaluate at the next device/app check-in.",
+			RelatedTypes:        []string{"all assignable Intune types (policies, profiles and apps reference filters by ID in their assignments)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-policyset-deviceandappmanagementassignmentfilter?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

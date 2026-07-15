@@ -25,8 +25,14 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/targetedManagedAppConfigurations",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
-			KeySettings: []string{"customSettings", "appGroupType"},
+			Purpose:             "An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
+			KeySettings:         []string{"customSettings", "appGroupType"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "App configuration applies at the managed app next check-in; deleting the policy stops delivering the settings (apps keep the last received values until reinstalled).",
+			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (targeted apps)", "Microsoft.Graph/groups (assignment target groups)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-targetedmanagedappconfiguration?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

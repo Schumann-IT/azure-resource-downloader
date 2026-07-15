@@ -26,8 +26,14 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/iosManagedAppProtections",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
-			KeySettings: []string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},
+			Purpose:             "An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
+			KeySettings:         []string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Policy changes apply at the protected app's next check-in; deleting a policy removes app protection from targeted apps (protected data remains until a selective wipe is issued).",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-iosmanagedappprotection?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

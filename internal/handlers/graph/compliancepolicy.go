@@ -28,8 +28,15 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/compliancePolicies",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune (settings-catalog based) device compliance policy, e.g. for Linux.",
-			EmbeddedPayloads: []string{"settings (settingInstance values)"},
+			Purpose:             "An Intune (settings-catalog based) device compliance policy, e.g. for Linux.",
+			EmbeddedPayloads:    []string{"settings (settingInstance values)"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "Compliance re-evaluates at the next device check-in; deleting or unassigning the policy can change device compliance state and Conditional Access outcomes.",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)", "Microsoft.Graph/notificationMessageTemplates (noncompliance notifications)", "Microsoft.Graph/conditionalAccessPolicies (compliance-based grants)"},
+			Links: models.ResourceLinks{
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementcompliancepolicy?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/device-compliance-get-started"},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

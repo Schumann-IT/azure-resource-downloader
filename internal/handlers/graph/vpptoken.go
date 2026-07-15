@@ -23,8 +23,14 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/vppTokens",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
-			KeySettings: []string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
+			Purpose:             "An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
+			KeySettings:         []string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Apple VPP tokens expire yearly and must be renewed in Apple Business Manager; an expired token blocks app license assignment and installs. The token secret is masked by the service.",
+			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (VPP-licensed apps)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-vpptoken?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

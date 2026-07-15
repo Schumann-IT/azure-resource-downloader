@@ -23,8 +23,14 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
-			KeySettings: []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
+			Purpose:             "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
+			KeySettings:         []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels.",
+			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

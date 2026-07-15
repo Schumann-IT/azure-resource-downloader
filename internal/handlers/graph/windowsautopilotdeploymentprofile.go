@@ -22,8 +22,14 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/windowsAutopilotDeploymentProfiles",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.",
-			KeySettings: []string{"outOfBoxExperienceSettings", "deviceType", "enrollmentStatusScreenSettings"},
+			Purpose:             "A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.",
+			KeySettings:         []string{"outOfBoxExperienceSettings", "deviceType", "enrollmentStatusScreenSettings"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			Lifecycle:           "Profile changes apply at the device next Autopilot deployment (not retroactively); deleting a profile unassigns it from registered devices.",
+			RelatedTypes:        []string{"Microsoft.Graph/windowsAutopilotDeviceIdentities (registered devices)", "Microsoft.Graph/deviceEnrollmentConfigurations (Enrollment Status Page)", "Microsoft.Graph/groups (assignment target groups)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeploymentprofile?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

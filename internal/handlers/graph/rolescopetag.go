@@ -21,7 +21,13 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/roleScopeTags",
 		documentation: models.ResourceDocumentation{
-			Purpose: "An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
+			Purpose:             "An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
+			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
+			Lifecycle:           "Scope tags partition RBAC visibility; deleting a tag removes it from all tagged objects and role assignments. The default tag cannot be deleted.",
+			RelatedTypes:        []string{"Microsoft.Graph/roleDefinitions"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolescopetag?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

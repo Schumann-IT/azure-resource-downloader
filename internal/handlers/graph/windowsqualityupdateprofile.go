@@ -22,8 +22,14 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/windowsQualityUpdateProfiles",
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
-			KeySettings: []string{"expeditedUpdateSettings", "releaseDateDisplayName"},
+			Purpose:             "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
+			KeySettings:         []string{"expeditedUpdateSettings", "releaseDateDisplayName"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle:           "Expedites or pauses quality updates for targeted devices; deleting the profile returns devices to their default update cadence.",
+			RelatedTypes:        []string{"Microsoft.Graph/windowsFeatureUpdateProfiles", "Microsoft.Graph/groups (assignment target groups)"},
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsqualityupdateprofile?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

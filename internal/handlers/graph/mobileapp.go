@@ -23,9 +23,16 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileApps",
 		documentation: models.ResourceDocumentation{
-			Purpose:          "An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
-			KeySettings:      []string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},
-			EmbeddedPayloads: []string{"detectionRules", "requirementRules", "installExperience", "returnCodes", "largeIcon (base64 image)"},
+			Purpose:             "An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
+			KeySettings:         []string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},
+			EmbeddedPayloads:    []string{"detectionRules", "requirementRules", "installExperience", "returnCodes", "largeIcon (base64 image)"},
+			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			Lifecycle:           "Deleting an app from Intune does not uninstall it from devices (assign an uninstall intent first); Win32 apps follow supersedence rules when updated.",
+			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)", "Microsoft.Graph/mobileAppConfigurations (app configuration policies)"},
+			SubtypeNote:         "Highly polymorphic (win32LobApp, winGetApp, macOSPkgApp, iosStoreApp, officeSuiteApp, ...) - identify the concrete app type from @odata.type first; detection/requirement rules and install experience are subtype-specific.",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-mobileapp?view=graph-rest-beta",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
