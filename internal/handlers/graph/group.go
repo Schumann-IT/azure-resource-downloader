@@ -3,12 +3,21 @@ package graph
 import (
 	"azure-resource-downloader/internal/models"
 	"context"
+	_ "embed"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
+
+// groupPromptTemplateText overrides the default documentation prompt template
+// for groups: groups carry no settings payload and no assignments of their own
+// (they are the assignment targets), so the default settings/assignments-heavy
+// layout does not fit. See models.ResourceDocumentation.Template.
+//
+//go:embed group_prompt.tmpl
+var groupPromptTemplateText string
 
 // NewGroupHandler creates a handler for Entra groups (groups, Microsoft Graph
 // v1.0), including dynamic groups with their membership rules.
@@ -32,6 +41,7 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0",
 			},
+			Template: groupPromptTemplateText,
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

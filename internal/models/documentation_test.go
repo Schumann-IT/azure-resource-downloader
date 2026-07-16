@@ -127,16 +127,47 @@ func TestBuildDocumentationPromptOptionalFields(t *testing.T) {
 			tt.mutate(&doc)
 			prompt := BuildDocumentationPrompt(doc)
 
-			for _, want := range tt.present {
-				if !strings.Contains(prompt, want) {
-					t.Errorf("prompt missing %q", want)
-				}
-			}
-			for _, unwanted := range tt.absent {
-				if strings.Contains(prompt, unwanted) {
-					t.Errorf("prompt unexpectedly contains %q", unwanted)
-				}
-			}
+			runPromptAssertions(t, prompt, tt.present, tt.absent)
 		})
+	}
+}
+
+func TestBuildDocumentationPromptTemplateOverride(t *testing.T) {
+	doc := fullDoc()
+	doc.Template = "Custom prompt for {{ .AzureType }} ({{ join .KeySettings \" / \" }})"
+
+	got := BuildDocumentationPrompt(doc)
+	want := "Custom prompt for Microsoft.Graph/deviceConfigurations (omaSettings / encrypted values)"
+	if got != want {
+		t.Errorf("prompt = %q, want %q", got, want)
+	}
+}
+
+func TestBuildDocumentationPromptInvalidTemplatePanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("expected panic for invalid template override")
+		}
+	}()
+
+	doc := fullDoc()
+	doc.Template = "{{ .AzureType " // unclosed action
+	BuildDocumentationPrompt(doc)
+}
+
+// runPromptAssertions checks that the prompt contains every string in present
+// and none of the strings in absent.
+func runPromptAssertions(t *testing.T, prompt string, present, absent []string) {
+	t.Helper()
+
+	for _, want := range present {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt missing %q", want)
+		}
+	}
+	for _, unwanted := range absent {
+		if strings.Contains(prompt, unwanted) {
+			t.Errorf("prompt unexpectedly contains %q", unwanted)
+		}
 	}
 }

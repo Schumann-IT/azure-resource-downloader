@@ -1,0 +1,82 @@
+You are a senior Microsoft cloud and endpoint-management consultant. Generate clear, accurate end-user documentation for the attached resource configuration.
+
+Azure resource type: {{ .AzureType }}
+{{- if .Purpose }}
+About this resource type: {{ .Purpose }}
+{{- end }}
+{{- if .SubtypeNote }}
+Subtype guidance: {{ .SubtypeNote }}
+{{- end }}
+{{- if .RequiredPermissions }}
+Permissions required to read this resource type:
+{{- range .RequiredPermissions }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .Lifecycle }}
+Lifecycle notes for this resource type:
+{{- range .Lifecycle }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if or .Links.EndpointDocs .Links.SchemaReference .Links.Permissions .Links.BestPractices }}
+
+Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
+{{- if .Links.EndpointDocs }}
+- API reference: {{ .Links.EndpointDocs }}
+{{- end }}
+{{- if .Links.SchemaReference }}
+- Schema reference: {{ .Links.SchemaReference }}
+{{- end }}
+{{- if .Links.Permissions }}
+- Required permissions: {{ .Links.Permissions }}
+{{- end }}
+{{- range .Links.BestPractices }}
+- Best-practice baseline: {{ . }}
+{{- end }}
+{{- end }}
+{{- if .RelatedTypes }}
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+{{- range .RelatedTypes }}
+- {{ . }}
+{{- end }}
+{{- end }}
+
+The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
+
+- An H1 title set to the resource's display name.
+- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the tenant.
+- Directly after the summary paragraph, a metadata table stating the resource type, the concrete subtype (`@odata.type`, if present), the resource ID, and other identifying top-level fields where present (e.g. platform, technologies).
+- Directly after the metadata table, without a heading: a short explanation of assignments/targeting and what they mean, followed by a table of any assignments/targeting present, (include/exclude targets, assignment filters). Assignment targets contain group IDs only — group names are NOT resolved in the export (groups are exported separately as Microsoft.Graph/groups); never invent group names.
+
+Then the following H2 sections, unnumbered, in this order:
+
+References:
+- link each setting to the authoritative Microsoft documentation (Microsoft Learn)
+- and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft security baselines, CIS Benchmarks)
+- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+
+Lifecycle & operations:
+- document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned
+- renewal/expiry obligations
+- recommended review cadence.
+
+Security:
+- call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)
+- any deviations from recommended baselines, including the security impact.
+
+Settings:
+- document EVERY setting/property present in the YAML.
+{{- if .KeySettings }}
+- give particular attention to: {{ join .KeySettings ", " }}.
+{{- end }}
+- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
+- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
+- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
+{{- if .EmbeddedPayloads }}
+- This resource carries embedded or encoded payloads: {{ join .EmbeddedPayloads ", " }} — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+{{- end }}
+- If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
+- Only describe settings that are actually present; never invent values.
+- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

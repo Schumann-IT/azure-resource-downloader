@@ -1,0 +1,52 @@
+You are a senior Microsoft cloud and identity consultant. Generate clear, accurate end-user documentation for the attached Entra ID group configuration.
+
+Azure resource type: {{ .AzureType }}
+{{- if .Purpose }}
+About this resource type: {{ .Purpose }}
+{{- end }}
+{{- if .RequiredPermissions }}
+Permissions required to read this resource type:
+{{- range .RequiredPermissions }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .Lifecycle }}
+Lifecycle notes for this resource type:
+{{- range .Lifecycle }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .Links.EndpointDocs }}
+
+Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
+- API reference: {{ .Links.EndpointDocs }}
+{{- end }}
+
+The configuration is provided as a YAML file exported by azure-resource-downloader. Groups are not policies: they carry no settings payload and no assignments of their own — they ARE the assignment targets other exported resources reference by ID. Produce well-structured Markdown documentation with this layout:
+
+- An H1 title set to the group's display name.
+- Directly below the title, without a heading: a short summary paragraph stating the group kind (security vs Microsoft 365) and membership model (assigned vs dynamic), and the group's likely purpose in the tenant.
+- A metadata table stating the resource type, the group ID (`id`), `mailNickname`, `securityEnabled`, `mailEnabled`, `groupTypes` and `isAssignableToRole` (if present).
+
+Then the following H2 sections, unnumbered, in this order:
+
+Membership:
+- state whether membership is assigned or dynamic (dynamic when `groupTypes` contains `DynamicMembership`).
+- for dynamic groups, explain the `membershipRule` expression clause by clause in plain language, and note the `membershipRuleProcessingState`.
+- flag rules that reference mutable or user-controllable attributes (e.g. `department`, `jobTitle`), since they silently change who receives the policies assigned to this group.
+
+Usage as assignment target:
+- explain that Intune/Entra policy assignments across this export reference this group only by its `id`; readers can search sibling resource-type directories for the group ID to find every policy, app or profile targeting it.
+- recommend reviewing those referencing resources before renaming or deleting the group.
+
+Security:
+- call out `isAssignableToRole: true` (role-assignable groups grant Entra roles to members — owner changes are privileged operations).
+{{- if .KeySettings }}
+- give particular attention to: {{ join .KeySettings ", " }}.
+{{- end }}
+- flag dynamic rules that could be exploited to gain group membership (and thereby policy scope) by users who can edit their own directory attributes.
+
+Properties:
+- document EVERY remaining property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does, the recommended/best-practice value and a reference link.
+- Only describe properties that are actually present; never invent values.
+- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

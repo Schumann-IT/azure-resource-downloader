@@ -1,9 +1,38 @@
 package models
 
 import (
+	_ "embed"
 	"fmt"
 	"strings"
+	"text/template"
 )
+
+// defaultPromptTemplateText is the default documentation prompt template,
+// embedded from documentation_prompt.tmpl. It uses Go text/template syntax
+// with ResourceDocumentation as its data and a `join` helper (strings.Join).
+//
+//go:embed documentation_prompt.tmpl
+var defaultPromptTemplateText string
+
+// defaultPromptTemplate is the pre-parsed default documentation prompt template.
+var defaultPromptTemplate = template.Must(parsePromptTemplate(defaultPromptTemplateText))
+
+// DefaultDocumentationPromptTemplate returns the text of the default
+// documentation prompt template. Resource types that want to customize only
+// parts of the prompt can start from this text and set the result as their
+// ResourceDocumentation.Template override.
+func DefaultDocumentationPromptTemplate() string {
+	return defaultPromptTemplateText
+}
+
+// parsePromptTemplate parses a documentation prompt template with the helper
+// functions available to all prompt templates (currently `join`, mapping to
+// strings.Join).
+func parsePromptTemplate(text string) (*template.Template, error) {
+	return template.New("documentation-prompt").Funcs(template.FuncMap{
+		"join": strings.Join,
+	}).Parse(text)
+}
 
 // ResourceLinks holds curated reference URLs for a resource type. All fields
 // are optional; empty strings and nil slices are silently omitted from the
@@ -57,113 +86,38 @@ type ResourceDocumentation struct {
 	// Links holds curated reference URLs for this resource type. All subfields
 	// are optional and are omitted from the prompt when empty.
 	Links ResourceLinks
+	// Template optionally overrides the default documentation prompt template
+	// for this resource type. It uses Go text/template syntax, is executed with
+	// this ResourceDocumentation as data and has a `join` helper (strings.Join)
+	// available. When empty, the embedded default template is used; see
+	// DefaultDocumentationPromptTemplate for its text.
+	Template string
 }
 
 // BuildDocumentationPrompt returns a dedicated LLM prompt for the given resource
-// type. The prompt is tailored using the type's Purpose, KeySettings,
-// EmbeddedPayloads, RequiredPermissions, Lifecycle, RelatedTypes, SubtypeNote
-// and Links so every resource type produces its own prompt. It asks the model
-// to document every setting with best-practice guidance, Microsoft
-// documentation links, fully expanded embedded payloads and lifecycle notes.
+// type by executing a Go text/template with the ResourceDocumentation as data.
+// By default the embedded template (documentation_prompt.tmpl) is used; a
+// resource type can supply its own template via the Template field. The prompt
+// is tailored using the type's Purpose, KeySettings, EmbeddedPayloads,
+// RequiredPermissions, Lifecycle, RelatedTypes, SubtypeNote and Links so every
+// resource type produces its own prompt.
 //
-// All fields except AzureType and Purpose are optional and are omitted from
-// the prompt when empty.
+// Templates are developer-authored constants, so an invalid Template override
+// or a failing execution panics (fail-fast, analogous to template.Must); this
+// surfaces immediately in tests rather than silently producing broken prompts.
 func BuildDocumentationPrompt(doc ResourceDocumentation) string {
+	tmpl := defaultPromptTemplate
+	if doc.Template != "" {
+		override, err := parsePromptTemplate(doc.Template)
+		if err != nil {
+			panic(fmt.Sprintf("invalid documentation prompt template for %s: %v", doc.AzureType, err))
+		}
+		tmpl = override
+	}
+
 	var b strings.Builder
-
-	b.WriteString("You are a senior Microsoft cloud and endpoint-management consultant. ")
-	b.WriteString("Generate clear, accurate end-user documentation for the attached resource configuration.\n\n")
-
-	fmt.Fprintf(&b, "Azure resource type: %s\n", doc.AzureType)
-	if doc.Purpose != "" {
-		fmt.Fprintf(&b, "About this resource type: %s\n", doc.Purpose)
+	if err := tmpl.Execute(&b, doc); err != nil {
+		panic(fmt.Sprintf("failed to execute documentation prompt template for %s: %v", doc.AzureType, err))
 	}
-	if doc.SubtypeNote != "" {
-		fmt.Fprintf(&b, "Subtype guidance: %s\n", doc.SubtypeNote)
-	}
-	if len(doc.RequiredPermissions) > 0 {
-		b.WriteString("Permissions required to read this resource type:\n")
-		for _, p := range doc.RequiredPermissions {
-			fmt.Fprintf(&b, "- %s\n", p)
-		}
-	}
-	if len(doc.Lifecycle) > 0 {
-		b.WriteString("Lifecycle notes for this resource type:\n")
-		for _, p := range doc.Lifecycle {
-			fmt.Fprintf(&b, "- %s\n", p)
-		}
-	}
-
-	if l := doc.Links; l.EndpointDocs != "" || l.SchemaReference != "" || l.Permissions != "" || len(l.BestPractices) > 0 {
-		b.WriteString("\nReference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):\n")
-		if l.EndpointDocs != "" {
-			fmt.Fprintf(&b, "- API reference: %s\n", l.EndpointDocs)
-		}
-		if l.SchemaReference != "" {
-			fmt.Fprintf(&b, "- Schema reference: %s\n", l.SchemaReference)
-		}
-		if l.Permissions != "" {
-			fmt.Fprintf(&b, "- Required permissions: %s\n", l.Permissions)
-		}
-		for _, bp := range l.BestPractices {
-			fmt.Fprintf(&b, "- Best-practice baseline: %s\n", bp)
-		}
-	}
-
-	if len(doc.RelatedTypes) > 0 {
-		b.WriteString("\nRelated resource types exported alongside this one (cross-reference their YAML directories instead of guessing):\n")
-		for _, rt := range doc.RelatedTypes {
-			fmt.Fprintf(&b, "- %s\n", rt)
-		}
-	}
-
-	b.WriteString("\n")
-
-	b.WriteString("The configuration is provided as a YAML file exported by azure-resource-downloader. ")
-	b.WriteString("Produce well-structured Markdown documentation with this layout:\n\n")
-
-	b.WriteString("- An H1 title set to the resource's display name.\n")
-	b.WriteString("- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the tenant.\n")
-	b.WriteString("- Directly after the summary paragraph, a metadata table stating the resource type, the concrete subtype (`@odata.type`, if present), the resource ID, ")
-	b.WriteString("and other identifying top-level fields where present (e.g. platform, technologies).\n")
-	b.WriteString("- Directly after the metadata table, without a heading: a short explanation of assignments/targeting and what they mean, followed by a table of any assignments/targeting present, ")
-	b.WriteString("(include/exclude targets, assignment filters). Assignment targets contain group IDs only — group names are NOT resolved in the export ")
-	b.WriteString("(groups are exported separately as Microsoft.Graph/groups); never invent group names.\n\n")
-
-	b.WriteString("Then the following H2 sections, unnumbered, in this order:\n\n")
-
-	b.WriteString("References:\n")
-	b.WriteString("- link each setting to the authoritative Microsoft documentation (Microsoft Learn)\n")
-	b.WriteString("- and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft security baselines, CIS Benchmarks)\n")
-	b.WriteString("- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
-	b.WriteString("\n")
-	b.WriteString("Lifecycle & operations:\n")
-	b.WriteString("- document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned\n")
-	b.WriteString("- renewal/expiry obligations\n")
-	b.WriteString("- recommended review cadence.\n")
-	b.WriteString("\n")
-	b.WriteString("Security:\n")
-	b.WriteString("- call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)\n")
-	b.WriteString("- any deviations from recommended baselines, including the security impact.\n")
-	b.WriteString("\n")
-	b.WriteString("Settings:\n")
-	b.WriteString("- document EVERY setting/property present in the YAML.\n")
-	if len(doc.KeySettings) > 0 {
-		fmt.Fprintf(&b, "- give particular attention to: %s.\n", strings.Join(doc.KeySettings, ", "))
-	}
-	b.WriteString("- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: ")
-	b.WriteString("the `<summary>` holds the setting key (YAML path) and its configured value; ")
-	b.WriteString("the expanded body documents what the setting does, the recommended/best-practice value and a reference link.\n")
-	b.WriteString("- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.\n")
-	b.WriteString("- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.\n")
-	if len(doc.EmbeddedPayloads) > 0 {
-		fmt.Fprintf(&b, "- This resource carries embedded or encoded payloads: %s —", strings.Join(doc.EmbeddedPayloads, ", "))
-		b.WriteString(" decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, ")
-		b.WriteString("using nested `<details>` blocks for the payload's keys where that aids readability.\n")
-	}
-	b.WriteString("- If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.\n")
-	b.WriteString("- Only describe settings that are actually present; never invent values.\n")
-	b.WriteString("- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.")
-
-	return b.String()
+	return strings.TrimSuffix(b.String(), "\n")
 }
