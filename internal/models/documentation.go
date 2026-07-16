@@ -132,31 +132,38 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 
 	b.WriteString("Then the following H2 sections, unnumbered, in this order:\n\n")
 
-	b.WriteString("References — link each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline ")
-	b.WriteString("(e.g. Microsoft security baselines, CIS Benchmarks). Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
-	b.WriteString("Lifecycle & operations — document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned, ")
-	b.WriteString("renewal/expiry obligations, and a recommended review cadence.\n")
-	b.WriteString("Security — call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.) and any deviations from recommended baselines, including the security impact.")
-	if len(doc.KeySettings) > 0 {
-		fmt.Fprintf(&b, " For this resource type, give particular attention to: %s.", strings.Join(doc.KeySettings, ", "))
-	}
+	b.WriteString("References:\n")
+	b.WriteString("- link each setting to the authoritative Microsoft documentation (Microsoft Learn)\n")
+	b.WriteString("- and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft security baselines, CIS Benchmarks)\n")
+	b.WriteString("- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.\n")
 	b.WriteString("\n")
-	b.WriteString("Settings — document EVERY setting/property present in the YAML in a table with the columns: ")
-	b.WriteString("Setting (YAML path), Configured value, What it does, Recommended/best-practice value, Reference. ")
-	b.WriteString("If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema. ")
-	b.WriteString("Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.\n")
-
-	b.WriteString("Embedded payloads — fully expand and explain any embedded or encoded payloads")
-	if len(doc.EmbeddedPayloads) > 0 {
-		fmt.Fprintf(&b, " — for this resource type pay particular attention to: %s", strings.Join(doc.EmbeddedPayloads, ", "))
-	} else {
-		b.WriteString(" — for example `configurationXml`, `omaSettings`, `payloadJson`, custom OMA-URI values and base64/`payload` blobs")
+	b.WriteString("Lifecycle & operations:\n")
+	b.WriteString("- document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned\n")
+	b.WriteString("- renewal/expiry obligations\n")
+	b.WriteString("- recommended review cadence.\n")
+	b.WriteString("\n")
+	b.WriteString("Security:\n")
+	b.WriteString("- call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)\n")
+	b.WriteString("- any deviations from recommended baselines, including the security impact.\n")
+	b.WriteString("\n")
+	b.WriteString("Settings:\n")
+	b.WriteString("- document EVERY setting/property present in the YAML.\n")
+	if len(doc.KeySettings) > 0 {
+		fmt.Fprintf(&b, "- give particular attention to: %s.\n", strings.Join(doc.KeySettings, ", "))
 	}
-	b.WriteString(". Decode and pretty-print them, then document each contained key/value the same way as the top-level settings. ")
-	b.WriteString("If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents as part of the resource.\n\n")
-
-	b.WriteString("Only describe settings that are actually present; never invent values. ")
-	b.WriteString("Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.")
+	b.WriteString("- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: ")
+	b.WriteString("the `<summary>` holds the setting key (YAML path) and its configured value; ")
+	b.WriteString("the expanded body documents what the setting does, the recommended/best-practice value and a reference link.\n")
+	b.WriteString("- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.\n")
+	b.WriteString("- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.\n")
+	if len(doc.EmbeddedPayloads) > 0 {
+		fmt.Fprintf(&b, "- This resource carries embedded or encoded payloads: %s —", strings.Join(doc.EmbeddedPayloads, ", "))
+		b.WriteString(" decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, ")
+		b.WriteString("using nested `<details>` blocks for the payload's keys where that aids readability.\n")
+	}
+	b.WriteString("- If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.\n")
+	b.WriteString("- Only describe settings that are actually present; never invent values.\n")
+	b.WriteString("- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.")
 
 	return b.String()
 }
