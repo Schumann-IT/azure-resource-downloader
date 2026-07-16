@@ -2,18 +2,22 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: {{ .AzureType }}
 {{- if .Purpose }}
+
 About this resource type: {{ .Purpose }}
 {{- end }}
 {{- if .SubtypeNote }}
+
 Subtype guidance: {{ .SubtypeNote }}
 {{- end }}
 {{- if .RequiredPermissions }}
+
 Permissions required to read this resource type:
 {{- range .RequiredPermissions }}
 - {{ . }}
 {{- end }}
 {{- end }}
 {{- if .Lifecycle }}
+
 Lifecycle notes for this resource type:
 {{- range .Lifecycle }}
 - {{ . }}

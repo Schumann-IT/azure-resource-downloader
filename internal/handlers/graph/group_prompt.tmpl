@@ -2,15 +2,18 @@ You are a senior Microsoft cloud and identity consultant. Generate clear, accura
 
 Azure resource type: {{ .AzureType }}
 {{- if .Purpose }}
+
 About this resource type: {{ .Purpose }}
 {{- end }}
 {{- if .RequiredPermissions }}
+
 Permissions required to read this resource type:
 {{- range .RequiredPermissions }}
 - {{ . }}
 {{- end }}
 {{- end }}
 {{- if .Lifecycle }}
+
 Lifecycle notes for this resource type:
 {{- range .Lifecycle }}
 - {{ . }}
