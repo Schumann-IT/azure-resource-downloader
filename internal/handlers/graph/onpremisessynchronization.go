@@ -27,6 +27,7 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/onPremisesSynchronization",
 		documentation: models.ResourceDocumentation{
+			Template:            singletonPromptTemplateText,
 			Purpose:             "The tenant Entra ID on-premises directory synchronization (Azure AD Connect) configuration and features.",
 			KeySettings:         []string{"features", "configuration"},
 			RequiredPermissions: []string{"OnPremDirectorySynchronization.Read.All"},

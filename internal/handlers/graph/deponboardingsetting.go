@@ -27,6 +27,7 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/depOnboardingSettings",
 		documentation: models.ResourceDocumentation{
+			Template:            credentialPromptTemplateText,
 			Purpose:             "Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
 			KeySettings:         []string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},

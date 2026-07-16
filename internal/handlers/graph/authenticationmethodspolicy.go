@@ -36,6 +36,7 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationMethodsPolicy",
 		documentation: models.ResourceDocumentation{
+			Template:            singletonPromptTemplateText,
 			Purpose:             "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
 			KeySettings:         []string{"authenticationMethodConfigurations", "registrationEnforcement"},
 			RequiredPermissions: []string{"Policy.Read.All"},

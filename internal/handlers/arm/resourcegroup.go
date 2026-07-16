@@ -33,6 +33,7 @@ func (h *ResourceGroupHandler) GetType() string {
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *ResourceGroupHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Resource Group, the logical container that holds related Azure resources and governs their lifecycle, location and tags.",
 		KeySettings:         []string{"location", "tags", "provisioningState"},

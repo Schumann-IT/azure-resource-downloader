@@ -23,6 +23,7 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/roleDefinitions",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune RBAC role definition listing the permissions granted by the role.",
 			KeySettings:         []string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},

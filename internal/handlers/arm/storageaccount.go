@@ -33,6 +33,7 @@ func (h *StorageAccountHandler) GetType() string {
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *StorageAccountHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
 		KeySettings:         []string{"enableHttpsTrafficOnly", "minimumTlsVersion", "allowBlobPublicAccess", "allowSharedKeyAccess", "networkRuleSet", "encryption"},

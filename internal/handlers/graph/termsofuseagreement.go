@@ -21,6 +21,7 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/termsOfUseAgreements",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Entra ID Terms of Use agreement presented via Conditional Access.",
 			KeySettings:         []string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
 			EmbeddedPayloads:    []string{"files (the uploaded ToU PDF documents, base64)"},

@@ -22,6 +22,7 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationStrengthPolicies",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
 			KeySettings:         []string{"allowedCombinations"},
 			RequiredPermissions: []string{"Policy.Read.All"},

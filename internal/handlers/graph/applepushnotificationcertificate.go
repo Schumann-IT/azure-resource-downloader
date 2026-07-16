@@ -37,6 +37,7 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/applePushNotificationCertificate",
 		documentation: models.ResourceDocumentation{
+			Template:            credentialPromptTemplateText,
 			Purpose:             "The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
 			KeySettings:         []string{"expirationDateTime", "appleIdentifier"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},

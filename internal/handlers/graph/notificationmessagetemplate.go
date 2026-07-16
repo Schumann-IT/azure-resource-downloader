@@ -22,6 +22,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/notificationMessageTemplates",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune notification message template used for compliance and other notifications.",
 			EmbeddedPayloads:    []string{"localizedNotificationMessages (per-locale subject and message body)"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},

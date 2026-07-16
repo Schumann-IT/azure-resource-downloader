@@ -33,6 +33,7 @@ func (h *VirtualMachineHandler) GetType() string {
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *VirtualMachineHandler) GetDocumentationPrompt() string {
 	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Virtual Machine, including its compute size, OS profile, storage, networking and security configuration.",
 		KeySettings:         []string{"hardwareProfile.vmSize", "storageProfile.osDisk", "osProfile", "networkProfile", "securityProfile"},

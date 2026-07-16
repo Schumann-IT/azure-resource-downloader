@@ -22,6 +22,7 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/namedLocations",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.",
 			KeySettings:         []string{"ipRanges", "countriesAndRegions", "isTrusted"},
 			RequiredPermissions: []string{"Policy.Read.All"},

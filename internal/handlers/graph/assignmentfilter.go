@@ -21,6 +21,7 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/assignmentFilters",
 		documentation: models.ResourceDocumentation{
+			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
 			KeySettings:         []string{"platform", "rule"},
 			EmbeddedPayloads:    []string{"rule (filter rule expression)"},

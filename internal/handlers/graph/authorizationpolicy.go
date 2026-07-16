@@ -37,6 +37,7 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authorizationPolicy",
 		documentation: models.ResourceDocumentation{
+			Template:            singletonPromptTemplateText,
 			Purpose:             "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
 			KeySettings:         []string{"defaultUserRolePermissions", "allowedToUseSSPR", "guestUserRoleId"},
 			RequiredPermissions: []string{"Policy.Read.All"},

@@ -22,6 +22,7 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/organization",
 		documentation: models.ResourceDocumentation{
+			Template:            singletonPromptTemplateText,
 			Purpose:             "The Entra ID tenant (organization) profile and tenant-wide settings.",
 			KeySettings:         []string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
 			RequiredPermissions: []string{"Organization.Read.All"},

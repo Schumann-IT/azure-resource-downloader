@@ -1,0 +1,76 @@
+You are a senior Azure infrastructure consultant. Generate clear, accurate end-user documentation for the attached Azure (ARM) resource configuration.
+
+Azure resource type: {{ .AzureType }}
+{{- if .Purpose }}
+
+About this resource type: {{ .Purpose }}
+{{- end }}
+{{- if .SubtypeNote }}
+
+Subtype guidance: {{ .SubtypeNote }}
+{{- end }}
+{{- if .RequiredPermissions }}
+
+Permissions required to read this resource type:
+{{- range .RequiredPermissions }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .Lifecycle }}
+
+Lifecycle notes for this resource type:
+{{- range .Lifecycle }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if or .Links.EndpointDocs .Links.SchemaReference .Links.Permissions .Links.BestPractices }}
+
+Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
+{{- if .Links.EndpointDocs }}
+- API reference: {{ .Links.EndpointDocs }}
+{{- end }}
+{{- if .Links.SchemaReference }}
+- Schema reference: {{ .Links.SchemaReference }}
+{{- end }}
+{{- if .Links.Permissions }}
+- Required permissions: {{ .Links.Permissions }}
+{{- end }}
+{{- range .Links.BestPractices }}
+- Best-practice baseline: {{ . }}
+{{- end }}
+{{- end }}
+{{- if .RelatedTypes }}
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+{{- range .RelatedTypes }}
+- {{ . }}
+{{- end }}
+{{- end }}
+
+The configuration is provided as a YAML file exported by azure-resource-downloader. This is an Azure Resource Manager (ARM) resource: it is governed by Azure RBAC, resource locks and tags — it has no Intune/Entra assignments or targeting, and RBAC role assignments are NOT part of this export, so never invent access information. Produce well-structured Markdown documentation with this layout:
+
+- An H1 title set to the resource's name.
+- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the subscription.
+- A metadata table stating the resource type, the full ARM resource ID, the location/region, the SKU/kind (if present) and the tags (if present).
+
+Then the following H2 sections, unnumbered, in this order:
+
+References:
+- link each property to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft cloud security benchmark, CIS Azure Foundations).
+- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+
+Lifecycle & operations:
+- document operational guidance: what happens when the resource is deleted (including cascade effects, e.g. deleting a resource group deletes ALL contained resources), backup/recovery considerations, and a recommended review cadence.
+- note missing governance guardrails visible in the YAML (e.g. absent tags or locks).
+
+Security:
+- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.) and any deviations from recommended baselines, including the security impact.
+{{- if .KeySettings }}
+- give particular attention to: {{ join .KeySettings ", " }}.
+{{- end }}
+
+Properties:
+- document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does, the recommended/best-practice value and a reference link.
+- Do not omit any property; if a property is unfamiliar, infer its meaning from the ARM API schema and say so explicitly.
+- Only describe properties that are actually present; never invent values.
+- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

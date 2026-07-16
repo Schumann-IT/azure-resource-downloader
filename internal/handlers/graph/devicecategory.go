@@ -21,6 +21,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceCategories",
 		documentation: models.ResourceDocumentation{
+			Template:            recordPromptTemplateText,
 			Purpose:             "An Intune device category used to group and target devices at enrollment.",
 			RequiredPermissions: []string{"DeviceManagementManagedDevices.Read.All"},
 			Lifecycle:           []string{"Categories are chosen by users during enrollment or set by admins; deleting a category leaves devices without a category but does not affect their management."},

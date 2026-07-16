@@ -23,6 +23,7 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/vppTokens",
 		documentation: models.ResourceDocumentation{
+			Template:            credentialPromptTemplateText,
 			Purpose:             "An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
 			KeySettings:         []string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},

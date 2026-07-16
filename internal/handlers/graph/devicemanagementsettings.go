@@ -38,6 +38,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/deviceManagement",
 		documentation: models.ResourceDocumentation{
+			Template:            singletonPromptTemplateText,
 			Purpose:             "Tenant-wide Intune device management settings and configuration.",
 			KeySettings:         []string{"settings", "intuneAccountId"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},

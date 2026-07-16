@@ -23,6 +23,7 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/ndesConnectors",
 		documentation: models.ResourceDocumentation{
+			Template:            recordPromptTemplateText,
 			Purpose:             "An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.",
 			KeySettings:         []string{"state", "lastConnectionDateTime"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
