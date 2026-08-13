@@ -52,8 +52,6 @@ filters:
     displayName: "GBL_.*"
   Microsoft.Graph/deviceEnrollmentConfigurations:
     displayName: "GBL_.*"
-  Microsoft.Graph/deviceHealthScripts:
-    displayName: "GBL_.*"
   # Settings catalog policies expose the title via "name", not "displayName"
   Microsoft.Graph/deviceManagementConfigurationPolicies:
     name: "GBL_.*"
@@ -69,3 +67,4 @@ filters:
     displayName: "GBL_.*"
 
 write-prompts: true
+resolve-secrets: true
