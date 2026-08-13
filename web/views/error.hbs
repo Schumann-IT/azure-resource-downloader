@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <main class="mx-auto max-w-5xl px-4 py-16 text-center">
+      <p class="text-5xl font-bold text-slate-300 dark:text-slate-700">404</p>
+      <h1 class="mt-4 text-xl font-semibold">Document not found</h1>
+      <p class="mt-2 text-slate-500 dark:text-slate-400">
+        {{#if tenant}}Tenant <code class="font-mono">{{tenant}}</code>{{else}}Unknown tenant{{/if}}{{#if requested}},
+        path <code class="font-mono">{{requested}}</code>{{/if}}.
+      </p>
+      <a href="/" class="inline-block mt-6 text-brand-600 dark:text-brand-400 hover:underline">Back to tenants</a>
+    </main>
+  </body>
+</html>

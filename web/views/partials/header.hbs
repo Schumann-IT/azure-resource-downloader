@@ -1,0 +1,13 @@
+<header class="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+  <div class="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+    <a href="/" class="font-semibold text-brand-600 dark:text-brand-400 hover:underline">Docs</a>
+    {{#if tenant}}
+      <span class="text-slate-400">/</span>
+      <a href="/{{tenant}}" class="text-slate-700 dark:text-slate-200 hover:underline">{{tenant}}</a>
+    {{/if}}
+    {{#each breadcrumb}}
+      <span class="text-slate-400">/</span>
+      <span class="text-slate-500 dark:text-slate-400">{{this.label}}</span>
+    {{/each}}
+  </div>
+</header>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <main class="mx-auto max-w-5xl px-4 py-8">
+      {{#if meta.source}}
+        <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
+          source <code class="font-mono">{{meta.source}}</code>{{#if meta.generatedAt}} · generated {{meta.generatedAt}}{{/if}}
+        </p>
+      {{/if}}
+      <article class="prose prose-slate dark:prose-invert max-w-none">
+        {{{body}}}
+      </article>
+    </main>
+  </body>
+</html>
