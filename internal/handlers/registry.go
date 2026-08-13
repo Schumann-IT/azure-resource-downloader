@@ -73,3 +73,27 @@ func (r *Registry) HasHandler(resourceType string) bool {
 	_, exists := r.handlers[resourceType]
 	return exists
 }
+
+// DedicatedAppRequirements reports, for the given resource types, which ones
+// require a dedicated app registration (device-code sign-in) to be read,
+// mapping each such type to the delegated permissions it declares. Types that
+// work with the default Azure CLI credentials (or have no registered handler)
+// are omitted. Callers use this before authenticating to decide whether they
+// must obtain --client-id/--tenant-id.
+func (r *Registry) DedicatedAppRequirements(resourceTypes []string) map[string][]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	requirements := make(map[string][]string)
+	for _, resourceType := range resourceTypes {
+		handler, exists := r.handlers[resourceType]
+		if !exists {
+			continue
+		}
+		scoped, ok := handler.(models.PermissionScoped)
+		if ok && scoped.RequiresDedicatedApp() {
+			requirements[resourceType] = scoped.RequiredPermissions()
+		}
+	}
+	return requirements
+}

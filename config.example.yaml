@@ -2,6 +2,9 @@
 # Save it anywhere and load it explicitly with --config, e.g.:
 #   azure-rd download --config ~/.azure-rd.yaml
 # Without --config no config file is read and the built-in defaults apply.
+#
+# Precedence (highest to lowest): CLI flag > AZURE_RD_* env var > this file >
+# built-in default. A higher source silently overrides a lower one (no warning).
 
 # Azure subscription ID (optional)
 # If not specified, the default subscription from 'az login' will be used
@@ -19,6 +22,10 @@
 
 # Output directory for downloaded resources (default: ./output)
 # Uncomment to override the default output directory.
+# The tool writes exclusively under <output>/<tenant-domain>/resources/, which
+# also holds the export metadata (resources/metadata.yaml) and per-type
+# doc-prompt.md files. Anything you place elsewhere under <output> is left
+# untouched (and never pruned).
 # output: "./output"
 
 # Number of concurrent workers for parallel processing
@@ -42,14 +49,22 @@
 # Dry run mode - preview without writing files (default: false)
 # dry-run: false
 
-# Timeout in seconds for the download operation (default: 300)
-# Equivalent to the --timeout flag. Flag overrides this value.
+# Per-operation timeout in seconds (default: 300)
+# Applied around each individual resource fetch (including its retries), NOT as
+# a whole-run budget. Equivalent to the --timeout flag. Flag overrides this.
 # timeout: 300
 
-# Resource type filter (optional)
+# Selection (optional) - choose WHAT to download. If none of the three below is
+# set, every registered resource type is downloaded (a full export).
+#
+# Explicit resource IDs to download (repeatable).
+# Equivalent to repeating the --resource-id flag. Flag overrides this value.
+# resource-id:
+#   - "/subscriptions/<sub>/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/acct"
+#
+# Resource type filter.
 # Restrict the download to one or more registered resource types.
 # Equivalent to repeating the --type flag. Flag overrides this value.
-# If omitted, all registered resource types are downloaded.
 # type:
 #   - Microsoft.Resources/resourceGroups
 #   - Microsoft.Storage/storageAccounts
@@ -65,17 +80,26 @@
 # Equivalent to the --resolve-secrets flag. Flag overrides this value.
 # resolve-secrets: false
 
-# Generate documentation prompts (default: false)
-# When enabled, the writer creates one dedicated LLM documentation prompt per
-# resource type, written as "<type>.prompt.md" inside each resource type's
-# output directory (e.g. output/Microsoft.Graph/deviceConfigurations/
-# deviceConfigurations.prompt.md). Each prompt is tailored to its resource type
-# and asks an LLM to document every setting with best-practice guidance,
-# Microsoft Learn links and fully expanded embedded payloads (e.g.
-# configurationXml, omaSettings). Paste the prompt together with a resource YAML
-# from the same directory into an LLM to generate the documentation.
-# Equivalent to the --write-prompts flag. Flag overrides this value.
-# write-prompts: true
+# Skip documentation prompts (default: false — prompts ARE written by default)
+# The writer creates one dedicated LLM documentation prompt per resource type,
+# written as "doc-prompt.md" inside each resource type's directory (e.g.
+# output/<tenant>/resources/Microsoft.Graph/deviceConfigurations/doc-prompt.md).
+# Each prompt is tailored to its resource type and asks an LLM to document every
+# setting with best-practice guidance, Microsoft Learn links and fully expanded
+# embedded payloads (e.g. configurationXml, omaSettings). Paste the prompt
+# together with a resource YAML from the same directory into an LLM to generate
+# the documentation. Set no-prompt to true to skip writing these files.
+# Equivalent to the --no-prompt flag. Flag overrides this value.
+# no-prompt: false
+
+# Prune stale resources (default: false)
+# When enabled, after a COMPLETE, failure-free run the tool deletes files under
+# resources/ for resources it establishes are no longer in the tenant (based on
+# the previous export recorded in resources/metadata.yaml), and drops their
+# metadata entries. It refuses to run for an incomplete run or one with
+# failures, and does nothing under --dry-run. Only resources of types this run
+# fully listed are eligible. Equivalent to the --prune flag. Flag overrides this.
+# prune: false
 
 # Log level - controls verbosity (default: info)
 # Options: debug, info, warn, error

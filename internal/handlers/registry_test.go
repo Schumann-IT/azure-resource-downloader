@@ -50,6 +50,53 @@ func (m *MockHandler) GetDocumentationPrompt() string {
 	})
 }
 
+// scopedMockHandler is a MockHandler that also declares a dedicated-app
+// requirement, exercising the optional models.PermissionScoped interface.
+type scopedMockHandler struct {
+	MockHandler
+	requiresApp bool
+	permissions []string
+}
+
+func (m *scopedMockHandler) RequiresDedicatedApp() bool    { return m.requiresApp }
+func (m *scopedMockHandler) RequiredPermissions() []string { return m.permissions }
+
+func TestDedicatedAppRequirements(t *testing.T) {
+	registry := NewEmptyRegistry()
+
+	// ARM-like handler: no PermissionScoped, never requires a dedicated app.
+	registry.Register("Microsoft.Storage/storageAccounts", &MockHandler{resourceType: "Microsoft.Storage/storageAccounts"})
+	// Graph-like handler that requires a dedicated app.
+	registry.Register("Microsoft.Graph/conditionalAccessPolicies", &scopedMockHandler{
+		MockHandler: MockHandler{resourceType: "Microsoft.Graph/conditionalAccessPolicies"},
+		requiresApp: true,
+		permissions: []string{"Policy.Read.All"},
+	})
+	// Graph-like handler that opts out (readable with the CLI credential).
+	registry.Register("Microsoft.Graph/openType", &scopedMockHandler{
+		MockHandler: MockHandler{resourceType: "Microsoft.Graph/openType"},
+		requiresApp: false,
+	})
+
+	got := registry.DedicatedAppRequirements([]string{
+		"Microsoft.Storage/storageAccounts",
+		"Microsoft.Graph/conditionalAccessPolicies",
+		"Microsoft.Graph/openType",
+		"Microsoft.Graph/notRegistered",
+	})
+
+	if len(got) != 1 {
+		t.Fatalf("DedicatedAppRequirements() returned %d entries, want 1: %v", len(got), got)
+	}
+	perms, ok := got["Microsoft.Graph/conditionalAccessPolicies"]
+	if !ok {
+		t.Fatal("DedicatedAppRequirements() missing the conditional access policy type")
+	}
+	if len(perms) != 1 || perms[0] != "Policy.Read.All" {
+		t.Errorf("DedicatedAppRequirements() permissions = %v, want [Policy.Read.All]", perms)
+	}
+}
+
 func TestNewEmptyRegistry(t *testing.T) {
 	registry := NewEmptyRegistry()
 

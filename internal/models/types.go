@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+// ResourcesDirName is the single subdirectory under the per-tenant output
+// directory that azure-rd writes exclusively. Every downloaded YAML, sidecar
+// artifact, doc-prompt.md and the metadata.yaml live under it. That ownership
+// boundary is what makes --prune safe to reason about.
+const ResourcesDirName = "resources"
+
 // FetchRequest represents a request to fetch Azure resources
 type FetchRequest struct {
 	ResourceID    string
@@ -33,6 +39,11 @@ type FetchResult struct {
 	// failures nor written to disk.
 	Skipped    bool
 	SkipReason string
+	// Cancelled marks a request that produced no work because the pipeline was
+	// cancelled (e.g. a per-run deadline or interrupt) before it was processed.
+	// It exists so every request accounts for exactly one result, which the
+	// completeness invariant depends on.
+	Cancelled bool
 }
 
 // TransformResult represents the result of transforming a resource
@@ -52,6 +63,8 @@ type TransformResult struct {
 	// Filtered marks a resource that was excluded by a configured resource
 	// filter. Filtered resources are neither written nor counted as failures.
 	Filtered bool
+	// Cancelled is propagated from the fetch stage (see FetchResult.Cancelled).
+	Cancelled bool
 }
 
 // FileArtifact represents an additional file to be written alongside a
@@ -63,9 +76,10 @@ type FileArtifact struct {
 
 // WriteResult represents the result of writing files
 type WriteResult struct {
-	ResourceID string
-	YAMLPath   string
-	Error      error
+	ResourceID   string
+	ResourceType string
+	YAMLPath     string
+	Error        error
 	// Skipped is propagated from earlier stages for resources the signed-in
 	// user is not permitted to read (no file is written).
 	Skipped    bool
@@ -73,6 +87,38 @@ type WriteResult struct {
 	// Filtered is propagated from the transform stage for resources excluded by
 	// a configured resource filter (no file is written).
 	Filtered bool
+	// Cancelled is propagated from earlier stages (see FetchResult.Cancelled).
+	Cancelled bool
+	// Facts carries the immutable, observed facts about a successfully written
+	// resource for resources/metadata.yaml. It is nil for results that wrote no
+	// file (skipped, filtered, cancelled, errored, or dry-run).
+	Facts *ResourceFacts
+}
+
+// ResourceFacts captures the immutable facts about a single written resource,
+// computed in the pipeline at write time (the only place the marshalled YAML
+// bytes exist) and recorded in resources/metadata.yaml. Facts describe what a
+// resource is, never how it should be classified.
+type ResourceFacts struct {
+	// SourceSha256 is the hex-encoded SHA-256 of the YAML bytes written to disk.
+	SourceSha256 string
+	// ResourceID is the Azure resource id, letting a later diff distinguish a
+	// genuine edit from a regenerated id.
+	ResourceID string
+	// DisplayName comes from the handler's Transform (not always recoverable
+	// from the YAML on disk).
+	DisplayName string
+	// ODataType, Platforms and Technologies are best-effort lookups from the
+	// cleaned data; treat as nullable, never as a primary key.
+	ODataType    string
+	Platforms    string
+	Technologies string
+	// Artifacts lists the sidecar file names written alongside the YAML.
+	Artifacts []string
+	// AssignmentTargets holds the raw, per-resource assignment targets as read
+	// from the cleaned data. Resolving GUIDs to names is a cross-resource join
+	// that belongs to a later post-processing step.
+	AssignmentTargets []interface{}
 }
 
 // TransformedResource represents a fully transformed Azure resource
@@ -106,6 +152,25 @@ type ResourceHandler interface {
 	// every setting with best-practice guidance, Microsoft documentation links,
 	// and fully expanded embedded payloads (e.g. configurationXml).
 	GetDocumentationPrompt() string
+}
+
+// PermissionScoped is optionally implemented by a ResourceHandler whose
+// resource type needs delegated Microsoft Graph permissions that the Azure CLI
+// first-party app cannot provide, and therefore requires signing in to a
+// dedicated app registration (--client-id/--tenant-id, device-code flow).
+//
+// Handlers that do not implement it are assumed to work with the default Azure
+// CLI credentials (e.g. ARM types authorised via subscription RBAC). Callers
+// use RequiresDedicatedApp to decide, before authenticating, whether they must
+// obtain a dedicated app registration for the selected resource types.
+type PermissionScoped interface {
+	// RequiresDedicatedApp reports whether this type can only be read with a
+	// dedicated app registration.
+	RequiresDedicatedApp() bool
+
+	// RequiredPermissions lists the delegated permissions/scopes the type needs,
+	// for user-facing messages. It may be empty.
+	RequiredPermissions() []string
 }
 
 // PipelineConfig holds configuration for the pipeline

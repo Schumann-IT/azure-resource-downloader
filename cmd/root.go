@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"azure-resource-downloader/internal/logger"
 
@@ -12,20 +13,14 @@ import (
 
 // Package-level flag variables are prefixed with "flag" so they never collide
 // with (and shadow) local variables in command implementations, which commonly
-// read the same settings back from Viper using natural names like dryRun or
-// resourceGroup. These are referenced only here in root.go for flag binding;
-// command code reads values via viper.Get*.
+// read the same settings back from Viper using natural names like dryRun.
+// These are referenced only here in root.go for flag binding; command code
+// reads values via viper.Get*.
 var (
-	flagConfigFile    string
-	flagSubscription  string
-	flagOutput        string
-	flagWorkers       int
-	flagDryRun        bool
-	flagLogLevel      string
-	flagClientID      string
-	flagTenantID      string
-	flagResourceTypes []string
-	flagResourceGroup string
+	flagConfigFile string
+	flagOutput     string
+	flagDryRun     bool
+	flagLogLevel   string
 )
 
 // rootCmd represents the base command
@@ -33,8 +28,8 @@ var rootCmd = &cobra.Command{
 	Use:   "azure-rd",
 	Short: "Azure Resource Downloader - Download and transform Azure resources",
 	Long: `Azure Resource Downloader is a CLI tool that downloads Azure resources,
-transforms them into clean YAML format, and can generate per-resource-type AI
-documentation prompts (--write-prompts).
+transforms them into clean YAML format, and generates per-resource-type AI
+documentation prompts by default (pass --no-prompt to skip them).
 
 The tool follows a pipeline pattern with async processing for maximum performance.
 It's designed to be easily extensible with support for multiple Azure resource types.
@@ -44,6 +39,12 @@ same delegated token is used for both ARM and Microsoft Graph calls. To download
 Microsoft Graph/Intune types that need scopes the Azure CLI app cannot provide,
 sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	Version: "1.0.0",
+}
+
+// toolVersion returns the tool identifier recorded in export metadata, derived
+// from the root command's version so there is a single source of truth.
+func toolVersion() string {
+	return "azure-rd " + rootCmd.Version
 }
 
 // Execute runs the root command
@@ -57,28 +58,21 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Global flags
+	// Global flags: every planned command needs the export root and benefits
+	// from a uniform dry-run safety switch, config loading and log verbosity.
+	// Command-specific flags (auth, selection, pipeline tuning) are opt-in via
+	// the helpers in flags.go so future commands do not silently inherit them.
 	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "path to a YAML config file; if omitted, no config file is loaded and defaults apply")
-	rootCmd.PersistentFlags().StringVar(&flagSubscription, "subscription", "", "Azure subscription ID (default: your az login default subscription)")
 	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "directory to write downloaded resources into")
-	rootCmd.PersistentFlags().IntVar(&flagWorkers, "workers", 5, "number of concurrent workers")
 	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "preview what would be downloaded without writing files")
 	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "info", "log verbosity: debug, info, warn, or error")
-	rootCmd.PersistentFlags().StringVar(&flagClientID, "client-id", "", "app registration (client) ID for device-code sign-in; use to obtain Graph scopes the az login app lacks (e.g. DeviceManagementConfiguration.ReadWrite.All)")
-	rootCmd.PersistentFlags().StringVar(&flagTenantID, "tenant-id", "", "Entra tenant ID for device-code sign-in (required with --client-id)")
-	rootCmd.PersistentFlags().StringSliceVar(&flagResourceTypes, "type", []string{}, "resource type to download; repeatable, acts as a filter (default: all registered types)")
-	rootCmd.PersistentFlags().StringVar(&flagResourceGroup, "resource-group", "", "download resources in this resource group")
 
-	// Bind flags to viper
-	_ = viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
+	// Bind global flags to viper. Command-local flags are bound per-execution in
+	// each command's RunE via bindFlags to avoid the global viper singleton
+	// picking up a sibling command's identically named flag.
 	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
-	_ = viper.BindPFlag("workers", rootCmd.PersistentFlags().Lookup("workers"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
-	_ = viper.BindPFlag("client-id", rootCmd.PersistentFlags().Lookup("client-id"))
-	_ = viper.BindPFlag("tenant-id", rootCmd.PersistentFlags().Lookup("tenant-id"))
-	_ = viper.BindPFlag("type", rootCmd.PersistentFlags().Lookup("type"))
-	_ = viper.BindPFlag("resource-group", rootCmd.PersistentFlags().Lookup("resource-group"))
 }
 
 // initConfig reads environment variables and, only when --config is given, the
@@ -86,8 +80,11 @@ func init() {
 // the built-in defaults apply (still overridable by flags and AZURE_RD_* env
 // vars). An explicitly requested config file that cannot be read is fatal.
 func initConfig() {
-	// Read in environment variables that match
+	// Read in environment variables that match. The key replacer maps hyphens
+	// to underscores so hyphenated keys like log-level resolve to a shell-
+	// exportable name (AZURE_RD_LOG_LEVEL) rather than AZURE_RD_LOG-LEVEL.
 	viper.SetEnvPrefix("AZURE_RD")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
 	configFileUsed := ""
@@ -103,7 +100,7 @@ func initConfig() {
 	}
 
 	// Configure log level after reading config
-	// Priority: CLI flag > config file > env variable > default
+	// Priority: CLI flag > env variable > config file > default
 	configuredLevel := viper.GetString("log-level")
 	if configuredLevel != "" {
 		logger.SetLogLevel(configuredLevel)

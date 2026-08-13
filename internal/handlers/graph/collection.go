@@ -32,9 +32,17 @@ type GraphCollectionHandler struct {
 	// type carries its own prompt; AzureType is filled in from the
 	// handler at prompt-build time.
 	documentation models.ResourceDocumentation
-	listIDs       func(ctx context.Context) ([]string, error)
-	fetchItem     func(ctx context.Context, itemID string) (serialization.Parsable, error)
-	displayName   func(item serialization.Parsable) string
+	// worksWithCLICredential opts a specific Graph type out of requiring a
+	// dedicated app registration. It defaults to false: every Microsoft Graph
+	// collection here reads admin/Intune data via delegated scopes the Azure CLI
+	// first-party app cannot consent to (e.g. Policy.Read.All,
+	// DeviceManagementConfiguration.Read.All), so by default these types need a
+	// dedicated app (--client-id/--tenant-id). A constructor may set this true
+	// for a type that is readable with the plain az login session.
+	worksWithCLICredential bool
+	listIDs                func(ctx context.Context) ([]string, error)
+	fetchItem              func(ctx context.Context, itemID string) (serialization.Parsable, error)
+	displayName            func(item serialization.Parsable) string
 }
 
 // newBetaGraphClient creates a Microsoft Graph beta client for the given
@@ -75,6 +83,20 @@ func (h *GraphCollectionHandler) GetDocumentationPrompt() string {
 	doc := h.documentation
 	doc.AzureType = h.azureType
 	return models.BuildDocumentationPrompt(doc)
+}
+
+// RequiresDedicatedApp reports whether this Microsoft Graph type needs a
+// dedicated app registration (device-code sign-in with delegated scopes the
+// Azure CLI first-party app cannot provide). It is true for every Graph
+// collection unless the constructor opts out via worksWithCLICredential.
+func (h *GraphCollectionHandler) RequiresDedicatedApp() bool {
+	return !h.worksWithCLICredential
+}
+
+// RequiredPermissions returns the delegated Microsoft Graph permissions this
+// type needs, as declared in its documentation metadata (for user messages).
+func (h *GraphCollectionHandler) RequiredPermissions() []string {
+	return h.documentation.RequiredPermissions
 }
 
 // List returns the IDs of all items in the collection.

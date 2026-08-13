@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"azure-resource-downloader/internal/azure"
@@ -37,7 +38,7 @@ func NewPipeline(azureClient *azure.Client, registry *handlers.Registry, config 
 	}
 
 	return &Pipeline{
-		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount),
+		fetcher:     NewFetcher(azureClient, registry, config.WorkerCount, config.Timeout),
 		transformer: NewTransformer(registry, config.WorkerCount, transformerConfigs, config.ResourceFilters),
 		writer:      NewWriter(config.OutputDir, config.WorkerCount, config.DryRun, config.WritePrompts),
 		config:      config,
@@ -57,12 +58,11 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	metrics := NewPipelineMetrics(p.config.WorkerCount, len(requests))
 	defer metrics.LogSummary()
 
-	// Create context with timeout if configured
-	if p.config.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, p.config.Timeout)
-		defer cancel()
-	}
+	// NOTE: config.Timeout is a PER-OPERATION deadline applied around each
+	// resource fetch inside the fetcher, not a whole-run budget. The pipeline
+	// intentionally runs on the caller's context so a slow tenant cannot
+	// silently abandon queued requests (which would break the completeness
+	// invariant below).
 
 	log.Info("Starting pipeline",
 		"resources", len(requests),
@@ -93,6 +93,8 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 		metrics.RecordResult()
 
 		switch {
+		case writeResult.Cancelled:
+			summary.CancelledResources++
 		case writeResult.Filtered:
 			summary.FilteredResources++
 		case writeResult.Skipped:
@@ -114,9 +116,23 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 				"successful", summary.SuccessfulResources,
 				"skipped", summary.SkippedResources,
 				"filtered", summary.FilteredResources,
+				"cancelled", summary.CancelledResources,
 				"failed", summary.FailedResources,
 				"elapsed", time.Since(metrics.StartTime).Round(time.Second))
 		}
+	}
+
+	// Collect the per-type documentation prompt hashes gathered by the writer
+	// (populated only when --write-prompts is enabled). writePromptFiles runs
+	// before the write channel closes, so they are complete here.
+	summary.PromptSHAByType = p.writer.PromptSHAByType()
+
+	// Assert the accounting invariant: every request must have produced exactly
+	// one result. A mismatch is a pipeline bug (a lost or duplicated result),
+	// not a condition to tolerate, because a missing result would later look
+	// like a resource deleted in the tenant and could be pruned from disk.
+	if len(summary.Results) != summary.TotalResources {
+		return summary, fmt.Errorf("pipeline invariant violated: %d results produced for %d requests", len(summary.Results), summary.TotalResources)
 	}
 
 	return summary, nil
@@ -133,14 +149,49 @@ type ExecutionSummary struct {
 	// FilteredResources counts resources excluded by a configured resource
 	// filter. They are not written and do not cause a non-zero exit.
 	FilteredResources int
+	// CancelledResources counts requests that produced no work because the
+	// pipeline was cancelled before processing them. Any cancellation makes the
+	// run incomplete.
+	CancelledResources int
 	// SkippedTypes lists resource types whose listing failed before the
 	// pipeline ran; their resource counts are not part of the totals above.
 	SkippedTypes []models.SkippedType
 	// EmptyTypes lists resource types whose listing succeeded but returned no
 	// resources (nothing exists, insufficient permissions, or different scope).
 	EmptyTypes []string
-	Results    []*models.WriteResult
-	Errors     []string
+	// PromptSHAByType maps a resource type to the SHA-256 of its assembled
+	// doc-prompt.md content. Populated only when --write-prompts is enabled.
+	PromptSHAByType map[string]string
+	// Complete reports whether the run knows it downloaded everything in scope:
+	// every request produced a result, no stage was cancelled, and no type
+	// failed to list. When false, IncompleteReason states why.
+	Complete         bool
+	IncompleteReason string
+	Results          []*models.WriteResult
+	Errors           []string
+}
+
+// MarkCompleteness derives Complete and IncompleteReason from the summary's
+// fields. It must be called after SkippedTypes has been populated, since a type
+// that failed to list makes the run incomplete. A run is complete when every
+// request produced a result, nothing was cancelled, and every type listed.
+func (s *ExecutionSummary) MarkCompleteness() {
+	var reasons []string
+	if len(s.Results) != s.TotalResources {
+		reasons = append(reasons, fmt.Sprintf("only %d of %d requests produced a result", len(s.Results), s.TotalResources))
+	}
+	if s.CancelledResources > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d requests were cancelled", s.CancelledResources))
+	}
+	if len(s.SkippedTypes) > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d resource types could not be listed", len(s.SkippedTypes)))
+	}
+	s.Complete = len(reasons) == 0
+	if s.Complete {
+		s.IncompleteReason = ""
+	} else {
+		s.IncompleteReason = strings.Join(reasons, "; ")
+	}
 }
 
 // PrintSummary prints a summary of the execution
@@ -152,9 +203,20 @@ func (s *ExecutionSummary) PrintSummary() {
 		"successful", s.SuccessfulResources,
 		"skipped", s.SkippedResources,
 		"filtered", s.FilteredResources,
+		"cancelled", s.CancelledResources,
 		"failed", s.FailedResources,
 		"skipped_types", len(s.SkippedTypes),
 		"empty_types", len(s.EmptyTypes))
+
+	if s.Complete {
+		log.Info("Run is complete: every request produced a result and every type in scope was listed")
+	} else {
+		log.Warn("Run is INCOMPLETE; do not treat missing resources as deleted", "reason", s.IncompleteReason)
+	}
+
+	if s.CancelledResources > 0 {
+		log.Warn("Some requests were cancelled before completion", "cancelled", s.CancelledResources)
+	}
 
 	if s.FilteredResources > 0 {
 		log.Info("Some resources were excluded by configured resource filters",

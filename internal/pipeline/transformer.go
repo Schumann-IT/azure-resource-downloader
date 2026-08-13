@@ -57,38 +57,53 @@ func (t *Transformer) transformWorker(ctx context.Context, fetchResults <-chan *
 	defer wg.Done()
 
 	for fetchResult := range fetchResults {
-		select {
-		case <-ctx.Done():
+		// On cancellation keep draining the input channel, emitting one
+		// cancelled result per remaining item so every request still accounts
+		// for exactly one result.
+		if err := ctx.Err(); err != nil {
 			transformResults <- &models.TransformResult{
-				ResourceID: fetchResult.ResourceID,
-				Error:      ctx.Err(),
+				ResourceID:   fetchResult.ResourceID,
+				ResourceType: fetchResult.ResourceType,
+				Cancelled:    true,
+				Error:        err,
 			}
-			return
-		default:
-			// Propagate resources the user was not permitted to read; they are
-			// neither transformed nor written, just reported as warnings.
-			if fetchResult.Skipped {
-				transformResults <- &models.TransformResult{
-					ResourceID:   fetchResult.ResourceID,
-					ResourceType: fetchResult.ResourceType,
-					Skipped:      true,
-					SkipReason:   fetchResult.SkipReason,
-				}
-				continue
-			}
-
-			// Check if fetch had an error
-			if fetchResult.Error != nil {
-				transformResults <- &models.TransformResult{
-					ResourceID: fetchResult.ResourceID,
-					Error:      fetchResult.Error,
-				}
-				continue
-			}
-
-			result := t.transformResource(fetchResult)
-			transformResults <- result
+			continue
 		}
+
+		// Propagate requests cancelled upstream in the fetch stage.
+		if fetchResult.Cancelled {
+			transformResults <- &models.TransformResult{
+				ResourceID:   fetchResult.ResourceID,
+				ResourceType: fetchResult.ResourceType,
+				Cancelled:    true,
+				Error:        fetchResult.Error,
+			}
+			continue
+		}
+
+		// Propagate resources the user was not permitted to read; they are
+		// neither transformed nor written, just reported as warnings.
+		if fetchResult.Skipped {
+			transformResults <- &models.TransformResult{
+				ResourceID:   fetchResult.ResourceID,
+				ResourceType: fetchResult.ResourceType,
+				Skipped:      true,
+				SkipReason:   fetchResult.SkipReason,
+			}
+			continue
+		}
+
+		// Check if fetch had an error
+		if fetchResult.Error != nil {
+			transformResults <- &models.TransformResult{
+				ResourceID:   fetchResult.ResourceID,
+				ResourceType: fetchResult.ResourceType,
+				Error:        fetchResult.Error,
+			}
+			continue
+		}
+
+		transformResults <- t.transformResource(fetchResult)
 	}
 }
 

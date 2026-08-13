@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
@@ -17,24 +18,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Download-specific flag variables are prefixed with "flag" so they never
-// collide with (and shadow) local variables/params in command code that read
-// the same settings back from Viper using natural names like timeout. These
-// are referenced only for flag binding (and resourceIDs in runDownload).
-var (
-	flagResourceIDs    []string
-	flagTimeout        int
-	flagResolveSecrets bool
-	flagWritePrompts   bool
-)
-
 // downloadCmd represents the download command
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download Azure resources",
-	Long: `Download Azure resources and transform them into YAML format. With
---write-prompts, each resource type directory also receives a dedicated AI
-documentation prompt (doc-prompt.md).
+	Long: `Download Azure resources and transform them into YAML format. By
+default each resource type directory also receives a dedicated AI documentation
+prompt (doc-prompt.md); pass --no-prompt to skip writing them.
 
 You can specify resources in multiple ways:
   - By resource ID: --resource-id "/subscriptions/.../resourceGroups/my-rg"
@@ -78,20 +68,23 @@ Examples:
 func init() {
 	rootCmd.AddCommand(downloadCmd)
 
-	// Download-specific flags
-	downloadCmd.Flags().StringSliceVar(&flagResourceIDs, "resource-id", []string{}, "explicit Azure resource ID to download; repeatable")
-	downloadCmd.Flags().IntVar(&flagTimeout, "timeout", 300, "per-operation timeout in seconds")
-	downloadCmd.Flags().BoolVar(&flagResolveSecrets, "resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
-	downloadCmd.Flags().BoolVar(&flagWritePrompts, "write-prompts", false, "write a per-type documentation LLM prompt file (<type>.prompt.md) into each resource type directory")
+	// download opts into every command-flag group plus its own switches. Flags
+	// are bound to viper per-execution in runDownload via bindFlags.
+	addAzureAuthFlags(downloadCmd)
+	addSelectionFlags(downloadCmd)
+	addPipelineFlags(downloadCmd)
 
-	// Bind config-backed flags to viper so they can also be set via the config
-	// file or AZURE_RD_* env vars (precedence: flag > env > config > default).
-	_ = viper.BindPFlag("timeout", downloadCmd.Flags().Lookup("timeout"))
-	_ = viper.BindPFlag("resolve-secrets", downloadCmd.Flags().Lookup("resolve-secrets"))
-	_ = viper.BindPFlag("write-prompts", downloadCmd.Flags().Lookup("write-prompts"))
+	downloadCmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
+	downloadCmd.Flags().Bool("no-prompt", false, "skip writing the per-type documentation LLM prompt files (doc-prompt.md); prompts are written by default")
+	downloadCmd.Flags().Bool("prune", false, "delete files under resources/ for resources this run establishes are no longer in the tenant (requires a complete run)")
 }
 
 func runDownload(cmd *cobra.Command, args []string) error {
+	// Bind this command's local flags to viper before reading any values so the
+	// flag > env > config > default precedence holds without a sibling command
+	// stealing the binding.
+	bindFlags(cmd)
+
 	ctx := context.Background()
 
 	// Get configuration
@@ -99,11 +92,23 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	output := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
 	workersFlag := viper.GetInt("workers")
+	workersExplicit := cmd.Flags().Changed("workers")
+	resourceIDs := viper.GetStringSlice("resource-id")
 
 	// Selection/tuning options are config-backed (flag > env > config > default).
 	selectedTypes := viper.GetStringSlice("type")
 	resourceGroup := viper.GetString("resource-group")
 	timeout := viper.GetInt("timeout")
+
+	// Documentation prompts are written by default; --no-prompt (or no-prompt in
+	// config) opts out.
+	writePrompts := !viper.GetBool("no-prompt")
+
+	// Secret resolution changes the delegated Graph permission the Intune device
+	// configuration type needs (ReadWrite.All instead of Read.All), so read it
+	// once and thread it through both the permission probe and the real
+	// registry.
+	resolveSecrets := viper.GetBool("resolve-secrets")
 
 	// Build worker configuration
 	workerConfig := buildWorkerConfig()
@@ -155,11 +160,45 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		"workers", workersFlag,
 		"dry_run", dryRun)
 
+	clientID := viper.GetString("client-id")
+	tenantID := viper.GetString("tenant-id")
+
+	// Before authenticating, determine whether any selected resource type needs
+	// a dedicated app registration (Microsoft Graph scopes the Azure CLI app
+	// cannot provide). Building the probe registry is a local operation (no
+	// network) and only reads static per-type metadata, so a plain Azure CLI
+	// credential is enough here regardless of the final sign-in method.
+	probeCred, err := azure.NewCredential("", "")
+	if err != nil {
+		log.Error("Failed to prepare Azure credentials", "error", err)
+		os.Exit(1)
+	}
+	probeRegistry := handlers.NewRegistry(probeCred, sub, resolveSecrets)
+	requirements := probeRegistry.DedicatedAppRequirements(
+		selectedTypeNames(probeRegistry, selectedTypes, resourceGroup, resourceIDs))
+
+	// If such a type is targeted but the client ID or tenant ID is missing,
+	// request them interactively rather than failing later with permission
+	// errors. The client ID default comes from --client-id/AZURE_RD_CLIENT_ID
+	// (config), and the tenant ID defaults to the current Azure CLI session's
+	// tenant so the user can usually just press Enter.
+	if len(requirements) > 0 && (clientID == "" || tenantID == "") {
+		defaultTenantID := tenantID
+		if defaultTenantID == "" {
+			defaultTenantID = azure.CLIDefaultTenantID(ctx)
+		}
+		clientID, tenantID, err = promptForDedicatedApp(requirements, os.Stdin, clientID, defaultTenantID)
+		if err != nil {
+			log.Error("Cannot download the selected resource types without a dedicated app registration", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	// Create Azure client (will auto-detect subscription if not provided).
 	// Authentication uses the existing Azure CLI session (az login) by default,
 	// or device-code sign-in against a dedicated app when --client-id is set.
 	log.Info("Authenticating with Azure...")
-	azureClient, err := azure.NewClient(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"))
+	azureClient, err := azure.NewClient(ctx, sub, clientID, tenantID)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to create Azure client", "error", err)
@@ -173,17 +212,19 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Scope the output under the tenant's default domain so downloads from
 	// different tenants never collide. Resolution is best-effort: if it fails
 	// (e.g. insufficient permissions), warn and keep the base output path.
+	tenant := ""
 	if tenantDomain, err := azureClient.GetTenantDomain(ctx); err != nil {
 		log.Warn("Could not resolve tenant domain; output path will not include the tenant",
 			"reason", azure.ErrorSummary(err))
 		log.Debug("Tenant domain resolution failed", "error", err)
 	} else {
+		tenant = tenantDomain
 		output = filepath.Join(output, tenantDomain)
 		log.Info("Scoping output under tenant", "tenant", tenantDomain, "output", output)
 	}
 
 	// Create handler registry pre-populated with all supported resource types
-	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), viper.GetBool("resolve-secrets"))
+	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), resolveSecrets)
 
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
@@ -196,7 +237,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build fetch requests
-	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, flagResourceIDs, resourceGroup, selectedTypes, sub, listConcurrency)
+	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub, listConcurrency)
 	if err != nil {
 		// Runtime error - print and exit without showing help
 		log.Error("Failed to build fetch requests", "error", err)
@@ -219,7 +260,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine worker count based on resource type and API
-	workers := determineWorkerCount(workerConfig, effectiveType, requests, workersFlag)
+	workers := determineWorkerCount(workerConfig, effectiveType, requests, workersFlag, workersExplicit)
 
 	log.Info("Worker configuration",
 		"workers", workers,
@@ -273,7 +314,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		SubscriptionID:     sub,
 		TransformerConfigs: transformerConfigs,
 		ResourceFilters:    resourceFilters,
-		WritePrompts:       viper.GetBool("write-prompts"),
+		WritePrompts:       writePrompts,
 	}
 
 	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
@@ -287,11 +328,34 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	// Print summary, including resource types that could not be listed and
-	// types that returned no resources
+	// Attach the resource types that could not be listed and the types that
+	// returned no resources, then derive completeness (a failed listing makes
+	// the run incomplete) before printing the summary.
 	summary.SkippedTypes = skippedTypes
 	summary.EmptyTypes = emptyTypes
+	summary.MarkCompleteness()
 	summary.PrintSummary()
+
+	// Record the export metadata (resources/metadata.yaml) and, when requested,
+	// prune resources this run proved are gone from the tenant. This runs before
+	// the failure exit below so the metadata always reflects what happened. A
+	// metadata failure only warns: the downloaded YAML is the valuable output.
+	exportRun := docs.ExportRun{
+		Output:                output,
+		Tenant:                tenant,
+		ToolVersion:           toolVersion(),
+		GeneratedAt:           time.Now(),
+		Scope:                 docs.RunScope{Types: selectedTypes, ResourceIDs: resourceIDs, ResourceGroup: resourceGroup},
+		TransformConfigSha256: docs.HashTransformConfig(transformerConfigs, resolveSecrets),
+		ResolveSecrets:        resolveSecrets,
+		WritePrompts:          writePrompts,
+		DryRun:                dryRun,
+		Prune:                 viper.GetBool("prune"),
+		Summary:               summary,
+	}
+	if err := docs.WriteExportMetadata(exportRun); err != nil {
+		log.Warn("Export metadata not written", "error", err)
+	}
 
 	if summary.FailedResources > 0 {
 		// Runtime error - print and exit without showing help
@@ -301,6 +365,37 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Download completed successfully")
 	return nil
+}
+
+// selectedTypeNames resolves the resource types a run targets, mirroring the
+// selection precedence in Registry.BuildFetchRequests, so the permission probe
+// examines exactly the types that will be downloaded:
+//   - explicit --resource-id: the type parsed from each ID (unparseable IDs,
+//     e.g. bare Microsoft Graph GUIDs, are skipped);
+//   - --resource-group: the resource group type (ARM, no dedicated app);
+//   - --type: the listed types;
+//   - none of the above: every registered type (a full export).
+func selectedTypeNames(registry *handlers.Registry, selectedTypes []string, resourceGroup string, resourceIDs []string) []string {
+	switch {
+	case len(resourceIDs) > 0:
+		var types []string
+		seen := make(map[string]bool)
+		for _, id := range resourceIDs {
+			info, err := azure.ParseResourceID(id)
+			if err != nil || info.FullType == "" || seen[info.FullType] {
+				continue
+			}
+			seen[info.FullType] = true
+			types = append(types, info.FullType)
+		}
+		return types
+	case resourceGroup != "":
+		return []string{"Microsoft.Resources/resourceGroups"}
+	case len(selectedTypes) > 0:
+		return selectedTypes
+	default:
+		return registry.GetAllTypes()
+	}
 }
 
 // buildWorkerConfig constructs worker configuration from config file
@@ -331,11 +426,13 @@ func buildWorkerConfig() *models.WorkerConfig {
 	return config
 }
 
-// determineWorkerCount determines the worker count based on resource type
-func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string, requests []*models.FetchRequest, workersFlag int) int {
-	// Priority 1: Check if --workers CLI flag was explicitly set (highest priority)
-	// The flag value is passed in; if it's not the default (5), user set it explicitly
-	if workersFlag != 5 {
+// determineWorkerCount determines the worker count based on resource type.
+// Explicitness is passed in (cmd.Flags().Changed("workers")) rather than sniffed
+// from the value, so an explicit --workers 5 is honoured for API types and the
+// default literal is never duplicated here.
+func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string, requests []*models.FetchRequest, workersFlag int, workersExplicit bool) int {
+	// Priority 1: an explicitly set --workers flag wins for every API.
+	if workersExplicit {
 		return workersFlag
 	}
 

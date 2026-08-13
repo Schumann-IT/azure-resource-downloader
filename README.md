@@ -25,7 +25,7 @@ The tool follows a three-stage async pipeline. The stages run concurrently, conn
 
 1. **Fetcher** — retrieves resources from Azure with retry logic (5 attempts, exponential backoff).
 2. **Transformer** — applies configurable transformations: cleaning (property removal), ID resolution, name sanitization, and base64 decoding.
-3. **Writer** — writes one YAML file per resource. With `--write-prompts` (or `write-prompts: true`) it also writes a documentation LLM prompt (`doc-prompt.md`) per resource type.
+3. **Writer** — writes one YAML file per resource. By default it also writes a documentation LLM prompt (`doc-prompt.md`) per resource type; pass `--no-prompt` (or `no-prompt: true`) to skip them.
 
 Each stage uses its own worker pool; the worker count is configurable via the `--workers` flag or API-specific settings in the config file (see *Worker Count Optimization* below).
 
@@ -80,6 +80,13 @@ azure-rd download --subscription "your-subscription-id"
 ### Optional: dedicated app registration (device-code sign-in)
 
 To download resource types that need scopes the Azure CLI app can't provide, register your own Entra app and sign in to it with `--client-id`. The tool then uses an interactive **device-code** flow (prints a URL + code) and acquires a token carrying those delegated scopes.
+
+> **Automatic prompt:** each resource type declares whether it needs a dedicated app registration (every `Microsoft.Graph/*` type does; ARM types do not). Before authenticating, `download` checks the resource types you selected — via `--type`, `--resource-id`, `--resource-group`, or a full export — and if any of them need a dedicated app but the client ID **or** tenant ID is missing, it lists the types (with their required permissions) and prompts you interactively:
+>
+> - **Client ID** defaults to `--client-id` / `AZURE_RD_CLIENT_ID` (or the config value) when set, so you can export it once and just press Enter.
+> - **Tenant ID** defaults to your current Azure CLI session's tenant (resolved via `az account show`), so you can usually press Enter to accept it.
+>
+> Press Enter to accept a shown `[default]`, or type a value to override it. If both IDs are already provided (flags/env), no prompt appears. In a fully non-interactive run with no defaults available, it exits with guidance to pass the flags instead of hanging.
 
 **One-time app setup** (requires a privileged admin):
 
@@ -249,6 +256,10 @@ azure-rd download \
 azure-rd download \
   --resource-group "my-rg" \
   --dry-run
+
+# Refresh a full export and delete resources that are gone from the tenant
+# (only prunes after a complete, failure-free run; see Pruning Stale Resources)
+azure-rd download --prune
 ```
 
 > **Flags vs. configuration:** run `azure-rd --help` (or `download`/`list --help`)
@@ -277,7 +288,7 @@ azure-rd download --type "Microsoft.Network/virtualNetworks"
 
 ### Environment Variables
 
-You can use environment variables instead of flags:
+You can use environment variables instead of flags. They sit between CLI flags and the config file in precedence (see [Configuration & Precedence](#configuration--precedence) below):
 
 ```bash
 export AZURE_RD_SUBSCRIPTION="your-subscription-id"  # Optional - overrides the signed-in user's default subscription
@@ -288,22 +299,41 @@ export LOG_LEVEL="info"  # or debug, warn, error
 azure-rd download --resource-group "my-rg"
 ```
 
-**Available environment variables:**
+**Available environment variables:** every flag maps to an `AZURE_RD_*` variable
+whose name is the flag in upper-case with hyphens replaced by underscores (e.g.
+`--log-level` → `AZURE_RD_LOG_LEVEL`, `--resolve-secrets` →
+`AZURE_RD_RESOLVE_SECRETS`).
 - `AZURE_RD_SUBSCRIPTION` - Azure subscription ID (optional, uses the signed-in user's default subscription if not set)
 - `AZURE_RD_CLIENT_ID` - App registration (client) ID for device-code sign-in (optional; defaults to the az login session)
 - `AZURE_RD_TENANT_ID` - Entra tenant ID for device-code sign-in (used with `AZURE_RD_CLIENT_ID`)
 - `AZURE_RD_OUTPUT` - Output directory path
 - `AZURE_RD_WORKERS` - Number of concurrent workers
-- `AZURE_RD_TIMEOUT` - Timeout in seconds for the download operation (default 300)
+- `AZURE_RD_TIMEOUT` - Per-operation timeout in seconds, applied around each resource fetch (default 300)
 - `AZURE_RD_TYPE` - Resource type filter (equivalent to `--type`)
+- `AZURE_RD_RESOURCE_ID` - Explicit resource ID(s) to download (equivalent to `--resource-id`)
+- `AZURE_RD_RESOURCE_GROUP` - Resource group to download (equivalent to `--resource-group`)
+- `AZURE_RD_RESOLVE_SECRETS` - Resolve masked Intune OMA-URI secrets to plaintext
+- `AZURE_RD_NO_PROMPT` - Skip writing the per-type `doc-prompt.md` files (they are written by default)
+- `AZURE_RD_PRUNE` - Prune resources gone from the tenant after a complete run
 - `AZURE_RD_LOG_LEVEL` - Logging verbosity (debug, info, warn, error)
 - `LOG_LEVEL` - Legacy logging verbosity (still supported)
 
-### Configuration File
+### Configuration & Precedence
 
 **Every option this tool accepts can be set in a configuration file** that you load explicitly with `--config` (e.g. `--config ~/.azure-rd.yaml`). Most options also expose a CLI flag that *overrides* the configured value for a single run. **A config file is read only when you pass `--config`** — without it, the built-in defaults apply (a mistyped `--config` path is a fatal error rather than being silently ignored).
 
-**Precedence (highest to lowest):** CLI flag → environment variable → configuration file → built-in default.
+**Precedence (highest to lowest):** CLI flag → environment variable (`AZURE_RD_*`) → configuration file → built-in default. This is [Viper](https://github.com/spf13/viper)'s standard resolution order.
+
+**How override works:** for each setting, Viper returns the value from the highest-precedence source that provides it, and lower sources are silently ignored — there is no per-override warning. Two details are worth knowing:
+
+- A **CLI flag only overrides** env/config **when you actually pass it**. An unset flag falls through to the environment variable, then the config file, then its built-in default — so leaving a flag off does *not* clobber a configured value with the flag's default.
+- All sources are always active together: e.g. you can keep most settings in `--config` and override just one for a single run via `AZURE_RD_*` or a flag.
+
+Example — `workers` is `5` in the config file, but a flag wins for this run:
+
+```bash
+azure-rd download --config ~/.azure-rd.yaml --workers 20   # uses 20 (flag > config)
+```
 
 > **CLI flags are documented by the tool itself** — run `azure-rd --help`, `azure-rd download --help`, or `azure-rd list --help` for the full list with defaults. Each flag maps to a config key of the same name (e.g. `--resource-group` → `resource-group`). This section documents only the options that have **no** CLI flag and can therefore be set **only** in the configuration file.
 
@@ -532,7 +562,7 @@ Common keys to drop: `provisioningState`, `etag`, `creationTime`, `changedTime`,
 
 ## 📂 Output Structure
 
-The tool creates the following directory structure (the `doc-prompt.md` files are written only when `--write-prompts` / `write-prompts: true` is set):
+The tool creates the following directory structure (the `doc-prompt.md` files are written by default; pass `--no-prompt` / `no-prompt: true` to skip them):
 
 Resources are written under a per-tenant directory named after the tenant's
 Entra default domain (e.g. `contoso.onmicrosoft.com`), so downloads from
@@ -540,23 +570,76 @@ different tenants never collide. The domain is resolved via the ARM Tenants API;
 if it cannot be resolved (e.g. insufficient permissions), the tool logs a
 warning and writes directly into the base `--output` directory.
 
+**Everything the tool generates lives under a single `resources/` subdirectory
+that it owns exclusively** — the per-resource YAML, sidecar artifacts, the
+per-type `doc-prompt.md` files, and the export metadata (`metadata.yaml`).
+Anything you place elsewhere under `--output` is never touched (and never
+pruned).
+
 ```
 output/
-└── contoso.onmicrosoft.com/            # tenant default domain
-    ├── Microsoft.Resources/
-    │   └── resourceGroups/
-    │       ├── my-resource-group.yaml
-    │       ├── another-resource-group.yaml
-    │       └── doc-prompt.md            # only with --write-prompts
-    ├── Microsoft.Storage/
-    │   └── storageAccounts/
-    │       ├── mystorageaccount.yaml
-    │       └── doc-prompt.md            # only with --write-prompts
-    └── Microsoft.Compute/
-        └── virtualMachines/
-            ├── my_vm.yaml
-            └── doc-prompt.md            # only with --write-prompts
+└── contoso.onmicrosoft.com/                # tenant default domain
+    └── resources/                          # the only tree azure-rd writes to
+        ├── metadata.yaml                    # export metadata (see below)
+        ├── Microsoft.Resources/
+        │   └── resourceGroups/
+        │       ├── my-resource-group.yaml
+        │       ├── another-resource-group.yaml
+        │       └── doc-prompt.md            # default; skip with --no-prompt
+        ├── Microsoft.Storage/
+        │   └── storageAccounts/
+        │       ├── mystorageaccount.yaml
+        │       └── doc-prompt.md            # default; skip with --no-prompt
+        └── Microsoft.Compute/
+            └── virtualMachines/
+                ├── my_vm.yaml
+                └── doc-prompt.md            # default; skip with --no-prompt
 ```
+
+### Export Metadata (`resources/metadata.yaml`)
+
+After every real (non-`--dry-run`) download, the tool writes
+`resources/metadata.yaml` recording **facts** about the export — what each
+resource is, never how it should be classified — so a downstream pipeline can
+diff and organise the export without re-downloading the tenant. Each run
+**merges** into the previous file rather than replacing it: types and resources
+outside the current run's scope are preserved.
+
+Key fields:
+
+- **`run.complete` / `run.incompleteReason`** — whether the run knows it saw
+  everything in scope. A run is complete only when every request produced a
+  result, nothing was cancelled, and every type in scope listed successfully. A
+  permission-skipped resource does **not** make the run incomplete; a type that
+  failed to list does.
+- **`run.transformConfigSha256`** — hash of the effective transform config (and
+  `--resolve-secrets`). When it changes, every resource's `sourceSha256` moves
+  too, so a diff can attribute a mass change to a config flip rather than edits.
+- **`types.<type>`** — per-type coverage timestamp, how it was covered
+  (`full`, `--type`, `--resource-id`, `--resource-group`) and the
+  `doc-prompt.md` hash (prompts are written by default unless `--no-prompt`).
+- **`resources.<path>`** — per-resource `sourceSha256`, `resourceId`,
+  `displayName`, `presentInTenant`, raw `assignmentTargets`, and sidecar
+  artifact names. The map key is the resource's path relative to
+  `resources/`.
+- **`notListed`** — types that could not be listed (permissions) and types that
+  listed to zero resources this run.
+
+### Pruning Stale Resources (`--prune`)
+
+`azure-rd download --prune` deletes files under `resources/` for resources this
+run establishes are gone from the tenant (present in a prior `metadata.yaml` but
+absent from a fresh listing), and drops their metadata entries. It is
+deliberately conservative:
+
+- It runs **only for a complete, failure-free run** — an incomplete run or one
+  with failures refuses to prune (a missing resource might just be an
+  unreadable one, not a deleted one).
+- Only resources of types this run **fully listed** are eligible; entries in
+  types outside the run's scope are never pruned.
+- Under `--dry-run` it deletes nothing.
+- A type's `doc-prompt.md` is removed only when the entire type directory is
+  being pruned away.
 
 ### YAML File
 
@@ -573,7 +656,7 @@ tags:
 
 ### Documentation Prompt File
 
-When enabled with `--write-prompts` (or `write-prompts: true` in the config file; **off by default**), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
+By default (pass `--no-prompt`, or `no-prompt: true` in the config file, to skip), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:
 
 - **Document every setting** — one row per YAML property (path, configured value, what it does, recommended value, reference), identifying the concrete `@odata.type` subtype first for polymorphic types.
 - **Link best practices and Microsoft docs** — Microsoft Learn URLs plus hardening baselines (Microsoft security baselines, CIS) where relevant.

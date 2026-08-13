@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
@@ -17,14 +18,19 @@ type Fetcher struct {
 	azureClient *azure.Client
 	registry    *handlers.Registry
 	workerCount int
+	// opTimeout bounds a single resource fetch (including its retries). Zero
+	// disables the per-operation deadline.
+	opTimeout time.Duration
 }
 
-// NewFetcher creates a new fetcher
-func NewFetcher(azureClient *azure.Client, registry *handlers.Registry, workerCount int) *Fetcher {
+// NewFetcher creates a new fetcher. opTimeout is applied around each individual
+// resource fetch rather than around the whole run.
+func NewFetcher(azureClient *azure.Client, registry *handlers.Registry, workerCount int, opTimeout time.Duration) *Fetcher {
 	return &Fetcher{
 		azureClient: azureClient,
 		registry:    registry,
 		workerCount: workerCount,
+		opTimeout:   opTimeout,
 	}
 }
 
@@ -61,17 +67,20 @@ func (f *Fetcher) fetchWorker(ctx context.Context, requests <-chan *models.Fetch
 	defer wg.Done()
 
 	for req := range requests {
-		select {
-		case <-ctx.Done():
+		// On cancellation keep draining the input channel, emitting one cancelled
+		// result per remaining request instead of returning early. This guarantees
+		// every request produces exactly one result, which the completeness
+		// invariant relies on.
+		if err := ctx.Err(); err != nil {
 			results <- &models.FetchResult{
-				ResourceID: req.ResourceID,
-				Error:      ctx.Err(),
+				ResourceID:   req.ResourceID,
+				ResourceType: req.ResourceType,
+				Cancelled:    true,
+				Error:        err,
 			}
-			return
-		default:
-			result := f.fetchResource(ctx, req)
-			results <- result
+			continue
 		}
+		results <- f.fetchResource(ctx, req)
 	}
 }
 
@@ -120,7 +129,17 @@ func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *
 	retryConfig := retry.DefaultConfig()
 	attemptNum := 0
 
-	rawData, err := retry.DoWithData(ctx, retryConfig, func() (interface{}, error) {
+	// Apply the per-operation timeout around this single resource fetch (and
+	// its retries), matching what --timeout documents. A whole-run budget, if
+	// ever wanted, would be a separate, explicitly named flag.
+	fetchCtx := ctx
+	if f.opTimeout > 0 {
+		var cancel context.CancelFunc
+		fetchCtx, cancel = context.WithTimeout(ctx, f.opTimeout)
+		defer cancel()
+	}
+
+	rawData, err := retry.DoWithData(fetchCtx, retryConfig, func() (interface{}, error) {
 		attemptNum++
 		if attemptNum > 1 {
 			log.Warn("Retrying resource fetch",
@@ -128,7 +147,7 @@ func (f *Fetcher) fetchResource(ctx context.Context, req *models.FetchRequest) *
 				"attempt", attemptNum,
 				"max_attempts", retryConfig.MaxAttempts)
 		}
-		return handler.Fetch(ctx, req.ResourceID)
+		return handler.Fetch(fetchCtx, req.ResourceID)
 	})
 
 	if err != nil {

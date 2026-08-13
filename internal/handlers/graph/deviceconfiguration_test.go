@@ -20,6 +20,33 @@ func TestDeviceConfigurationHandler_GetType(t *testing.T) {
 	}
 }
 
+func TestDeviceConfigurationHandler_RequiredPermissions(t *testing.T) {
+	tests := []struct {
+		name           string
+		resolveSecrets bool
+		want           string
+	}{
+		{name: "read-only", resolveSecrets: false, want: "DeviceManagementConfiguration.Read.All"},
+		{name: "resolve secrets needs read-write", resolveSecrets: true, want: "DeviceManagementConfiguration.ReadWrite.All"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, tt.resolveSecrets)
+			if err != nil {
+				t.Fatalf("NewDeviceConfigurationHandler() unexpected error: %v", err)
+			}
+			perms := handler.RequiredPermissions()
+			if len(perms) != 1 || perms[0] != tt.want {
+				t.Errorf("RequiredPermissions() = %v, want [%s]", perms, tt.want)
+			}
+			if !handler.RequiresDedicatedApp() {
+				t.Error("RequiresDedicatedApp() = false, want true for deviceConfigurations")
+			}
+		})
+	}
+}
+
 func TestExtractDeviceConfigurationID(t *testing.T) {
 	tests := []struct {
 		name       string

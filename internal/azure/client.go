@@ -3,6 +3,7 @@ package azure
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"azure-resource-downloader/internal/logger"
@@ -30,11 +31,41 @@ type Client struct {
 // If subscriptionID is empty, it attempts to resolve a default subscription for
 // that user.
 func NewClient(ctx context.Context, subscriptionID, clientID, tenantID string) (*Client, error) {
-	cred, err := newCredential(clientID, tenantID)
+	cred, err := NewCredential(clientID, tenantID)
 	if err != nil {
 		return nil, err
 	}
+	return NewClientWithCredential(ctx, cred, subscriptionID, tenantID)
+}
 
+// CLIDefaultTenantID returns the tenant ID of the current Azure CLI session
+// (via `az account show`), used as a default when interactively prompting for
+// a dedicated app registration. It is best-effort: any failure (Azure CLI not
+// installed, not signed in, or no tenant on the account) yields an empty
+// string rather than an error.
+func CLIDefaultTenantID(ctx context.Context) string {
+	out, err := exec.CommandContext(ctx, "az", "account", "show", "--query", "tenantId", "--output", "tsv").Output()
+	if err != nil {
+		logger.Default.Debug("Could not resolve default tenant from Azure CLI", "error", err)
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// NewCredential builds the token credential used for all ARM and Microsoft
+// Graph requests without performing any network calls: the actual sign-in
+// (device-code) or Azure CLI token fetch is deferred to the first token
+// request. This lets callers construct a credential cheaply — e.g. to probe
+// which resource types need a dedicated app before committing to a sign-in.
+func NewCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
+	return newCredential(clientID, tenantID)
+}
+
+// NewClientWithCredential builds a Client around an already-created credential.
+// It resolves a default subscription when subscriptionID is empty (which is not
+// fatal: a tenant-only identity can still download Microsoft Graph resources)
+// and wires the generic ARM resources client when a subscription is available.
+func NewClientWithCredential(ctx context.Context, cred azcore.TokenCredential, subscriptionID, tenantID string) (*Client, error) {
 	// If no subscription ID is provided, try to get the default one. Failing to
 	// resolve a subscription is NOT fatal: the signed-in user may only have
 	// tenant-level (Microsoft Graph) access. We warn and continue with an empty
@@ -54,6 +85,7 @@ func NewClient(ctx context.Context, subscriptionID, clientID, tenantID string) (
 	// Create the generic ARM resources client only when a subscription exists.
 	var resourcesClient *armresources.Client
 	if subscriptionID != "" {
+		var err error
 		resourcesClient, err = armresources.NewClient(subscriptionID, cred, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create resources client: %w", err)

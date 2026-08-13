@@ -25,9 +25,18 @@ downloaded.`,
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+
+	// list only needs authentication to construct the client; selection and
+	// pipeline-tuning flags would be misleading here (list ignores them).
+	addAzureAuthFlags(listCmd)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
+	// Bind this command's local flags to viper before reading any values so the
+	// flag > env > config > default precedence holds without a sibling command
+	// stealing the binding.
+	bindFlags(cmd)
+
 	ctx := context.Background()
 	sub := viper.GetString("subscription")
 	log := logger.Default
