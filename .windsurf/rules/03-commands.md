@@ -83,16 +83,20 @@ make check
 
 ## "Add a CLI command"
 1. Create `cmd/<command>.go` with Cobra structure
-2. Define command-specific flags
-3. Add to `init()` function: `rootCmd.AddCommand(<command>Cmd)`
+2. In `init()`: `rootCmd.AddCommand(<command>Cmd)`, then **opt into the flag groups the command actually uses** from `cmd/flags.go` — `addAzureAuthFlags`, `addSelectionFlags`, `addPipelineFlags` — plus any command-specific flags declared on `<command>Cmd.Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
+3. **Call `bindFlags(cmd)` as the first statement of `RunE`**, before reading any value. Local flags are bound to Viper per-execution so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command.
 4. Implement `RunE` function with:
-   - Configuration loading via Viper
+   - Configuration loading via Viper (after `bindFlags`)
    - Azure client initialization
    - Handler registry setup
    - Pipeline execution
    - Error handling and user-friendly output
 5. Add examples in command's `Long` description
 6. Update README.md with new command usage
+
+**Do not add a flag to a command that ignores it.** Persistent flags were deliberately narrowed for this reason: `list` previously advertised `--type` and `--resource-group` and silently ignored them.
+
+**Destructive commands**: if the command deletes anything, it must respect `--dry-run` by listing what it would remove, and share one eligibility decision between the preview and the real path (see `prunableKeys` in `internal/docs/metadata.go`) so the two cannot diverge.
 
 ## "Add a transformation"
 1. Add function to `internal/transform/<transformation>.go`
@@ -102,11 +106,16 @@ make check
 
 ## "Add config option"
 1. Add field to `models.PipelineConfig` struct
-2. Add flag in `cmd/root.go` → `PersistentFlags`
-3. Bind to Viper: `viper.BindPFlag()`
-4. Use in pipeline/command
-5. Update `config.example.yaml`
-6. Document in README.md
+2. Declare the flag in the right place:
+   - **Command-specific** (the normal case) → on that command's `Flags()`, or in the matching group helper in `cmd/flags.go` if more than one command needs it
+   - **Global** → `cmd/root.go` → `PersistentFlags`, and only if *every* command genuinely needs it. Root currently holds only `--config`, `--output`, `--dry-run` and `--log-level`; adding a fifth needs a reason
+3. Binding: local flags are bound automatically by `bindFlags(cmd)` in the command's `RunE` — do NOT add a manual `viper.BindPFlag()` for them. Only the four global flags are bound explicitly in `root.go`'s `init()`
+4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `defaultWorkerCount` in `cmd/flags.go`)
+5. Use in pipeline/command
+6. Update `config.example.yaml`
+7. Document in README.md
+
+Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))` in `initConfig`. Do not remove it — without it `log-level` resolves to `AZURE_RD_LOG-LEVEL`, which no shell can export, and every hyphenated override silently stops working.
 
 # Output shape
 - Provide full file paths and complete code blocks

@@ -353,9 +353,9 @@ Create a config file (e.g. `~/.azure-rd.yaml`) and load it with `--config`:
 # All fields are optional
 # subscription: "your-subscription-id"  # Optional - uses the signed-in user's default subscription if not specified
 output: "./azure-resources"
-workers: 10
 
-# Timeout in seconds for the download operation (default: 300)
+# Per-operation timeout in seconds (default: 300), applied around each resource
+# fetch including its retries - not a whole-run budget.
 # Equivalent to --timeout; the flag overrides this value.
 timeout: 300
 
@@ -370,7 +370,8 @@ timeout: 300
 log-level: "info"
 
 # Property removal is configured on the `cleaning` transformer (see Transformers).
-# Global exclusions apply to all types; per-type exclusions are merged with them.
+# NOTE: this key REPLACES the default pipeline rather than merging with it, so
+# every transformer you still want must be listed - including base64-decode.
 transformers:
   - name: cleaning
     remove-keys:
@@ -385,9 +386,15 @@ transformers:
         - primaryEndpoints
   - name: id-resolution
   - name: name-sanitization
+  - name: base64-decode
 ```
 
-The repository ships a fully-commented [`config.example.yaml`](config.example.yaml) documenting **every** option (type/item filtering, workers, logging, transformers). Copy it as a starting point:
+> **Worker counts:** a configured `workers` value applies to a full export or a
+> multi-type run. When exactly one `--type` is downloaded, the API-specific count
+> (`workers-by-api`, default Microsoft Graph 5 / ARM 20) wins — only the
+> `--workers` **flag** overrides an API-specific count.
+
+The repository ships a fully-commented [`config.example.yaml`](config.example.yaml) in which **every option is present with its built-in default value**, so loading it unmodified behaves exactly like running with no config at all. Copy it as a starting point:
 
 ```bash
 cp config.example.yaml ~/.azure-rd.yaml

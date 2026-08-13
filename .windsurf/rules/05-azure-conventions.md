@@ -63,6 +63,7 @@ func (h *XHandler) Fetch(ctx context.Context, resourceID string) (interface{}, e
 - Use helper function `safeString()` for pointer dereferences
 - Include: id, name, location, type, tags, and resource-specific properties
 - Exclude: timestamps, etags, provisioning states (cleaned by transform.CleanProperties)
+- **`DisplayName` MUST be set to something meaningful.** It names the resource's file and is recorded in `resources/metadata.yaml`, and it is the ONLY source for that name — several Microsoft Graph singletons (`applePushNotificationCertificate`, `depOnboardingSettings`, `deviceManagement`, `mobileThreatDefenseConnectors`, `onPremisesSynchronization`) carry no `displayName` in their payload at all, and `deviceManagementConfigurationPolicies` uses `name` instead. Nothing downstream can recover it from the exported YAML, so a handler that leaves it empty produces a permanently nameless entry. For a singleton with no natural name, supply a fixed descriptive label.
 
 Example:
 ```go

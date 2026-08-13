@@ -123,8 +123,9 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	}
 
 	// Collect the per-type documentation prompt hashes gathered by the writer
-	// (populated only when --write-prompts is enabled). writePromptFiles runs
-	// before the write channel closes, so they are complete here.
+	// (populated only when prompt writing is enabled, i.e. --no-prompt was not
+	// passed). writePromptFiles runs before the write channel closes, so they
+	// are complete here.
 	summary.PromptSHAByType = p.writer.PromptSHAByType()
 
 	// Assert the accounting invariant: every request must have produced exactly
@@ -160,7 +161,8 @@ type ExecutionSummary struct {
 	// resources (nothing exists, insufficient permissions, or different scope).
 	EmptyTypes []string
 	// PromptSHAByType maps a resource type to the SHA-256 of its assembled
-	// doc-prompt.md content. Populated only when --write-prompts is enabled.
+	// doc-prompt.md content. Populated only when prompt writing is enabled
+	// (i.e. --no-prompt was not passed).
 	PromptSHAByType map[string]string
 	// Complete reports whether the run knows it downloaded everything in scope:
 	// every request produced a result, no stage was cancelled, and no type

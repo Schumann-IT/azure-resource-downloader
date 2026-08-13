@@ -61,7 +61,16 @@ Examples:
   azure-rd download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
 
   # Sign in to a dedicated app registration (device-code) for Graph/Intune scopes
-  azure-rd download --client-id "<app-id>" --tenant-id "<tenant-id>"`,
+  azure-rd download --client-id "<app-id>" --tenant-id "<tenant-id>"
+
+  # Load settings from a config file (see config.example.yaml; flags still win)
+  azure-rd download --config ~/.azure-rd.yaml
+
+  # Also delete resources that are no longer in the tenant (complete runs only)
+  azure-rd download --prune
+
+  # List what --prune would delete, without deleting anything
+  azure-rd download --prune --dry-run`,
 	RunE: runDownload,
 }
 

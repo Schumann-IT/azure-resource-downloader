@@ -25,9 +25,12 @@ trigger: always_on
   AZURE_RD_WORKERS="10"
   ```
 - **Config file**: read ONLY when `--config <path>` is passed (no auto-discovery of `~/.azure-rd.yaml`); a mistyped `--config` path is a fatal error. Reference schema: `config.example.yaml`.
+- **Env key replacer**: `initConfig` sets `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))`. Removing it silently breaks every hyphenated override (`AZURE_RD_LOG_LEVEL` would have to be spelled `AZURE_RD_LOG-LEVEL`).
+- **Flag placement**: only `--config`, `--output`, `--dry-run` and `--log-level` are global. Auth, selection and pipeline-tuning flags are per-command groups in `cmd/flags.go`, so they must follow the subcommand (`azure-rd download --type X`, not `azure-rd --type X download`).
 - **All flags are optional**:
   - `--subscription` is auto-detected from the signed-in user's default subscription; with no subscription at all, Graph types still download and ARM types are skipped with a warning
-  - `--output`, `--workers`, `--dry-run`, `--timeout`, `--resolve-secrets`, `--write-prompts`, `--log-level`, `--client-id`/`--tenant-id`
+  - `--output`, `--workers`, `--dry-run`, `--timeout`, `--resolve-secrets`, `--no-prompt`, `--prune`, `--log-level`, `--client-id`/`--tenant-id`
+  - Selection: `--resource-id`, `--type`, `--resource-group` (all repeatable/config-backed; none given = every registered type)
 
 ## Operations
 - **Graceful shutdown**:
@@ -38,12 +41,23 @@ trigger: always_on
   - Permission errors (ARM 403, Graph missing scopes/Forbidden) NEVER fail the run: warn + skip via `azure.IsPermissionError`, reported as skipped in the summary
   - Collect errors in `ExecutionSummary`
   - Return non-zero exit code only when `FailedResources > 0` (skipped/filtered resources don't affect it)
+  - **Completeness is separate from the exit code.** `ExecutionSummary.Complete` is false when any request was cancelled, any result went missing, or any type failed to list — an incomplete run can still exit 0. Anything that infers absence (metadata, prune) must gate on `Complete`, never on the exit code.
 - **Resource limits**:
   - API-specific worker defaults: Microsoft Graph 5, ARM 20 (configurable via `--workers` / `workers` / `workers-by-api`)
-  - Default timeout: 300 seconds
+  - Default timeout: 300 seconds, applied **per operation** (around each resource fetch including its retries), not as a whole-run budget
   - Rate limiting: `internal/retry` retries transient failures (429/503/timeouts allowlist) with exponential backoff, 5 attempts; 403 is never retried
-- **Dry-run mode**: Always support `--dry-run` to preview without writes
-- **Output layout**: resources are written under a per-tenant directory named after the tenant's Entra default domain; falls back to the base output dir with a warning if it cannot be resolved
+- **Dry-run mode**: Always support `--dry-run` to preview without writes — and for destructive operations, to list exactly what would be removed
+- **Output layout**: everything the tool writes lives under `<output>/<tenant>/resources/`, where `<tenant>` is the tenant's Entra default domain (falls back to the base output dir with a warning if it cannot be resolved). `resources/` is the only tree `azure-rd` writes to; it holds `metadata.yaml` at its root and `<APIType>/<endpoint>/` directories containing each resource YAML, its sidecar artifacts and the type's `doc-prompt.md`
+
+## Export Metadata and Prune
+
+`--prune` is the ONLY delete path in the codebase. These rules are what make it safe; do not relax them.
+
+- **`resources/metadata.yaml` describes the export directory, not the tenant.** Never remove an entry for a file that still exists on disk — a resource gone from the tenant is recorded as `presentInTenant: false` with its facts and hash retained. Removing the entry instead makes the next run find an undescribed YAML and treat it as new, forever. Only `--prune`, having actually deleted the file, removes an entry.
+- **An incomplete run may not mark anything `presentInTenant: false`** — it cannot tell a deleted resource from one it never reached.
+- **"Covered" means a type's listing succeeded**, not that it returned resources. `EmptyTypes` is covered (absence there is real); `SkippedTypes` is not (the count is unknown). Collapsing the two turns a missing permission into a deletion.
+- **Prune guards**: refuses unless the run is `Complete` and `FailedResources == 0`; only deletes within covered types; never leaves `resources/`; never deletes `resources/metadata.yaml`; removes a type's `doc-prompt.md` only when that type empties out entirely. Every deletion is logged, with a total.
+- **Partial runs merge, never truncate**: a `--type`-scoped run must retain entries for types it did not cover and leave their `lastCoveredAt` alone.
 
 ## Observability
 - **User-friendly output**: Use emojis and clear progress messages

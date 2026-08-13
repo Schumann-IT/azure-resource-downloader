@@ -4,15 +4,16 @@ trigger: always_on
 
 # Project Context
 - **Language**: Go 1.24, Module mode
-- **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (`--write-prompts`)
+- **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (written by default; skip with `--no-prompt`)
 - **Architecture**: Async pipeline pattern with worker pools
 - **Repo layout**:
-    - `cmd/`                    → Cobra CLI commands (root, download, list)
+    - `cmd/`                    → Cobra CLI commands (root, download, list); flag groups in `flags.go`, interactive sign-in prompt in `prompt.go`
     - `internal/models/`        → Core types, interfaces, config structs
     - `internal/pipeline/`      → 3-stage async pipeline (fetcher, transformer, writer)
     - `internal/handlers/`      → Handler registry (package handlers); ARM handlers in `arm/`, Microsoft Graph handlers in `graph/`
     - `internal/azure/`         → Azure SDK wrappers and utilities (auth, listing pagers, permission-error detection, ID resolver)
     - `internal/transform/`     → Transformation utilities (cleaner, sanitizer, base64 decoding)
+    - `internal/docs/`          → Export metadata (`resources/metadata.yaml`): facts collected from pipeline results, partial-run merge, and `--prune`
     - `internal/logger/`        → Structured logging (charmbracelet/log wrapper)
     - `internal/retry/`         → Exponential backoff for transient Azure API failures
     - `main.go`                 → Entry point (calls cmd.Execute())
@@ -43,7 +44,12 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 ## Worker Pool Pattern
 - Configurable concurrency with API-specific defaults (Microsoft Graph: 5, ARM: 20; see `internal/models/api.go`), overridable via `--workers` / `workers` / `workers-by-api`
 - Uses `sync.WaitGroup` + goroutines + channels
-- Context-aware cancellation
+- Context-aware cancellation — see the accounting invariant below
+
+## Export Metadata
+- Every download writes `<output>/<tenant>/resources/metadata.yaml` describing the **export directory**
+- It records **facts only** (hashes, display names, `@odata.type`, assignment targets, artifact names) — never decisions that depend on a rule you might revise, so revising one never requires re-downloading a tenant
+- `--prune` is the only delete path in the codebase; see `04-security-and-ops.md`
 
 # Non-negotiables
 - Every exported function gets a doc comment
@@ -61,3 +67,6 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Avoid global state; handlers get their dependencies via constructor (ARM: credential + subscriptionID; Graph: credential only)
 - Pipeline stages communicate via channels only (no shared state)
 - Use `sync.RWMutex` for thread-safe registry access
+- **Every request produces exactly one result.** A pipeline stage that stops early on `ctx.Done()` MUST keep draining its input channel and emit one `Cancelled` result per remaining item — never `return` and abandon the queue. `Pipeline.Execute` fails loudly when `len(summary.Results) != summary.TotalResources`.
+  - This is not bookkeeping: a request that produces no result is indistinguishable from a resource deleted in the tenant, so with `--prune` a dropped request would delete a live file. Any new stage must preserve it, and `internal/pipeline/pipeline_test.go` covers it.
+- `Transform()` MUST set a meaningful `DisplayName` — see `05-azure-conventions.md`

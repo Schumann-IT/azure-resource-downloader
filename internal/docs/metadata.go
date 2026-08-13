@@ -309,7 +309,7 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 	}
 
 	// Record per-type documentation prompt hashes (only populated when
-	// --write-prompts was enabled).
+	// prompt writing was enabled, i.e. --no-prompt was not passed).
 	for t, sha := range s.PromptSHAByType {
 		tm := m.Types[t]
 		tm.PromptSha256 = sha

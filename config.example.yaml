@@ -5,202 +5,242 @@
 #
 # Precedence (highest to lowest): CLI flag > AZURE_RD_* env var > this file >
 # built-in default. A higher source silently overrides a lower one (no warning).
+# An unset flag does NOT clobber a configured value with the flag's default.
+#
+# Every value below is set to the tool's built-in default, so loading this file
+# unmodified behaves exactly like running with no config at all. Change what you
+# need; the comments describe what each key does and what a non-default value
+# means. Keys that have NO usable default (credentials, selection filters) are
+# present with empty values; a few that are dangerous to leave enabled are
+# documented but commented out — those are called out where they appear.
 
-# Azure subscription ID (optional)
-# If not specified, the default subscription from 'az login' will be used
-# You can override this with the --subscription CLI flag
-# subscription: "00000000-0000-0000-0000-000000000000"
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
 
-# Authentication (optional)
-# By default the tool reuses your existing Azure CLI session (run 'az login').
-# To download Microsoft Graph/Intune types that need scopes the Azure CLI app
-# cannot provide, sign in to a dedicated app registration via the device-code
-# flow by setting both client-id and tenant-id.
-# Equivalent to the --client-id / --tenant-id flags. Flags override these values.
-# client-id: "00000000-0000-0000-0000-000000000000"  # app (client) ID
-# tenant-id: "00000000-0000-0000-0000-000000000000"  # Entra tenant ID (required with client-id)
+# Azure subscription ID.
+# Empty = use the default subscription from your 'az login' session. With no
+# subscription at all, Microsoft Graph types still download and ARM types are
+# skipped with a warning.
+# Equivalent to --subscription / AZURE_RD_SUBSCRIPTION.
+subscription: ""
 
-# Output directory for downloaded resources (default: ./output)
-# Uncomment to override the default output directory.
+# Dedicated app registration for device-code sign-in.
+# Empty = reuse the existing Azure CLI session (same delegated token for ARM and
+# Microsoft Graph). Set BOTH values to sign in to your own app registration
+# instead — needed for Microsoft Graph/Intune scopes the Azure CLI app cannot
+# provide. If a selected resource type requires one and these are empty, the run
+# prompts for them interactively.
+# Equivalent to --client-id / --tenant-id.
+client-id: ""     # app (client) ID
+tenant-id: ""     # Entra tenant ID (required together with client-id)
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+# Output directory for downloaded resources.
 # The tool writes exclusively under <output>/<tenant-domain>/resources/, which
-# also holds the export metadata (resources/metadata.yaml) and per-type
+# also holds the export metadata (resources/metadata.yaml) and the per-type
 # doc-prompt.md files. Anything you place elsewhere under <output> is left
 # untouched (and never pruned).
-# output: "./output"
+# Equivalent to --output / AZURE_RD_OUTPUT.
+output: "./output"
 
-# Number of concurrent workers for parallel processing
-# Option 1: Use API-specific defaults (RECOMMENDED)
-# - Microsoft Graph API: 5 workers (strict rate limits)
-# - Azure Resource Manager: 20 workers (generous limits)
-# Comment out 'workers' to use automatic API-based defaults
-# workers: 5
+# Preview mode: run everything but write nothing to disk.
+# Under dry-run the export metadata is not written and --prune deletes nothing;
+# a dry run with prune enabled instead lists the files a real run would remove.
+# Equivalent to --dry-run.
+dry-run: false
 
-# Option 2: Set workers globally (overrides API-based defaults)
-# Uncomment to use same worker count for all APIs
-# workers: 10
+# ---------------------------------------------------------------------------
+# Concurrency and timeouts
+# ---------------------------------------------------------------------------
 
-# Option 3: Configure workers per API (ADVANCED)
-# Fine-tune worker count for each API independently.
-# The values below are the built-in defaults; uncomment only to override them.
-# workers-by-api:
-#   microsoft-graph: 5         # For Microsoft.Graph/* resources (default: 5)
-#   azure-resource-manager: 20 # For Microsoft.* ARM resources (default: 20)
-
-# Dry run mode - preview without writing files (default: false)
-# dry-run: false
-
-# Per-operation timeout in seconds (default: 300)
-# Applied around each individual resource fetch (including its retries), NOT as
-# a whole-run budget. Equivalent to the --timeout flag. Flag overrides this.
-# timeout: 300
-
-# Selection (optional) - choose WHAT to download. If none of the three below is
-# set, every registered resource type is downloaded (a full export).
+# Worker count for the download pipeline.
 #
-# Explicit resource IDs to download (repeatable).
-# Equivalent to repeating the --resource-id flag. Flag overrides this value.
-# resource-id:
-#   - "/subscriptions/<sub>/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/acct"
-#
-# Resource type filter.
-# Restrict the download to one or more registered resource types.
-# Equivalent to repeating the --type flag. Flag overrides this value.
-# type:
-#   - Microsoft.Resources/resourceGroups
-#   - Microsoft.Storage/storageAccounts
+# How this value is actually used:
+#   - Downloading exactly ONE --type: the API-specific count below wins and this
+#     value is ignored. Only the --workers FLAG overrides an API-specific count.
+#   - Downloading several types or a full export: this value is used.
+# To raise concurrency for a specific API, set workers-by-api instead.
+# Equivalent to --workers / AZURE_RD_WORKERS.
+workers: 5
 
-# Resource group filter (optional)
+# Per-API worker counts (config-only; there is no CLI flag).
+# Microsoft Graph has strict rate limits, ARM is far more generous. More workers
+# can SLOW a run down once throttling and exponential backoff kick in.
+workers-by-api:
+  microsoft-graph: 5          # for Microsoft.Graph/* resources
+  azure-resource-manager: 20  # for Microsoft.* ARM resources
+
+# Per-operation timeout in seconds.
+# Applied around each individual resource fetch INCLUDING its retries — it is
+# not a whole-run budget, so a large tenant does not need a larger value.
+# Equivalent to --timeout / AZURE_RD_TIMEOUT.
+timeout: 300
+
+# ---------------------------------------------------------------------------
+# Selection — WHAT to download
+# ---------------------------------------------------------------------------
+# If none of the three keys below is set, every registered resource type is
+# downloaded (a full export). Run 'azure-rd list' to see the registered types.
+
+# Explicit Azure resource IDs. Equivalent to repeating --resource-id.
+# Example:
+#   resource-id:
+#     - "/subscriptions/<sub>/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/acct"
+resource-id: []
+
+# Resource type filter. Equivalent to repeating --type.
+# Example:
+#   type:
+#     - Microsoft.Resources/resourceGroups
+#     - Microsoft.Storage/storageAccounts
+type: []
+
 # Download the named resource group itself (ARM only).
-# Equivalent to the --resource-group flag. Flag overrides this value.
-# resource-group: "my-resource-group"
+# Equivalent to --resource-group.
+resource-group: ""
 
-# Resolve masked Intune OMA-URI secrets to plaintext (default: false)
-# WARNING: writes decrypted secret values to the output files on disk.
-# Requires DeviceManagementConfiguration.ReadWrite.All in the token.
-# Equivalent to the --resolve-secrets flag. Flag overrides this value.
-# resolve-secrets: false
+# ---------------------------------------------------------------------------
+# Download behaviour
+# ---------------------------------------------------------------------------
 
-# Skip documentation prompts (default: false — prompts ARE written by default)
+# Resolve masked Intune OMA-URI secrets to plaintext.
+# WARNING: when true, decrypted secret values are written to the output files on
+# disk in the clear. Requires DeviceManagementConfiguration.ReadWrite.All in the
+# token. Leave false unless you specifically need the secret values.
+# Equivalent to --resolve-secrets.
+resolve-secrets: false
+
+# Skip the per-type documentation prompts. Prompts ARE written by default.
 # The writer creates one dedicated LLM documentation prompt per resource type,
-# written as "doc-prompt.md" inside each resource type's directory (e.g.
+# as "doc-prompt.md" inside each resource type's directory (e.g.
 # output/<tenant>/resources/Microsoft.Graph/deviceConfigurations/doc-prompt.md).
-# Each prompt is tailored to its resource type and asks an LLM to document every
-# setting with best-practice guidance, Microsoft Learn links and fully expanded
-# embedded payloads (e.g. configurationXml, omaSettings). Paste the prompt
-# together with a resource YAML from the same directory into an LLM to generate
-# the documentation. Set no-prompt to true to skip writing these files.
-# Equivalent to the --no-prompt flag. Flag overrides this value.
-# no-prompt: false
+# Each prompt is tailored to its type and asks an LLM to document every setting
+# with best-practice guidance, Microsoft Learn links and fully expanded embedded
+# payloads (e.g. configurationXml, omaSettings). Paste a prompt together with a
+# resource YAML from the same directory into an LLM to generate documentation.
+# Equivalent to --no-prompt.
+no-prompt: false
 
-# Prune stale resources (default: false)
-# When enabled, after a COMPLETE, failure-free run the tool deletes files under
-# resources/ for resources it establishes are no longer in the tenant (based on
-# the previous export recorded in resources/metadata.yaml), and drops their
-# metadata entries. It refuses to run for an incomplete run or one with
-# failures, and does nothing under --dry-run. Only resources of types this run
-# fully listed are eligible. Equivalent to the --prune flag. Flag overrides this.
-# prune: false
+# Delete resource files that are no longer in the tenant.
+# When true, after a COMPLETE, failure-free run the tool deletes files under
+# resources/ for resources it establishes are gone (by comparing against the
+# previous export recorded in resources/metadata.yaml) and drops their metadata
+# entries. It refuses to run for an incomplete run or one with failures, only
+# considers types this run fully listed, and never leaves resources/.
+# Under --dry-run it deletes nothing and lists what it would remove.
+# Equivalent to --prune.
+prune: false
 
-# Log level - controls verbosity (default: info)
-# Options: debug, info, warn, error
-# - debug: Maximum verbosity (all messages)
-# - info: Normal operation (progress, metrics, warnings, errors)
-# - warn: Warnings and errors only
-# - error: Errors only
-# log-level: "info"
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 
-# Transformers (optional)
-# List of transformers to apply with their configurations
-# Default: all transformers are applied with default settings
+# Log verbosity. One of: debug, info, warn, error.
+#   debug - maximum verbosity (all messages)
+#   info  - normal operation (progress, metrics, warnings, errors)
+#   warn  - warnings and errors only
+#   error - errors only
+# Equivalent to --log-level / AZURE_RD_LOG_LEVEL (LOG_LEVEL is also honoured).
+log-level: "info"
+
+# ---------------------------------------------------------------------------
+# Transformers (config-only; there is no CLI flag)
+# ---------------------------------------------------------------------------
+# The list below IS the built-in default pipeline, written out explicitly.
+#
+# IMPORTANT: this key replaces the defaults wholesale — it is not merged. If you
+# edit it, keep every transformer you still want, including base64-decode. An
+# empty list (transformers: []) disables ALL transformers and exports raw Azure
+# data.
 #
 # Available transformers:
-#   - cleaning: Clean properties and apply exclusions
-#   - id-resolution: Resolve Azure resource IDs to friendly names  
-#   - name-sanitization: Sanitize resource names for files
-#   - base64-decode: Decode a base64 property (e.g. Intune macOS profile payload).
-#                    Options:
-#                      mode (default: inline)  # inline = replace value in YAML;
-#                                              # file = write decoded sidecar file
-#                      source-key (default: payload)
-#                      filename-key (default: payloadFileName)  # file mode
-#                      extension (default: .mobileconfig)       # file mode
-#                      remove-source (default: false)           # file mode
+#   cleaning          - remove properties and empty values
+#   id-resolution     - resolve Azure resource IDs to friendly names
+#                       (adds "<property>_name" beside each resolved ID)
+#   name-sanitization - sanitize resource names for use as file names
+#   base64-decode     - decode a base64 property (e.g. an Intune macOS profile
+#                       payload) inline or into a sidecar file
+transformers:
+  - name: cleaning
+    clean-empty: true         # remove keys with empty values (null, [], "", {})
+  - name: id-resolution
+  - name: name-sanitization
+  - name: base64-decode
+    mode: inline              # inline = replace the value in the YAML
+                              # file   = write a decoded sidecar file instead
+    source-key: payload       # property holding the base64-encoded value
+    filename-key: payloadFileName  # file mode: property holding the file name
+    extension: .mobileconfig  # file mode: extension for the decoded file
+    remove-source: false      # file mode: drop the encoded key from the YAML
+
+# Additional cleaning options (not defaults — uncomment inside the cleaning
+# entry above to use them):
 #
-# Example 1: All transformers with default settings
-# transformers:
 #   - name: cleaning
-#     # No remove-keys specified - only clean-empty: true applies (removes empty values)
-#     # To remove Azure metadata, specify remove-keys explicitly
-#   - name: id-resolution
-#   - name: name-sanitization
-#
-# Example 2: Cleaning transformer with remove-keys, preserve-keys, and replace
-# transformers:
-#   - name: cleaning
-#     remove-keys:                # Keys to remove (replaces old "exclude-keys" name)
+#     remove-keys:              # remove these keys everywhere, recursively
 #       - provisioningState
 #       - etag
 #       - systemData
-#       - id                      # Remove "id" everywhere recursively
-#     remove-keys-by-type:        # Type-specific removals (replaces "exclude-keys-by-type")
+#       - id
+#     remove-keys-by-type:      # additional per-resource-type removals
 #       Microsoft.Resources/resourceGroups:
 #         - managedBy
 #       Microsoft.Storage/storageAccounts:
 #         - primaryEndpoints
 #         - secondaryEndpoints
-#     preserve-keys:              # Exceptions - preserve these even if in remove-keys
-#       - properties.subnet.id    # Keep this specific "id" (even though "id" is in remove-keys)
-#       - metadata.id             # Keep this one too
-#     replace:                    # Replace complex objects with specific values
+#     preserve-keys:            # exceptions kept even if matched by remove-keys
+#       - properties.subnet.id
+#       - metadata.id
+#     replace:                  # replace a complex object with a nested value
 #       - from: grantControls.authenticationStrength.displayName
 #         to: grantControls.authenticationStrength
-#         # Takes displayName value and replaces entire authenticationStrength object with it
 #       - from: properties.networkProfile.id
 #         to: networkProfileId
-#         # Moves nested value to top level with new name
-#     clean-empty: true           # Remove keys with empty values (null, [], "", {}). Default: true
-#   - name: id-resolution
-#   - name: name-sanitization
+#     clean-empty: true
 #
-# Example 3: Simple list format (no custom config)
-# transformers:
-#   - cleaning
-#   - id-resolution
-#   - name-sanitization
+# Transformers may also be given as a plain list of names when no per-transformer
+# settings are needed:
 #
-# Example 4: Disable ALL transformers (raw Azure data)
-# transformers: []
+#   transformers:
+#     - cleaning
+#     - id-resolution
+#     - name-sanitization
+#     - base64-decode
 
-# Filters (optional)
+# ---------------------------------------------------------------------------
+# Filters (config-only; there is no CLI flag)
+# ---------------------------------------------------------------------------
 # Restrict which resources are downloaded per resource type by matching one or
 # more properties against a regular expression (Go RE2 syntax).
 #
 # Structure: filters.<resourceType>.<propertyPath>: <regex>
-#   - <resourceType>  matches a registered handler type (case-insensitive)
-#   - <propertyPath>  is a dot-separated path into the resource's raw
-#                     properties (e.g. displayName or properties.subnet.id)
-#   - <regex>         is a Go regular expression matched against the value
+#   <resourceType>  a registered handler type (case-insensitive)
+#   <propertyPath>  dot-separated path into the resource's raw properties
+#                   (e.g. displayName or properties.subnet.id)
+#   <regex>         a Go regular expression matched against the value
 #
 # A resource is downloaded only when EVERY listed property regex for its type
-# matches (logical AND). Resources of types without a filter are unaffected.
-# Filters are evaluated after fetch (against the raw Azure properties), so the
-# resource is still read from Azure but excluded resources are never written.
+# matches (logical AND). Types without a filter are unaffected. Filters are
+# evaluated after fetch, so the resource is still read from Azure — it is simply
+# never written.
 #
-# Examples:
+# The default is no filters. Leave this key commented out entirely: an empty or
+# valueless "filters:" is not a valid filter map and is reported as ignored.
+#
 # filters:
-#   # Only export device configurations whose displayName starts with "GBL_"
+#   # only export device configurations whose displayName starts with "GBL_"
 #   Microsoft.Graph/deviceConfigurations:
 #     displayName: "GBL_.*"
 #
-#   # Combine multiple properties (both must match)
+#   # combine multiple properties (both must match)
 #   Microsoft.Graph/groups:
 #     displayName: "^IT-.*"
 #     mailEnabled: "true"
 #
-#   # Anchor a regex for an exact prefix on storage accounts
+#   # anchor a regex for an exact prefix on storage accounts
 #   Microsoft.Storage/storageAccounts:
 #     name: "^prod"
-
-# Note: Property exclusions are now configured per-transformer
-# See the cleaning transformer configuration above
-
