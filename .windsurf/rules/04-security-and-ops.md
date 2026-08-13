@@ -46,8 +46,12 @@ trigger: always_on
   - API-specific worker defaults: Microsoft Graph 5, ARM 20 (configurable via `--workers` / `workers` / `workers-by-api`)
   - Default timeout: 300 seconds, applied **per operation** (around each resource fetch including its retries), not as a whole-run budget
   - Rate limiting: `internal/retry` retries transient failures (429/503/timeouts allowlist) with exponential backoff, 5 attempts; 403 is never retried
-- **Dry-run mode**: Always support `--dry-run` to preview without writes — and for destructive operations, to list exactly what would be removed
-- **Output layout**: everything the tool writes lives under `<output>/<tenant>/resources/`, where `<tenant>` is the tenant's Entra default domain (falls back to the base output dir with a warning if it cannot be resolved). `resources/` is the only tree `azure-rd` writes to; it holds `metadata.yaml` at its root and `<APIType>/<endpoint>/` directories containing each resource YAML, its sidecar artifacts and the type's `doc-prompt.md`
+- **Dry-run mode**: Always support `--dry-run`. Under it the tool writes **no** resource files and neither writes nor updates `resources/metadata.yaml` — and nothing that depends on those writes is recalculated to compensate (e.g. `Writer.writeResource` builds `ResourceFacts` only when not in dry-run, which is correct: no file is written, so there is no hash to record). For destructive operations it must list exactly what would be removed.
+  - A command whose real work is a download may **skip the download entirely** under `--dry-run` and answer only the part of its question that can be answered offline. When it does, the output is a subset of a real run, not a preview, and must be worded so it cannot be mistaken for one.
+- **Output layout**: everything lives under `<output>/<tenant>/`, where `<tenant>` is the tenant's Entra default domain (falls back to the base output dir with a warning if it cannot be resolved), in two sibling trees:
+  - `resources/` — **the only tree `azure-rd` writes to.** Holds `metadata.yaml` at its root and `<APIType>/<endpoint>/` directories containing each resource YAML, its sidecar artifacts and the type's `doc-prompt.md`
+  - `docs/` — generated documentation, written by the documentation run and NOT by this tool. It mirrors `resources/` exactly, so a document's path is its resource's path with the tree root and extension swapped (`resources/Microsoft.Graph/x/y.yaml` → `docs/Microsoft.Graph/x/y.md`). Do not add a `doc:` field to `metadata.yaml` — the path is derived
+  - `--prune` must never reach into `docs/`. A pruned resource leaves its document behind as an orphan: report it, never delete it
 
 ## Export Metadata and Prune
 
