@@ -58,6 +58,8 @@ trigger: always_on
 - **"Covered" means a type's listing succeeded**, not that it returned resources. `EmptyTypes` is covered (absence there is real); `SkippedTypes` is not (the count is unknown). Collapsing the two turns a missing permission into a deletion.
 - **Prune guards**: refuses unless the run is `Complete` and `FailedResources == 0`; only deletes within covered types; never leaves `resources/`; never deletes `resources/metadata.yaml`; removes a type's `doc-prompt.md` only when that type empties out entirely. Every deletion is logged, with a total.
 - **Partial runs merge, never truncate**: a `--type`-scoped run must retain entries for types it did not cover and leave their `lastCoveredAt` alone.
+- **Metadata records facts, never decisions.** A value belongs in `metadata.yaml` only if it is read from the resource or computed from its bytes (hashes, display name, `@odata.type`, assignment targets, artifact names). Anything derived from a rule you might revise — grouping, classification, change buckets, counts — belongs to a post-processing step, or revising the rule means re-downloading every tenant.
+- **`promptSha256` hashes the ASSEMBLED `doc-prompt.md` bytes** (`content.String()` in `Writer.writePromptFiles` — the generated header and trailing newline included), never `TransformResult.DocumentationPrompt`. Hash the raw prompt string instead and the recorded hash never matches the file on disk, so every later comparison reports every type as changed.
 
 ## Observability
 - **User-friendly output**: Use emojis and clear progress messages

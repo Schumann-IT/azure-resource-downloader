@@ -40,26 +40,6 @@ report it as content drift — and it can only do that if it actually changes. W
 
 ---
 
-## Invariants the next iteration must not undo
-
-These are enforced in code today and easy to "simplify" into bugs.
-
-- **`metadata.yaml` describes the export directory, not the tenant.** Never remove an entry for a file that
-  still exists on disk. "Gone from the tenant" is `presentInTenant: false` with facts and hash retained.
-  Removing the entry instead makes the next run find an undescribed YAML and treat it as new — forever. Only
-  `--prune`, having actually deleted the file, removes an entry.
-- **An incomplete run may not mark anything `presentInTenant: false`.** It cannot distinguish a deleted
-  resource from one it never reached.
-- **"Covered" means the type's listing succeeded**, not that it returned resources. `EmptyTypes` is covered,
-  so absence there is real; `SkippedTypes` is not, because the count is unknown. Collapsing the two turns a
-  missing permission into a deletion.
-- **Facts in the pipeline, decisions in post-processing.** Anything that depends on a rule you might revise
-  must stay out of `metadata.yaml`, or revising the rule means re-downloading a tenant.
-- **`promptSha256` hashes the assembled `doc-prompt.md` bytes**, not the raw prompt string, or it will never
-  match the file on disk.
-
----
-
 ## Later, deliberately not decided here
 
 Where generated documentation lives; how a post-processing step consumes `metadata.yaml` to emit a
