@@ -39,6 +39,16 @@ func successResult(yamlPath, resType, name, id string) *models.WriteResult {
 	}
 }
 
+// dryRunResult mimics a dry-run write: the resource was fetched and its target
+// path is known, but nothing was marshalled, so it carries no facts.
+func dryRunResult(yamlPath, resType, id string) *models.WriteResult {
+	return &models.WriteResult{
+		ResourceID:   id,
+		ResourceType: resType,
+		YAMLPath:     yamlPath,
+	}
+}
+
 func newSummary(complete bool, results []*models.WriteResult, empty []string, skipped []models.SkippedType) *pipeline.ExecutionSummary {
 	return &pipeline.ExecutionSummary{
 		TotalResources: len(results),
@@ -241,5 +251,88 @@ func TestHashTransformConfig(t *testing.T) {
 	}
 	if HashTransformConfig(cfg, true) == h1 {
 		t.Error("resolve-secrets should change the transform config hash")
+	}
+}
+
+func TestDryRunPrunePreviewTouchesNothing(t *testing.T) {
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	scope := RunScope{Types: []string{testType}}
+
+	aPath := writeYAML(t, resourcesDir, testType, "alpha")
+	bPath := writeYAML(t, resourcesDir, testType, "bravo")
+
+	// Seed a real run marking both present.
+	if err := WriteExportMetadata(exportRun(output, newSummary(true, []*models.WriteResult{
+		successResult(aPath, testType, "alpha", "id-a"),
+		successResult(bPath, testType, "bravo", "id-b"),
+	}, nil, nil), scope, false)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Dry-run prune: only alpha remains in the tenant. bravo is prunable, but a
+	// dry run may neither delete a file nor rewrite metadata.
+	dry := exportRun(output, newSummary(true, []*models.WriteResult{
+		dryRunResult(aPath, testType, "id-a"),
+	}, nil, nil), scope, true)
+	dry.DryRun = true
+	if err := WriteExportMetadata(dry); err != nil {
+		t.Fatalf("dry-run prune: %v", err)
+	}
+
+	if _, err := os.Stat(bPath); err != nil {
+		t.Errorf("bravo.yaml must not be deleted on a dry run: %v", err)
+	}
+	if _, err := os.Stat(aPath); err != nil {
+		t.Errorf("alpha.yaml must remain: %v", err)
+	}
+
+	// Metadata on disk is still the seed: not pruned, bravo still present.
+	meta, err := loadMetadata(filepath.Join(resourcesDir, MetadataFileName))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if meta.Run.Pruned {
+		t.Error("run.pruned must be false: a dry run writes no metadata")
+	}
+	bravo, ok := meta.Resources["Microsoft.Graph/deviceCompliancePolicies/bravo.yaml"]
+	if !ok || !bravo.PresentInTenant {
+		t.Error("a dry run must not rewrite metadata; bravo should stay present from the seed run")
+	}
+}
+
+func TestPrunableKeysSelectsAbsentCoveredEntries(t *testing.T) {
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	scope := RunScope{Types: []string{testType}}
+
+	m := Metadata{
+		Types: map[string]TypeMeta{},
+		Resources: map[string]ResourceMeta{
+			"Microsoft.Graph/deviceCompliancePolicies/alpha.yaml": {ResourceId: "id-a", PresentInTenant: true},
+			"Microsoft.Graph/deviceCompliancePolicies/bravo.yaml": {ResourceId: "id-b", PresentInTenant: false},
+		},
+	}
+
+	// A complete, failure-free run covering testType.
+	run := exportRun(output, newSummary(true, []*models.WriteResult{
+		successResult(filepath.Join(resourcesDir, "alpha"), testType, "alpha", "id-a"),
+	}, nil, nil), scope, true)
+
+	keys, ok := prunableKeys(&m, run)
+	if !ok {
+		t.Fatal("prunableKeys should be eligible on a complete, failure-free run")
+	}
+	if len(keys) != 1 || keys[0] != "Microsoft.Graph/deviceCompliancePolicies/bravo.yaml" {
+		t.Fatalf("expected only the absent bravo entry, got %v", keys)
+	}
+
+	// A run with failures is never eligible.
+	failing := newSummary(true, []*models.WriteResult{
+		successResult(filepath.Join(resourcesDir, "alpha"), testType, "alpha", "id-a"),
+	}, nil, nil)
+	failing.FailedResources = 1
+	if _, ok := prunableKeys(&m, exportRun(output, failing, scope, true)); ok {
+		t.Error("prunableKeys must refuse when the run had failures")
 	}
 }

@@ -637,7 +637,11 @@ deliberately conservative:
   unreadable one, not a deleted one).
 - Only resources of types this run **fully listed** are eligible; entries in
   types outside the run's scope are never pruned.
-- Under `--dry-run` it deletes nothing.
+- Under `--dry-run` it deletes nothing and instead **lists exactly what it would
+  delete** (one line per resource, then a `would_delete` total). The preview
+  uses the same selection as a real prune, so what it lists is what a real run
+  would remove.
+- A real prune logs each deletion and a final `Prune: complete` total.
 - A type's `doc-prompt.md` is removed only when the entire type directory is
   being pruned away.
 

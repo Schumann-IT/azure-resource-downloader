@@ -7,17 +7,65 @@ documentation lives — that is deferred to a later reshaping of the post-proces
 
 Four changes, in dependency order:
 
-1. **Fix the CLI surface** — two bugs and the flag structure, before anything builds on it.
-2. **Move downloaded files under `resources/`** — a directory the tool exclusively owns.
-3. **Make the run's own completeness knowable** — without it, metadata cannot be trusted and prune is unsafe.
-4. **Emit `metadata.yaml`**, and add **`download --prune`** on top of it.
+1. **Fix the CLI surface** — two bugs and the flag structure, before anything builds on it. — **done**
+2. **Move downloaded files under `resources/`** — a directory the tool exclusively owns. — **done**
+3. **Make the run's own completeness knowable** — without it, metadata cannot be trusted and prune is
+   unsafe. — **done, tested**
+4. **Emit `metadata.yaml`**, and add **`download --prune`** on top of it. — **done**
 
 ---
 
-## 1. CLI surface: two bugs and one structural fix
+## Status — reviewed against the implementation
 
-Do this first. Every later change adds flags, and both bugs below are the kind that stay invisible until
-something depends on them.
+All four sections are implemented. What follows stays in this file as the rationale record; the sections are
+annotated with what landed. Verified in `cmd/flags.go`, `cmd/root.go`, `cmd/list.go`, `cmd/download.go`,
+`internal/pipeline/*`, `internal/models/types.go`, `internal/docs/metadata.go`.
+
+### Remaining work
+
+**Tests — the completeness gap is now closed.** `internal/pipeline/pipeline_test.go` covers the section 3
+work: `MarkCompleteness` (complete, missing-results, cancelled, skipped-types, and multiple reasons joined),
+the drain-on-cancel behaviour in all three stages (fetcher, transformer, writer each emit exactly one result
+per input under a cancelled context), the upstream-status propagation each stage performs, and — via
+`TestPipelineStagesAccountForEveryRequestOnCancel` — the three stages wired together producing exactly one
+result per request under cancellation, which is the guarantee the `len(Results) == TotalResources` assertion
+in `Execute` rests on. Run under `-race` (`make test-race`) since it is concurrent code.
+`internal/docs/metadata_test.go` covers merge, absence, prune and prune-refusal well.
+
+Two smaller test gaps this plan asked for by name:
+
+- the env-key-replacer guarantee (set `AZURE_RD_LOG_LEVEL`, assert it is read) — no test references it
+- determinism: two runs over an unchanged export producing byte-identical `metadata.yaml`
+
+**`--dry-run --prune` does not list what it would remove.** — **closed.** `WriteExportMetadata` now runs the
+merge in-memory before the dry-run branch and calls `previewPrune`, which shares `prunableKeys` with the real
+prune so the preview can never diverge from an actual deletion. Dry-run write results (YAMLPath set, no facts)
+are counted as present in `mergeMetadata`, so absence detection — and the preview built on it — is accurate.
+
+**Prune logs each deletion but no total.** — **closed.** `pruneCovered` now logs
+`Prune: complete deleted=<n> candidates=<m>`, and `previewPrune` logs `would_delete=<n>`.
+
+**Still deferred, unchanged:** `list` requires authentication to print a compile-time registry, and
+`rootCmd.Version` is still the hardcoded `"1.0.0"`. `toolVersion()` at least makes it a single source of
+truth for what lands in `metadata.yaml`, but it will not move when the binary does — which defeats the
+"this type re-hashed because you upgraded" attribution `promptSha256` was meant to support.
+
+### Landed beyond this plan
+
+- `--write-prompts` became `--no-prompt`: documentation prompts are now written by default.
+- `cmd/prompt.go` — an interactive prompt for the dedicated app registration (client/tenant ID), driven by a
+  per-type permission probe that decides when the Azure CLI app is insufficient. Not part of this plan.
+- `config.example.yaml` documents `resource-id`, `no-prompt` and `prune`, and the `timeout` comment now says
+  per-operation — which closes the three-way description conflict this plan had deferred.
+
+---
+
+## 1. CLI surface: two bugs and one structural fix — DONE
+
+Both bugs fixed and the flag structure rebuilt as specified. `cmd/flags.go` holds `addAzureAuthFlags` /
+`addSelectionFlags` / `addPipelineFlags` plus a per-execution `bindFlags`, with the defaults as named
+constants so the value-sniffing bug cannot recur. Root keeps only `--config`, `--output`, `--dry-run` and
+`--log-level`; `list` opts into auth alone. Outstanding: no test for the env-key-replacer guarantee.
 
 ### Bug: environment overrides are silently broken for every hyphenated key
 
@@ -117,7 +165,10 @@ requiring authentication to print a compile-time registry, and `Version: "1.0.0"
 
 ---
 
-## 2. Export layout
+## 2. Export layout — DONE
+
+`models.ResourcesDirName` with `Writer.resourcesDir()` used by both `writeResource` and `writePromptFiles`;
+`metadata.yaml` written at `resources/metadata.yaml`.
 
 ```
 output/<domain>/
@@ -151,9 +202,15 @@ Two `filepath.Join` calls in `internal/pipeline/writer.go`:
 
 ---
 
-## 3. Make the run's completeness knowable
+## 3. Make the run's completeness knowable — DONE
 
-**This is the prerequisite for everything else.** A metadata file is only as trustworthy as the run's own
+All four required changes landed: every stage drains on cancel and emits a `Cancelled` result per request,
+`Execute` returns an error if `len(Results) != TotalResources`, `ExecutionSummary` gained
+`Complete` / `IncompleteReason` / `CancelledResources` with `MarkCompleteness`, and `--timeout` is now applied
+per fetch inside `Fetcher` rather than around the whole pipeline. Tests now cover all of it in
+`internal/pipeline/pipeline_test.go` (see the status block above); run with `make test-race`.
+
+**This was the prerequisite for everything else.** A metadata file is only as trustworthy as the run's own
 knowledge of what it did and did not fetch. Right now a run cannot tell you it was incomplete, and there is
 a concrete path to silent data loss once prune exists.
 
@@ -230,7 +287,13 @@ Collapsing these into "nothing came back" is what turns a missing permission int
 
 ---
 
-## 4. `metadata.yaml`
+## 4. `metadata.yaml` — DONE
+
+`internal/docs/metadata.go` implements the shape, the merge and the coverage rules as specified:
+`coveredTypes` treats `EmptyTypes` as covered and removes `SkippedTypes`, absence is only detected on a
+complete run, and skipped/filtered resources retain their prior facts by resource-id lookup. Facts are built
+in `Writer.buildResourceFacts` from the marshalled bytes; `promptSHAByType` hashes the assembled
+`doc-prompt.md` content. Missing: a determinism test.
 
 ### Purpose
 
@@ -428,7 +491,14 @@ rule is about describing the directory.
 
 ---
 
-## 5. `download --prune`
+## 5. `download --prune` — DONE
+
+`pruneCovered` runs after the merge, refuses on an incomplete run or any failure, deletes only within covered
+types inside `resources/`, removes sidecar artifacts, and removes `doc-prompt.md` plus the type directory only
+when a type empties out. Metadata is written once, without the pruned entries, with `run.pruned` set. Both
+earlier gaps are now closed: `--dry-run --prune` enumerates exactly what a real run would delete (via
+`previewPrune`, sharing `prunableKeys` with the real prune), and the real prune logs a deletion total. Covered
+by `TestDryRunPrunePreviewTouchesNothing` and `TestPrunableKeysSelectsAbsentCoveredEntries`.
 
 Opt-in flag. Removes files under `resources/` that this run establishes are no longer in the tenant, so the
 export stops accumulating.

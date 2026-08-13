@@ -160,20 +160,23 @@ func WriteExportMetadata(run ExportRun) error {
 	resourcesDir := filepath.Join(run.Output, models.ResourcesDirName)
 	metaPath := filepath.Join(resourcesDir, MetadataFileName)
 
-	if run.DryRun {
-		log.Info("Dry-run: skipping export metadata write", "path", metaPath)
-		if run.Prune {
-			log.Info("Dry-run: prune is evaluated only against a real export; nothing would be deleted")
-		}
-		return nil
-	}
-
 	existing, err := loadMetadata(metaPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing metadata: %w", err)
 	}
 
+	// Merge in-memory first so a dry run can enumerate exactly what a real run
+	// would do — including which files --prune would delete — rather than
+	// returning before it can tell.
 	merged := mergeMetadata(existing, run, resourcesDir)
+
+	if run.DryRun {
+		log.Info("Dry-run: skipping export metadata write", "path", metaPath)
+		if run.Prune {
+			previewPrune(&merged, run)
+		}
+		return nil
+	}
 
 	// Prune runs after the merge, deleting exactly the entries the merge marked
 	// absent in covered types. It is guarded on a complete, failure-free run.
@@ -339,6 +342,21 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 			}
 			presentKeys[key] = true
 
+		case r.YAMLPath != "" && r.Error == nil && !r.Skipped && !r.Filtered && !r.Cancelled:
+			// Dry-run: the resource was fetched and would have been written
+			// (YAMLPath is set), but carries no facts because nothing was
+			// marshalled. Record presence against any existing entry so absence
+			// detection — and the prune preview built on it — stays accurate,
+			// without overwriting facts from an earlier real run. A real run
+			// never reaches here: a successful write always carries facts, and
+			// a failed one carries no YAMLPath.
+			key := relKey(resourcesDir, r.YAMLPath)
+			entry := m.Resources[key]
+			entry.PresentInTenant = true
+			entry.LastSeenAt = now
+			m.Resources[key] = entry
+			presentKeys[key] = true
+
 		case r.Skipped, r.Filtered:
 			// Re-observed but not rewritten. Retain the previous entry's facts
 			// and mark why it was not refreshed. Without a file path we can only
@@ -413,38 +431,74 @@ func coveredTypes(s *pipeline.ExecutionSummary, scope RunScope) map[string]bool 
 	return covered
 }
 
-// pruneCovered deletes files for entries the merge marked absent
-// (presentInTenant:false) within a covered type, drops their metadata entries,
-// and sets run.pruned. It refuses to run unless the run is complete and had no
-// failures, because only then is an absence a reliable deletion signal.
-func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
+// prunableKeys returns the sorted metadata keys a --prune run would delete:
+// entries the merge marked absent (presentInTenant:false) within a type this
+// run covered. The bool is false when the run is not eligible to prune (an
+// incomplete run, or one with failures), with the reason logged — so the real
+// prune and the dry-run preview share one eligibility decision and one
+// selection and can never diverge.
+func prunableKeys(m *Metadata, run ExportRun) ([]string, bool) {
 	log := logger.Default
 	s := run.Summary
 
 	if !s.Complete {
 		log.Warn("Refusing to prune: run is incomplete", "reason", s.IncompleteReason)
-		return
+		return nil, false
 	}
 	if s.FailedResources > 0 {
 		log.Warn("Refusing to prune: run had failures", "failed", s.FailedResources)
-		return
+		return nil, false
 	}
 
 	covered := coveredTypes(s, run.Scope)
 
-	// Deletable entries: absent from the tenant, in a type this run covered.
 	var keys []string
 	for key, entry := range m.Resources {
 		if covered[typeOfKey(key)] && !entry.PresentInTenant {
 			keys = append(keys, key)
 		}
 	}
+	sort.Strings(keys)
+	return keys, true
+}
+
+// previewPrune logs the files a real --prune would delete, without touching
+// disk. It shares prunableKeys with pruneCovered so the preview can never
+// diverge from what a real run would remove.
+func previewPrune(m *Metadata, run ExportRun) {
+	log := logger.Default
+
+	keys, ok := prunableKeys(m, run)
+	if !ok {
+		return
+	}
+	if len(keys) == 0 {
+		log.Info("Dry-run: prune would delete nothing")
+		return
+	}
+	for _, key := range keys {
+		entry := m.Resources[key]
+		log.Info("Dry-run: would prune resource no longer in tenant", "path", key, "resource_id", entry.ResourceId)
+	}
+	log.Info("Dry-run: prune preview complete", "would_delete", len(keys))
+}
+
+// pruneCovered deletes files for entries the merge marked absent
+// (presentInTenant:false) within a covered type, drops their metadata entries,
+// and sets run.pruned. It refuses to run unless the run is complete and had no
+// failures, because only then is an absence a reliable deletion signal.
+func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
+	log := logger.Default
+
+	keys, ok := prunableKeys(m, run)
+	if !ok {
+		return
+	}
 	m.Run.Pruned = true
 	if len(keys) == 0 {
 		log.Info("Prune: nothing to delete")
 		return
 	}
-	sort.Strings(keys)
 
 	// Count entries that will remain per type so we can tell when an entire type
 	// directory (and thus its doc-prompt.md) is going away.
@@ -455,6 +509,7 @@ func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
 		}
 	}
 
+	deleted := 0
 	for _, key := range keys {
 		entry := m.Resources[key]
 		yamlPath := filepath.Join(resourcesDir, filepath.FromSlash(key))
@@ -463,6 +518,7 @@ func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
 			continue
 		}
 		log.Info("Prune: deleted resource no longer in tenant", "path", yamlPath, "resource_id", entry.ResourceId)
+		deleted++
 
 		// Sidecar artifacts live alongside the YAML.
 		dir := filepath.Dir(yamlPath)
@@ -478,6 +534,7 @@ func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
 	// When a covered type has no remaining resources, remove its doc-prompt.md
 	// and the now-empty type directory. The prompt is deleted only here, when
 	// the whole type directory is being removed; otherwise the run rewrites it.
+	covered := coveredTypes(run.Summary, run.Scope)
 	for t := range covered {
 		if remainingByType[t] > 0 {
 			continue
@@ -489,6 +546,8 @@ func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
 			log.Debug("Prune: type directory not empty after cleanup", "dir", typeDir, "error", err)
 		}
 	}
+
+	log.Info("Prune: complete", "deleted", deleted, "candidates", len(keys))
 }
 
 // writeMetadata marshals the metadata and writes it into the resources/
