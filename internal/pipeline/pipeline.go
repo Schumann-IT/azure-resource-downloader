@@ -122,14 +122,6 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	return summary, nil
 }
 
-// max returns the maximum of two integers
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // ExecutionSummary contains the results of a pipeline execution
 type ExecutionSummary struct {
 	TotalResources      int
