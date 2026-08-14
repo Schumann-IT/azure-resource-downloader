@@ -82,8 +82,8 @@ make check
 5. Update README.md "Supported Resource Types" table
 
 ## "Add a CLI command"
-1. Create `cmd/<command>.go` with Cobra structure. For a command **group with subcommands**, keep the parent in package `cmd` (like `docs`) and put each subcommand in its own directory `cmd/<command>/` as a separate package exposing an exported constructor (e.g. `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `cmd/cmdutil`.
-2. In `init()` (flat command) or the constructor (directory subcommand): `rootCmd.AddCommand(<command>Cmd)`, then **opt into the flag groups the command actually uses** from `cmd/cmdutil` — `cmdutil.AddAzureAuthFlags`, `cmdutil.AddSelectionFlags`, `cmdutil.AddPipelineFlags` — plus any command-specific flags declared on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
+1. Create `cmd/<command>.go` with Cobra structure. For a command **group with subcommands**, keep the parent in package `cmd` (like `docs`) and put each subcommand in its own directory `cmd/<command>/` as a separate package exposing an exported constructor (e.g. `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`.
+2. In `init()` (flat command) or the constructor (directory subcommand): `rootCmd.AddCommand(<command>Cmd)`, then **opt into the flag groups the command actually uses** from `../../internal/cmdutil` — `cmdutil.AddAzureAuthFlags`, `cmdutil.AddSelectionFlags`, `cmdutil.AddPipelineFlags` — plus any command-specific flags declared on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
 3. **Call `cmdutil.BindFlags(cmd)` as the first statement of `RunE`**, before reading any value. Local flags are bound to Viper per-execution so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command.
 4. Implement `RunE` function with:
    - Configuration loading via Viper (after `cmdutil.BindFlags`)
@@ -107,10 +107,10 @@ make check
 ## "Add config option"
 1. Add field to `models.PipelineConfig` struct
 2. Declare the flag in the right place:
-   - **Command-specific** (the normal case) → on that command's `Flags()`, or in the matching group helper in `cmd/cmdutil` if more than one command needs it
+   - **Command-specific** (the normal case) → on that command's `Flags()`, or in the matching group helper in `../../internal/cmdutil` if more than one command needs it
    - **Global** → `cmd/root.go` → `PersistentFlags`, and only if *every* command genuinely needs it. Root currently holds only `--config`, `--output`, `--dry-run` and `--log-level`; adding a fifth needs a reason
 3. Binding: local flags are bound automatically by `cmdutil.BindFlags(cmd)` in the command's `RunE` — do NOT add a manual `viper.BindPFlag()` for them. Only the four global flags are bound explicitly in `root.go`'s `init()`
-4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `cmdutil.DefaultWorkerCount` in `cmd/cmdutil`)
+4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `cmdutil.DefaultWorkerCount` in `../../internal/cmdutil`)
 5. Use in pipeline/command
 6. Update `config.example.yaml`
 7. Document in README.md

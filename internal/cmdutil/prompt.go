@@ -1,4 +1,4 @@
-package cmd
+package cmdutil
 
 import (
 	"bufio"
@@ -12,7 +12,7 @@ import (
 	"azure-resource-downloader/internal/logger"
 )
 
-// promptForDedicatedApp interactively requests the app registration client ID
+// PromptForDedicatedApp interactively requests the app registration client ID
 // and tenant ID needed to download resource types that require a dedicated app
 // (Microsoft Graph scopes the Azure CLI first-party app cannot provide). The
 // requirements map (type -> declared permissions) is shown so the user knows
@@ -24,7 +24,7 @@ import (
 // in; when no input is available (e.g. a non-interactive run) it falls back to
 // the defaults, and only errors when a required value has neither input nor a
 // default.
-func promptForDedicatedApp(requirements map[string][]string, in io.Reader, defaultClientID, defaultTenantID string) (clientID, tenantID string, err error) {
+func PromptForDedicatedApp(requirements map[string][]string, in io.Reader, defaultClientID, defaultTenantID string) (clientID, tenantID string, err error) {
 	log := logger.Default
 
 	types := make([]string, 0, len(requirements))

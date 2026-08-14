@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"azure-resource-downloader/internal/cmdutil"
 	"context"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/azure"
 	docsengine "azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/logger"

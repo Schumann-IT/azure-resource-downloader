@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"azure-resource-downloader/internal/cmdutil"
 	"context"
 	"reflect"
 	"strings"
 	"testing"
 
-	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
 )

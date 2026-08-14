@@ -1,13 +1,13 @@
 package cmd
 
 import (
+	cmdutil "azure-resource-downloader/internal/cmdutil"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
@@ -197,7 +197,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		if defaultTenantID == "" {
 			defaultTenantID = azure.CLIDefaultTenantID(ctx)
 		}
-		clientID, tenantID, err = promptForDedicatedApp(requirements, os.Stdin, clientID, defaultTenantID)
+		clientID, tenantID, err = cmdutil.PromptForDedicatedApp(requirements, os.Stdin, clientID, defaultTenantID)
 		if err != nil {
 			log.Error("Cannot download the selected resource types without a dedicated app registration", "error", err)
 			os.Exit(1)

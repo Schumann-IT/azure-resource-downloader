@@ -7,7 +7,7 @@
 // subcommand packages expose an exported constructor (e.g.
 // docs.NewGeneratePromptCommand) that this parent attaches; they cannot import
 // package cmd (that would be an import cycle), so shared flag helpers come from
-// cmd/cmdutil instead.
+// internal/cmdutil instead.
 package cmd
 
 import (

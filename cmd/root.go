@@ -61,7 +61,7 @@ func init() {
 	// Global flags: every planned command needs the export root and benefits
 	// from a uniform dry-run safety switch, config loading and log verbosity.
 	// Command-specific flags (auth, selection, pipeline tuning) are opt-in via
-	// the helpers in cmd/cmdutil so future commands do not silently inherit them.
+	// the helpers in internal/cmdutil so future commands do not silently inherit them.
 	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "path to a YAML config file; if omitted, no config file is loaded and defaults apply")
 	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "directory to write downloaded resources into")
 	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "preview what would be downloaded without writing files")

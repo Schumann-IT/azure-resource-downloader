@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"azure-resource-downloader/internal/cmdutil"
 	"context"
 	"os"
 
-	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"

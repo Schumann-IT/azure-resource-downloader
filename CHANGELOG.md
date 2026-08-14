@@ -45,9 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Shared CLI flag helpers moved to `cmd/cmdutil`.** `AddAzureAuthFlags`, `AddSelectionFlags`,
+- **Shared CLI flag helpers moved to `internal/cmdutil`.** `AddAzureAuthFlags`, `AddSelectionFlags`,
   `AddPipelineFlags`, `BindFlags` and the default constants moved out of `cmd/flags.go` into a new
-  `cmd/cmdutil` package so a subcommand living in its own directory can reuse them without an import cycle
+  `internal/cmdutil` package so a subcommand living in its own directory can reuse them without an import cycle
   back into package `cmd`.
 
 - **`docs` subcommands live in their own directory (`cmd/docs/`).** The `docs` parent command stays in
