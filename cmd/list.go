@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"azure-resource-downloader/internal/cmdutil"
-	"context"
 	"os"
 
 	"azure-resource-downloader/internal/azure"
@@ -38,27 +37,25 @@ func runList(cmd *cobra.Command, args []string) error {
 	// stealing the binding.
 	cmdutil.BindFlags(cmd)
 
-	ctx := context.Background()
 	sub := viper.GetString("subscription")
 	log := logger.Default
 
-	// Create Azure client (will auto-detect subscription if not provided)
-	// Note: list command doesn't really need a subscription, but we create the client
-	// to ensure authentication works and to maintain consistency
-	azureClient, err := azure.NewClient(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"))
+	// The supported types are baked into the binary, so enumerating them needs
+	// neither a subscription nor a signed-in session. Build a lazy credential
+	// (no network, no token fetch until first use) purely so the registry's
+	// handler constructors succeed — the same offline path download uses for its
+	// probe registry. This keeps `azure-rd list` usable as documentation, even
+	// offline or without 'az login'.
+	cred, err := azure.NewCredential(viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
 		// Runtime error - print and exit without showing help
-		log.Error("Failed to create Azure client", "error", err)
+		log.Error("Failed to prepare Azure credentials", "error", err)
 		os.Exit(1)
 	}
 
-	// Get the actual subscription ID being used
-	sub = azureClient.GetSubscriptionID()
-	log.Info("Using subscription", "subscription", sub)
-
 	// Create handler registry pre-populated with all supported resource types.
 	// Secret resolution is a download-only concern, so it is always disabled here.
-	registry := handlers.NewRegistry(azureClient.GetCredential(), azureClient.GetSubscriptionID(), false)
+	registry := handlers.NewRegistry(cred, sub, false)
 
 	// Get and display all registered types
 	types := registry.GetAllTypes()

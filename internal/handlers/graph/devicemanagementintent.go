@@ -26,7 +26,8 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceManagementIntents",
+		azureType:      "Microsoft.Graph/deviceManagementIntents",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune security baseline / template intent and its configured setting values.",
 			EmbeddedPayloads:    []string{"settings (settingsDelta / setting instance values)"},

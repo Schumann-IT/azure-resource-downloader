@@ -19,7 +19,8 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/termsAndConditions",
+		azureType:      "Microsoft.Graph/termsAndConditions",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Terms and Conditions policy presented to users at enrollment.",
 			EmbeddedPayloads:    []string{"bodyText", "acceptanceStatement"},

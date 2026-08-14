@@ -40,9 +40,13 @@ type GraphCollectionHandler struct {
 	// dedicated app (--client-id/--tenant-id). A constructor may set this true
 	// for a type that is readable with the plain az login session.
 	worksWithCLICredential bool
-	listIDs                func(ctx context.Context) ([]string, error)
-	fetchItem              func(ctx context.Context, itemID string) (serialization.Parsable, error)
-	displayName            func(item serialization.Parsable) string
+	// hasAssignments marks a type that has an assignments concept (its fetchItem
+	// populates assignments). It is surfaced via HasAssignments so the export can
+	// record it per type, and defaults false for types with no assignments.
+	hasAssignments bool
+	listIDs        func(ctx context.Context) ([]string, error)
+	fetchItem      func(ctx context.Context, itemID string) (serialization.Parsable, error)
+	displayName    func(item serialization.Parsable) string
 }
 
 // newBetaGraphClient creates a Microsoft Graph beta client for the given
@@ -97,6 +101,12 @@ func (h *GraphCollectionHandler) RequiresDedicatedApp() bool {
 // type needs, as declared in its documentation metadata (for user messages).
 func (h *GraphCollectionHandler) RequiredPermissions() []string {
 	return h.documentation.RequiredPermissions
+}
+
+// HasAssignments reports whether this Microsoft Graph type has an assignments
+// concept, as declared by its constructor. It satisfies models.AssignmentCapable.
+func (h *GraphCollectionHandler) HasAssignments() bool {
+	return h.hasAssignments
 }
 
 // List returns the IDs of all items in the collection.

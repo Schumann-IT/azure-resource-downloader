@@ -24,7 +24,8 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsManagedAppProtections",
+		azureType:      "Microsoft.Graph/windowsManagedAppProtections",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows App Protection (MAM) policy controlling data protection for managed apps on Windows.",
 			KeySettings:         []string{"allowedInboundDataTransferSources", "allowedOutboundDataTransferDestinations"},

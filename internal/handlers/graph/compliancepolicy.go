@@ -26,7 +26,8 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/compliancePolicies",
+		azureType:      "Microsoft.Graph/compliancePolicies",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune (settings-catalog based) device compliance policy, e.g. for Linux.",
 			EmbeddedPayloads:    []string{"settings (settingInstance values)"},

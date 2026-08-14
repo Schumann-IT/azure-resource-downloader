@@ -211,6 +211,245 @@ func TestGeneratePromptReferencedGroups(t *testing.T) {
 	}
 }
 
+// docFM describes the frontmatter (and optional assignment markers) to write
+// into a generated document for list-2 tests.
+type docFM struct {
+	srcSha         string
+	promptSha      string
+	assignmentsSha string
+	targetedBySha  string
+	withMarkers    bool
+}
+
+// writeDocFM writes a document for a metadata key with the given frontmatter and
+// optional assignment markers.
+func writeDocFM(t *testing.T, tenantDir, key string, fm docFM) {
+	t.Helper()
+	docPath := filepath.Join(tenantDir, filepath.FromSlash(docRel(key)))
+	if err := os.MkdirAll(filepath.Dir(docPath), 0755); err != nil {
+		t.Fatalf("mkdir doc: %v", err)
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "source: %s\n", srcRel(key))
+	fmt.Fprintf(&b, "sourceSha256: %s\n", fm.srcSha)
+	fmt.Fprintf(&b, "promptSha256: %s\n", fm.promptSha)
+	if fm.assignmentsSha != "" {
+		fmt.Fprintf(&b, "assignmentsSha256: %s\n", fm.assignmentsSha)
+	}
+	if fm.targetedBySha != "" {
+		fmt.Fprintf(&b, "targetedBySha256: %s\n", fm.targetedBySha)
+	}
+	b.WriteString("generatedAt: 2026-01-01T00:00:00Z\n---\n# doc\n")
+	if fm.withMarkers {
+		b.WriteString("\n<!-- assignments:start -->\ntable\n<!-- assignments:end -->\n")
+	}
+	if err := os.WriteFile(docPath, []byte(b.String()), 0644); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+}
+
+func forwardHash(m *Metadata, key string) string {
+	return assignmentsSha256(parseAssignments(m.Resources[key].AssignmentTargets), buildGroupInfo(m), buildFilterInfo(m))
+}
+
+func reverseHash(m *Metadata, groupID string) string {
+	return targetedBySha256(buildTargetedBy(m)[groupID], buildFilterInfo(m))
+}
+
+func docPaths(items []RespliceItem) map[string]RespliceItem {
+	out := map[string]RespliceItem{}
+	for _, it := range items {
+		out[it.DocPath] = it
+	}
+	return out
+}
+
+// assignmentScenario builds a metadata + tree with one assignment-capable
+// policy targeting a present group G1, both with current source/prompt docs. It
+// returns the tenant dir and metadata so tests can vary the doc frontmatter.
+func assignmentScenario(t *testing.T) (string, *Metadata) {
+	t.Helper()
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:   {PromptSha256: "p-comp", HasAssignments: true},
+			groupsType: {PromptSha256: "p-grp"},
+		},
+		Resources: map[string]ResourceMeta{
+			compType + "/policy.yaml": {
+				ResourceId: "pol", DisplayName: "Policy", SourceSha256: "s-pol", PresentInTenant: true,
+				AssignmentTargets: []interface{}{groupTarget("G1")},
+			},
+			groupsType + "/g1.yaml": {
+				ResourceId: "G1", DisplayName: "Group One", SourceSha256: "s-g1", PresentInTenant: true,
+				GroupTypes: []string{"DynamicMembership"}, SecurityEnabled: boolPtr(true),
+			},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	writePromptFile(t, resourcesDir, compType)
+	writePromptFile(t, resourcesDir, groupsType)
+	// Keep the group document current and correctly reverse-hashed so the group
+	// itself never lands in a list unless a test intends it to.
+	writeDocFM(t, tenantDir, groupsType+"/g1.yaml", docFM{srcSha: "s-g1", promptSha: "p-grp", targetedBySha: reverseHash(m, "G1")})
+	return tenantDir, m
+}
+
+func TestGeneratePromptForwardResplice(t *testing.T) {
+	tenantDir, m := assignmentScenario(t)
+	// Policy is current (source/prompt match) with markers, but its recorded
+	// assignmentsSha256 is stale.
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp", assignmentsSha: "STALE", withMarkers: true})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	if len(res.ToGenerate) != 0 {
+		t.Errorf("current policy must not be in list 1: %+v", res.ToGenerate)
+	}
+	if len(res.Migrate) != 0 {
+		t.Errorf("policy has markers, must not migrate: %+v", res.Migrate)
+	}
+	fwd := docPaths(res.ForwardResplice)
+	it, ok := fwd["docs/"+compType+"/policy.md"]
+	if !ok {
+		t.Fatalf("policy must be in ForwardResplice, got %+v", res.ForwardResplice)
+	}
+	if it.Hash != forwardHash(m, compType+"/policy.yaml") {
+		t.Errorf("forward hash = %q, want %q", it.Hash, forwardHash(m, compType+"/policy.yaml"))
+	}
+	if len(res.ReverseResplice) != 0 {
+		t.Errorf("group is correctly hashed, must not reverse-resplice: %+v", res.ReverseResplice)
+	}
+
+	// Rewriting the doc with the correct hash clears the forward re-splice.
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp", assignmentsSha: forwardHash(m, compType+"/policy.yaml"), withMarkers: true})
+	res, err = GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt (rerun): %v", err)
+	}
+	if len(res.ForwardResplice) != 0 {
+		t.Errorf("matching hash must clear ForwardResplice: %+v", res.ForwardResplice)
+	}
+}
+
+func TestGeneratePromptMigrate(t *testing.T) {
+	tenantDir, m := assignmentScenario(t)
+	// Policy is current but predates markers: it has an assignments table (here
+	// just a body) and no <!-- assignments:start --> marker.
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp", withMarkers: false})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	if len(res.ForwardResplice) != 0 {
+		t.Errorf("a marker-less doc migrates rather than re-splices: %+v", res.ForwardResplice)
+	}
+	if len(res.Migrate) != 1 || res.Migrate[0].DocPath != "docs/"+compType+"/policy.md" {
+		t.Fatalf("policy must be in Migrate, got %+v", res.Migrate)
+	}
+	if res.Migrate[0].AssignmentsSha256 != forwardHash(m, compType+"/policy.yaml") {
+		t.Errorf("migrate item must carry the forward hash to write after migration")
+	}
+	if !res.HasPendingWork() {
+		t.Error("a migrate-only run still has pending work")
+	}
+}
+
+func TestGeneratePromptReverseResplice(t *testing.T) {
+	tenantDir, m := assignmentScenario(t)
+	// Policy is fully current (source/prompt/assignments all match).
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp", assignmentsSha: forwardHash(m, compType+"/policy.yaml"), withMarkers: true})
+	// The group document's reverse hash is stale.
+	writeDocFM(t, tenantDir, groupsType+"/g1.yaml", docFM{srcSha: "s-g1", promptSha: "p-grp", targetedBySha: "STALE"})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	if len(res.ToGenerate) != 0 || len(res.ForwardResplice) != 0 {
+		t.Errorf("only the group's reverse block is stale: gen=%+v fwd=%+v", res.ToGenerate, res.ForwardResplice)
+	}
+	rev := docPaths(res.ReverseResplice)
+	it, ok := rev["docs/"+groupsType+"/g1.md"]
+	if !ok {
+		t.Fatalf("group must be in ReverseResplice, got %+v", res.ReverseResplice)
+	}
+	if it.Hash != reverseHash(m, "G1") {
+		t.Errorf("reverse hash = %q, want %q", it.Hash, reverseHash(m, "G1"))
+	}
+}
+
+func TestGeneratePromptList1ExcludedFromList2(t *testing.T) {
+	tenantDir, m := assignmentScenario(t)
+	// Policy source moved: it is regenerated wholesale, so it must NOT also be a
+	// forward re-splice candidate, and its work-list row carries the new hash.
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "OLD", promptSha: "p-comp", assignmentsSha: "STALE", withMarkers: true})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	gen := reasonsByDoc(res.ToGenerate)
+	if _, ok := gen["docs/"+compType+"/policy.md"]; !ok {
+		t.Fatalf("stale-source policy must be in list 1: %+v", res.ToGenerate)
+	}
+	if len(res.ForwardResplice) != 0 {
+		t.Errorf("a list-1 document must not also appear in list 2: %+v", res.ForwardResplice)
+	}
+	var item WorkItem
+	for _, it := range res.ToGenerate {
+		if it.DocPath == "docs/"+compType+"/policy.md" {
+			item = it
+		}
+	}
+	if item.AssignmentsSha256 != forwardHash(m, compType+"/policy.yaml") {
+		t.Errorf("list-1 assignment-capable item must carry the forward hash, got %q", item.AssignmentsSha256)
+	}
+}
+
+func TestGeneratePromptDanglingFilter(t *testing.T) {
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:              {PromptSha256: "p-comp", HasAssignments: true},
+			assignmentFiltersType: {PromptSha256: "p-flt"},
+		},
+		Resources: map[string]ResourceMeta{
+			compType + "/policy.yaml": {
+				ResourceId: "pol", SourceSha256: "s-pol", PresentInTenant: true,
+				AssignmentTargets: []interface{}{
+					groupTargetWithFilter("", "F-present", "include"),
+					groupTargetWithFilter("", "F-missing", "exclude"),
+					groupTargetWithFilter("", noFilterSentinel, "none"),
+				},
+			},
+			assignmentFiltersType + "/f1.yaml": {ResourceId: "F-present", DisplayName: "Present Filter", SourceSha256: "s-f1", PresentInTenant: true},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	writePromptFile(t, resourcesDir, compType)
+	writePromptFile(t, resourcesDir, assignmentFiltersType)
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp", assignmentsSha: forwardHash(m, compType+"/policy.yaml"), withMarkers: true})
+	writeDocFM(t, tenantDir, assignmentFiltersType+"/f1.yaml", docFM{srcSha: "s-f1", promptSha: "p-flt"})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	// Only F-missing is dangling; the sentinel and the present filter are not.
+	if len(res.DanglingFilterIDs) != 1 || res.DanglingFilterIDs[0] != "F-missing" {
+		t.Errorf("DanglingFilterIDs = %v, want [F-missing]", res.DanglingFilterIDs)
+	}
+}
+
 func TestGeneratePromptTenantMismatch(t *testing.T) {
 	tenantDir := t.TempDir()
 	m := &Metadata{Tenant: "example.com", Run: RunMeta{Complete: true},

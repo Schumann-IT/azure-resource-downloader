@@ -26,7 +26,8 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceCompliancePolicies",
+		azureType:      "Microsoft.Graph/deviceCompliancePolicies",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune device compliance policy that defines the rules a device must meet to be considered compliant.",
 			KeySettings:         []string{"passwordRequired", "osMinimumVersion", "storageRequireEncryption", "scheduledActionsForRule (grace period and actions)"},

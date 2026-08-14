@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -84,6 +85,23 @@ type WorkItem struct {
 	Reason       string
 	SourceSha256 string
 	PromptSha256 string
+	// AssignmentsSha256 is the forward hash the generated document must record
+	// in its frontmatter. It is set only for assignment-capable types; blank
+	// for types with no assignments concept.
+	AssignmentsSha256 string
+}
+
+// RespliceItem is one document whose marked block must be re-rendered even
+// though its own resource is current, because the block is rendered from
+// information outside that resource (see appendix A of the template). Hash is
+// the new value to write into the document's frontmatter after splicing:
+// assignmentsSha256 for a forward item, targetedBySha256 for a reverse one.
+type RespliceItem struct {
+	ResourceType string
+	SourcePath   string // tenant-relative, under resources/
+	DocPath      string // tenant-relative, under docs/
+	Reason       string
+	Hash         string
 }
 
 // GeneratePromptResult reports what the comparison found, for the command to
@@ -103,8 +121,36 @@ type GeneratePromptResult struct {
 	PromptMissingTypes []string
 	// DanglingGroupIDs are assignment target GUIDs with no group in the export.
 	DanglingGroupIDs []string
+	// DanglingFilterIDs are assignment filter GUIDs referenced by an assignment
+	// with no filter in the export (the sentinel "no filter" id is excluded).
+	DanglingFilterIDs []string
 	// ReferencedGroups is the count of groups referenced by an assignment.
 	ReferencedGroups int
+	// ForwardResplice lists current documents whose own assignments table must
+	// be re-rendered because a referenced group or filter changed name, kind or
+	// presence (the resource's own YAML did not move, so it is not in
+	// ToGenerate). Excludes documents already in ToGenerate, which get a fresh
+	// block anyway.
+	ForwardResplice []RespliceItem
+	// ReverseResplice lists current group documents whose "Targeted by" block
+	// must be re-rendered because the set of resources targeting the group
+	// changed.
+	ReverseResplice []RespliceItem
+	// Migrate lists current documents of an assignment-capable type that predate
+	// the assignment markers, so the markers must be inserted before the block
+	// can be spliced.
+	Migrate []WorkItem
+}
+
+// HasPendingWork reports whether any document is out of date in any sense:
+// missing/stale (ToGenerate), a marked block needing a re-splice (forward or
+// reverse), or a document needing marker migration. --exit-code gates on this,
+// so a clean CI run means every document on disk matches the export.
+func (r *GeneratePromptResult) HasPendingWork() bool {
+	return len(r.ToGenerate) > 0 ||
+		len(r.ForwardResplice) > 0 ||
+		len(r.ReverseResplice) > 0 ||
+		len(r.Migrate) > 0
 }
 
 // GeneratePrompt compares resources/metadata.yaml against the documents under
@@ -112,9 +158,13 @@ type GeneratePromptResult struct {
 // file (OutPath) unless DryRun is set, never touches resources/ and never
 // deletes anything.
 //
-// This is Phase 1: it decides list 1 (documents to generate) from source and
-// prompt hashes. The re-splice and migrate blocks are rendered as "none"; the
-// forward/reverse splice hashes are a later phase.
+// It decides two lists in one pass over the in-scope documents, reading each
+// document's bytes once:
+//   - list 1 (ToGenerate): documents missing or whose source/spec hash moved,
+//     regenerated wholesale;
+//   - list 2 (ForwardResplice / ReverseResplice / Migrate): current documents
+//     whose marked assignment block was rendered from information outside their
+//     own resource and has since gone stale, or that predate the markers.
 func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 	log := logger.Default
 
@@ -142,11 +192,19 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 
 	referenced, dangling := referencedGroups(&m)
 
+	// The group and filter indexes and the reverse (targeted-by) index resolve
+	// every hash and every rendered table from one source, so the command and
+	// the agent can never render from different facts.
+	groups := buildGroupInfo(&m)
+	filters := buildFilterInfo(&m)
+	targetedBy := buildTargetedBy(&m)
+
 	res := &GeneratePromptResult{
 		ExportGeneratedAt: m.GeneratedAt,
 		ExportComplete:    m.Run.Complete,
 		IncompleteReason:  m.Run.IncompleteReason,
 		DanglingGroupIDs:  dangling,
+		DanglingFilterIDs: danglingFilterIDs(&m, filters),
 		ReferencedGroups:  len(referenced),
 	}
 
@@ -182,18 +240,73 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 			continue
 		}
 
-		reason := staleReason(opts.TenantDir, key, entry, m.Types[rtype])
-		if reason == "" {
-			continue // current
+		tm := m.Types[rtype]
+
+		// Read the document once; this pass decides list 1 and, for a current
+		// document, list 2 (re-splice / migrate) without a second walk.
+		docBytes, fm := readDocument(opts.TenantDir, key)
+
+		// List 1: the document is missing, unreadable, or its source/spec hash
+		// moved. It is regenerated wholesale (with a fresh assignments block),
+		// so it is never also a list-2 candidate.
+		if reason := list1Reason(entry, tm, docBytes, fm); reason != "" {
+			item := WorkItem{
+				ResourceType: rtype,
+				SourcePath:   srcRel(key),
+				DocPath:      docRel(key),
+				Reason:       reason,
+				SourceSha256: entry.SourceSha256,
+				PromptSha256: tm.PromptSha256,
+			}
+			// The generated document must record the forward hash the tool
+			// computed; the agent never computes a hash.
+			if tm.HasAssignments {
+				item.AssignmentsSha256 = assignmentsSha256(parseAssignments(entry.AssignmentTargets), groups, filters)
+			}
+			res.ToGenerate = append(res.ToGenerate, item)
+			continue
 		}
-		res.ToGenerate = append(res.ToGenerate, WorkItem{
-			ResourceType: rtype,
-			SourcePath:   srcRel(key),
-			DocPath:      docRel(key),
-			Reason:       reason,
-			SourceSha256: entry.SourceSha256,
-			PromptSha256: m.Types[rtype].PromptSha256,
-		})
+
+		// List 2, forward: an assignment-capable type's document is current but
+		// its own assignments block was rendered from inputs that have since
+		// moved. A document predating the markers is migrated first (5e) so the
+		// splice has something to replace.
+		if tm.HasAssignments {
+			if !hasAssignmentsMarker(docBytes) {
+				res.Migrate = append(res.Migrate, WorkItem{
+					ResourceType:      rtype,
+					SourcePath:        srcRel(key),
+					DocPath:           docRel(key),
+					Reason:            "document predates the assignment markers",
+					SourceSha256:      entry.SourceSha256,
+					PromptSha256:      tm.PromptSha256,
+					AssignmentsSha256: assignmentsSha256(parseAssignments(entry.AssignmentTargets), groups, filters),
+				})
+			} else if want := assignmentsSha256(parseAssignments(entry.AssignmentTargets), groups, filters); want != fm.AssignmentsSha256 {
+				res.ForwardResplice = append(res.ForwardResplice, RespliceItem{
+					ResourceType: rtype,
+					SourcePath:   srcRel(key),
+					DocPath:      docRel(key),
+					Reason:       forwardRespliceReason(fm.AssignmentsSha256),
+					Hash:         want,
+				})
+			}
+		}
+
+		// List 2, reverse: a group document is current but the set of resources
+		// targeting it changed. Groups have no assignments concept of their own,
+		// so this is independent of HasAssignments.
+		if rtype == groupsType {
+			if want := targetedBySha256(targetedBy[entry.ResourceId], filters); want != fm.TargetedBySha256 {
+				res.ReverseResplice = append(res.ReverseResplice, RespliceItem{
+					ResourceType: rtype,
+					SourcePath:   srcRel(key),
+					DocPath:      docRel(key),
+					Reason:       reverseRespliceReason(fm.TargetedBySha256),
+					Hash:         want,
+				})
+			}
+		}
 	}
 
 	res.PromptMissingTypes = sortedKeys(promptMissing)
@@ -206,9 +319,9 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 	}{
 		{"export", renderExport(opts.TenantDir, &m)},
 		{"worklist", renderWorklist(res.ToGenerate)},
-		{"refmap", renderRefmap(&m, referenced)},
-		{"resplice", renderNotImplemented("re-splice detection")},
-		{"migrate", renderNotImplemented("marker migration")},
+		{"refmap", renderRefmap(&m, referenced, groups)},
+		{"resplice", renderResplice(res.ForwardResplice, res.ReverseResplice)},
+		{"migrate", renderMigrate(res.Migrate)},
 	}
 	for _, b := range blocks {
 		out, err = spliceMarker(out, b.name, b.content)
@@ -247,16 +360,31 @@ func inScope(rtype string, entry ResourceMeta, referenced map[string]bool) bool 
 	}
 }
 
-// staleReason returns why a document must be (re)generated, or "" when it is
-// current. It never skips on a signal it could not read.
-func staleReason(tenantDir, key string, entry ResourceMeta, tm TypeMeta) string {
+// readDocument reads a document's bytes and parses its frontmatter, returning
+// nil bytes when the file cannot be read and nil frontmatter when there is no
+// parseable block. Reading once serves both list-1 staleness and the list-2
+// marker/hash checks.
+func readDocument(tenantDir, key string) ([]byte, *docFrontmatter) {
 	docPath := filepath.Join(tenantDir, filepath.FromSlash(docRel(key)))
 	data, err := os.ReadFile(docPath)
 	if err != nil {
-		return "no document"
+		return nil, nil
 	}
 	fm, ok := parseFrontmatter(data)
 	if !ok {
+		return data, nil
+	}
+	return data, fm
+}
+
+// list1Reason returns why a document must be regenerated wholesale, or "" when
+// it is current. It never skips on a signal it could not read: a missing file
+// or unreadable frontmatter regenerates rather than being trusted.
+func list1Reason(entry ResourceMeta, tm TypeMeta, docBytes []byte, fm *docFrontmatter) string {
+	if docBytes == nil {
+		return "no document"
+	}
+	if fm == nil {
 		return "frontmatter missing or unreadable"
 	}
 	if fm.SourceSha256 != entry.SourceSha256 {
@@ -266,6 +394,31 @@ func staleReason(tenantDir, key string, entry ResourceMeta, tm TypeMeta) string 
 		return "type spec (doc-prompt.md) changed"
 	}
 	return ""
+}
+
+// hasAssignmentsMarker reports whether a document already carries the assignment
+// splice markers. A current assignment-capable document without them predates
+// the markers and must be migrated (5e) before its block can be spliced.
+func hasAssignmentsMarker(docBytes []byte) bool {
+	return bytes.Contains(docBytes, []byte("<!-- assignments:start -->"))
+}
+
+// forwardRespliceReason describes why a document's assignments block is stale,
+// distinguishing a block that was never spliced from one whose inputs moved.
+func forwardRespliceReason(existing string) string {
+	if existing == "" {
+		return "assignments block never spliced (no assignmentsSha256 recorded)"
+	}
+	return "a referenced group or filter changed name, kind or presence"
+}
+
+// reverseRespliceReason mirrors forwardRespliceReason for a group's Targeted by
+// block.
+func reverseRespliceReason(existing string) string {
+	if existing == "" {
+		return "Targeted by block never spliced (no targetedBySha256 recorded)"
+	}
+	return "the set of resources targeting this group changed"
 }
 
 // docFrontmatter is the self-describing state a generated document records.

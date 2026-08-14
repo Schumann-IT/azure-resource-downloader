@@ -109,8 +109,8 @@ func renderWorklist(items []WorkItem) string {
 		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 |\n")
 		b.WriteString("|---|---|---|---|---|---|\n")
 		for _, r := range rows {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | |\n",
-				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256)
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s |\n",
+				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256, hashCell(r.AssignmentsSha256))
 		}
 		b.WriteString("\n")
 	}
@@ -118,9 +118,11 @@ func renderWorklist(items []WorkItem) string {
 	return b.String()
 }
 
-// renderRefmap lists every referenced assignment target group as GUID → name
-// and document path, flagging GUIDs with no group in the export as dangling.
-func renderRefmap(m *Metadata, referenced map[string]bool) string {
+// renderRefmap lists every referenced assignment target group as GUID → name,
+// document path and kind (assigned/dynamic, security/Microsoft 365), so the
+// agent renders the assignment tables from the same facts the forward hash was
+// computed from. GUIDs with no group in the export are flagged dangling.
+func renderRefmap(m *Metadata, referenced map[string]bool, groups map[string]groupInfo) string {
 	if len(referenced) == 0 {
 		return "_No assignment target groups are referenced in this export._"
 	}
@@ -144,14 +146,81 @@ func renderRefmap(m *Metadata, referenced map[string]bool) string {
 		if name == "" {
 			name = id
 		}
-		fmt.Fprintf(&b, "- `%s` → [%s](%s)\n", id, name, docRel(key))
+		fmt.Fprintf(&b, "- `%s` → [%s](%s) · %s\n", id, name, docRel(key), groupKindLabel(groups[id]))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderNotImplemented renders a marked block whose detection this build does
-// not yet perform. It states so plainly rather than claiming "none", so the
-// block is never silently trusted as empty.
-func renderNotImplemented(what string) string {
-	return fmt.Sprintf("_none detected — %s is not yet implemented in this build, so a group rename or a re-pointed assignment will not be reflected here until it is._", what)
+// renderResplice renders the two re-splice groups: documents whose own
+// assignments block must be re-rendered (forward), and group documents whose
+// "Targeted by" block must be re-rendered (reverse). Each row carries the new
+// hash the agent must write into that document's frontmatter after splicing. It
+// is "none" only when both sets are empty.
+func renderResplice(forward, reverse []RespliceItem) string {
+	if len(forward) == 0 && len(reverse) == 0 {
+		return "_No documents need re-splicing — every current document's assignment and targeting blocks match the export._"
+	}
+
+	var b strings.Builder
+
+	b.WriteString("**Forward — re-render the document's own assignments block (write the new `assignmentsSha256`):**\n\n")
+	if len(forward) == 0 {
+		b.WriteString("_None._\n")
+	} else {
+		b.WriteString("| Document | Type | Reason | assignmentsSha256 |\n")
+		b.WriteString("|---|---|---|---|\n")
+		for _, it := range sortedResplice(forward) {
+			fmt.Fprintf(&b, "| `%s` | %s | %s | `%s` |\n", it.DocPath, it.ResourceType, it.Reason, it.Hash)
+		}
+	}
+
+	b.WriteString("\n**Reverse — re-render the group document's `Targeted by` block (write the new `targetedBySha256`):**\n\n")
+	if len(reverse) == 0 {
+		b.WriteString("_None._")
+	} else {
+		b.WriteString("| Document | Type | Reason | targetedBySha256 |\n")
+		b.WriteString("|---|---|---|---|\n")
+		for _, it := range sortedResplice(reverse) {
+			fmt.Fprintf(&b, "| `%s` | %s | %s | `%s` |\n", it.DocPath, it.ResourceType, it.Reason, it.Hash)
+		}
+		return strings.TrimRight(b.String(), "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// renderMigrate lists documents predating the assignment markers that must have
+// the markers inserted before their block can be spliced. It is "none" when
+// there are none.
+func renderMigrate(items []WorkItem) string {
+	if len(items) == 0 {
+		return "_No documents need migrating — every assignment-capable document already carries the markers._"
+	}
+
+	sorted := append([]WorkItem(nil), items...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].DocPath < sorted[j].DocPath })
+
+	var b strings.Builder
+	b.WriteString("| Document | Type | assignmentsSha256 |\n")
+	b.WriteString("|---|---|---|\n")
+	for _, it := range sorted {
+		fmt.Fprintf(&b, "| `%s` | %s | %s |\n", it.DocPath, it.ResourceType, hashCell(it.AssignmentsSha256))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// sortedResplice returns a copy of items sorted by document path for
+// deterministic output.
+func sortedResplice(items []RespliceItem) []RespliceItem {
+	sorted := append([]RespliceItem(nil), items...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].DocPath < sorted[j].DocPath })
+	return sorted
+}
+
+// hashCell renders a hash as a backticked table cell, or an empty cell when the
+// hash is absent (a type with no assignments concept).
+func hashCell(hash string) string {
+	if hash == "" {
+		return ""
+	}
+	return "`" + hash + "`"
 }

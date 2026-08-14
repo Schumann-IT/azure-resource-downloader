@@ -10,16 +10,22 @@ GOTEST=$(GOCMD) test
 GOFMT=$(GOCMD) fmt
 GOMOD=$(GOCMD) mod
 
+# Version stamped into the binary so `--version` and export metadata track the
+# build. Prefers the annotated git tag, falling back to the short commit (with a
+# -dirty suffix), then "dev". Override with `make build VERSION=v1.2.3`.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X azure-resource-downloader/cmd.version=$(VERSION)
+
 # Build the application
 build:
-	@echo "🔨 Building $(BINARY_NAME)..."
-	@$(GOBUILD) -o $(BINARY_NAME) .
+	@echo "🔨 Building $(BINARY_NAME) ($(VERSION))..."
+	@$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 	@echo "✅ Build complete: ./$(BINARY_NAME)"
 
 # Install the application globally
 install:
-	@echo "📦 Installing $(BINARY_NAME)..."
-	@$(GOCMD) install .
+	@echo "📦 Installing $(BINARY_NAME) ($(VERSION))..."
+	@$(GOCMD) install -ldflags "$(LDFLAGS)" .
 	@echo "✅ Installed to $(shell go env GOPATH)/bin/$(BINARY_NAME)"
 
 clean-output:

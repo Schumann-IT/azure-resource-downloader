@@ -23,7 +23,8 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceComplianceScripts",
+		azureType:      "Microsoft.Graph/deviceComplianceScripts",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck"},

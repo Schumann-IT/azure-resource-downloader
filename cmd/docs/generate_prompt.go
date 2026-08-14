@@ -139,7 +139,10 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 
 	reportGeneratePrompt(res, dryRun)
 
-	if exitCode && len(res.ToGenerate) > 0 {
+	// --exit-code gates on ANY pending work — documents to generate, blocks to
+	// re-splice, or documents to migrate — so a clean CI run means every
+	// document on disk matches the export, not merely that none is missing.
+	if exitCode && res.HasPendingWork() {
 		os.Exit(exitStaleFound)
 	}
 	return nil
@@ -240,20 +243,50 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 	for _, id := range res.DanglingGroupIDs {
 		log.Warn("Dangling assignment target: group not in export", "group_id", id)
 	}
-
-	if len(res.ToGenerate) == 0 {
-		log.Info("Every in-scope document is current; nothing to generate")
-		return
+	for _, id := range res.DanglingFilterIDs {
+		log.Warn("Dangling assignment target: filter not in export", "filter_id", id)
 	}
 
-	log.Info("Documents to generate", "count", len(res.ToGenerate))
-	for _, it := range res.ToGenerate {
-		log.Info("  needs documentation", "doc", it.DocPath, "reason", it.Reason)
+	// The three work sets are independent: a run can have nothing to generate
+	// yet still need blocks re-spliced or documents migrated.
+	if !res.HasPendingWork() {
+		log.Info("Every in-scope document is current; nothing to generate, re-splice or migrate")
+	}
+
+	if len(res.ToGenerate) > 0 {
+		log.Info("Documents to generate", "count", len(res.ToGenerate))
+		for _, it := range res.ToGenerate {
+			log.Info("  needs documentation", "doc", it.DocPath, "reason", it.Reason)
+		}
+	}
+	if len(res.Migrate) > 0 {
+		log.Info("Documents to migrate to assignment markers", "count", len(res.Migrate))
+		for _, it := range res.Migrate {
+			log.Info("  needs marker migration", "doc", it.DocPath)
+		}
+	}
+	if len(res.ForwardResplice) > 0 {
+		log.Info("Documents whose assignments block must be re-spliced", "count", len(res.ForwardResplice))
+		for _, it := range res.ForwardResplice {
+			log.Info("  assignments block stale", "doc", it.DocPath, "reason", it.Reason)
+		}
+	}
+	if len(res.ReverseResplice) > 0 {
+		log.Info("Group documents whose 'Targeted by' block must be re-spliced", "count", len(res.ReverseResplice))
+		for _, it := range res.ReverseResplice {
+			log.Info("  targeting block stale", "doc", it.DocPath, "reason", it.Reason)
+		}
 	}
 
 	if dryRun {
 		log.Info("Dry-run: prompt not written", "would_write", res.OutPath)
 		return
 	}
-	log.Info("Documentation prompt written", "path", res.OutPath, "documents", len(res.ToGenerate))
+	if res.HasPendingWork() {
+		log.Info("Documentation prompt written", "path", res.OutPath,
+			"generate", len(res.ToGenerate),
+			"migrate", len(res.Migrate),
+			"resplice_forward", len(res.ForwardResplice),
+			"resplice_reverse", len(res.ReverseResplice))
+	}
 }

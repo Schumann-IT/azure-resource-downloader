@@ -20,7 +20,8 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsAutopilotDeploymentProfiles",
+		azureType:      "Microsoft.Graph/windowsAutopilotDeploymentProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.",
 			KeySettings:         []string{"outOfBoxExperienceSettings", "deviceType", "enrollmentStatusScreenSettings"},

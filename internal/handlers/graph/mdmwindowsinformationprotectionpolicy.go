@@ -21,7 +21,8 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/mdmWindowsInformationProtectionPolicies",
+		azureType:      "Microsoft.Graph/mdmWindowsInformationProtectionPolicies",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
 			KeySettings:         []string{"enforcementLevel", "protectedApps", "exemptApps", "enterpriseProtectedDomainNames"},

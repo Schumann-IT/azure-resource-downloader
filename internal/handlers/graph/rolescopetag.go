@@ -19,7 +19,8 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/roleScopeTags",
+		azureType:      "Microsoft.Graph/roleScopeTags",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune RBAC scope tag used to scope which admins can see and manage which objects.",

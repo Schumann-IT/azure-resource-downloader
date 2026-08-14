@@ -49,7 +49,8 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceConfigurations",
+		azureType:      "Microsoft.Graph/deviceConfigurations",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "A legacy Intune device configuration profile (templates), including Custom OMA-URI profiles for Windows, iOS, Android and macOS.",
 			KeySettings:         []string{"omaSettings", "encrypted/secret values"},

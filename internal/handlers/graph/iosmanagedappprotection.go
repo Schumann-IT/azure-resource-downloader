@@ -24,7 +24,8 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/iosManagedAppProtections",
+		azureType:      "Microsoft.Graph/iosManagedAppProtections",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
 			KeySettings:         []string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},

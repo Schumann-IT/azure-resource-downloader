@@ -25,7 +25,8 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceManagementConfigurationPolicies",
+		azureType:      "Microsoft.Graph/deviceManagementConfigurationPolicies",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
 			EmbeddedPayloads:    []string{"settings (settingInstance / settingDefinition values, including secret settings)"},

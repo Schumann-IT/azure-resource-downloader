@@ -20,7 +20,8 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsDriverUpdateProfiles",
+		azureType:      "Microsoft.Graph/windowsDriverUpdateProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
 			KeySettings:         []string{"approvalType", "deploymentDeferralInDays"},

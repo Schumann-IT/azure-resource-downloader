@@ -20,7 +20,8 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsFeatureUpdateProfiles",
+		azureType:      "Microsoft.Graph/windowsFeatureUpdateProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
 			KeySettings:         []string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},

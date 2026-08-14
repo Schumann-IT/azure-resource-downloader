@@ -327,15 +327,25 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		WritePrompts:       writePrompts,
 	}
 
-	p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
-
-	// Execute pipeline
-	log.Info("Starting pipeline execution...")
-	summary, err := p.Execute(ctx, requests)
-	if err != nil {
-		// Runtime error - print and exit without showing help
-		log.Error("Pipeline execution failed", "error", err)
-		os.Exit(1)
+	// A dry run answers "what would be downloaded" offline: the per-type
+	// listing that built the request set has already run (upstream of the
+	// fetcher), so stop here rather than fetching, transforming and discarding
+	// every resource. This keeps the dry run cheap and consistent with
+	// 'docs generate-prompt --dry-run', and its output is a subset of a real
+	// run, never a preview of the files a real run would write.
+	var summary *pipeline.ExecutionSummary
+	if dryRun {
+		log.Info("Dry-run: listing resources that would be downloaded (no fetch, transform or write)")
+		summary = pipeline.DryRunSummary(requests)
+	} else {
+		p := pipeline.NewPipeline(azureClient, registry, pipelineConfig)
+		log.Info("Starting pipeline execution...")
+		summary, err = p.Execute(ctx, requests)
+		if err != nil {
+			// Runtime error - print and exit without showing help
+			log.Error("Pipeline execution failed", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	// Attach the resource types that could not be listed and the types that
@@ -351,17 +361,18 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// the failure exit below so the metadata always reflects what happened. A
 	// metadata failure only warns: the downloaded YAML is the valuable output.
 	exportRun := docs.ExportRun{
-		Output:                output,
-		Tenant:                tenant,
-		ToolVersion:           toolVersion(),
-		GeneratedAt:           time.Now(),
-		Scope:                 docs.RunScope{Types: selectedTypes, ResourceIDs: resourceIDs, ResourceGroup: resourceGroup},
-		TransformConfigSha256: docs.HashTransformConfig(transformerConfigs, resolveSecrets),
-		ResolveSecrets:        resolveSecrets,
-		WritePrompts:          writePrompts,
-		DryRun:                dryRun,
-		Prune:                 viper.GetBool("prune"),
-		Summary:               summary,
+		Output:                 output,
+		Tenant:                 tenant,
+		ToolVersion:            toolVersion(),
+		GeneratedAt:            time.Now(),
+		Scope:                  docs.RunScope{Types: selectedTypes, ResourceIDs: resourceIDs, ResourceGroup: resourceGroup},
+		TransformConfigSha256:  docs.HashTransformConfig(transformerConfigs, resolveSecrets),
+		ResolveSecrets:         resolveSecrets,
+		WritePrompts:           writePrompts,
+		DryRun:                 dryRun,
+		Prune:                  viper.GetBool("prune"),
+		AssignmentCapableTypes: registry.AssignmentCapableTypes(),
+		Summary:                summary,
 	}
 	if err := docs.WriteExportMetadata(exportRun); err != nil {
 		log.Warn("Export metadata not written", "error", err)

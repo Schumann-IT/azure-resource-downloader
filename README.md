@@ -719,30 +719,44 @@ the wrong export.
 **What is documented.** Two Graph types are excluded as bulk directory records:
 `windowsAutopilotDeviceIdentities` (no exceptions) and `groups` — **except
 groups referenced by an assignment**, which are computed from `assignmentTargets`
-in `metadata.yaml`. A document is listed for (re)generation when it is missing,
-its resource's `sourceSha256` changed, its type's `doc-prompt.md` (`promptSha256`)
-changed, or its frontmatter is missing/unreadable. Resources marked
-`presentInTenant: false` are reported as orphaned documents (never deleted), and
-types with no `doc-prompt.md` are reported as ungeneratable (e.g. an export run
-with `--no-prompt`).
+in `metadata.yaml`. The command computes two lists in one pass over the export:
 
-**Output & exit codes.** Under `--dry-run` nothing is written; it lists the
-stale documents (and warns if an older `generate.md` is still on disk). The
-export's `generatedAt` and completeness are printed so a forgotten download step
-is visible — an incomplete export is a warning, not a refusal. Exit codes: `0`
-on success (whether or not work was found), `2` when the command could not answer
-(no metadata, ambiguous tenant, unreadable template), and — with `--exit-code` —
-`3` when stale documents exist, for CI gating.
+- **List 1 — documents to (re)generate.** A document is listed when it is
+  missing, its resource's `sourceSha256` changed, its type's `doc-prompt.md`
+  (`promptSha256`) changed, or its frontmatter is missing/unreadable.
+- **List 2 — blocks to re-splice, and documents to migrate.** For
+  assignment-capable types the command hashes the *resolved* assignment rows —
+  group name, group kind (assigned/dynamic · security/Microsoft 365), filter
+  name and include/exclude — into an `assignmentsSha256` (forward) and, for a
+  referenced group, hashes the resources targeting it into a `targetedBySha256`
+  (reverse). A current document whose recorded hash no longer matches is a
+  **re-splice** (its marked block must be re-rendered, not the whole page); a
+  current document that predates the assignment markers is a **migrate** (the
+  markers must be inserted first). A document already in list 1 is never also in
+  list 2 — regenerating it renders the block fresh anyway.
+
+Resources marked `presentInTenant: false` are reported as orphaned documents
+(never deleted); types with no `doc-prompt.md` are reported as ungeneratable
+(e.g. an export run with `--no-prompt`); and assignment target groups or filters
+with no entry in the export are reported as **dangling** (kept as raw GUIDs,
+never invented).
+
+**Reference map.** The emitted prompt resolves every referenced group GUID to
+its display name, document path and kind, so the agent renders assignment tables
+from those given facts without re-reading each group's YAML.
+
+**Output & exit codes.** Under `--dry-run` nothing is written; it lists every
+pending item across all three sets (generate, re-splice, migrate) and warns if
+an older `generate.md` is still on disk. The export's `generatedAt` and
+completeness are printed so a forgotten download step is visible — an incomplete
+export is a warning, not a refusal. Exit codes: `0` on success (whether or not
+work was found), `2` when the command could not answer (no metadata, ambiguous
+tenant, unreadable template), and — with `--exit-code` — `3` when **any** work
+is pending (generate, re-splice or migrate), for CI gating.
 
 The prompt is rendered from a built-in template embedded in the binary
 (`internal/docs/generate_prompt_template.md`; override with `--prompt <file>`);
 the full-export procedure in `DOC-GENERATION-PROMPT.md` is separate and untouched.
-
-> **Current limitation.** This is the first iteration: it decides the list of
-> documents to *generate*. It does **not yet** detect documents needing only a
-> marked block re-rendered (a group renamed, or an assignment re-pointed at a
-> different group) — the `resplice`/`migrate` blocks in the emitted prompt say so
-> plainly rather than claiming "none".
 
 ```bash
 # Resolve the tenant via az login, then write docs/generate.md

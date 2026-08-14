@@ -385,8 +385,9 @@ the contents of marked blocks. Do not spawn agents for it and do not retype tabl
 ### 5a. Reference map (given)
 
 <!-- refmap:start -->
-_Replaced by the tool: group GUID → display name, its document path, and the resources that target it,
-resolved from `metadata.yaml`. Includes any GUID with no matching group in the export, flagged as dangling._
+_Replaced by the tool: group GUID → display name, its document path and its kind
+(assigned/dynamic · security/Microsoft 365), resolved from `metadata.yaml`. Includes any GUID with no
+matching group in the export, flagged as dangling._
 <!-- refmap:end -->
 
 Two values need care:
@@ -396,12 +397,11 @@ Two values need care:
 - A group GUID flagged **dangling** above has no group in the export — usually deleted from the tenant while
   still assigned. Keep the raw GUID, mark it `⚠️ not in export`, and list every one in your final report.
 
-The map does not carry `groupTypes`, `securityEnabled` or `membershipRule`. Read those from the referenced
-groups' YAML when you need the inline `dynamic security group` annotation — that is a few dozen files, and
-reading them is not the same as documenting them. **Read them once, at the start of the splice, into a single
-GUID → (name, document, dynamic|assigned, security|Microsoft 365) lookup**, and drive every table from that
-lookup. Re-reading a group's YAML each time a policy happens to target it turns a few dozen reads into
-several hundred.
+The map already carries each group's name, document and kind — the `dynamic security group` /
+`assigned Microsoft 365 group` annotation is given, not derived, so **drive every assignment table directly
+from the map** and never open a group's YAML to recover it. The one thing the map does not carry is
+`membershipRule`: read that from a dynamic group's YAML only when you are documenting that group (5b), not
+when a policy merely targets it.
 
 ### 5b. Document referenced groups
 

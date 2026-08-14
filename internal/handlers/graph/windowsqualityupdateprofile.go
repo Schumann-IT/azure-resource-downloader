@@ -20,7 +20,8 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsQualityUpdateProfiles",
+		azureType:      "Microsoft.Graph/windowsQualityUpdateProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
 			KeySettings:         []string{"expeditedUpdateSettings", "releaseDateDisplayName"},

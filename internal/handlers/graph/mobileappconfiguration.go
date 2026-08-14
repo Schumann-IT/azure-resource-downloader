@@ -23,7 +23,8 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/mobileAppConfigurations",
+		azureType:      "Microsoft.Graph/mobileAppConfigurations",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
 			EmbeddedPayloads:    []string{"encodedSettingXml (base64)", "settings"},

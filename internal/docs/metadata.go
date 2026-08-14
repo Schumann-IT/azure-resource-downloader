@@ -59,8 +59,13 @@ type ExportRun struct {
 	DryRun                bool
 	// Prune requests deletion of files this run establishes are gone from the
 	// tenant. It is honoured only for a complete run with no failures.
-	Prune   bool
-	Summary *pipeline.ExecutionSummary
+	Prune bool
+	// AssignmentCapableTypes maps every registered resource type to whether it
+	// has an assignments concept. It is recorded per covered type in TypeMeta so
+	// a later docs generate-prompt run can tell a type with no assignments
+	// concept from one whose resources merely have none.
+	AssignmentCapableTypes map[string]bool
+	Summary                *pipeline.ExecutionSummary
 }
 
 // Metadata is the on-disk shape of resources/metadata.yaml.
@@ -96,8 +101,13 @@ type ScopeMeta struct {
 type TypeMeta struct {
 	PromptSha256      string `yaml:"promptSha256,omitempty"`
 	PromptFileWritten bool   `yaml:"promptFileWritten"`
-	LastCoveredAt     string `yaml:"lastCoveredAt,omitempty"`
-	LastCoveredBy     string `yaml:"lastCoveredBy,omitempty"`
+	// HasAssignments records whether this type has an assignments concept, as
+	// declared by its handler. It is a fact about the type, not the tenant's
+	// data: docs generate-prompt reads it to tell a type with no assignments
+	// concept from one whose resources merely have none.
+	HasAssignments bool   `yaml:"hasAssignments"`
+	LastCoveredAt  string `yaml:"lastCoveredAt,omitempty"`
+	LastCoveredBy  string `yaml:"lastCoveredBy,omitempty"`
 }
 
 // ResourceMeta records per-resource facts. The map key is the resource path
@@ -306,11 +316,17 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 	// full/--type run; id/group runs cover nothing.
 	covered := coveredTypes(s, run.Scope)
 
-	// Advance coverage timestamps for covered types.
+	// Advance coverage timestamps for covered types, and record each covered
+	// type's assignments capability (a fact about the type declared by its
+	// handler). Recording it only for covered types keeps a --type-scoped run
+	// from disturbing types it did not touch, matching the merge philosophy.
 	for t := range covered {
 		tm := m.Types[t]
 		tm.LastCoveredAt = now
 		tm.LastCoveredBy = coveredBy
+		if run.AssignmentCapableTypes != nil {
+			tm.HasAssignments = run.AssignmentCapableTypes[t]
+		}
 		m.Types[t] = tm
 	}
 
@@ -350,20 +366,22 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 			}
 			presentKeys[key] = true
 
-		case r.YAMLPath != "" && r.Error == nil && !r.Skipped && !r.Filtered && !r.Cancelled:
-			// Dry-run: the resource was fetched and would have been written
-			// (YAMLPath is set), but carries no facts because nothing was
-			// marshalled. Record presence against any existing entry so absence
-			// detection — and the prune preview built on it — stays accurate,
-			// without overwriting facts from an earlier real run. A real run
-			// never reaches here: a successful write always carries facts, and
-			// a failed one carries no YAMLPath.
-			key := relKey(resourcesDir, r.YAMLPath)
-			entry := m.Resources[key]
-			entry.PresentInTenant = true
-			entry.LastSeenAt = now
-			m.Resources[key] = entry
-			presentKeys[key] = true
+		case run.DryRun && r.Error == nil && !r.Skipped && !r.Filtered && !r.Cancelled:
+			// Dry-run: nothing was fetched or written, so the result carries no
+			// facts and — for a list-only dry run — no path. Record presence
+			// against the existing entry matched by resource id so absence
+			// detection, and the prune preview built on it, stay accurate
+			// offline, without overwriting facts from an earlier real run. A new
+			// resource has no entry to mark and is correctly left as present-
+			// but-unrecorded. A real run never reaches here (run.DryRun is
+			// false): a successful write always carries facts.
+			if key, ok := keyByID[r.ResourceID]; ok {
+				entry := m.Resources[key]
+				entry.PresentInTenant = true
+				entry.LastSeenAt = now
+				m.Resources[key] = entry
+				presentKeys[key] = true
+			}
 
 		case r.Skipped, r.Filtered:
 			// Re-observed but not rewritten. Retain the previous entry's facts

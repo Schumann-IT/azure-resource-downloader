@@ -24,7 +24,8 @@ func NewAndroidManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/androidManagedAppProtections",
+		azureType:      "Microsoft.Graph/androidManagedAppProtections",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Android App Protection (MAM) policy controlling data protection for managed apps.",
 			KeySettings:         []string{"dataBackupBlocked", "screenCaptureBlocked", "pinRequired", "allowedOutboundDataTransferDestinations"},

@@ -23,7 +23,8 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceEnrollmentConfigurations",
+		azureType:      "Microsoft.Graph/deviceEnrollmentConfigurations",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.",
 			KeySettings:         []string{"priority", "platformRestrictions", "blockUntilComplete"},

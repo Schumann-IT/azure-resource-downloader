@@ -20,7 +20,8 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/intuneBrandingProfiles",
+		azureType:      "Microsoft.Graph/intuneBrandingProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Company Portal branding profile controlling the end-user portal appearance.",
 			EmbeddedPayloads:    []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},

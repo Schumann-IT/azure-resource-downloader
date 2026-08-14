@@ -23,7 +23,8 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/targetedManagedAppConfigurations",
+		azureType:      "Microsoft.Graph/targetedManagedAppConfigurations",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
 			KeySettings:         []string{"customSettings", "appGroupType"},

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"azure-resource-downloader/internal/logger"
@@ -10,6 +11,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// version is the tool version reported by `--version` and recorded in export
+// metadata. It is empty in a plain `go build` and injected at release time via
+// -ldflags "-X azure-resource-downloader/cmd.version=<v>". When unset,
+// resolveVersion falls back to the module version or VCS revision the Go
+// toolchain embeds, so the reported version tracks the binary rather than a
+// literal that never moves.
+var version = ""
 
 // Package-level flag variables are prefixed with "flag" so they never collide
 // with (and shadow) local variables in command implementations, which commonly
@@ -38,7 +47,46 @@ Authentication reuses your existing Azure CLI session (run 'az login' first); th
 same delegated token is used for both ARM and Microsoft Graph calls. To download
 Microsoft Graph/Intune types that need scopes the Azure CLI app cannot provide,
 sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
-	Version: "1.0.0",
+	Version: resolveVersion(),
+}
+
+// resolveVersion returns the tool version, preferring an ldflags-injected value,
+// then the module version of a `go install …@version` build, then the embedded
+// VCS revision (with a -dirty suffix for uncommitted changes), and finally
+// "dev". This is why toolVersion in metadata.yaml actually moves when the binary
+// does — letting a later docs step attribute a prompt-hash change to an upgrade
+// rather than reporting it as content drift.
+func resolveVersion() string {
+	if version != "" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	if v := info.Main.Version; v != "" && v != "(devel)" {
+		return v
+	}
+	var rev string
+	var dirty bool
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			dirty = s.Value == "true"
+		}
+	}
+	if rev != "" {
+		if len(rev) > 12 {
+			rev = rev[:12]
+		}
+		if dirty {
+			rev += "-dirty"
+		}
+		return rev
+	}
+	return "dev"
 }
 
 // toolVersion returns the tool identifier recorded in export metadata, derived

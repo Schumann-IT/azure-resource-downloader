@@ -71,6 +71,34 @@ func exportRun(output string, summary *pipeline.ExecutionSummary, scope RunScope
 	}
 }
 
+// TestWriteExportMetadataDeterministic guards the byte-for-byte stability of
+// metadata.yaml: two independent exports of the same tenant must serialise
+// identically, or a re-download would churn the file (and any downstream diff)
+// on map ordering alone. The keys are written out of order on purpose.
+func TestWriteExportMetadataDeterministic(t *testing.T) {
+	build := func() string {
+		output := t.TempDir()
+		resourcesDir := filepath.Join(output, models.ResourcesDirName)
+		var results []*models.WriteResult
+		for _, name := range []string{"delta", "alpha", "charlie", "bravo"} {
+			p := writeYAML(t, resourcesDir, testType, name)
+			results = append(results, successResult(p, testType, name, "id-"+name))
+		}
+		run := exportRun(output, newSummary(true, results, nil, nil), RunScope{}, false)
+		if err := WriteExportMetadata(run); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(resourcesDir, MetadataFileName))
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		return string(data)
+	}
+	if first, second := build(), build(); first != second {
+		t.Errorf("metadata.yaml must be byte-identical across runs\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+}
+
 func TestWriteExportMetadataFreshAndAbsence(t *testing.T) {
 	output := t.TempDir()
 	resourcesDir := filepath.Join(output, models.ResourcesDirName)

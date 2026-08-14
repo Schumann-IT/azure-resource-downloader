@@ -27,7 +27,8 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/groupPolicyConfigurations",
+		azureType:      "Microsoft.Graph/groupPolicyConfigurations",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
 			EmbeddedPayloads:    []string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},

@@ -180,6 +180,23 @@ type PermissionScoped interface {
 	RequiredPermissions() []string
 }
 
+// AssignmentCapable is optionally implemented by a ResourceHandler whose
+// resource type has an assignments concept (Intune policies, apps, profiles and
+// the like assign to groups; most Entra and singleton types do not).
+//
+// The distinction is a fact about the type, not about a particular tenant's
+// data: a type whose resources happen to have no assignments in a small tenant
+// still has the concept, and must be told apart from a type that has no concept
+// at all. The docs generate-prompt step relies on it to decide which documents
+// carry an assignmentsSha256, which are candidates for a forward re-splice, and
+// which predate the assignment markers and must be migrated. Handlers that do
+// not implement it are treated as having no assignments concept.
+type AssignmentCapable interface {
+	// HasAssignments reports whether this resource type has an assignments
+	// concept.
+	HasAssignments() bool
+}
+
 // PipelineConfig holds configuration for the pipeline
 type PipelineConfig struct {
 	OutputDir          string

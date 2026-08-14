@@ -74,6 +74,23 @@ func (r *Registry) HasHandler(resourceType string) bool {
 	return exists
 }
 
+// AssignmentCapableTypes reports, for every registered resource type, whether
+// it has an assignments concept (see models.AssignmentCapable). A type whose
+// handler does not implement the interface is recorded as false. The export
+// records this per covered type so a later docs generate-prompt run can tell a
+// type with no assignments concept from one whose resources merely have none.
+func (r *Registry) AssignmentCapableTypes() map[string]bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[string]bool, len(r.handlers))
+	for resourceType, handler := range r.handlers {
+		capable, ok := handler.(models.AssignmentCapable)
+		out[resourceType] = ok && capable.HasAssignments()
+	}
+	return out
+}
+
 // DedicatedAppRequirements reports, for the given resource types, which ones
 // require a dedicated app registration (device-code sign-in) to be read,
 // mapping each such type to the delegated permissions it declares. Types that

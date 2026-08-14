@@ -139,11 +139,45 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	return summary, nil
 }
 
+// DryRunSummary builds the ExecutionSummary for a list-only dry run: one
+// would-download result per request, with no fetch, transform or write
+// performed. It exists so the completeness accounting and the one-result-per-
+// request invariant hold for a dry run exactly as they do for a real run,
+// without the per-resource Azure traffic a real download incurs. The request
+// set itself is the offline answer to "what would be downloaded" — it is
+// produced by the per-type listing upstream of the fetcher, which a dry run
+// still performs.
+//
+// Each result carries only its resource id and type (no path, no facts): under
+// --dry-run nothing is marshalled, so there is no output path or hash to record.
+// That is enough for the metadata prune preview, which matches present
+// resources by id.
+func DryRunSummary(requests []*models.FetchRequest) *ExecutionSummary {
+	s := &ExecutionSummary{
+		TotalResources: len(requests),
+		DryRun:         true,
+		Results:        make([]*models.WriteResult, 0, len(requests)),
+	}
+	for _, r := range requests {
+		s.Results = append(s.Results, &models.WriteResult{
+			ResourceID:   r.ResourceID,
+			ResourceType: r.ResourceType,
+		})
+		s.WouldDownload++
+	}
+	return s
+}
+
 // ExecutionSummary contains the results of a pipeline execution
 type ExecutionSummary struct {
 	TotalResources      int
 	SuccessfulResources int
 	FailedResources     int
+	// DryRun reports that this summary describes a list-only dry run: the
+	// request set was listed but no resource was fetched, transformed or
+	// written. WouldDownload then counts the resources a real run would fetch.
+	DryRun        bool
+	WouldDownload int
 	// SkippedResources counts resources the signed-in user was not permitted to
 	// read. They are reported as warnings and do not cause a non-zero exit.
 	SkippedResources int
@@ -199,6 +233,32 @@ func (s *ExecutionSummary) MarkCompleteness() {
 // PrintSummary prints a summary of the execution
 func (s *ExecutionSummary) PrintSummary() {
 	log := logger.Default
+
+	// A dry run lists rather than downloads, so report what it would fetch
+	// instead of success/failure counts that never accrue when no stage ran.
+	if s.DryRun {
+		log.Info("Dry-run Summary (list only — nothing fetched, transformed or written)",
+			"would_download", s.WouldDownload,
+			"total", s.TotalResources,
+			"skipped_types", len(s.SkippedTypes),
+			"empty_types", len(s.EmptyTypes))
+		if s.Complete {
+			log.Info("Listing is complete: every type in scope was listed, so this is the full set that would be downloaded")
+		} else {
+			log.Warn("Listing is INCOMPLETE; the set that would be downloaded is a subset of the tenant", "reason", s.IncompleteReason)
+		}
+		if len(s.SkippedTypes) > 0 {
+			for _, st := range s.SkippedTypes {
+				log.Warn("Skipped type (could not be listed)", "type", st.ResourceType, "reason", st.Reason)
+			}
+		}
+		if len(s.EmptyTypes) > 0 {
+			for _, t := range s.EmptyTypes {
+				log.Warn("Empty type (listed, no resources)", "type", t)
+			}
+		}
+		return
+	}
 
 	log.Info("Pipeline Execution Summary",
 		"total", s.TotalResources,

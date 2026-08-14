@@ -22,7 +22,8 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceHealthScripts",
+		azureType:      "Microsoft.Graph/deviceHealthScripts",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows remediation script package (detection + remediation).",
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},

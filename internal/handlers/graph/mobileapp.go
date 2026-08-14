@@ -21,7 +21,8 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/mobileApps",
+		azureType:      "Microsoft.Graph/mobileApps",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune managed application (e.g. Win32, store, line-of-business app) and its deployment configuration.",
 			KeySettings:         []string{"installCommandLine", "uninstallCommandLine", "minimumSupportedOperatingSystem"},

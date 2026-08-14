@@ -23,7 +23,8 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceCustomAttributeShellScripts",
+		azureType:      "Microsoft.Graph/deviceCustomAttributeShellScripts",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune macOS custom attribute shell script that collects a custom attribute from managed Macs.",
 			KeySettings:         []string{"customAttributeType", "runAsAccount"},

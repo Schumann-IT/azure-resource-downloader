@@ -21,7 +21,8 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
+		azureType:      "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
 			KeySettings:         []string{"platform", "enrollmentType", "priority"},

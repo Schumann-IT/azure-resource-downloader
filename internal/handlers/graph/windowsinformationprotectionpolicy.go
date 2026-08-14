@@ -21,7 +21,8 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/windowsInformationProtectionPolicies",
+		azureType:      "Microsoft.Graph/windowsInformationProtectionPolicies",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
 			KeySettings:         []string{"enforcementLevel", "protectedApps", "exemptApps"},

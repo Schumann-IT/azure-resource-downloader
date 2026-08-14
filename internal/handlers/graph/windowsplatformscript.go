@@ -21,7 +21,8 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceManagementScripts",
+		azureType:      "Microsoft.Graph/deviceManagementScripts",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows PowerShell platform script run on managed devices.",
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},

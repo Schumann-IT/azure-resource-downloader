@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **`docs generate-prompt` now computes list 2 (re-splice + migrate), not just the documents to generate.**
+  In one pass over the export the engine hashes each assignment-capable resource's *resolved* assignment rows —
+  group name, group kind (assigned/dynamic · security/Microsoft 365), filter name and include/exclude — into a
+  forward `assignmentsSha256`, and hashes the resources targeting a referenced group into a reverse
+  `targetedBySha256`. A current document whose recorded hash no longer matches is reported as a **re-splice**
+  (only its marked block needs re-rendering); a current document that predates the assignment markers is
+  reported as a **migrate** (markers must be inserted first). A document already in list 1 is never also in
+  list 2. Assignment target filters with no export entry are now flagged **dangling** alongside groups.
+
+- **Reference map carries group kind.** The spliced `refmap` block now resolves each referenced group GUID to
+  its display name, document path **and** kind, so the agent renders assignment tables from given facts
+  without re-reading each group's YAML. The work list's `assignmentsSha256` column is now populated, and the
+  emitted prompt gains real `resplice` and `migrate` blocks.
+
+- **`AssignmentCapable` capability.** Handlers with an assignments concept declare it; the registry surfaces it
+  and `download` records it per covered type as `hasAssignments` in `metadata.yaml`, so `docs generate-prompt`
+  can tell a type with no assignments concept from one whose resources merely have none.
+
+- **Tests** for assignment parsing and the forward/reverse hashes (order-independence, group/filter rename,
+  dangling, group-kind change), list-2 detection (forward re-splice, reverse re-splice, migrate,
+  list-1-excluded-from-list-2), dangling filters, the env-key replacer, and `metadata.yaml` determinism.
+
+### Changed
+
+- **`--exit-code` now gates on any pending work.** It returns `3` when documents need generating **or**
+  re-splicing **or** migrating, not merely when documents are missing, so a clean CI run means every document
+  on disk matches the export.
+
+- **`download --dry-run` is list-only.** A dry run stops after building the fetch requests and reports what it
+  would download without calling the fetch/transform/write pipeline; it writes no resource files and does not
+  touch `metadata.yaml`.
+
+- **`list` runs offline.** It builds the handler registry with a lazily-resolved credential so supported
+  resource types can be listed without authenticating.
+
+- **Version is injected at build time.** `rootCmd.Version` resolves from an ldflags-injected string, falling
+  back to `debug.ReadBuildInfo()`; the `Makefile` injects the version on `build`/`install`.
 
 ## [RC2]
 

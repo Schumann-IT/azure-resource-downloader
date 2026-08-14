@@ -22,7 +22,8 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 	}
 
 	return &GraphCollectionHandler{
-		azureType: "Microsoft.Graph/deviceShellScripts",
+		azureType:      "Microsoft.Graph/deviceShellScripts",
+		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune macOS shell script run on managed Macs.",
 			KeySettings:         []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
