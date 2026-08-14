@@ -61,18 +61,23 @@ func init() {
 	// Global flags: every planned command needs the export root and benefits
 	// from a uniform dry-run safety switch, config loading and log verbosity.
 	// Command-specific flags (auth, selection, pipeline tuning) are opt-in via
-	// the helpers in flags.go so future commands do not silently inherit them.
+	// the helpers in cmd/cmdutil so future commands do not silently inherit them.
 	rootCmd.PersistentFlags().StringVar(&flagConfigFile, "config", "", "path to a YAML config file; if omitted, no config file is loaded and defaults apply")
 	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "./output", "directory to write downloaded resources into")
 	rootCmd.PersistentFlags().BoolVar(&flagDryRun, "dry-run", false, "preview what would be downloaded without writing files")
 	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "info", "log verbosity: debug, info, warn, or error")
 
 	// Bind global flags to viper. Command-local flags are bound per-execution in
-	// each command's RunE via bindFlags to avoid the global viper singleton
-	// picking up a sibling command's identically named flag.
+	// each command's RunE via cmdutil.BindFlags to avoid the global viper
+	// singleton picking up a sibling command's identically named flag.
 	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+
+	// Subcommand packages that live in their own directory register through a
+	// constructor (they cannot import package cmd without a cycle). Flat-file
+	// commands in package cmd still self-register in their own init().
+	rootCmd.AddCommand(NewCommand())
 }
 
 // initConfig reads environment variables and, only when --config is given, the

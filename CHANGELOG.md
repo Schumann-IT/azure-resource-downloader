@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-prompt` command.** A new `docs` command group whose first subcommand turns an export into
+  a single, ready-to-paste incremental documentation prompt covering exactly the resources whose
+  documentation is missing or out of date. It **never fetches a resource** and never writes into
+  `resources/`: it reads `resources/metadata.yaml` and the documents already under `docs/`, then writes one
+  file, `output/<tenant>/docs/generate.md` (override with `--out`). A document is listed for (re)generation
+  when it is missing, its resource's `sourceSha256` changed, its type's `doc-prompt.md` (`promptSha256`)
+  changed, or its frontmatter is unreadable; `presentInTenant: false` entries are reported as orphaned
+  documents (never deleted) and types with no `doc-prompt.md` are reported as ungeneratable. Two Graph types
+  are excluded as bulk records — `windowsAutopilotDeviceIdentities`, and `groups` **except those referenced
+  by an assignment** (computed from `assignmentTargets`, with dangling GUIDs flagged). The `export`,
+  `worklist` and `refmap` blocks are spliced into the repo-root `DOC-GENERATION-TEMPLATE.md` (override with
+  `--prompt`); every marker is validated before anything is written.
+
+  Tenant resolution mirrors `download` (Azure CLI sign-in → tenant default domain), with `--domain` to skip
+  authentication and run offline, and a single-export-directory default when neither is available; the
+  resolved domain is cross-checked against `metadata.yaml`'s `tenant:`. Exit codes: `0` on success, `2` when
+  the command cannot answer (no metadata, ambiguous tenant, unreadable template), and — with `--exit-code` —
+  `3` when stale documents exist. `docs/generate.md` is the only file `azure-rd` writes under `docs/`, and
+  `--prune` still never touches `docs/`.
+
+  This is the first iteration: it decides the list of documents to *generate*. It does not yet detect
+  documents needing only a marked block re-rendered (a renamed group, a re-pointed assignment) — the
+  `resplice` and `migrate` blocks state that plainly rather than claiming "none".
+
+- **Group facts in `metadata.yaml`.** Group entries now record `groupTypes` and `securityEnabled` as raw
+  facts (`ResourceFacts`/`ResourceMeta`), so a downstream step can resolve a referenced group's kind without
+  re-reading its YAML. These feed the future assignment-resolution hash.
+
+- **Tests** for the documentation-prompt engine (staleness classification, referenced groups and reference
+  map, tenant mismatch, missing metadata, missing per-type prompt, determinism and dry-run, template marker
+  validation and splicing, frontmatter parsing), the embedded-template/root sync guard, and the group-facts
+  extraction.
+
+### Changed
+
+- **Shared CLI flag helpers moved to `cmd/cmdutil`.** `AddAzureAuthFlags`, `AddSelectionFlags`,
+  `AddPipelineFlags`, `BindFlags` and the default constants moved out of `cmd/flags.go` into a new
+  `cmd/cmdutil` package so a subcommand living in its own directory can reuse them without an import cycle
+  back into package `cmd`.
+
+- **`docs` subcommands live in their own directory (`cmd/docs/`).** The `docs` parent command stays in
+  package `cmd`; each subcommand is a file under `cmd/docs/` exposing an exported constructor (e.g.
+  `NewGeneratePromptCommand`) that the parent attaches.
+
+## [RC1]
+
+### Added
+
 - **Export metadata (`resources/metadata.yaml`).** Every download now records a facts-only description of
   the export: per resource its `sourceSha256`, `resourceId`, `displayName`, `@odata.type`, `platforms`,
   `technologies`, sidecar artifact names and raw assignment targets; per type the SHA-256 of its assembled

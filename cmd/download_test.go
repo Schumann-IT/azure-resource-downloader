@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
 )
@@ -164,9 +165,9 @@ func TestDetermineWorkerCount(t *testing.T) {
 		{
 			name:         "explicit flag wins even at the default value",
 			resourceType: "Microsoft.Graph/groups",
-			workersFlag:  defaultWorkerCount,
+			workersFlag:  cmdutil.DefaultWorkerCount,
 			explicit:     true,
-			want:         defaultWorkerCount,
+			want:         cmdutil.DefaultWorkerCount,
 		},
 		{
 			name:         "explicit non-default flag wins",
@@ -178,14 +179,14 @@ func TestDetermineWorkerCount(t *testing.T) {
 		{
 			name:         "no flag uses API-specific default for a single type",
 			resourceType: "Microsoft.Storage/storageAccounts",
-			workersFlag:  defaultWorkerCount,
+			workersFlag:  cmdutil.DefaultWorkerCount,
 			explicit:     false,
 			want:         wc.GetWorkerCount("Microsoft.Storage/storageAccounts"),
 		},
 		{
 			name:         "no flag and mixed types uses the safe default",
 			resourceType: "",
-			workersFlag:  defaultWorkerCount,
+			workersFlag:  cmdutil.DefaultWorkerCount,
 			explicit:     false,
 			want:         wc.Default,
 		},

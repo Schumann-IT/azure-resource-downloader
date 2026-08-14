@@ -577,30 +577,41 @@ different tenants never collide. The domain is resolved via the ARM Tenants API;
 if it cannot be resolved (e.g. insufficient permissions), the tool logs a
 warning and writes directly into the base `--output` directory.
 
-**Everything the tool generates lives under a single `resources/` subdirectory
+**Everything `download` generates lives under a single `resources/` subdirectory
 that it owns exclusively** — the per-resource YAML, sidecar artifacts, the
 per-type `doc-prompt.md` files, and the export metadata (`metadata.yaml`).
 Anything you place elsewhere under `--output` is never touched (and never
 pruned).
 
+The sibling `docs/` tree holds the generated documentation and is **not**
+tool-owned, with one exception: `azure-rd docs generate-prompt` writes
+`docs/generate.md` (see [Generating a documentation prompt](#generating-a-documentation-prompt-docs-generate-prompt)).
+That is the only file `azure-rd` ever writes under `docs/`, and `--prune` never
+reaches into `docs/`.
+
 ```
 output/
 └── contoso.onmicrosoft.com/                # tenant default domain
-    └── resources/                          # the only tree azure-rd writes to
-        ├── metadata.yaml                    # export metadata (see below)
-        ├── Microsoft.Resources/
-        │   └── resourceGroups/
-        │       ├── my-resource-group.yaml
-        │       ├── another-resource-group.yaml
-        │       └── doc-prompt.md            # default; skip with --no-prompt
-        ├── Microsoft.Storage/
-        │   └── storageAccounts/
-        │       ├── mystorageaccount.yaml
-        │       └── doc-prompt.md            # default; skip with --no-prompt
-        └── Microsoft.Compute/
-            └── virtualMachines/
-                ├── my_vm.yaml
-                └── doc-prompt.md            # default; skip with --no-prompt
+    ├── resources/                          # the only tree download writes to
+    │   ├── metadata.yaml                    # export metadata (see below)
+    │   ├── Microsoft.Resources/
+    │   │   └── resourceGroups/
+    │   │       ├── my-resource-group.yaml
+    │   │       ├── another-resource-group.yaml
+    │   │       └── doc-prompt.md            # default; skip with --no-prompt
+    │   ├── Microsoft.Storage/
+    │   │   └── storageAccounts/
+    │   │       ├── mystorageaccount.yaml
+    │   │       └── doc-prompt.md            # default; skip with --no-prompt
+    │   └── Microsoft.Compute/
+    │       └── virtualMachines/
+    │           ├── my_vm.yaml
+    │           └── doc-prompt.md            # default; skip with --no-prompt
+    └── docs/                                # documentation (mirrors resources/)
+        ├── generate.md                      # written by docs generate-prompt
+        └── Microsoft.Storage/
+            └── storageAccounts/
+                └── mystorageaccount.md      # written by the documentation run
 ```
 
 ### Export Metadata (`resources/metadata.yaml`)
@@ -627,7 +638,9 @@ Key fields:
   `doc-prompt.md` hash (prompts are written by default unless `--no-prompt`).
 - **`resources.<path>`** — per-resource `sourceSha256`, `resourceId`,
   `displayName`, `presentInTenant`, raw `assignmentTargets`, and sidecar
-  artifact names. The map key is the resource's path relative to
+  artifact names. Group entries additionally record `groupTypes` and
+  `securityEnabled` (raw facts, used by `docs generate-prompt` to resolve a
+  referenced group's kind). The map key is the resource's path relative to
   `resources/`.
 - **`notListed`** — types that could not be listed (permissions) and types that
   listed to zero resources this run.
@@ -677,6 +690,73 @@ By default (pass `--no-prompt`, or `no-prompt: true` in the config file, to skip
 - **Explain assignments accurately** — include/exclude targets and filters; the prompt states that targets carry group IDs only (names are exported separately via `Microsoft.Graph/groups`), so the model never invents group names.
 
 Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings, embedded payloads to expand, required read permissions, lifecycle notes, related exported types, subtype guidance for polymorphic types, and a **verified Microsoft Learn API-reference link** (plus best-practice baselines for security-sensitive types). It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`, which renders a Go `text/template` (embedded default: `internal/models/documentation_prompt.tmpl`) with the type's metadata as data; a resource type can supply its own template through the `Template` field of `models.ResourceDocumentation` (a `join` helper is available, and `models.DefaultDocumentationPromptTemplate()` returns the default text as a starting point). Resource-type families whose shape does not match the default policy-style layout use dedicated override templates: groups (`internal/handlers/graph/group_prompt.tmpl`), tenant-wide singletons (`singleton_prompt.tmpl`), credential/token records (`credential_prompt.tmpl`), inventory records (`record_prompt.tmpl`), objects referenced by ID from other policies (`referenced_prompt.tmpl`) and all ARM types (`internal/handlers/arm/arm_prompt.tmpl`). ARM handlers supply this metadata inline; Microsoft Graph constructors set it as a `models.ResourceDocumentation{...}` literal on the shared `GraphCollectionHandler`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
+
+## 📝 Generating a documentation prompt (`docs generate-prompt`)
+
+`azure-rd docs generate-prompt` turns an export into a single, ready-to-paste
+documentation prompt covering **exactly the resources whose documentation is
+missing or out of date**. The workflow is two independent steps:
+
+```bash
+azure-rd download               # tenant -> export   (refreshes resources/ and metadata.yaml)
+azure-rd docs generate-prompt   # export -> docs     (writes one prompt file; reads everything else)
+```
+
+It **never fetches a resource** and never writes into `resources/`: it only
+reads `resources/metadata.yaml` and the documents already under `docs/`, then
+writes one file, `docs/generate.md` (override with `--out`). Run it as often as
+you like against an export of any age — the answer depends only on files on disk.
+
+**Which tenant.** By default it signs in with your `az login` session and
+resolves the tenant's Entra default domain — the export folder name — exactly as
+`download` does. Pass `--domain <domain>` to name the folder explicitly and
+**skip authentication entirely** (offline, CI, no credentials). If `--output`
+holds exactly one directory containing `resources/metadata.yaml`, it defaults to
+that one; it refuses to guess when there are several. The resolved domain is
+cross-checked against `metadata.yaml`'s `tenant:` field, so it never documents
+the wrong export.
+
+**What is documented.** Two Graph types are excluded as bulk directory records:
+`windowsAutopilotDeviceIdentities` (no exceptions) and `groups` — **except
+groups referenced by an assignment**, which are computed from `assignmentTargets`
+in `metadata.yaml`. A document is listed for (re)generation when it is missing,
+its resource's `sourceSha256` changed, its type's `doc-prompt.md` (`promptSha256`)
+changed, or its frontmatter is missing/unreadable. Resources marked
+`presentInTenant: false` are reported as orphaned documents (never deleted), and
+types with no `doc-prompt.md` are reported as ungeneratable (e.g. an export run
+with `--no-prompt`).
+
+**Output & exit codes.** Under `--dry-run` nothing is written; it lists the
+stale documents (and warns if an older `generate.md` is still on disk). The
+export's `generatedAt` and completeness are printed so a forgotten download step
+is visible — an incomplete export is a warning, not a refusal. Exit codes: `0`
+on success (whether or not work was found), `2` when the command could not answer
+(no metadata, ambiguous tenant, unreadable template), and — with `--exit-code` —
+`3` when stale documents exist, for CI gating.
+
+The prompt is rendered from a repo-root template, `DOC-GENERATION-TEMPLATE.md`
+(override with `--prompt <file>`); the full-export procedure in
+`DOC-GENERATION-PROMPT.md` is separate and untouched.
+
+> **Current limitation.** This is the first iteration: it decides the list of
+> documents to *generate*. It does **not yet** detect documents needing only a
+> marked block re-rendered (a group renamed, or an assignment re-pointed at a
+> different group) — the `resplice`/`migrate` blocks in the emitted prompt say so
+> plainly rather than claiming "none".
+
+```bash
+# Resolve the tenant via az login, then write docs/generate.md
+azure-rd docs generate-prompt
+
+# Offline: name the folder, skip sign-in
+azure-rd docs generate-prompt --domain contoso.onmicrosoft.com
+
+# Preview what is stale without writing the prompt
+azure-rd docs generate-prompt --domain contoso.onmicrosoft.com --dry-run
+
+# Fail (exit 3) when stale documents exist
+azure-rd docs generate-prompt --domain contoso.onmicrosoft.com --exit-code
+```
 
 ## 🎯 Supported Resource Types
 

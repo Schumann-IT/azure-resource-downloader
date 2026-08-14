@@ -119,6 +119,13 @@ type ResourceFacts struct {
 	// from the cleaned data. Resolving GUIDs to names is a cross-resource join
 	// that belongs to a later post-processing step.
 	AssignmentTargets []interface{}
+	// GroupTypes and SecurityEnabled are group-only facts (empty/nil for every
+	// other type), read raw from the group YAML so a later step can resolve a
+	// referenced group's kind without re-opening its file. They are recorded as
+	// plain values, never as a rendered "dynamic security group" string, which
+	// is a decision the renderer makes.
+	GroupTypes      []string
+	SecurityEnabled *bool
 }
 
 // TransformedResource represents a fully transformed Azure resource

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
@@ -28,14 +29,14 @@ func init() {
 
 	// list only needs authentication to construct the client; selection and
 	// pipeline-tuning flags would be misleading here (list ignores them).
-	addAzureAuthFlags(listCmd)
+	cmdutil.AddAzureAuthFlags(listCmd)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	// Bind this command's local flags to viper before reading any values so the
 	// flag > env > config > default precedence holds without a sibling command
 	// stealing the binding.
-	bindFlags(cmd)
+	cmdutil.BindFlags(cmd)
 
 	ctx := context.Background()
 	sub := viper.GetString("subscription")

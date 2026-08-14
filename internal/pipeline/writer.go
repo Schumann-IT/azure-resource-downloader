@@ -287,7 +287,45 @@ func buildResourceFacts(tr *models.TransformResult, yamlData []byte) *models.Res
 		Technologies:      stringFromData(tr.CleanedData, "technologies"),
 		Artifacts:         artifactNames,
 		AssignmentTargets: assignmentTargetsFromData(tr.CleanedData),
+		GroupTypes:        stringSliceFromData(tr.CleanedData, "groupTypes"),
+		SecurityEnabled:   boolPtrFromData(tr.CleanedData, "securityEnabled"),
 	}
+}
+
+// stringSliceFromData returns the string elements at key in the cleaned data,
+// or nil when the key is absent or not a slice of strings. Non-string elements
+// are skipped so a malformed value never panics.
+func stringSliceFromData(data map[string]interface{}, key string) []string {
+	if data == nil {
+		return nil
+	}
+	raw, ok := data[key].([]interface{})
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// boolPtrFromData returns a pointer to the bool value at key in the cleaned
+// data, or nil when the key is absent or not a bool. The pointer distinguishes
+// "false" from "not a group / not present".
+func boolPtrFromData(data map[string]interface{}, key string) *bool {
+	if data == nil {
+		return nil
+	}
+	if v, ok := data[key].(bool); ok {
+		return &v
+	}
+	return nil
 }
 
 // stringFromData returns the string value at key in the cleaned data, or "" if

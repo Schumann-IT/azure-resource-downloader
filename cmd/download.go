@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"azure-resource-downloader/cmd/cmdutil"
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
@@ -79,9 +80,9 @@ func init() {
 
 	// download opts into every command-flag group plus its own switches. Flags
 	// are bound to viper per-execution in runDownload via bindFlags.
-	addAzureAuthFlags(downloadCmd)
-	addSelectionFlags(downloadCmd)
-	addPipelineFlags(downloadCmd)
+	cmdutil.AddAzureAuthFlags(downloadCmd)
+	cmdutil.AddSelectionFlags(downloadCmd)
+	cmdutil.AddPipelineFlags(downloadCmd)
 
 	downloadCmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
 	downloadCmd.Flags().Bool("no-prompt", false, "skip writing the per-type documentation LLM prompt files (doc-prompt.md); prompts are written by default")
@@ -92,7 +93,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Bind this command's local flags to viper before reading any values so the
 	// flag > env > config > default precedence holds without a sibling command
 	// stealing the binding.
-	bindFlags(cmd)
+	cmdutil.BindFlags(cmd)
 
 	ctx := context.Background()
 

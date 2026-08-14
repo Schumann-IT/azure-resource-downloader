@@ -7,13 +7,13 @@ trigger: always_on
 - **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (written by default; skip with `--no-prompt`)
 - **Architecture**: Async pipeline pattern with worker pools
 - **Repo layout**:
-    - `cmd/`                    → Cobra CLI commands (root, download, list); flag groups in `flags.go`, interactive sign-in prompt in `prompt.go`
+    - `cmd/`                    → Cobra CLI commands (root, download, list; `docs` parent with `generate-prompt` subcommand in `cmd/docs/`); shared flag groups in `cmd/cmdutil`, interactive sign-in prompt in `prompt.go`
     - `internal/models/`        → Core types, interfaces, config structs
     - `internal/pipeline/`      → 3-stage async pipeline (fetcher, transformer, writer)
     - `internal/handlers/`      → Handler registry (package handlers); ARM handlers in `arm/`, Microsoft Graph handlers in `graph/`
     - `internal/azure/`         → Azure SDK wrappers and utilities (auth, listing pagers, permission-error detection, ID resolver)
     - `internal/transform/`     → Transformation utilities (cleaner, sanitizer, base64 decoding)
-    - `internal/docs/`          → Export metadata (`resources/metadata.yaml`): facts collected from pipeline results, partial-run merge, and `--prune`
+    - `internal/docs/`          → Export metadata (`resources/metadata.yaml`): facts, partial-run merge, `--prune`; plus the `docs generate-prompt` engine (staleness vs document frontmatter, referenced-groups, template splice → `docs/generate.md`)    
     - `internal/logger/`        → Structured logging (charmbracelet/log wrapper)
     - `internal/retry/`         → Exponential backoff for transient Azure API failures
     - `main.go`                 → Entry point (calls cmd.Execute())

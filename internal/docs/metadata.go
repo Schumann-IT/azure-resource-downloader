@@ -115,6 +115,12 @@ type ResourceMeta struct {
 	Skipped           bool          `yaml:"skipped,omitempty"`
 	LastSeenAt        string        `yaml:"lastSeenAt,omitempty"`
 	AssignmentTargets []interface{} `yaml:"assignmentTargets,omitempty"`
+	// GroupTypes and SecurityEnabled are group-only facts, retained so a later
+	// step (docs generate-prompt) can resolve a referenced group's kind from
+	// metadata.yaml alone. They are recorded raw; the rendered
+	// "dynamic security group" phrasing is left to the renderer.
+	GroupTypes      []string `yaml:"groupTypes,omitempty"`
+	SecurityEnabled *bool    `yaml:"securityEnabled,omitempty"`
 }
 
 // NotListedMeta records this run's types that could not be listed (permissions)
@@ -339,6 +345,8 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 				PresentInTenant:   true,
 				LastSeenAt:        now,
 				AssignmentTargets: r.Facts.AssignmentTargets,
+				GroupTypes:        sortedCopy(r.Facts.GroupTypes),
+				SecurityEnabled:   r.Facts.SecurityEnabled,
 			}
 			presentKeys[key] = true
 
