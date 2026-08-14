@@ -734,9 +734,9 @@ on success (whether or not work was found), `2` when the command could not answe
 (no metadata, ambiguous tenant, unreadable template), and — with `--exit-code` —
 `3` when stale documents exist, for CI gating.
 
-The prompt is rendered from a repo-root template, `DOC-GENERATION-TEMPLATE.md`
-(override with `--prompt <file>`); the full-export procedure in
-`DOC-GENERATION-PROMPT.md` is separate and untouched.
+The prompt is rendered from a built-in template embedded in the binary
+(`internal/docs/generate_prompt_template.md`; override with `--prompt <file>`);
+the full-export procedure in `DOC-GENERATION-PROMPT.md` is separate and untouched.
 
 > **Current limitation.** This is the first iteration: it decides the list of
 > documents to *generate*. It does **not yet** detect documents needing only a

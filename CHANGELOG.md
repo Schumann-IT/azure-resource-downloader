@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documents (never deleted) and types with no `doc-prompt.md` are reported as ungeneratable. Two Graph types
   are excluded as bulk records — `windowsAutopilotDeviceIdentities`, and `groups` **except those referenced
   by an assignment** (computed from `assignmentTargets`, with dangling GUIDs flagged). The `export`,
-  `worklist` and `refmap` blocks are spliced into the repo-root `DOC-GENERATION-TEMPLATE.md` (override with
-  `--prompt`); every marker is validated before anything is written.
+  `worklist` and `refmap` blocks are spliced into a built-in template embedded in the binary
+  (`internal/docs/generate_prompt_template.md`; override with `--prompt`); every marker is validated before
+  anything is written.
 
   Tenant resolution mirrors `download` (Azure CLI sign-in → tenant default domain), with `--domain` to skip
   authentication and run offline, and a single-export-directory default when neither is available; the

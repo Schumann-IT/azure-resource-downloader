@@ -70,7 +70,7 @@ Examples:
 	f := cmd.Flags()
 	f.String("domain", "", "export tenant domain (folder name under --output); skips authentication and runs offline")
 	f.String("out", "", "path to write the prompt to (default: <output>/<tenant>/docs/generate.md)")
-	f.String("prompt", "", "path to a template file overriding the built-in DOC-GENERATION-TEMPLATE.md")
+	f.String("prompt", "", "path to a template file overriding the built-in documentation-prompt template")
 	f.Bool("exit-code", false, "exit non-zero (3) when stale documents were found, for CI gating")
 
 	return cmd

@@ -22,12 +22,18 @@ install:
 	@$(GOCMD) install .
 	@echo "✅ Installed to $(shell go env GOPATH)/bin/$(BINARY_NAME)"
 
+clean-output:
+	@echo "🧹 Cleaning output..."
+	@rm -rf output
+	@echo "✅ Clean complete"
+
 # Clean build artifacts
-clean:
+clean-bin:
 	@echo "🧹 Cleaning..."
 	@rm -f $(BINARY_NAME)
-	@rm -rf output/
 	@echo "✅ Clean complete"
+
+clean: clean-bin clean-output
 
 # Run tests
 test:
@@ -87,7 +93,7 @@ check: fmt lint test
 	@echo "✅ All checks passed"
 
 # Run all quality checks and build (useful for CI/CD)
-ci: clean deps check build
+ci: clean-bin deps check build
 	@echo "✅ CI pipeline complete"
 
 # Display help

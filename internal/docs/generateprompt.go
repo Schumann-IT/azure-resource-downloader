@@ -16,9 +16,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// generatePromptTemplate is the default template spliced by GeneratePrompt. It
-// is a package-local copy of the repo-root DOC-GENERATION-TEMPLATE.md; a test
-// asserts the two stay identical so the root file remains the source of truth.
+// generatePromptTemplate is the default template spliced by GeneratePrompt. This
+// embedded file is the source of truth for the incremental documentation prompt;
+// edit it directly. (It must live inside this package because go:embed cannot
+// reach outside the package directory.)
 //
 //go:embed generate_prompt_template.md
 var generatePromptTemplate []byte

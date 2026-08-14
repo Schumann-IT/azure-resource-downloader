@@ -3,7 +3,7 @@
 Open work only. Everything delivered so far is recorded in `CHANGELOG.md`.
 
 `DOC-GENERATION-PROMPT.md` remains untouched — it is the full-export procedure. The incremental flow in
-section 4 uses its own template, `DOC-GENERATION-TEMPLATE.md`.
+section 4 uses its own template, embedded at `internal/docs/generate_prompt_template.md`.
 
 ---
 
@@ -166,9 +166,9 @@ stale marked block — see "Two lists" below, which decides list 2 from `assignm
 
 ### Contract: document frontmatter is an interface
 
-`DOC-GENERATION-TEMPLATE.md` §2 requires `source`, `sourceSha256`, `promptSha256` and `generatedAt` on every
-generated document, plus `assignmentsSha256` where the type has assignments and `targetedBySha256` on group
-documents. That is not housekeeping: it is the only reason the next run can tell a current document from a
+The template (`internal/docs/generate_prompt_template.md`) §2 requires `source`, `sourceSha256`,
+`promptSha256` and `generatedAt` on every generated document, plus `assignmentsSha256` where the type has
+assignments and `targetedBySha256` on group documents. That is not housekeeping: it is the only reason the next run can tell a current document from a
 stale one. Without those hashes this command degrades to detecting wholly missing documents.
 
 Every one of those hashes is handed to the agent in its work-list row. No document should ever be written
@@ -192,8 +192,9 @@ you do have is still useful.
 
 ### Output shape (decided)
 
-One prompt file, rendered from a **template that lives in the repo**: `DOC-GENERATION-TEMPLATE.md`, adapted
-from `DOC-GENERATION-PROMPT.md` §0–§5. Override it with `--prompt <file>`.
+One prompt file, rendered from a **template embedded in the binary**:
+`internal/docs/generate_prompt_template.md`, adapted from `DOC-GENERATION-PROMPT.md` §0–§5. Override it with
+`--prompt <file>`.
 
 `DOC-GENERATION-PROMPT.md` itself stays untouched — it remains the full-export procedure, and it is not read
 by this command. The template is a separate file precisely so the incremental flow can drop what does not
