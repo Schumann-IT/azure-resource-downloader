@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [RC2]
+
 ### Added
 
 - **`docs generate-prompt` command.** A new `docs` command group whose first subcommand turns an export into
@@ -30,9 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `3` when stale documents exist. `docs/generate.md` is the only file `azure-rd` writes under `docs/`, and
   `--prune` still never touches `docs/`.
 
+  Under `--dry-run` nothing is written, and an existing `generate.md` left by an earlier run is reported
+  with its path and age — a dry run cannot be mistaken for having refreshed the prompt someone is about to
+  paste.
+
   This is the first iteration: it decides the list of documents to *generate*. It does not yet detect
   documents needing only a marked block re-rendered (a renamed group, a re-pointed assignment) — the
-  `resplice` and `migrate` blocks state that plainly rather than claiming "none".
+  `resplice` and `migrate` blocks state that plainly rather than claiming "none". For the same reason the
+  work list's `assignmentsSha256` column is emitted empty: the hash is not computed yet, and nothing reads
+  the column back. See `NEXT-ITERATIONS.md` §4.
 
 - **Group facts in `metadata.yaml`.** Group entries now record `groupTypes` and `securityEnabled` as raw
   facts (`ResourceFacts`/`ResourceMeta`), so a downstream step can resolve a referenced group's kind without
