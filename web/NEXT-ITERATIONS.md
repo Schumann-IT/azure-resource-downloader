@@ -14,5 +14,3 @@ left out on purpose:
 - **Explicit dark-mode toggle.** Currently follows `prefers-color-scheme` only.
 - **Watch-based cache invalidation.** The cache is mtime-checked per request; an `fs.watch` layer could
   pre-warm/evict, but per-request `stat()` already gives no-restart refresh.
-- **e2e route tests.** Only the security-relevant path-traversal unit is covered. Controller/route tests
-  with supertest against a fixture tenant would be the next add.
