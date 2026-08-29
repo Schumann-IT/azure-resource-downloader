@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-index` command.** A second `docs` subcommand emits `docs/index.yaml`, the machine-readable
+  navigation index the documentation frontend reads to render a tenant's index (so no `index.md` is
+  generated). Like `generate-prompt` it **never fetches a resource** and never writes into `resources/`; it
+  authenticates only to resolve the tenant's Entra default domain (`--domain` skips sign-in and runs offline)
+  and writes exactly one file, `output/<tenant>/docs/index.yaml` (override with `--out`) — the only file
+  besides `generate.md` that `azure-rd` writes under `docs/`. The index is fully derived from
+  `resources/metadata.yaml` (facts: `displayName`, `scope`, `odataType`, `platforms`, count-only assignment
+  summaries) enriched with each document's frontmatter (the LLM-authored `summary`, `platformGroup` and
+  `functionGroup`). An in-scope resource with no document yet is listed with `documented: false` and blank
+  summary/grouping so counts stay honest and the frontend can show it as pending; excluded bulk types
+  (unreferenced groups, autopilot device identities) are reported as counts only, never listed; orphans
+  (resources gone from the tenant) are counted but leave their document in place. It shares
+  `metadata.yaml`, the in-scope rule and the assignment resolution with `generate-prompt`, so the index can
+  never describe a different set of resources than the prompt documents. It carries no wall-clock time
+  (`generatedAt` mirrors the export), so re-running over an unchanged export is byte-identical. Under
+  `--dry-run` nothing is written and the command reports what the index would contain. Exit codes mirror
+  `generate-prompt`: `0` on success, `2` when the command cannot answer (no metadata, tenant mismatch).
+
+- **Tests** for the index engine (in-scope classification and excluded-type counts, pending vs documented
+  resources, orphans, assignment count summaries, tenant mismatch, determinism and dry-run).
+
 - **`docs generate-prompt` now computes list 2 (re-splice + migrate), not just the documents to generate.**
   In one pass over the export the engine hashes each assignment-capable resource's *resolved* assignment rows —
   group name, group kind (assigned/dynamic · security/Microsoft 365), filter name and include/exclude — into a
