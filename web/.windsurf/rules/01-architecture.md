@@ -9,7 +9,7 @@ This folder is a **self-contained project**: a read-only browser for the Markdow
 produced from `azure-resource-downloader` exports. It shares nothing with the Go CLI in the sibling
 `go/` folder except the export tree on disk. The Go rules in `go/.windsurf/rules/` do not apply
 here. `README.md` in this folder is the single source of truth (no further Markdown files besides
-`NEXT-ITERATIONS.md`).
+`NEXT-ITERATIONS.md` and `CHANGELOG.md`).
 
 ## Context
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
@@ -35,6 +35,12 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
 ## Non-negotiables
+
+### Changelog
+- **Every change is reflected in `CHANGELOG.md`.** Any change a user or operator can notice (routes,
+  views, discovery/rendering behaviour, environment variables, scripts, dependencies, security
+  boundaries, bug fixes) is only complete once it has an entry under `## [Unreleased]`, written in the
+  same edit — never as a follow-up. Details of format and RC sections: `02-style-and-quality.md`.
 
 ### Read-only
 - The app **never writes, moves or deletes anything** under the docs root, and never calls Azure.

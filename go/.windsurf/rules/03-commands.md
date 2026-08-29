@@ -80,6 +80,7 @@ make check
 3. Register in `internal/handlers/defaults.go` → `registerDefaults()` function
 4. Add unit tests in the same subpackage (`internal/handlers/{arm,graph}/<resource>_test.go`)
 5. Update README.md "Supported Resource Types" table
+6. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
 ## "Add a CLI command"
 1. Create `cmd/<command>.go` with Cobra structure. For a command **group with subcommands**, keep the parent in package `cmd` (like `docs`) and put each subcommand in its own directory `cmd/<command>/` as a separate package exposing an exported constructor (e.g. `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`.
@@ -93,6 +94,7 @@ make check
    - Error handling and user-friendly output
 5. Add examples in command's `Long` description
 6. Update README.md with new command usage
+7. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
 **Do not add a flag to a command that ignores it.** Persistent flags were deliberately narrowed for this reason: `list` previously advertised `--type` and `--resource-group` and silently ignored them.
 
@@ -103,6 +105,7 @@ make check
 2. Use in `internal/pipeline/transformer.go` → `transformResource()`
 3. Add unit tests
 4. Document behavior in function comment
+5. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
 ## "Add config option"
 1. Add field to `models.PipelineConfig` struct
@@ -114,6 +117,7 @@ make check
 5. Use in pipeline/command
 6. Update `config.example.yaml`
 7. Document in README.md
+8. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
 Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))` in `initConfig`. Do not remove it — without it `log-level` resolves to `AZURE_RD_LOG-LEVEL`, which no shell can export, and every hyphenated override silently stops working.
 
@@ -129,6 +133,7 @@ Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyRe
   ✅ Dependencies updated: make deps
   ✅ Built successfully: make build
   ✅ All checks passed: make check
+  ✅ CHANGELOG.md updated under [Unreleased]
   ⚠️  Manual: Add to README.md supported types table
   ⚠️  Manual: Test with: ./azure-rd list
   ```

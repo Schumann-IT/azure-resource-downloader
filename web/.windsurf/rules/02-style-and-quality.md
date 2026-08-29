@@ -77,3 +77,26 @@ assertion to get green.
 `README.md` in this folder is the single source of truth for this project: update it when routes,
 environment variables, scripts, layout or the docs-root contract change. Deliberate scope cuts go in
 `NEXT-ITERATIONS.md`. Do not create additional Markdown files here.
+
+## Changelog: update it with every change
+`CHANGELOG.md` is part of the change, not a follow-up. **Every** change that a user or operator can
+notice — routes, views, discovery/rendering behaviour, environment variables, scripts, dependencies,
+security boundaries, bug fixes — gets an entry in the same commit/edit, before you report the work as
+done. Purely internal edits that change no observable behaviour (a rename, a comment, a test-only
+addition) do not need one.
+
+Rules for entries:
+
+- **Format**: Keep a Changelog + SemVer, same prose style as `../go/CHANGELOG.md` — a bolded lead-in
+  followed by sentences, not bare one-liners.
+- **Place new entries under `## [Unreleased]`**, in the matching `### Added` / `### Changed` /
+  `### Fixed` / `### Breaking` subsection (create the subsection if it is missing). Never edit an
+  already-released section to sneak in new work.
+- **Released sections are release candidates** (`## [RC1]`, `## [RC2]`, …), newest first, matching
+  `../go/CHANGELOG.md`. Cutting one means renaming `[Unreleased]` to the next `RC<n>` and starting a
+  fresh empty `[Unreleased]` — only do that when asked.
+- **Explain *why* and which invariant now holds**, not just what moved. If a change touches a
+  non-negotiable (path safety, read-only, one `markdown-it` instance, no client-side JS, no-restart
+  freshness), say explicitly how it is preserved.
+- **Deliberate scope cuts belong in `NEXT-ITERATIONS.md`** and are referenced from the changelog, not
+  duplicated into it.

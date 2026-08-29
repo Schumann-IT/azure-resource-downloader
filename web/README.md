@@ -166,6 +166,9 @@ The architecture invariants and the style/testing requirements for this project 
 `.windsurf/rules/` **in this folder** (`01-architecture.md`, `02-style-and-quality.md`). They are
 self-contained: the Go rules in the parent repository do not apply here.
 
+User-visible changes are recorded in [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog + SemVer);
+changes to the Go CLI go in [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
+
 ## Known limitations
 
 Deliberate iteration-1 scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md) — no

@@ -93,3 +93,13 @@ globs: **/*.go
 - When generating new features or commands, Cascade should **update the main README.md** with concise usage notes instead of adding a new file.
 - The README should be treated as the *single source of truth* for onboarding, configuration, and developer reference.
 - Documentation: Never create new markdown files or docs folders. Append all relevant information to the root README.md.
+- `CHANGELOG.md` is the ONLY sanctioned Markdown file besides `README.md` (see Changelog Policy); do not treat it as a violation of the "no separate Markdown files" rule.
+
+## Changelog Policy
+
+- **Every change must be reflected in `CHANGELOG.md`.** No code, flag, behavior, config, or dependency change is complete until its user-visible effect is recorded — treat the changelog update as part of the change, not a follow-up.
+- Add entries under the `## [Unreleased]` section, in the appropriate Keep a Changelog group: `Added`, `Changed`, `Fixed`, or `Breaking`. Create the group under `Unreleased` if it does not exist yet.
+- Entries describe **behavior and intent** from the user's perspective (what changed and why it matters), not the commit or the files touched. Match the existing prose style: a bolded lead sentence, then the rationale.
+- The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html); a breaking change goes under `Breaking` and drives the next major.
+- Pure repo housekeeping with zero user-visible effect (e.g. moving files without an import or behavior change, formatting-only diffs) does not need an entry. When in doubt, add one.
+- New tests for a change belong in that change's `Added` group as a concise `**Tests** for …` bullet, mirroring existing entries.
