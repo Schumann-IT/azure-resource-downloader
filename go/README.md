@@ -678,6 +678,31 @@ tags:
   owner: team-platform
 ```
 
+The file name is the resource's sanitized display name. Two resources of the
+same type can share a display name (e.g. several default Intune
+`deviceEnrollmentConfigurations` are all named *"All users and all devices"*, or
+a `winGetApp` and a `macOSLobApp` both named *"3CX"*). To avoid one silently
+overwriting the other, colliding resources are disambiguated **deterministically**:
+sorted by resource ID, the lowest keeps the bare `<name>.yaml` and each other is
+written to `<name>_<disc>.yaml`, where `<disc>` is a short, stable token derived
+from its resource ID. The assignment depends only on the resource IDs, never on
+the order the concurrent pipeline happens to process them, so repeated exports of
+an unchanged tenant produce identical file names. Every disambiguation is logged
+as a warning, and each resource keeps its own file and its own `metadata.yaml`
+entry.
+
+**Reproducible output.** Beyond collision naming, the exporter canonicalizes two
+further sources of run-to-run noise so an unchanged tenant re-exports
+byte-for-byte identically: scalar (all-string) arrays are sorted — Microsoft
+Graph returns some multivalued attributes such as `proxyAddresses` in an unstable
+order — and volatile, server-generated identifiers that change on every read are
+dropped (currently the `Microsoft.Graph/applePushNotificationCertificate`
+singleton's `id`, which is removed from the YAML and replaced by its stable
+`appleIdentifier` as the recorded `resourceId`). Arrays containing objects keep
+their order, since it can be significant. The net effect: re-exporting an
+unchanged tenant yields identical resource files, and a `metadata.yaml` that
+differs only in its timestamps.
+
 ### Documentation Prompt File
 
 By default (pass `--no-prompt`, or `no-prompt: true` in the config file, to skip), each resource type directory also receives a `doc-prompt.md` documentation prompt. It is a ready-to-use LLM prompt that instructs a model to generate end-user documentation for any resource YAML in that directory. The prompt asks the model to:

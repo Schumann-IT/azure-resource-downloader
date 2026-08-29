@@ -14,6 +14,18 @@ import (
 // when the certificate carries no Apple ID.
 const applePushCertificateFallbackName = "Apple MDM Push Certificate"
 
+// applePushCertificateStableID returns the certificate's stable identity, used
+// both as its display name and as the resource id recorded in metadata. The
+// server-assigned id is a GUID regenerated on every read, so the Apple ID is
+// used instead (falling back to a constant); this keeps the export reproducible
+// across runs.
+func applePushCertificateStableID(cert betamodels.ApplePushNotificationCertificateable) string {
+	if appleID := safeStringValue(cert.GetAppleIdentifier()); appleID != "" {
+		return appleID
+	}
+	return applePushCertificateFallbackName
+}
+
 // NewApplePushNotificationCertificateHandler creates a handler for the Apple
 // MDM push certificate (deviceManagement/applePushNotificationCertificate,
 // Microsoft Graph beta). This is a tenant **singleton**: List probes the
@@ -51,21 +63,29 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 			if err != nil {
 				return nil, err
 			}
+			// Presence is probed via the server id, but the returned id must be
+			// STABLE across reads (the server id is a GUID regenerated on every
+			// read), so the singleton is identified by its Apple ID.
 			if cert == nil || cert.GetId() == nil || *cert.GetId() == "" {
 				return nil, nil
 			}
-			return []string{*cert.GetId()}, nil
+			return []string{applePushCertificateStableID(cert)}, nil
 		},
 		fetchItem: func(ctx context.Context, _ string) (serialization.Parsable, error) {
 			return getSingleton(ctx)
 		},
 		displayName: func(item serialization.Parsable) string {
 			if cert, ok := item.(betamodels.ApplePushNotificationCertificateable); ok {
-				if appleID := safeStringValue(cert.GetAppleIdentifier()); appleID != "" {
-					return appleID
-				}
+				return applePushCertificateStableID(cert)
 			}
 			return applePushCertificateFallbackName
+		},
+		normalize: func(properties map[string]interface{}) {
+			// This is a tenant singleton whose id is a server-generated GUID
+			// regenerated on every read; dropping it keeps the exported YAML
+			// identical across runs (the stable identity is appleIdentifier,
+			// which the file is named after).
+			delete(properties, "id")
 		},
 	}, nil
 }

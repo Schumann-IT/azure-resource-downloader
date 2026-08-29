@@ -209,6 +209,13 @@ func (t *Transformer) transformResource(fetchResult *models.FetchResult) *models
 			"using_original_name", sanitizedName)
 	}
 
+	// Canonicalize scalar array order for reproducible output. Microsoft Graph
+	// returns some multivalued attributes (e.g. proxyAddresses) in an unstable
+	// order; sorting all-string arrays makes a resource's YAML identical across
+	// runs. This runs unconditionally (like the YAML marshaller sorting map
+	// keys) so output is deterministic regardless of the configured transformers.
+	transform.SortScalarSlices(processedData)
+
 	// Build list of active transformers for logging
 	activeTransformers := []string{}
 	for _, tc := range t.transformerConfigs {

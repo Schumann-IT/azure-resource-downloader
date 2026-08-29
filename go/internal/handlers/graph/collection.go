@@ -47,6 +47,11 @@ type GraphCollectionHandler struct {
 	listIDs        func(ctx context.Context) ([]string, error)
 	fetchItem      func(ctx context.Context, itemID string) (serialization.Parsable, error)
 	displayName    func(item serialization.Parsable) string
+	// normalize, when set, is applied to a resource's serialized property map
+	// before it becomes the written YAML. It lets a specific type strip volatile,
+	// server-generated fields that change between reads (e.g. a singleton whose
+	// id is regenerated per request) so the exported YAML is reproducible.
+	normalize func(properties map[string]interface{})
 }
 
 // newBetaGraphClient creates a Microsoft Graph beta client for the given
@@ -142,6 +147,12 @@ func (h *GraphCollectionHandler) Transform(resource interface{}) (*models.Transf
 	}
 
 	itemID, _ := properties["id"].(string)
+
+	// Strip any volatile, server-generated fields this type has declared before
+	// the map becomes the written YAML.
+	if h.normalize != nil {
+		h.normalize(properties)
+	}
 
 	return &models.TransformedResource{
 		ID:          itemID,

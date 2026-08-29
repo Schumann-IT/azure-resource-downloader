@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Exports are now reproducible: an unchanged tenant re-exports byte-for-byte identically.** Three sources of
+  run-to-run noise were eliminated:
+  - **Colliding display names.** A resource's file name is its sanitized display name, and two resources of the
+    same type can share one — several default Intune `deviceEnrollmentConfigurations` are all named *"All users
+    and all devices"*, and a `winGetApp` and a `macOSLobApp` can both be named *"3CX"*. The writer used the
+    display name directly, so colliding siblings overwrote one another on disk **and** collapsed into a single
+    `metadata.yaml` entry (the key is the file path); because the pipeline writes concurrently, *which* sibling
+    survived varied run to run, silently dropping the rest. The writer now buffers its input and assigns names
+    in a deterministic order (sorted by type, sanitized name, resource ID): the lowest resource ID keeps the
+    bare `<name>.yaml` and every other collision is written to `<name>_<disc>.yaml`, where `<disc>` is a short,
+    stable token derived from its resource ID. No resource is lost, each keeps its own metadata entry, the
+    bare-name owner no longer depends on processing order, and every disambiguation is logged as a warning.
+  - **Unstable scalar array order.** Microsoft Graph returns some multivalued attributes (e.g. `proxyAddresses`)
+    in a different order per read. All-string arrays are now sorted during transformation (the array analogue of
+    the YAML marshaller already sorting map keys); arrays containing objects keep their order, which can be
+    significant.
+  - **Volatile server-generated identifiers.** The `Microsoft.Graph/applePushNotificationCertificate` singleton
+    returns a fresh `id` GUID on every read. That `id` is now dropped from the exported YAML via a new per-type
+    normalization hook, and the singleton is identified by its stable `appleIdentifier` (which the file is named
+    after) instead of the GUID, so its `resourceId` in `resources/metadata.yaml` is also stable across runs.
+    After these three fixes, two runs of an unchanged tenant produce identical resource YAML and `doc-prompt.md`
+    files, and a `metadata.yaml` that differs only in its timestamps.
+
 - **`config.example.yaml` is now a true no-op when loaded unmodified.** The example's own header promises that
   loading it behaves exactly like running with no config file, but its `transformers` block spelled out each
   transformer's settings (`clean-empty: true`, the full `base64-decode` block). Those values matched the runtime
@@ -19,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still documenting every setting.
 
 ### Added
+
+- **Tests** for the reproducibility fixes: colliding resources are written to distinct files with the
+  lowest resource ID keeping the bare name, the collision naming is order-independent (feeding the same
+  resources in reverse yields an identical id→name mapping) and lossless under a concurrent worker pool, the
+  name discriminator is stable per resource ID, `SortScalarSlices` sorts all-string arrays while leaving
+  object arrays and mixed lists untouched, and the `applePushNotificationCertificate` handler strips its
+  volatile `id`.
 
 - **Tests** guarding the `config.example.yaml` no-op promise: a run that loads the example unmodified now has a
   regression test asserting every effective value equals the built-in default a plain `azure-rd download` uses —

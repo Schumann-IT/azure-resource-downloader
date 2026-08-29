@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -28,7 +29,12 @@ type Writer struct {
 	// per resource type, hashed over the exact bytes written to disk so a later
 	// comparison against the file matches.
 	promptSHAByType map[string]string
-	mu              sync.Mutex
+	// usedNames tracks the file base names already claimed within each resource
+	// type (keyed "<type>/<name>") so two resources whose display names sanitize
+	// to the same string never overwrite each other on disk (or collapse into a
+	// single metadata entry). Guarded by mu.
+	usedNames map[string]bool
+	mu        sync.Mutex
 }
 
 // NewWriter creates a new writer. When writePrompts is true, a per-resource-type
@@ -41,6 +47,7 @@ func NewWriter(outputDir string, workerCount int, dryRun, writePrompts bool) *Wr
 		writePrompts:    writePrompts,
 		promptsByType:   make(map[string]string),
 		promptSHAByType: make(map[string]string),
+		usedNames:       make(map[string]bool),
 	}
 }
 
@@ -62,24 +69,76 @@ func (w *Writer) PromptSHAByType() map[string]string {
 	return out
 }
 
-// Write processes transform results and writes them to disk
+// Write processes transform results and writes them to disk.
+//
+// Unlike a purely streaming stage, the writer first drains all of its input —
+// emitting pass-through results (cancelled/skipped/filtered/errored) as they
+// arrive and buffering the resources that will produce a file — then assigns
+// every buffered resource a file name in a deterministic order before writing
+// the files concurrently. This is what makes the output reproducible: which of
+// several resources whose display names collide keeps the bare file name is
+// decided by resource id (see planFileNames), never by the non-deterministic
+// order the concurrent upstream stages deliver results.
 func (w *Writer) Write(ctx context.Context, transformResults <-chan *models.TransformResult) <-chan *models.WriteResult {
 	out := make(chan *models.WriteResult)
 
 	go func() {
 		defer close(out)
 
-		// Start worker pool
-		var wg sync.WaitGroup
-		for i := 0; i < w.workerCount; i++ {
-			wg.Add(1)
-			go w.writeWorker(ctx, transformResults, out, &wg)
+		// Phase 1: drain the input completely. Every request must still yield
+		// exactly one result, so pass-through statuses are emitted here and the
+		// writable resources are buffered. Draining fully (never returning early
+		// on ctx.Done) preserves the one-result-per-request invariant.
+		var writable []*models.TransformResult
+		for tr := range transformResults {
+			switch {
+			case ctx.Err() != nil:
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Cancelled: true, Error: ctx.Err()}
+			case tr.Cancelled:
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Cancelled: true, Error: tr.Error}
+			case tr.Skipped:
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Skipped: true, SkipReason: tr.SkipReason}
+			case tr.Filtered:
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Filtered: true}
+			case tr.Error != nil:
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Error: tr.Error}
+			default:
+				writable = append(writable, tr)
+			}
 		}
 
-		// Wait for all workers to complete
+		// If the run was cancelled, nothing buffered is written; account for
+		// each remaining request with a cancelled result so the invariant holds.
+		if ctx.Err() != nil {
+			for _, tr := range writable {
+				out <- &models.WriteResult{ResourceID: tr.ResourceID, ResourceType: tr.ResourceType, Cancelled: true, Error: ctx.Err()}
+			}
+			return
+		}
+
+		// Phase 2: assign a unique file name to each resource in a deterministic
+		// order, then write the files concurrently. Names are fixed before any
+		// write, so the concurrent write order no longer affects the result.
+		planned := w.planFileNames(writable)
+
+		var wg sync.WaitGroup
+		work := make(chan plannedWrite)
+		for i := 0; i < w.workerCount; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for p := range work {
+					out <- w.writeResource(p.result, p.fileName)
+				}
+			}()
+		}
+		for _, p := range planned {
+			work <- p
+		}
+		close(work)
 		wg.Wait()
 
-		// Write the documentation prompt file per resource type (opt-in)
+		// Phase 3: write the documentation prompt file per resource type (opt-in)
 		if w.writePrompts {
 			w.writePromptFiles()
 		}
@@ -88,74 +147,43 @@ func (w *Writer) Write(ctx context.Context, transformResults <-chan *models.Tran
 	return out
 }
 
-// writeWorker processes write operations
-func (w *Writer) writeWorker(ctx context.Context, transformResults <-chan *models.TransformResult, writeResults chan<- *models.WriteResult, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	for transformResult := range transformResults {
-		// On cancellation keep draining the input channel, emitting one
-		// cancelled result per remaining item so every request still accounts
-		// for exactly one result.
-		if err := ctx.Err(); err != nil {
-			writeResults <- &models.WriteResult{
-				ResourceID:   transformResult.ResourceID,
-				ResourceType: transformResult.ResourceType,
-				Cancelled:    true,
-				Error:        err,
-			}
-			continue
-		}
-
-		// Propagate requests cancelled in an earlier stage.
-		if transformResult.Cancelled {
-			writeResults <- &models.WriteResult{
-				ResourceID:   transformResult.ResourceID,
-				ResourceType: transformResult.ResourceType,
-				Cancelled:    true,
-				Error:        transformResult.Error,
-			}
-			continue
-		}
-
-		// Propagate resources the user was not permitted to read; nothing
-		// is written for them.
-		if transformResult.Skipped {
-			writeResults <- &models.WriteResult{
-				ResourceID:   transformResult.ResourceID,
-				ResourceType: transformResult.ResourceType,
-				Skipped:      true,
-				SkipReason:   transformResult.SkipReason,
-			}
-			continue
-		}
-
-		// Propagate resources excluded by a configured filter; nothing is
-		// written for them.
-		if transformResult.Filtered {
-			writeResults <- &models.WriteResult{
-				ResourceID:   transformResult.ResourceID,
-				ResourceType: transformResult.ResourceType,
-				Filtered:     true,
-			}
-			continue
-		}
-
-		// Check if transform had an error
-		if transformResult.Error != nil {
-			writeResults <- &models.WriteResult{
-				ResourceID:   transformResult.ResourceID,
-				ResourceType: transformResult.ResourceType,
-				Error:        transformResult.Error,
-			}
-			continue
-		}
-
-		writeResults <- w.writeResource(transformResult)
-	}
+// plannedWrite pairs a resource with the unique file base name reserved for it.
+type plannedWrite struct {
+	result   *models.TransformResult
+	fileName string
 }
 
-// writeResource writes a single resource to disk
-func (w *Writer) writeResource(transformResult *models.TransformResult) *models.WriteResult {
+// planFileNames reserves a unique file base name for every writable resource in
+// a deterministic order: resources are sorted by (type, sanitized name,
+// resource id) before names are assigned, so when several display names
+// sanitize to the same string the one that keeps the bare name is always the
+// lowest resource id — never whichever the concurrent upstream stages happened
+// to deliver first. Reservation itself is done by reserveFileName.
+func (w *Writer) planFileNames(writable []*models.TransformResult) []plannedWrite {
+	sort.Slice(writable, func(i, j int) bool {
+		a, b := writable[i], writable[j]
+		if a.ResourceType != b.ResourceType {
+			return a.ResourceType < b.ResourceType
+		}
+		if a.SanitizedName != b.SanitizedName {
+			return a.SanitizedName < b.SanitizedName
+		}
+		return a.ResourceID < b.ResourceID
+	})
+
+	planned := make([]plannedWrite, len(writable))
+	for i, tr := range writable {
+		planned[i] = plannedWrite{
+			result:   tr,
+			fileName: w.reserveFileName(tr.ResourceType, tr.SanitizedName, tr.ResourceID),
+		}
+	}
+	return planned
+}
+
+// writeResource writes a single resource to disk using the pre-assigned,
+// collision-free file base name from planFileNames.
+func (w *Writer) writeResource(transformResult *models.TransformResult, fileName string) *models.WriteResult {
 	log := logger.Default
 
 	log.Debug("Writing resource files",
@@ -183,7 +211,7 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 
 	// Write YAML file. The marshalled bytes exist only here, so this is also
 	// where the source hash for metadata.yaml is computed.
-	yamlPath := filepath.Join(resourceTypeDir, transformResult.SanitizedName+".yaml")
+	yamlPath := filepath.Join(resourceTypeDir, fileName+".yaml")
 	var facts *models.ResourceFacts
 	if !w.dryRun {
 		yamlData, err := yaml.Marshal(transformResult.CleanedData)
@@ -263,6 +291,51 @@ func (w *Writer) writeResource(transformResult *models.TransformResult) *models.
 		Facts:        facts,
 		Error:        nil,
 	}
+}
+
+// reserveFileName returns a file base name (no extension) for a resource that
+// is unique within its resource type. The first resource to claim a sanitized
+// name keeps it; any later resource whose name sanitizes to the same string is
+// given a deterministic discriminator derived from its resource ID, so colliding
+// resources are written to distinct files instead of silently overwriting one
+// another. It never overwrites: the returned name is guaranteed unused so far.
+func (w *Writer) reserveFileName(resourceType, sanitizedName, resourceID string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	key := func(name string) string { return resourceType + "/" + name }
+
+	if !w.usedNames[key(sanitizedName)] {
+		w.usedNames[key(sanitizedName)] = true
+		return sanitizedName
+	}
+
+	// Collision: append a stable discriminator. A numeric counter guards the
+	// (astronomically unlikely) case that the discriminated name is also taken,
+	// e.g. two resources sharing both a sanitized name and a resource ID.
+	base := sanitizedName + "_" + nameDiscriminator(resourceID)
+	candidate := base
+	for i := 2; w.usedNames[key(candidate)]; i++ {
+		candidate = fmt.Sprintf("%s_%d", base, i)
+	}
+	w.usedNames[key(candidate)] = true
+
+	logger.Default.Warn("Resource file name collides with another resource of the same type; writing to a disambiguated name to avoid overwriting",
+		"type", resourceType,
+		"name", sanitizedName,
+		"resolved_name", candidate,
+		"resource_id", resourceID)
+
+	return candidate
+}
+
+// nameDiscriminator derives a short, stable, filesystem-safe token from a
+// resource ID, used to disambiguate colliding file names. It is a prefix of the
+// SHA-256 of the ID, so it is deterministic for a given resource and does not
+// depend on the (non-deterministic) order resources are written.
+func nameDiscriminator(resourceID string) string {
+	sum := sha256.Sum256([]byte(resourceID))
+	return hex.EncodeToString(sum[:])[:8]
 }
 
 // buildResourceFacts assembles the immutable facts recorded in metadata.yaml
