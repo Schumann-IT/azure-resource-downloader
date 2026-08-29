@@ -6,8 +6,8 @@ description: Architecture of the documentation browser (NestJS)
 # Docs Browser — Architecture
 
 This folder is a **self-contained project**: a read-only browser for the Markdown documentation
-produced from `azure-resource-downloader` exports. It shares nothing with the Go CLI in the parent
-folder except the export tree on disk. The Go rules in the parent `.windsurf/rules/` do not apply
+produced from `azure-resource-downloader` exports. It shares nothing with the Go CLI in the sibling
+`go/` folder except the export tree on disk. The Go rules in `go/.windsurf/rules/` do not apply
 here. `README.md` in this folder is the single source of truth (no further Markdown files besides
 `NEXT-ITERATIONS.md`).
 

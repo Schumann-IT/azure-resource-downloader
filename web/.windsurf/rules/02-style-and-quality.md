@@ -16,7 +16,7 @@ Run everything from this folder (npm scripts, not raw binaries):
 
 There is no lint script and no ESLint config in this project; the `eslint-disable` comments in the
 source are historical. Do not reference `eslint`/`prettier` commands in docs until they are actually
-wired up. **Never use the Go `Makefile` in the parent folder** — it does not apply here.
+wired up. **Never use the Go `Makefile` in the sibling `go/` folder** — it does not apply here.
 
 ## TypeScript style
 - Match `tsconfig.json`: CommonJS modules, `strictNullChecks: true`, `noImplicitAny: false`.
