@@ -772,6 +772,41 @@ azure-rd docs generate-prompt --domain contoso.onmicrosoft.com --dry-run
 azure-rd docs generate-prompt --domain contoso.onmicrosoft.com --exit-code
 ```
 
+## 🗂️ Generating the documentation index (`docs generate-index`)
+
+`azure-rd docs generate-index` emits `docs/index.yaml`: a machine-readable
+navigation index the documentation frontend reads to render a tenant's index
+(so no `index.md` is generated). It is written at the `docs/` tree root — the
+only file besides `generate.md` that `azure-rd` writes under `docs/`.
+
+Like `generate-prompt`, it **never fetches a resource** and never writes into
+`resources/`. It authenticates only to resolve the tenant's Entra default domain
+(the export folder name); pass `--domain` to skip sign-in and run offline. The
+index is overwritten on every run and carries no wall-clock time (its
+`generatedAt` mirrors the export), so re-running over an unchanged export is
+byte-identical.
+
+`index.yaml` is fully derived from `resources/metadata.yaml` (facts —
+`displayName`, `scope`, `odataType`, `platforms`, count-only assignment
+summaries) enriched with each document's frontmatter (the LLM-authored
+`summary`, `platformGroup` and `functionGroup`). An in-scope resource whose
+document does not exist yet is listed with `documented: false` and a blank
+summary/grouping, so the counts stay honest and the frontend can show it as
+pending. Excluded bulk types (unreferenced groups, autopilot device identities)
+are reported as counts only, never listed. Run it **after** a documentation pass
+so the newly written summaries and grouping are picked up.
+
+```bash
+# Resolve the tenant via az login, then write docs/index.yaml
+azure-rd docs generate-index
+
+# Offline: name the folder, skip sign-in
+azure-rd docs generate-index --domain contoso.onmicrosoft.com
+
+# Preview what the index would contain without writing it
+azure-rd docs generate-index --domain contoso.onmicrosoft.com --dry-run
+```
+
 ## 🎯 Supported Resource Types
 
 Currently supported Azure resource types:

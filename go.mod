@@ -12,8 +12,8 @@ require (
 	github.com/charmbracelet/log v0.4.0
 	github.com/microsoft/kiota-abstractions-go v1.9.4
 	github.com/microsoft/kiota-serialization-json-go v1.1.2
-	github.com/microsoftgraph/msgraph-beta-sdk-go v0.162.0
-	github.com/microsoftgraph/msgraph-sdk-go v1.88.0
+	github.com/microsoftgraph/msgraph-beta-sdk-go v0.165.0
+	github.com/microsoftgraph/msgraph-sdk-go v1.101.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0

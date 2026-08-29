@@ -429,6 +429,13 @@ type docFrontmatter struct {
 	AssignmentsSha256 string `yaml:"assignmentsSha256"`
 	TargetedBySha256  string `yaml:"targetedBySha256"`
 	GeneratedAt       string `yaml:"generatedAt"`
+	// Summary, PlatformGroup and FunctionGroup are the LLM-authored index
+	// signals: a one-line purpose and the navigation grouping the model chose
+	// for this resource. generate-index reads them to build docs/index.yaml;
+	// generate-prompt ignores them (they never affect staleness).
+	Summary       string `yaml:"summary"`
+	PlatformGroup string `yaml:"platformGroup"`
+	FunctionGroup string `yaml:"functionGroup"`
 }
 
 // parseFrontmatter extracts the leading YAML frontmatter block delimited by
