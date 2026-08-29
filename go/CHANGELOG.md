@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`config.example.yaml` is now a true no-op when loaded unmodified.** The example's own header promises that
+  loading it behaves exactly like running with no config file, but its `transformers` block spelled out each
+  transformer's settings (`clean-empty: true`, the full `base64-decode` block). Those values matched the runtime
+  defaults functionally, yet writing them changed the transform-config hash recorded in `resources/metadata.yaml`
+  (`transformConfigSha256` is a byte hash of the transformer config), so a run that loaded the example diverged
+  from one that did not. The default pipeline is now written as bare transformer names (empty settings, identical
+  hash) and every per-transformer option is illustrated in comments instead — restoring the no-op guarantee while
+  still documenting every setting.
+
 ### Added
+
+- **Tests** guarding the `config.example.yaml` no-op promise: a run that loads the example unmodified now has a
+  regression test asserting every effective value equals the built-in default a plain `azure-rd download` uses —
+  every scalar flag key, the config-only `workers-by-api`/`transformers`/`filters` sections, and the
+  `transformConfigSha256` recorded in `resources/metadata.yaml` — so any future drift in the file (a re-defaulted
+  key or a spelled-out transformer setting) fails the build.
 
 - **`docs generate-index` command.** A second `docs` subcommand emits `docs/index.yaml`, the machine-readable
   navigation index the documentation frontend reads to render a tenant's index (so no `index.md` is

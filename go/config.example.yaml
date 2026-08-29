@@ -150,7 +150,12 @@ log-level: "info"
 # ---------------------------------------------------------------------------
 # Transformers (config-only; there is no CLI flag)
 # ---------------------------------------------------------------------------
-# The list below IS the built-in default pipeline, written out explicitly.
+# The list below IS the built-in default pipeline, written out explicitly. Each
+# entry is a bare name, so it carries NO per-transformer settings and the tool
+# applies each transformer's own defaults — byte-for-byte identical to running
+# with no config file (including the transform-config hash recorded in
+# resources/metadata.yaml). The default of every per-transformer setting is
+# shown, commented out, further down.
 #
 # IMPORTANT: this key replaces the defaults wholesale — it is not merged. If you
 # edit it, keep every transformer you still want, including base64-decode. An
@@ -166,19 +171,28 @@ log-level: "info"
 #                       payload) inline or into a sidecar file
 transformers:
   - name: cleaning
-    clean-empty: true         # remove keys with empty values (null, [], "", {})
   - name: id-resolution
   - name: name-sanitization
   - name: base64-decode
-    mode: inline              # inline = replace the value in the YAML
-                              # file   = write a decoded sidecar file instead
-    source-key: payload       # property holding the base64-encoded value
-    filename-key: payloadFileName  # file mode: property holding the file name
-    extension: .mobileconfig  # file mode: extension for the decoded file
-    remove-source: false      # file mode: drop the encoded key from the YAML
 
-# Additional cleaning options (not defaults — uncomment inside the cleaning
-# entry above to use them):
+# Per-transformer settings and their built-in defaults (config-only). To change
+# one, add the keys under the matching entry above. Spelling them out with these
+# exact values behaves the same as the bare names above — but writing any of
+# them changes the recorded transform-config hash, so only add the ones you
+# actually override.
+#
+#   - name: cleaning
+#     clean-empty: true         # remove keys with empty values (null, [], "", {})
+#   - name: base64-decode
+#     mode: inline              # inline = replace the value in the YAML
+#                               # file   = write a decoded sidecar file instead
+#     source-key: payload       # property holding the base64-encoded value
+#     filename-key: payloadFileName  # file mode: property holding the file name
+#     extension: .mobileconfig  # file mode: extension for the decoded file
+#     remove-source: false      # file mode: drop the encoded key from the YAML
+#
+# Additional cleaning options (NOT defaults — add inside the cleaning entry
+# above to use them):
 #
 #   - name: cleaning
 #     remove-keys:              # remove these keys everywhere, recursively
@@ -203,7 +217,7 @@ transformers:
 #     clean-empty: true
 #
 # Transformers may also be given as a plain list of names when no per-transformer
-# settings are needed:
+# settings are needed (equivalent to the bare-name entries above):
 #
 #   transformers:
 #     - cleaning

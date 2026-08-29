@@ -115,9 +115,15 @@ make check
 3. Binding: local flags are bound automatically by `cmdutil.BindFlags(cmd)` in the command's `RunE` — do NOT add a manual `viper.BindPFlag()` for them. Only the four global flags are bound explicitly in `root.go`'s `init()`
 4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `cmdutil.DefaultWorkerCount` in `../../internal/cmdutil`)
 5. Use in pipeline/command
-6. Update `config.example.yaml`
+6. Update `config.example.yaml` (see the invariant below — this is mandatory for ANY option change)
 7. Document in README.md
 8. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
+
+**`config.example.yaml` must be updated on ANY change to a config option — not only when adding one.** This includes adding, renaming, removing, or re-defaulting an option, or changing what an existing value does. The file is the single reference schema for configuration, and it carries an explicit promise in its own header: **loading it unmodified must behave byte-for-byte identically to running with no config file at all.** Therefore:
+- Every active key sets the tool's **built-in default**, so loading the file is a true no-op. Add the key with its default value; if a key has no usable default (credentials, selection filters) leave it empty; if a value is dangerous to leave enabled, document it **commented out**.
+- **Never write an active value that changes observable output OR any recorded fact** versus running with no config. In particular, do not spell out sub-settings whose only effect is to change a hash — e.g. the `transformers` entries are bare names (empty settings) because writing their defaults explicitly would change `transformConfigSha256` in `resources/metadata.yaml` even though the transformation is identical. Illustrate such options in **comments** instead.
+- Every option must still be **illustrated by a comment** describing what it does, its non-default alternatives, and the equivalent CLI flag / `AZURE_RD_*` env var where one exists.
+- When in doubt, verify the no-op guarantee: a `download`/`docs` run with `--config config.example.yaml` must produce the same files and the same `resources/metadata.yaml` (including all hashes) as the same run without `--config`.
 
 Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))` in `initConfig`. Do not remove it — without it `log-level` resolves to `AZURE_RD_LOG-LEVEL`, which no shell can export, and every hyphenated override silently stops working.
 
