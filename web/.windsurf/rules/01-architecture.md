@@ -14,7 +14,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 ## Context
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
   Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`),
-  `gray-matter`, Jest + supertest.
+  `gray-matter`, `js-yaml`, Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered.
 
 ## Layout
@@ -27,7 +27,8 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   ESM-only packages (`markdown-it-anchor` v9). Load ESM-only deps through it, never with `require`.
 - `src/docs/` → the single feature module (`DocsModule`):
   - `docs.controller.ts` — routes, breadcrumb, 404 mapping.
-  - `tenant-discovery.service.ts` — `DOCS_ROOT` scan + TTL cache.
+  - `tenant-discovery.service.ts` — `DOCS_ROOT` scan + TTL cache + `index.yaml` cache.
+  - `tenant-index.ts` — pure functions (`parseTenantIndex`, `buildNavigation`).
   - `markdown-renderer.service.ts` — the one `markdown-it` instance + render cache.
   - `link-rewrite.ts` — pure functions (`rewriteHref`, `extractTitle`).
   - `path-safety.ts` — `resolveWithinTenant`, the security boundary.
@@ -55,14 +56,17 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - Error responses must not leak absolute filesystem paths (asserted in the e2e suite).
 
 ### Tenant discovery
-- A tenant is a directory containing **both** `index.md` and `.doc-manifest.json`. One marker is not
-  enough.
+- A tenant is a directory containing a **readable, `version: 1`** `docs/index.yaml` — the navigation
+  index written by `azure-rd docs generate-index`. There is no `index.md` and no `.doc-manifest.json`.
+- A tenant's document root is `<export>/docs`, not the export folder: that is what the relative
+  `.md` links inside the documents resolve against, and it keeps `resources/` out of the served tree.
+- `docs/generate.md` is tool input, not documentation — it is never served.
 - A matched tenant owns its whole subtree — do not descend into it looking for more tenants.
 - Skip directories starting with `_` or `.` (housekeeping folders such as `_to_delete/`).
 - Depth is bounded (`MAX_DEPTH`); keep it bounded.
-- Counts shown to the user are **derived from the manifest** (sum of `types[*].resources`), never by
-  walking the tree.
-- A malformed/unreadable manifest makes the folder *not a tenant* — it must never crash discovery.
+- Counts shown to the user are **derived from the index** (`counts.documented` / `counts.pending` /
+  `counts.excluded`), never by walking the tree.
+- A malformed/unreadable index makes the folder *not a tenant* — it must never crash discovery.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in

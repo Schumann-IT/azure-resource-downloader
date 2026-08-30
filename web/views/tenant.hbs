@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <main class="mx-auto max-w-5xl px-4 py-8">
+      <h1 class="text-2xl font-bold mb-1">{{name}}</h1>
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">
+        {{counts.documented}} documented{{#if counts.pending}} · {{counts.pending}} pending{{/if}}{{#if generatedAt}} · exported {{generatedAt}}{{/if}}
+      </p>
+
+      {{#unless complete}}
+        <p class="mb-6 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          This export is incomplete{{#if incompleteReason}}: {{incompleteReason}}{{/if}}.
+        </p>
+      {{/unless}}
+
+      {{#if counts.excluded.length}}
+        <p class="mb-6 text-xs text-slate-500 dark:text-slate-400">
+          Not documented (bulk types):
+          {{#each counts.excluded}}<span class="font-mono">{{this.type}}</span> ({{this.count}}){{#unless @last}} · {{/unless}}{{/each}}
+        </p>
+      {{/if}}
+
+      {{#if sections.length}}
+        <div class="space-y-8">
+          {{#each sections}}
+            <section>
+              <h2 id="{{this.key}}" class="text-lg font-semibold mb-3">
+                {{this.label}}
+                <span class="ml-2 text-sm font-normal text-slate-400 dark:text-slate-500">{{this.items.length}}</span>
+              </h2>
+              <ul class="space-y-2">
+                {{#each this.items}}
+                  <li>
+                    <a
+                      href="{{this.href}}"
+                      class="block rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 hover:border-brand-400 dark:hover:border-brand-400 transition"
+                    >
+                      <span class="font-medium text-brand-600 dark:text-brand-400">{{this.label}}</span>
+                      {{#unless this.documented}}
+                        <span class="ml-2 rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs text-slate-500 dark:text-slate-400">pending</span>
+                      {{/unless}}
+                      {{#if this.summary}}
+                        <span class="block text-sm text-slate-600 dark:text-slate-300 mt-1">{{this.summary}}</span>
+                      {{/if}}
+                      {{#if this.badges.length}}
+                        <span class="block mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          {{#each this.badges}}<span class="inline-block rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 mr-1">{{this}}</span>{{/each}}
+                        </span>
+                      {{/if}}
+                    </a>
+                  </li>
+                {{/each}}
+              </ul>
+            </section>
+          {{/each}}
+        </div>
+      {{else}}
+        <p class="text-slate-500 dark:text-slate-400">
+          This tenant's <code class="font-mono">docs/index.yaml</code> lists no resources.
+        </p>
+      {{/if}}
+    </main>
+  </body>
+</html>

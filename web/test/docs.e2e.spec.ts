@@ -7,37 +7,38 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
 
-// Reproduces, as automated tests, the manual endpoint checks: discovery +
-// computed count, picker, index render + link rewrite, nested settings-catalog
-// doc with <details> + cross-type ../groups link rewrite, group page, 404,
-// path traversal, and no-restart refresh. Runs against a self-contained fixture
-// tenant so it does not depend on the real output/ export.
+// Reproduces, as automated tests, the manual endpoint checks: discovery via
+// docs/index.yaml, picker, the index-driven tenant landing page, a nested
+// settings-catalog doc with <details> + cross-type ../groups link rewrite,
+// group page, 404, path traversal, the agent prompt not being served, and
+// no-restart refresh. Runs against a self-contained fixture tenant so it does
+// not depend on the real output/ export.
 
-const MANIFEST = JSON.stringify({
-  version: 2,
-  tenant: 'My Tenant',
-  generatedAt: '2026-01-01T00:00:00Z',
-  types: {
-    'Microsoft.Graph/deviceManagementConfigurationPolicies': {
-      promptSha256: 'p',
-      resources: { 'p1.yaml': { sha256: 'a', doc: 'p1.md' } },
-    },
-    'Microsoft.Graph/groups': {
-      promptSha256: 'p',
-      resources: { 'g1.yaml': { sha256: 'b', doc: 'g1.md' } },
-    },
-    'Microsoft.Graph/deviceCompliancePolicies': {
-      promptSha256: 'p',
-      resources: { 'c1.yaml': { sha256: 'c', doc: 'c1.md' } },
-    },
-  },
-});
-
-const INDEX_MD = `# My Tenant — configuration
-
-Intro paragraph.
-
-- [Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md) — a policy
+const INDEX_YAML = `version: 1
+tenant: My Tenant
+generatedAt: "2026-01-01T00:00:00Z"
+complete: true
+counts:
+    documented: 2
+    pending: 1
+    excluded:
+        Microsoft.Graph/windowsAutopilotDeviceIdentities: 4
+resources:
+    - type: Microsoft.Graph/deviceManagementConfigurationPolicies
+      doc: Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md
+      displayName: Policy One
+      summary: A firewall policy.
+      documented: true
+      assignments:
+        groups: 1
+    - type: Microsoft.Graph/groups
+      doc: Microsoft.Graph/groups/g1.md
+      displayName: Admins
+      documented: true
+    - type: Microsoft.Graph/deviceCompliancePolicies
+      doc: Microsoft.Graph/deviceCompliancePolicies/c1.md
+      displayName: Compliance One
+      documented: false
 `;
 
 const POLICY_MD = `---
@@ -83,12 +84,14 @@ An assigned security group.
 describe('Docs browser (e2e)', () => {
   let app: NestExpressApplication;
   let root: string;
+  let exportDir: string;
   let tenantDir: string;
   let policyFile: string;
 
   beforeAll(async () => {
     root = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-'));
-    tenantDir = path.join(root, 'mytenant');
+    exportDir = path.join(root, 'mytenant');
+    tenantDir = path.join(exportDir, 'docs');
 
     const policyDir = path.join(
       tenantDir,
@@ -99,24 +102,30 @@ describe('Docs browser (e2e)', () => {
     await fsp.mkdir(policyDir, { recursive: true });
     await fsp.mkdir(groupsDir, { recursive: true });
 
-    await fsp.writeFile(path.join(tenantDir, '.doc-manifest.json'), MANIFEST);
-    await fsp.writeFile(path.join(tenantDir, 'index.md'), INDEX_MD);
+    await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
+    // The agent prompt lives next to the index and must never be served.
+    await fsp.writeFile(path.join(tenantDir, 'generate.md'), '# agent prompt');
     policyFile = path.join(policyDir, 'p1.md');
     await fsp.writeFile(policyFile, POLICY_MD);
     await fsp.writeFile(path.join(groupsDir, 'g1.md'), GROUP_MD);
 
-    // A housekeeping directory that itself contains marker files: it must NOT
-    // be surfaced as a second tenant (discovery stops at the matched tenant and
+    // A housekeeping directory that itself looks like an export: it must NOT be
+    // surfaced as a second tenant (discovery stops at the matched tenant and
     // skips `_`-prefixed dirs).
-    const trash = path.join(tenantDir, '_to_delete');
+    const trash = path.join(exportDir, '_to_delete', 'docs');
     await fsp.mkdir(trash, { recursive: true });
-    await fsp.writeFile(path.join(trash, '.doc-manifest.json'), MANIFEST);
-    await fsp.writeFile(path.join(trash, 'index.md'), '# trash');
+    await fsp.writeFile(path.join(trash, 'index.yaml'), INDEX_YAML);
 
-    // A folder with only index.md (no manifest) is not a tenant.
-    const halfDir = path.join(root, 'half-baked');
+    // An export whose docs/ folder has no index.yaml is not a tenant.
+    const halfDir = path.join(root, 'half-baked', 'docs');
     await fsp.mkdir(halfDir, { recursive: true });
-    await fsp.writeFile(path.join(halfDir, 'index.md'), '# half');
+    await fsp.writeFile(path.join(halfDir, 'stray.md'), '# half');
+
+    // A docs/index.yaml the parser rejects makes the folder *not* a tenant
+    // instead of crashing discovery.
+    const brokenDir = path.join(root, 'broken', 'docs');
+    await fsp.mkdir(brokenDir, { recursive: true });
+    await fsp.writeFile(path.join(brokenDir, 'index.yaml'), 'version: [oops\n');
 
     process.env.DOCS_ROOT = root;
 
@@ -133,28 +142,61 @@ describe('Docs browser (e2e)', () => {
     await fsp.rm(root, { recursive: true, force: true });
   });
 
-  it('GET /healthz reports one tenant and the computed document count (3)', async () => {
+  it('GET /healthz reports one tenant with the index counts', async () => {
     const res = await request(app.getHttpServer()).get('/healthz').expect(200);
-    expect(res.body).toEqual({ status: 'ok', tenants: 1, documents: 3 });
+    expect(res.body).toEqual({
+      status: 'ok',
+      tenants: 1,
+      documents: 2,
+      pending: 1,
+    });
   });
 
-  it('GET / lists exactly the real tenant with its resource count', async () => {
+  it('GET / lists exactly the real tenant with its index counts', async () => {
     const res = await request(app.getHttpServer()).get('/').expect(200);
     expect(res.text).toContain('mytenant');
-    expect(res.text).toContain('3 resources');
-    // The housekeeping / half-baked folders are not tenants.
+    expect(res.text).toContain('2 documented');
+    expect(res.text).toContain('1 pending');
+    // The housekeeping / marker-less / malformed folders are not tenants.
     expect(res.text).not.toContain('_to_delete');
     expect(res.text).not.toContain('half-baked');
+    expect(res.text).not.toContain('broken');
   });
 
-  it('GET /:tenant renders index.md and rewrites relative .md links to routes', async () => {
+  it('GET /:tenant renders the index-driven landing page with routes per document', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant')
       .expect(200);
-    expect(res.text).toContain('My Tenant — configuration');
+    expect(res.text).toContain('My Tenant');
+    expect(res.text).toContain('Policy One');
+    expect(res.text).toContain('A firewall policy.');
     expect(res.text).toContain(
       'href="/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
     );
+    // A not-yet-documented resource is listed as pending, honestly.
+    expect(res.text).toContain('Compliance One');
+    expect(res.text).toContain('pending');
+    // Excluded bulk types are reported as counts only, never listed.
+    expect(res.text).toContain(
+      'Microsoft.Graph/windowsAutopilotDeviceIdentities',
+    );
+  });
+
+  it('does not serve the agent prompt (docs/generate.md)', async () => {
+    await request(app.getHttpServer()).get('/mytenant/generate').expect(404);
+    await request(app.getHttpServer()).get('/mytenant/generate.md').expect(404);
+  });
+
+  it('reflects a regenerated index.yaml on the next request without a restart', async () => {
+    await fsp.writeFile(
+      path.join(tenantDir, 'index.yaml'),
+      INDEX_YAML.replace('displayName: Policy One', 'displayName: Policy Renamed'),
+    );
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toContain('Policy Renamed');
+    await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
   });
 
   it('renders a settings-catalog doc: <details> pass through, ../groups link rewritten, frontmatter stripped', async () => {

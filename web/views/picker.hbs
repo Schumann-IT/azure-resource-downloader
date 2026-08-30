@@ -21,7 +21,7 @@
               >
                 <span class="text-lg font-semibold text-brand-600 dark:text-brand-400">{{this.id}}</span>
                 <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {{this.resourceCount}} resources{{#if this.generatedAt}} · generated {{this.generatedAt}}{{/if}}
+                  {{this.documented}} documented{{#if this.pending}} · {{this.pending}} pending{{/if}}{{#if this.generatedAt}} · exported {{this.generatedAt}}{{/if}}
                 </span>
               </a>
             </li>
@@ -30,8 +30,8 @@
       {{else}}
         <p class="text-slate-500 dark:text-slate-400">
           No tenants found under the docs root. Set <code class="font-mono">DOCS_ROOT</code> to a folder
-          containing tenant directories (each with <code class="font-mono">index.md</code> and
-          <code class="font-mono">.doc-manifest.json</code>).
+          containing export directories, each with a <code class="font-mono">docs/index.yaml</code>
+          written by <code class="font-mono">azure-rd docs generate-index</code>.
         </p>
       {{/if}}
     </main>

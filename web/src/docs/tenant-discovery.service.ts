@@ -1,28 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { parseTenantIndex, TenantIndex } from './tenant-index';
 
 export interface TenantInfo {
-  // Route segment / picker id (the tenant folder name, e.g. "cb-gmbh.com").
+  // Route segment / picker id (the export folder name, e.g. "cb-gmbh.com").
   id: string;
-  // Human-friendly name from the manifest (falls back to id).
+  // Human-friendly name from the index (falls back to id).
   name: string;
-  // Absolute path to the tenant folder.
+  // Absolute path to the folder documents are resolved against: <export>/docs.
+  // Relative `.md` links inside the documents are relative to this folder.
   dir: string;
-  // Count of documented, in-scope resources (sum of manifest types[*].resources).
-  resourceCount: number;
-  // When the export was generated, from the manifest.
+  // Absolute path to that folder's index.yaml.
+  indexPath: string;
+  // In-scope resource counts, from the index (never by walking the tree).
+  documented: number;
+  pending: number;
+  // When the export was generated, from the index (mirrors the export).
   generatedAt: string | null;
 }
 
-const MANIFEST = '.doc-manifest.json';
-const INDEX = 'index.md';
+export const DOCS_DIR = 'docs';
+export const INDEX_FILE = 'index.yaml';
 const MAX_DEPTH = 3;
 const TTL_MS = 30_000;
 
+interface IndexCacheEntry {
+  mtimeMs: number;
+  size: number;
+  index: TenantIndex;
+}
+
 // Discovers tenant folders under DOCS_ROOT. A tenant is any directory that
-// contains BOTH index.md and .doc-manifest.json. Results are cached with a
-// short TTL so a newly generated tenant appears without a restart.
+// contains `docs/index.yaml` — the navigation index written by
+// `azure-rd docs generate-index`. Results are cached with a short TTL so a
+// newly generated tenant appears without a restart, and the parsed index is
+// cached by mtime + size so a regenerated index is picked up on the next
+// request.
 @Injectable()
 export class TenantDiscoveryService {
   private readonly root = path.resolve(
@@ -30,6 +44,7 @@ export class TenantDiscoveryService {
     process.env.DOCS_ROOT || '../output',
   );
   private cache?: { at: number; tenants: TenantInfo[] };
+  private readonly indexCache = new Map<string, IndexCacheEntry>();
 
   getRoot(): string {
     return this.root;
@@ -46,6 +61,47 @@ export class TenantDiscoveryService {
 
   async get(id: string): Promise<TenantInfo | undefined> {
     return (await this.list()).find((t) => t.id === id);
+  }
+
+  // Reads and parses a tenant's index.yaml, cached by mtime + size so a
+  // regenerated index shows up without a restart. Returns undefined when the
+  // file has become unreadable or malformed.
+  async getIndex(info: TenantInfo): Promise<TenantIndex | undefined> {
+    return this.readIndex(info.indexPath);
+  }
+
+  private async readIndex(file: string): Promise<TenantIndex | undefined> {
+    let stat;
+    try {
+      stat = await fs.stat(file);
+    } catch {
+      return undefined;
+    }
+
+    const cached = this.indexCache.get(file);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return cached.index;
+    }
+
+    let raw: string;
+    try {
+      raw = await fs.readFile(file, 'utf8');
+    } catch {
+      return undefined;
+    }
+
+    const index = parseTenantIndex(raw);
+    if (!index) {
+      this.indexCache.delete(file);
+      return undefined;
+    }
+
+    this.indexCache.set(file, {
+      mtimeMs: stat.mtimeMs,
+      size: stat.size,
+      index,
+    });
+    return index;
   }
 
   private async scan(): Promise<TenantInfo[]> {
@@ -69,12 +125,16 @@ export class TenantDiscoveryService {
       return;
     }
 
-    const names = new Set(entries.filter((e) => e.isFile()).map((e) => e.name));
-    if (names.has(INDEX) && names.has(MANIFEST)) {
+    const hasDocsDir = entries.some(
+      (e) => e.isDirectory() && e.name === DOCS_DIR,
+    );
+    if (hasDocsDir) {
       const info = await this.readTenant(dir);
-      if (info) found.push(info);
-      // A tenant owns its whole subtree — do not descend looking for more.
-      return;
+      if (info) {
+        found.push(info);
+        // A tenant owns its whole subtree — do not descend looking for more.
+        return;
+      }
     }
 
     for (const entry of entries) {
@@ -86,24 +146,20 @@ export class TenantDiscoveryService {
   }
 
   private async readTenant(dir: string): Promise<TenantInfo | undefined> {
-    try {
-      const raw = await fs.readFile(path.join(dir, MANIFEST), 'utf8');
-      const manifest = JSON.parse(raw);
-      const types = manifest.types || {};
-      let resourceCount = 0;
-      for (const key of Object.keys(types)) {
-        const resources = types[key]?.resources || {};
-        resourceCount += Object.keys(resources).length;
-      }
-      return {
-        id: path.basename(dir),
-        name: manifest.tenant || path.basename(dir),
-        dir,
-        resourceCount,
-        generatedAt: manifest.generatedAt || null,
-      };
-    } catch {
-      return undefined;
-    }
+    const docsDir = path.join(dir, DOCS_DIR);
+    const indexPath = path.join(docsDir, INDEX_FILE);
+    const index = await this.readIndex(indexPath);
+    if (!index) return undefined;
+
+    const id = path.basename(dir);
+    return {
+      id,
+      name: index.tenant || id,
+      dir: docsDir,
+      indexPath,
+      documented: index.counts.documented,
+      pending: index.counts.pending,
+      generatedAt: index.generatedAt,
+    };
   }
 }

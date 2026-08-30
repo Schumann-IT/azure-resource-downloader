@@ -37,8 +37,8 @@ wired up. **Never use the Go `Makefile` in the sibling `go/` folder** — it doe
 - Missing or unreadable documents/tenants are **normal**, not exceptional: map them to a 404 render.
   `MarkdownRendererService.render` throws and the controller converts it — keep that contract.
 - Never surface an absolute filesystem path, stack trace or raw exception message to the client.
-- A malformed manifest, unreadable directory or bad file must degrade (skip / 404), never take the
-  process down.
+- A malformed `index.yaml`, unreadable directory or bad file must degrade (skip / 404), never take
+  the process down.
 - Do not log per-request noise; `console` use is limited to the single startup line in `main.ts`.
 
 ## Frontend / CSS
@@ -61,11 +61,13 @@ wired up. **Never use the Go `Makefile` in the sibling `go/` folder** — it doe
   production.
 - Required coverage for changes:
   - touching `path-safety.ts` → new/updated cases in `test/path-safety.spec.ts`;
+  - touching `tenant-index.ts` → new/updated cases in `test/tenant-index.spec.ts`;
   - touching routes, discovery, rendering or link rewriting → a case in `test/docs.e2e.spec.ts`;
   - touching `src/styles.css` → assert the rule survives compilation in `test/styles-build.spec.ts`.
-- Keep the invariant tests: discovery must ignore `_`-prefixed and marker-incomplete folders,
-  frontmatter must not appear in the body, `<details>` must pass through, cross-type links must
-  resolve, traversal must 404, and an edited file must be reflected on the next request.
+- Keep the invariant tests: discovery must ignore `_`-prefixed folders and folders whose
+  `docs/index.yaml` is missing or malformed, `docs/generate.md` must not be served, frontmatter must
+  not appear in the body, `<details>` must pass through, cross-type links must resolve, traversal
+  must 404, and an edited document or index must be reflected on the next request.
 
 ## Failing tests: analyze, don't auto-fix
 Assume the tests are right and the implementation is wrong. Before editing, produce a short report:

@@ -13,7 +13,7 @@ export interface LinkEnv {
 // segment, producing an absolute app route with the `.md` suffix stripped. This
 // deliberately resolves at render time (rather than relying on the browser's
 // relative resolution) so that `../groups/x.md` from a policy page and
-// `Microsoft.Graph/type/x.md` from index.md both land on the right route
+// `Microsoft.Graph/type/x.md` from a docs-root document both land on the right route
 // regardless of trailing slashes.
 //
 // Returns null when the link should be left untouched (anchors, absolute URLs,

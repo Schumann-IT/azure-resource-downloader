@@ -8,7 +8,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **A tenant is now a directory containing `docs/index.yaml`; `index.md` and `.doc-manifest.json` are
+  gone.** The CLI stopped generating both: `azure-rd docs generate-index` writes a machine-readable
+  navigation index instead, and the manifest was retired because `resources/metadata.yaml` plus the
+  documents' frontmatter already carry the generation state it used to hold. Discovery is keyed off
+  that file, and a tenant's document root is now `<export>/docs` rather than the export folder — which
+  is what the relative `../<type>/<name>.md` links inside the documents were always relative to, so
+  cross-document links resolve without a rewrite change. An export that has not had
+  `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
+  a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
+  is still bounded, and counts are still derived from the index rather than by walking the tree. A
+  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
+
+### Added
+
+- **Index-driven tenant landing page (`views/tenant.hbs`).** `GET /:tenant` no longer renders an
+  `index.md`; it renders the navigation built from `docs/index.yaml`: resources grouped by type
+  (sorted, with their document routes), the LLM-authored `summary` when present, a *pending* marker
+  for in-scope resources that have no document yet, count-only assignment badges (`all users`,
+  `all devices`, `N groups`, `targeted by N`, `unassigned`) so resolved names stay in the documents,
+  the excluded bulk types as counts, and a banner when the export reports itself incomplete. Still no
+  client-side JavaScript. Grouping is by resource type because the documents do not yet carry the
+  `platformGroup`/`functionGroup` frontmatter the index can enrich them with; when present they are
+  shown as badges (see `NEXT-ITERATIONS.md`).
+
+- **`docs/index.yaml` parsing and navigation building (`src/docs/tenant-index.ts`).** A pure,
+  Nest-free module — parsing and grouping stay unit-testable without a module — with `js-yaml` added
+  as an explicit dependency. It validates defensively (`version: 1` plus a tenant name, unexpected
+  field types coerced, unknown fields ignored) so operator-supplied content cannot take the process
+  down.
+
+- **The parsed index is cached by `mtimeMs` + `size`**, like rendered documents, so a regenerated
+  index is reflected on the next request without a restart.
+
+- **Tests**: `test/tenant-index.spec.ts` for parsing (including rejection of malformed and
+  non-`version: 1` files) and navigation building; the e2e fixture was rebuilt on the new layout and
+  now also covers the landing page, a pending resource, the excluded-type counts, the malformed-index
+  folder being skipped, `generate.md` not being served, and no-restart refresh of the index itself.
+
 ### Changed
+
+- **`GET /healthz` reports `{ status, tenants, documents, pending }`.** `documents` is now the index's
+  `counts.documented` (previously the manifest's resource count) and `pending` is new, so the health
+  endpoint distinguishes a fully documented export from a partly generated one. The picker shows the
+  same split.
+
+- **`docs/generate.md` is never served.** The agent prompt sits at the docs root and would otherwise
+  be routable at `/:tenant/generate`; it is tool input, not documentation. Blocked in the controller
+  by its extensionless root-relative path, so a real document named `generate.md` deeper in the tree
+  is unaffected. This is a serving decision, not a path-safety change: `resolveWithinTenant()` remains
+  the only way a request-derived path becomes a filesystem path, and its guarantees are untouched.
 
 - **The project moved to `web/` and became self-contained.** The Go CLI now lives in the sibling `go/`
   folder and the shared export tree stays at the repository root, so the `DOCS_ROOT` default

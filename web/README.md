@@ -10,7 +10,12 @@ mutates the export in any way.
 ## What it does
 
 - **Tenant discovery** — walks `DOCS_ROOT` (up to 3 levels deep) and treats any directory that
-  contains **both** `index.md` **and** `.doc-manifest.json` as a tenant.
+  contains a readable `docs/index.yaml` as a tenant. That file is the navigation index written by
+  `azure-rd docs generate-index`; documents are resolved against the `docs/` folder.
+- **Index-driven landing page** — `GET /:tenant` is generated from `docs/index.yaml` (there is no
+  `index.md` any more): resources grouped by type, with the LLM-authored summary, a *pending* marker
+  for resources that have no document yet, count-only assignment badges, and the excluded bulk types
+  reported as counts.
 - **Rendering** — `markdown-it` with `html: true`, so the `<details>`/`<summary>` disclosure blocks
   that make up the bulk of the generated docs pass through untouched. Headings get anchors via
   `markdown-it-anchor`.
@@ -19,14 +24,15 @@ mutates the export in any way.
   `/<tenant>/Microsoft.Graph/groups/g1`).
 - **Frontmatter** — parsed with `gray-matter`; `source` and `generatedAt` are shown as page
   metadata, the rest is never rendered into the body.
-- **No-restart refresh** — regenerated documents appear on the next request (per-request `stat()`
-  against an mtime/size-keyed cache); newly generated tenants appear within the 30 s discovery TTL.
+- **No-restart refresh** — regenerated documents *and* a regenerated `index.yaml` appear on the next
+  request (per-request `stat()` against an mtime/size-keyed cache); newly generated tenants appear
+  within the 30 s discovery TTL.
 
 ## Requirements
 
 - Node.js **>= 20**
-- An export tree produced by `azure-rd` (documents plus `index.md` and `.doc-manifest.json` per
-  tenant)
+- An export tree produced by `azure-rd`, with `azure-rd docs generate-index` already run for each
+  tenant (the browser needs `docs/index.yaml`)
 
 ## Setup
 
@@ -69,33 +75,40 @@ DOCS_ROOT=/path/to/output PORT=4000 npm run start:prod
 ```
 <DOCS_ROOT>/
 └── <tenant>/                      # e.g. contoso.com/  (may be nested, up to 3 levels)
-    ├── index.md                   # required marker
-    ├── .doc-manifest.json         # required marker
-    └── Microsoft.Graph/
-        └── <endpoint>/
-            └── <name>.md
+    ├── resources/                 # written by `azure-rd download` — never read by this app
+    └── docs/
+        ├── index.yaml             # required marker (azure-rd docs generate-index)
+        ├── generate.md            # agent prompt — never served
+        └── Microsoft.Graph/
+            └── <endpoint>/
+                └── <name>.md
 ```
 
 Discovery rules:
 
-- A directory needs **both** markers to count as a tenant; a folder with only `index.md` is ignored.
+- A directory counts as a tenant when `docs/index.yaml` exists **and parses** as a `version: 1`
+  index; a malformed or unreadable index makes the folder *not* a tenant instead of crashing
+  discovery.
+- Documents are resolved against `<tenant>/docs`, which is what the relative `../<type>/<name>.md`
+  links inside the documents are relative to. `resources/` is therefore outside the served tree.
 - A matched tenant **owns its whole subtree** — discovery does not descend further looking for
   nested tenants.
 - Directories whose name starts with `_` or `.` are skipped (e.g. `_to_delete/`).
-- `resourceCount` in the picker is computed from the manifest: the sum of
-  `types[*].resources` entry counts.
+- The counts in the picker and on the landing page come from the index (`counts.documented`,
+  `counts.pending`, `counts.excluded`), never from walking the tree.
 
 ## Routes
 
 | Route | Response |
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`). |
-| `GET /healthz` | JSON `{ status, tenants, documents }`. |
-| `GET /:tenant` | That tenant's `index.md`. |
-| `GET /:tenant/*path` | A document inside the tenant; the `.md` suffix is optional. |
+| `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
+| `GET /:tenant` | The tenant landing page, generated from `docs/index.yaml`. |
+| `GET /:tenant/*path` | A document inside the tenant's `docs/` folder; the `.md` suffix is optional. |
 
 Anything that does not resolve to a Markdown file inside the tenant renders the 404 view. The 404
-page never leaks a filesystem path.
+page never leaks a filesystem path. `docs/generate.md` is tool input, not documentation, and is
+never served.
 
 ## Security
 
@@ -120,9 +133,12 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
 `markdown-it-anchor` v9 is ESM-only.
 
 - `test/path-safety.spec.ts` — traversal, symlink escape, null bytes, absolute paths.
+- `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed or
+  non-`version: 1` file) and navigation building.
 - `test/docs.e2e.spec.ts` — supertest against a self-contained fixture tenant in a temp dir:
-  discovery, picker, index render + link rewrite, nested `<details>`, cross-type link resolution,
-  404s, traversal, no-restart refresh.
+  discovery, picker, the index-driven landing page, nested `<details>`, cross-type link resolution,
+  404s, traversal, `generate.md` not being served, no-restart refresh of both a document and the
+  index.
 - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts the
   custom `<details>`/`<summary>` and dark-mode rules survive.
 
@@ -141,7 +157,8 @@ web/
 │   └── docs/
 │       ├── docs.module.ts
 │       ├── docs.controller.ts           # routes, breadcrumb, 404 mapping
-│       ├── tenant-discovery.service.ts  # DOCS_ROOT scan + 30 s TTL cache
+│       ├── tenant-discovery.service.ts  # DOCS_ROOT scan + 30 s TTL cache + index cache
+│       ├── tenant-index.ts              # docs/index.yaml parsing + navigation building
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
 │       └── path-safety.ts               # the security boundary
@@ -171,6 +188,8 @@ changes to the Go CLI go in [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 
 ## Known limitations
 
-Deliberate iteration-1 scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md) — no
-search, no syntax highlighting, single-segment tenant routes only, no manifest-driven navigation
-tree, no explicit dark-mode toggle.
+Deliberate scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md) — no search, no
+syntax highlighting, single-segment tenant routes only, no sidebar navigation, no explicit
+dark-mode toggle. Navigation groups by resource type: the documents do not yet carry the
+`platformGroup`/`functionGroup` frontmatter the index can enrich them with, so those are shown as
+badges when present rather than driving the tree.
