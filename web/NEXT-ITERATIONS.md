@@ -23,6 +23,70 @@ left out on purpose:
   no filter and no item summaries/badges — those are only on the index-listing fallback. It also does not
   remember which sections were open across navigations (that would need client-side state).
 
+## Section-level styling hooks for the document page
+
+`GET /:tenant/*path` renders the whole document into one `<article class="prose">`, so almost nothing in it
+can be addressed. An audit of the two reference exports found these hooks *already usable*: `.prose details`
+/ `.prose summary` / `.prose details details`, `h2[id]` and `.header-anchor` from `markdown-it-anchor`
+(`#references`, `#security`, `#settings`, `#properties`, `#membership`, `#targeted-by`, `#definition`, …),
+`.prose > h1`, `.prose > h1 + p` (the summary paragraph, reliable because `stripSourceEcho` removes the
+`` `x.yaml` `` echo first), `.prose > table:first-of-type`, and `.nav-tree` in the sidebar.
+
+What is missing, roughly in priority order:
+
+- **No section wrapper.** Everything between two H2s is a flat sibling run, so a section cannot get a panel,
+  a tint or its own density without `h2#settings ~ *` selectors that bleed into the next section. This is the
+  main gap and the only structural change on the list.
+- **The assignments block is invisible to CSS.** `<!-- assignments:start -->` / `<!-- assignments:end -->`
+  survive into the DOM (`html: true`) but HTML comments are not selectable, so the assignments intro
+  paragraph and table are indistinguishable from any other paragraph and table — even though the markers are
+  a *tool-maintained contract*, and therefore a better hook than any positional selector.
+- **The metadata table has no class.** `table:first-of-type` breaks the moment a document opens with an extra
+  heading — which 99 documents in the reference exports do (`## Metadata`, see the Go side below).
+- **`Lifecycle & operations` slugs to `lifecycle-%26-operations`.** Usable only as
+  `[id="lifecycle-%26-operations"]`, and an ugly deep link.
+- **Setting `<details>` depth is positional.** `.prose details details` is the only way to distinguish a
+  nested sub-setting, and it breaks as soon as sections are wrapped.
+- **No per-document hook on `<article>`.** A group document and a Win32 app document render identically;
+  neither the resource type nor the document family can be targeted.
+- **Template chrome has no semantic classes.** The source/generated line, the layout grid, `<main>` and the
+  view switcher are pure Tailwind utilities, so `src/styles.css` cannot reach them.
+
+Planned shape, cheapest first — the first two are self-contained and worth doing on their own:
+
+1. **Semantic classes in the templates.** `#doc-page` on `<body>`, `.doc-main`, `.doc-source` on the
+   source/generated line, `.doc-body` alongside `prose` on `<article>`, `.site-header`, `.view-switcher`.
+   Template-only, no renderer change.
+2. **`data-section` on headings.** A `heading_open` rule adding `class="doc-section-heading"` and
+   `data-section="<slug>"`, plus a custom `slugify` that drops the `%26`. Immediately enables
+   `[data-section="security"]` without touching document structure. The slug change alters existing anchor
+   URLs, so it needs a changelog note.
+3. **Turn the assignment markers into elements.** An `html_block` rule mapping the
+   `assignments:start`/`end` and `targeted-by:start`/`end` marker pairs to `<div class="doc-assignments">`
+   and `.doc-targeted-by`. Small, and it consumes a contract the CLI already guarantees.
+4. **Class the metadata table** by its position *after* the H1 and summary paragraph rather than by
+   `first-of-type`.
+5. **`data-family` / `data-type` on `<article>`**, from the document path and (for the family) from
+   `docs/index.yaml` — the CLI knows which prompt template a type uses; the frontend must not guess.
+6. **Wrap each H2 run in `<section class="doc-section" data-section="…">`** via a token post-process. Solves
+   the first gap, and is the only invasive item — deferred until per-section backgrounds are actually
+   wanted, since it also changes the `details details` depth selectors.
+
+All of it stays server-side and keeps the single `markdown-it` instance; each step needs a case in
+`test/docs.e2e.spec.ts`.
+
+**Depends on the Go side.** These hooks key off the H2 vocabulary, which is currently only *described* by
+the prompt templates and has drifted (`## Metadata` in 99 documents, `## Assignments` in 4). Closing that
+vocabulary, renaming the three `&` headings and adding `data-setting` / `data-note` to the setting
+`<details>` blocks is written up in `../go/NEXT-ITERATIONS.md` §1; it forces a full regeneration of every
+document, so it is a one-shot change. Steps 1–4 degrade gracefully on today's documents (an unrecognised
+heading simply gets an unstyled `data-section`), so they need not wait — but step 6 and any per-section
+visual treatment should land after the regeneration.
+
+Deliberately **not** requested from the generation prompt: section wrappers, the metadata-table class and
+the assignments wrapper. All three are derivable here, and 340+ documents of hand-written wrapper tags would
+eventually produce unbalanced HTML that only a regeneration could fix.
+
 ## Resource (YAML) rendering — shipped as option A
 
 Implemented: `<export>/resources` is a second read-only served root, `GET /:tenant/_resource/*path`
