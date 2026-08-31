@@ -13,6 +13,24 @@ today*; this file is only for what was left out on purpose.
 **Goal.** Make the generated Markdown structurally predictable enough that the docs browser in `../web` can
 style each part of a document, without asking the LLM to hand-write layout.
 
+> **Status — implemented (Aug 2026).** §1a–1e have shipped. All seven templates carry the closed-set
+> declaration plus a machine-readable `<!-- doc-headings: … -->` marker that names each family's ordered H2
+> set and rides along into every type's `doc-prompt.md`; the three `&` headings were renamed; the setting
+> `<details>` blocks gained `data-setting`/`data-note`; and `generate_prompt_template.md` §4 gained a
+> **Heading vocabulary** check that reads the contract from each type's `doc-prompt.md` and validates every
+> document's H2s (membership, order, no duplicates), skipping H2s inside `<!-- …:start -->`/`<!-- …:end -->`
+> marker pairs so the tool-spliced `## Targeted by` block is exempt (kept out of the group set rather than
+> added to it). §1e shipped as a **declaration only** on `docs/summary.md`.
+>
+> **Still missing:** three follow-ups on `summary.md` found by reviewing a regenerated one — its H3
+> sub-vocabulary (`### Findings` / `### Recommendations`) is not declared and the two exports disagree,
+> its findings carry no severity, and its preamble is undeclared (§1e-i to §1e-iii) — plus automated
+> enforcement of those headings (`summary.md` sits at the `docs/` root, which §4 skips, and has no
+> `doc-prompt.md` to hold a marker). Per-finding severity in the per-document `Security` sections stays
+> deliberately postponed (see *What stays out of the prompt*). The web-side renderer that consumes all this
+> is in `../web/NEXT-ITERATIONS.md`, and the required one-shot regeneration of all existing documentation has
+> not been run yet.
+
 The seven prompt templates each end with a list of H2 sections the model must produce, in order:
 
 ```
@@ -25,7 +43,8 @@ internal/handlers/graph/referenced_prompt.tmpl     References · Usage & referen
 internal/handlers/arm/arm_prompt.tmpl              References · Lifecycle & operations · Security · Properties
 ```
 
-That list is *described* but never *declared binding*, and it has drifted. In the two reference exports:
+That list *was* described but never declared binding, and it had drifted. In the two reference exports, both
+generated before §1a landed:
 
 - **`## Metadata` in 99 documents** — a second, model-invented metadata table, spread across every family
   (conditional access 24, settings-catalog policies 22, groups 20, …), even though the fixed preamble
@@ -89,6 +108,12 @@ structural checks; add a row (and the matching assertion in its Python checker):
 Same caveat as the existing *Heading structure* row: `deviceShellScripts` / `deviceManagementScripts`
 documents embed shell scripts whose `##` comment lines are not headings.
 
+**Implemented.** The closed set is not hardcoded in the checker: each template emits a
+`<!-- doc-headings: A | B | C -->` marker, so the assembled `doc-prompt.md` carries its own contract and the
+checker reads the ordered set from there (no Go→Python duplication of which family a type uses). The check
+also skips any `##` inside a `<!-- …:start -->`/`<!-- …:end -->` marker pair, which is how the tool-spliced
+`## Targeted by` block stays out of the group family's set instead of being added to it.
+
 ### What stays out of the prompt
 
 The division of labour matters more than the wording — **never ask the model for something a program can
@@ -125,6 +150,12 @@ templates, and its four headings (`Management summary`, `At a glance`, `Assignme
 `Coverage caveats`) are already consistent across both exports. It is the body of the browser's tenant
 landing page, so it deserves the same "closed set, verbatim" declaration — but it is a separate edit that
 does **not** change `promptSha256`, so it can ship independently of 1a–1d.
+
+**Implemented (declaration only).** §7 of `generate_prompt_template.md` now declares the four headings a
+closed contract, to be written verbatim and unnumbered (`## Management summary`, `## At a glance`,
+`## Assignment posture`, `## Coverage caveats`). It is **not** enforced: `summary.md` lives at the `docs/`
+root, which the §4 checker skips, and has no `doc-prompt.md` to hold a `doc-headings` marker, so an automated
+check for it is still open.
 
 ### Consumer
 

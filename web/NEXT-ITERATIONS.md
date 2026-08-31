@@ -15,7 +15,9 @@ left out on purpose:
   for them), so the landing page groups by resource type and shows the groups as badges when present.
   Once the template requires them, the tree (and the sidebar planned below) can become platform → function.
 - **Summary table of contents.** `markdown-it-anchor` already gives the summary's `##` headings ids; a
-  jump list (Management summary / At a glance / Assignment posture / Coverage caveats) is not built.
+  jump list (Management summary / At a glance / Assignment posture / Coverage caveats) is not built. Those
+  four headings are now a declared contract on the CLI side, so the slugs are safe to hard-code — see
+  *Section-level styling hooks* below.
 - **Explicit dark-mode toggle.** Currently follows `prefers-color-scheme` only.
 - **Watch-based cache invalidation.** The cache is mtime-checked per request; an `fs.watch` layer could
   pre-warm/evict, but per-request `stat()` already gives no-restart refresh.
@@ -58,9 +60,10 @@ Planned shape, cheapest first — the first two are self-contained and worth doi
    source/generated line, `.doc-body` alongside `prose` on `<article>`, `.site-header`, `.view-switcher`.
    Template-only, no renderer change.
 2. **`data-section` on headings.** A `heading_open` rule adding `class="doc-section-heading"` and
-   `data-section="<slug>"`, plus a custom `slugify` that drops the `%26`. Immediately enables
-   `[data-section="security"]` without touching document structure. The slug change alters existing anchor
-   URLs, so it needs a changelog note.
+   `data-section="<slug>"`, plus a custom `slugify` that drops the percent-encoding — `%26` from
+   `Lifecycle & operations` (now renamed away on the Go side) and `%E2%80%94` from the em dash in every
+   `summary.md` H1. Immediately enables `[data-section="security"]` without touching document structure. The
+   slug change alters existing anchor URLs, so it needs a changelog note.
 3. **Turn the assignment markers into elements.** An `html_block` rule mapping the
    `assignments:start`/`end` and `targeted-by:start`/`end` marker pairs to `<div class="doc-assignments">`
    and `.doc-targeted-by`. Small, and it consumes a contract the CLI already guarantees.
@@ -75,13 +78,47 @@ Planned shape, cheapest first — the first two are self-contained and worth doi
 All of it stays server-side and keeps the single `markdown-it` instance; each step needs a case in
 `test/docs.e2e.spec.ts`.
 
-**Depends on the Go side.** These hooks key off the H2 vocabulary, which is currently only *described* by
-the prompt templates and has drifted (`## Metadata` in 99 documents, `## Assignments` in 4). Closing that
-vocabulary, renaming the three `&` headings and adding `data-setting` / `data-note` to the setting
-`<details>` blocks is written up in `../go/NEXT-ITERATIONS.md` §1; it forces a full regeneration of every
-document, so it is a one-shot change. Steps 1–4 degrade gracefully on today's documents (an unrecognised
-heading simply gets an unstyled `data-section`), so they need not wait — but step 6 and any per-section
-visual treatment should land after the regeneration.
+**Depends on the Go side — now unblocked.** These hooks key off the H2 vocabulary, which used to be only
+*described* by the prompt templates and had drifted (`## Metadata` in 99 documents, `## Assignments` in 4).
+That is fixed: `../go/NEXT-ITERATIONS.md` §1 has shipped — all seven templates declare a closed, verbatim H2
+set (carried machine-readably in a `<!-- doc-headings: … -->` marker and checked by the generation template's
+§4 script), the three `&` headings were renamed, and the setting `<details>` blocks now carry
+`data-setting` / `data-note`. **What has not happened is the regeneration**, so the documents on disk still
+predate all of it.
+
+Steps 1–4 degrade gracefully on today's documents (an unrecognised heading simply gets an unstyled
+`data-section`), so they need not wait. Step 6 and any per-section visual treatment should land after the
+regeneration. `data-setting` / `data-note` hooks are worth building only once documents actually carry them.
+
+### The tenant landing page is the first page that can be styled
+
+`docs/summary.md` does not feed `promptSha256`, so it can be reissued on its own — and one tenant already
+was. A regenerated `iis.mitarbeiterangebote-staging.de` summary renders exactly four H2s with clean slugs and
+zero drift: `#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats`. Because the
+structure is tight (a heading followed by one list or a short run of paragraphs), positional selectors that
+would be fragile in a resource document hold up here, so `tenant.hbs` can be styled **before** any of the
+steps above:
+
+```css
+#findings + ol { }                  /* the findings list as a callout */
+#recommendations + ol { }
+#findings + ol > li > strong { }     /* the bolded finding lead-in */
+```
+
+Two caveats, both being fixed on the Go side rather than worked around here:
+
+- **`#findings` is not yet a contract.** The regenerated summary emits `### Findings` / `### Recommendations`;
+  the older `cb-gmbh.com` one emits `**Findings**` / `**Recommendations**` as bold paragraphs, with no ids at
+  all. Declaring those two H3s is `../go/NEXT-ITERATIONS.md` §1e-i — do not ship CSS that depends on
+  `#findings` until it lands.
+- **Findings carry no severity**, so a report-only-Conditional-Access finding and a "verify this in the live
+  tenant" note look identical. §1e-ii adds it as a `**[critical]**` / `**[warning]**` / `**[info]**` prefix
+  the renderer lifts into a class — a small `inline`-rule counterpart to step 3 above, and the one place where
+  asking the model for a judgement is worth it (at most six per tenant, no regeneration cost).
+
+Also unblocked by the same change: the **summary table of contents** listed at the top of this file. The four
+headings are now a declared contract with stable slugs, so a jump list no longer risks pointing at headings
+that may be renamed.
 
 Deliberately **not** requested from the generation prompt: section wrappers, the metadata-table class and
 the assignments wrapper. All three are derivable here, and 340+ documents of hand-written wrapper tags would

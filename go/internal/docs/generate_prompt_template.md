@@ -275,6 +275,7 @@ every assignments block still holds bare GUIDs by design. They are in section 6.
 | Coverage | Every work-list entry produced a document at its derived path. Zero missing. Diff the source paths in `chunks/*.md` against what exists on disk. |
 | Frontmatter | Every written document has valid frontmatter whose `sourceSha256` and `promptSha256` equal the values from its chunk file. A mismatch means an agent documented the wrong file. |
 | Heading structure | Exactly one `#` heading per document. Count headings **outside fenced code blocks only** — shell scripts embedded in `deviceShellScripts` / `deviceManagementScripts` documents contain `##` comment lines that are not headings. |
+| Heading vocabulary | Every `##` **outside fenced code blocks and outside `<!-- …:start -->`/`<!-- …:end -->` marker pairs** is in the closed set declared for that document's type — the `doc-headings` list in its `doc-prompt.md` — spelled exactly, in order, without duplicates. The marker-pair exemption is what lets the tool-spliced `## Targeted by` block (section 5) live in group documents without being part of the authored contract. Same fenced-code caveat as *Heading structure*. |
 | `<details>` balance | `<details>` count equals `</details>` count per file. Nesting is normal. |
 | Assignment markers | Every document that should have them has exactly one matched `<!-- assignments:start -->` / `<!-- assignments:end -->` pair — never unbalanced, never nested, never repeated. |
 | Stray artifacts | No leftover `DONE` receipts in document text, no truncated final block, every file ends cleanly. |
@@ -294,6 +295,22 @@ problems, seen = Counter(), set()
 def fail(doc, msg):
     problems[msg] += 1
     print(f"FAIL {doc}: {msg}")
+
+MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
+HEADING = re.compile(r"^(#+)\s+\S")
+_contracts = {}
+
+def heading_contract(src):
+    """Ordered closed H2 set for src's type, read from its doc-prompt.md."""
+    spec = pathlib.Path(src).parent / "doc-prompt.md"
+    if spec not in _contracts:
+        val = None
+        if spec.is_file():
+            m = re.search(r"<!--\s*doc-headings:\s*(.+?)\s*-->", spec.read_text(encoding="utf-8"))
+            if m:
+                val = [h.strip() for h in m.group(1).split("|") if h.strip()]
+        _contracts[spec] = val
+    return _contracts[spec]
 
 # expected[source path] = (doc path, promptSha256, sourceSha256)
 expected = {}
@@ -332,14 +349,43 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
 
-    in_fence, h1 = False, 0
+    in_fence, in_marker, h1, h2s = False, False, 0, []
     for line in text.splitlines():
         if FENCE.match(line):
             in_fence = not in_fence
-        elif not in_fence and line.startswith("# "):
-            h1 += 1
+            continue
+        if in_fence:
+            continue
+        mk = MARKER.match(line)
+        if mk:
+            in_marker = mk.group(1) == "start"
+            continue
+        if in_marker:
+            continue
+        h = HEADING.match(line)
+        if h:
+            level = len(h.group(1))
+            if level == 1:
+                h1 += 1
+            elif level == 2:
+                h2s.append(line.lstrip("#").strip())
     if h1 != 1:
         fail(doc, f"expected exactly one H1, found {h1}")
+
+    contract = heading_contract(src)
+    if contract is None:
+        fail(doc, "no doc-headings contract in its doc-prompt.md")
+    else:
+        allowed = set(contract)
+        extra = [h for h in dict.fromkeys(h2s) if h not in allowed]
+        if extra:
+            fail(doc, f"unexpected H2 heading(s): {', '.join(extra)}")
+        dupes = [h for h in dict.fromkeys(h2s) if h2s.count(h) > 1]
+        if dupes:
+            fail(doc, f"duplicate H2 heading(s): {', '.join(dupes)}")
+        it = iter(contract)
+        if not all(h in it for h in h2s if h in allowed):
+            fail(doc, "H2 headings out of contract order")
 
     opens, closes = text.count("<details"), text.count("</details>")
     if opens != closes:
@@ -545,6 +591,13 @@ one that spreads across thirty, and the reader cannot see that from the totals a
 
 **4. Coverage caveats** — whether the export was incomplete and why, any type that could not be listed, any
 type that listed empty, and how many resources are retained but no longer in the tenant.
+
+These four H2 headings are a closed set and a machine contract, exactly as in the per-type documents: the
+documentation frontend styles and deep-links `summary.md` by heading slug the same way it does every
+document. Write them verbatim — `## Management summary`, `## At a glance`, `## Assignment posture`,
+`## Coverage caveats` — with that exact wording and casing, no numbering, in this order, and emit no other
+H2. The numbers above label the sections for this instruction only; they are not part of the heading text.
+Use H3/H4 freely *inside* a section (e.g. the Findings and Recommendations lists) to structure it.
 
 Links in this file are relative to `docs/`, the directory it sits in — `Microsoft.Graph/groups/x.md`. That
 is neither the `../groups/x.md` form the documents use between themselves nor the `docs/`-prefixed form the

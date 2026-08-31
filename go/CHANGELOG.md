@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The generated documentation prompts now declare a closed, machine-readable set of H2 section headings.** The
+  seven prompt templates each ended with a section list that was described but never binding, and in real exports
+  the model invented extra headings (`## Metadata` in 99 documents, `## Assignments` in 4), which breaks a docs
+  browser that styles and deep-links sections by their heading slug. Each template now states that its headings
+  are a closed contract to be written verbatim, in order, with no others, and records the exact ordered list in a
+  `<!-- doc-headings: … -->` comment that carries into every type's `doc-prompt.md`. Three headings were renamed to
+  produce clean anchor slugs — `Lifecycle & operations` → `Lifecycle and operations`, `Expiry & renewal` →
+  `Expiry and renewal`, `Usage & references` → `Usage and references`. Each setting `<details>` block now carries a
+  `data-setting="<exact YAML path>"` deep-link target and an optional `data-note="security"|"inert"` hint. The
+  incremental generation prompt (`internal/docs/generate_prompt_template.md`) gained a **Heading vocabulary** check
+  (section 4) that validates every document's H2s against its type's `doc-headings` list, ignoring headings inside
+  `<!-- …:start -->`/`<!-- …:end -->` marker pairs so the tool-spliced `## Targeted by` block is exempt.
+  The tenant summary (`docs/summary.md`, section 7) now declares the same closed contract for its four H2
+  headings — `## Management summary`, `## At a glance`, `## Assignment posture`, `## Coverage caveats` — written
+  verbatim, unnumbered and in order, so the landing page slugs the same way as every document.
+  **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
+- **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
+  `doc-headings` marker for the default and ARM templates.
+
 ### Fixed
 
 - **Exports are now reproducible: an unchanged tenant re-exports byte-for-byte identically.** Three sources of

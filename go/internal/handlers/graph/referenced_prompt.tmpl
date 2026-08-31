@@ -59,11 +59,11 @@ References:
 - link each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline.
 - Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
 
-Usage & references:
+Usage and references:
 - explain that other exported resources reference this object only by its `id`; readers can search sibling resource-type directories for this ID to find every policy that uses it.
 - recommend reviewing those referencing resources before renaming or deleting this object, and describe what breaks in referencing policies when it is deleted.
 
-Lifecycle & operations:
+Lifecycle and operations:
 - document deprecation or migration status, edit/versioning behavior, and a recommended review cadence.
 
 Security:
@@ -74,7 +74,13 @@ Security:
 
 Definition:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
+- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="rule">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
+- Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the object contains a rule or filter expression (e.g. an assignment filter `rule`), explain the expression clause by clause in plain language and flag clauses that rely on mutable or spoofable attributes.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
+
+These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above, assignment information belongs in the assignments block above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
+
+<!-- doc-headings: References | Usage and references | Lifecycle and operations | Security | Definition -->

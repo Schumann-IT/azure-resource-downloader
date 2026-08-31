@@ -24,7 +24,7 @@ func TestSharedPromptTemplateOverrides(t *testing.T) {
 		{
 			name:        "credential",
 			newHandler:  func() (*GraphCollectionHandler, error) { return NewVppTokenHandler(fakeTokenCredential{}) },
-			marker:      "Expiry & renewal:",
+			marker:      "Expiry and renewal:",
 			description: "vppTokens uses the credential template",
 		},
 		{
@@ -36,7 +36,7 @@ func TestSharedPromptTemplateOverrides(t *testing.T) {
 		{
 			name:        "referenced",
 			newHandler:  func() (*GraphCollectionHandler, error) { return NewAssignmentFilterHandler(fakeTokenCredential{}) },
-			marker:      "Usage & references:",
+			marker:      "Usage and references:",
 			description: "assignmentFilters uses the referenced template",
 		},
 	}
