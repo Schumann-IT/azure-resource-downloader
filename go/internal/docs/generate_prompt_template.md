@@ -563,17 +563,33 @@ frontend — prose for an operator and the manager they report to; the machine-r
 **The length is fixed: about one page, 600–900 words.** Do not ask the operator how long, how deep or how
 formal it should be — this line settles it. When something does not fit, cut detail, never a section.
 
-Write these four sections, in this order:
+Above the first H2, write the page preamble in this fixed shape, and emit nothing else there:
 
-**1. Management summary** — the top half of the page, and the only part that judges anything:
+- A single H1 title, verbatim: `# Tenant summary`. This is the file's only H1.
+- Directly below it, without a heading, one orientation sentence: name the tenant (its Entra default domain,
+  which is this export's folder name) and state that the page summarizes the **exported** Intune/Entra
+  configuration, not the live tenant. Keep judgements out of it — posture, findings and recommendations
+  belong in **Management summary** below.
 
-- One paragraph on the overall posture: what is managed, how consistently, and whether the configuration
-  that exists is actually in force.
-- **Findings** — at most six, most serious first, one line each. A finding states a fact and its
-  consequence: *"All 24 Conditional Access policies are in report-only mode — no identity control in this
-  tenant is currently enforced."* Give the number of resources affected and link the documents that carry
-  the detail. Never reprint a credential value in this file: name the resource and the field that holds it.
-- **Recommendations** — at most four, each tied to a finding above and naming what to act on. Prefer the
+Then write these four sections, in this order:
+
+**1. Management summary** — the top half of the page, and the only part that judges anything. Open with one
+paragraph on the overall posture (no heading): what is managed, how consistently, and whether the
+configuration that exists is actually in force. Then two H3 subsections, in this order, each heading written
+verbatim:
+
+- `### Findings` — at most six, rendered as a table, one finding per row, sorted by severity with the most
+  serious first (all `critical` rows, then `high`, then `medium`). The table has these columns, in this
+  order: **Severity**, **Finding**, **Affected**, **Documents**.
+  - **Severity** — one value from a closed set, `critical`, `high` or `medium`, and no other; the frontend
+    ranks and filters on it, and the row order must match it.
+  - **Finding** — the fact and its consequence in one line, e.g. *"All Conditional Access policies are in
+    report-only mode — no identity control in this tenant is currently enforced."* Never reprint a credential
+    value: name the resource and the field that holds it.
+  - **Affected** — the number of resources the finding covers as a bare number, or `—` when it is not
+    resource-scoped.
+  - **Documents** — a relative link (or links) to the documents that carry the detail.
+- `### Recommendations` — at most four, each tied to a finding above and naming what to act on. Prefer the
   concrete instruction (*"resolve or remove the 9 assignments pointing at the deleted group
   `06f19a9f-…`"*) over the generic principle. Where acting needs information the export does not hold, say
   what to check in the live tenant rather than guessing.
@@ -597,7 +613,11 @@ documentation frontend styles and deep-links `summary.md` by heading slug the sa
 document. Write them verbatim — `## Management summary`, `## At a glance`, `## Assignment posture`,
 `## Coverage caveats` — with that exact wording and casing, no numbering, in this order, and emit no other
 H2. The numbers above label the sections for this instruction only; they are not part of the heading text.
-Use H3/H4 freely *inside* a section (e.g. the Findings and Recommendations lists) to structure it.
+
+The H3 sub-vocabulary is closed the same way: the only H3 headings anywhere in the file are `### Findings`
+and `### Recommendations`, both inside **Management summary** and in that order. Write them verbatim and
+emit no other H3 — the other three sections carry no subheadings. Deeper structure inside a subsection (H4,
+lists, one small table) is free.
 
 Links in this file are relative to `docs/`, the directory it sits in — `Microsoft.Graph/groups/x.md`. That
 is neither the `../groups/x.md` form the documents use between themselves nor the `docs/`-prefixed form the

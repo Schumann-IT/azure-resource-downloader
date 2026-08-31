@@ -1,8 +1,8 @@
 # Next iterations — deliberately out of scope
 
-Planned work and deliberate scope cuts for the Go CLI. Sections are numbered so the changelog can point at
-them (`See NEXT-ITERATIONS.md §1`). `README.md` stays the single source of truth for what the tool *does
-today*; this file is only for what was left out on purpose.
+Planned work, deliberate scope cuts, and parked ideas for the Go CLI. Sections are numbered so the changelog
+can point at them (`See NEXT-ITERATIONS.md §1`). `README.md` stays the single source of truth for what the
+tool *does today*; this file is only for what was left out on purpose.
 
 > The `§4` reference in the `[RC2]` changelog entry points at the previous edition of this file (retired in
 > `b9cc39b`) and is left as-is: released changelog sections are history, and that work — the forward
@@ -21,43 +21,39 @@ style each part of a document, without asking the LLM to hand-write layout.
 > pairs; and `docs/summary.md` got the same closed-set declaration for its four H2s. See the `[Unreleased]`
 > entry in `CHANGELOG.md`.
 >
-> **What remains** is confined to the tenant summary — three follow-ups the web side found while reviewing a
-> regenerated `summary.md` (§1e-i to §1e-iii), plus an enforcement check for that file. A one-shot
+> **What remains** is an enforcement check for `docs/summary.md`: the three follow-ups the web side raised
+> (§1e-i to §1e-iii) have all shipped as declarations, but nothing validates them yet. A one-shot
 > regeneration of all existing documentation is still required and has not been run.
-
-### 1e-i. Declare `summary.md`'s H3 sub-vocabulary
-
-The **Management summary** section carries `### Findings` and `### Recommendations` sub-headings that §7 of
-`internal/docs/generate_prompt_template.md` never declares, and the two reference exports disagree on them.
-Give the summary's H3s the same closed-set-and-verbatim treatment the H2s got, so the web side can style and
-deep-link them.
-
-### 1e-ii. Give summary findings a severity
-
-Summary findings currently carry no severity, so the landing page cannot rank or filter them. Declare a
-small, closed severity vocabulary for the **Findings** list in §7. This is the tenant-summary counterpart to
-— and distinct from — the per-document `Security` severity that stays out of scope (below): the summary makes
-at most six findings once per tenant, not a subjective call 400+ times across an export.
-
-### 1e-iii. Declare the summary preamble
-
-The content above the first H2 (the posture/intro paragraph) is undeclared, so its shape is not guaranteed.
-State what the preamble must contain, the way the per-type templates fix their metadata table and summary
-paragraph.
 
 ### 1e enforcement
 
-The three declarations above are only worth as much as a check. `summary.md` sits at the `docs/` root, which
-the §4 checker skips, and has no `doc-prompt.md` to hold a `doc-headings` marker — so its contract cannot be
-validated the way per-type documents are. Add an explicit `summary.md` check (its closed H2 set, the H3
-sub-vocabulary from 1e-i, and the preamble from 1e-iii) to §4 or alongside it.
+A declaration is only worth as much as a check. `summary.md` sits at the `docs/` root, which the §4 checker
+skips, and has no `doc-prompt.md` to hold a `doc-headings` marker — so its contract cannot be validated the
+way per-type documents are. Add an explicit `summary.md` check: its closed H2 set, the `### Findings` /
+`### Recommendations` H3 sub-vocabulary (§1e-i), the findings table with its closed `Severity` column and
+severity-ordered rows (§1e-ii), and the fixed preamble — `# Tenant summary` H1 plus its orientation sentence
+(§1e-iii). All three are now declared; none is checked.
 
-### Deliberately still out
+### Idea (parked): per-finding severity in document `Security` sections
 
-Per-finding severity tags in the per-document `Security` sections (`**[risk]**` / `**[review]**` /
-`**[ok]**`) are genuinely model-only information, but they are a subjective call made 400+ times with nothing
-able to validate them — distinct from the once-per-tenant summary findings in §1e-ii. Section-level styling
-already gets most of the visual benefit; revisit once the vocabulary has proven stable.
+Tag every individual security callout *inside each resource's document* with `**[risk]**` / `**[review]**` /
+`**[ok]**`, so the web side can colour or filter them. **Not planned — parked deliberately**, for three
+reasons:
+
+- **It is a subjective, model-only judgement.** Nothing in the export can compute or validate whether a given
+  setting is risk / review / ok.
+- **It is made 400+ times** (once per callout across every document), so a bad or inconsistent batch is
+  likely — and the only fix is regenerating everything.
+- **Low marginal benefit.** Section-level styling (the `Security` H2 slug) already gives the frontend most of
+  the visual win without the per-item risk.
+
+This is the opposite trade-off from the summary findings severity (§1e-ii), which is decided once per tenant
+on at most six findings — tiny blast radius, easy to eyeball — and was therefore done.
+
+**Revisit only if both hold:** (1) the closed-heading contract has proven stable across a real regeneration,
+with no drift observed in practice; and (2) the web side needs per-item severity that section-level styling
+cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
+seven templates and regenerate every document — and accept that it cannot be automatically validated.
 
 ### Consumer
 

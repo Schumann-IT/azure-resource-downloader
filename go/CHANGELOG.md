@@ -23,7 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<!-- …:start -->`/`<!-- …:end -->` marker pairs so the tool-spliced `## Targeted by` block is exempt.
   The tenant summary (`docs/summary.md`, section 7) now declares the same closed contract for its four H2
   headings — `## Management summary`, `## At a glance`, `## Assignment posture`, `## Coverage caveats` — written
-  verbatim, unnumbered and in order, so the landing page slugs the same way as every document.
+  verbatim, unnumbered and in order, so the landing page slugs the same way as every document. Its Findings and
+  Recommendations are now declared as verbatim `### Findings` / `### Recommendations` H3 headings, and the
+  summary's H3 vocabulary is closed to exactly those two, so the browser can style and deep-link them
+  consistently (they previously varied between exports). Findings are now rendered as a table sorted by
+  severity (most serious first) with a closed `Severity` column — `critical`, `high` or `medium` — so the
+  landing page can rank and filter them. The summary's preamble is also fixed: a verbatim `# Tenant summary`
+  H1 followed by a single orientation sentence, so everything above the first H2 has a known shape.
   **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
 - **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
   `doc-headings` marker for the default and ARM templates.
