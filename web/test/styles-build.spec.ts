@@ -54,6 +54,21 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/\.yaml-view\s+\.line:target/);
   });
 
+  it('includes the findings table rules (wrapping opt-out and severity icons)', () => {
+    // The shared .prose table rule sets `white-space: nowrap` for wide GUID
+    // tables; the findings table must override it or its prose runs off-screen.
+    expect(css).toMatch(/\.prose\s+table\.findings/);
+    expect(css).toMatch(/white-space:\s*normal/);
+    // Severity is drawn as a masked SVG, with the word kept for screen readers.
+    expect(css).toContain('--sev-icon');
+    expect(css).toContain('--sev-color');
+    expect(css).toMatch(/\[data-severity=["']critical["']\]/);
+    expect(css).toMatch(/\[data-severity=["']high["']\]/);
+    expect(css).toMatch(/\[data-severity=["']medium["']\]/);
+    expect(css).toMatch(/mask:\s*var\(--sev-icon\)/);
+    expect(css).toMatch(/text-indent:\s*-9999px/);
+  });
+
   it('still emits the typography prose classes', () => {
     expect(css).toMatch(/prose/);
   });

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import matter from 'gray-matter';
 import { dynamicImport } from '../dynamic-import';
 import { rewriteHref, extractTitle, LinkEnv } from './link-rewrite';
+import { applyFindingsTable } from './findings-table';
 
 export interface RenderedPage {
   html: string;
@@ -68,6 +69,7 @@ export class MarkdownRendererService implements OnModuleInit {
     });
 
     this.installLinkRewriter();
+    this.installFindingsTable();
   }
 
   // Overrides the link renderer so `.md` hrefs become app routes at render time.
@@ -93,6 +95,15 @@ export class MarkdownRendererService implements OnModuleInit {
       }
       return defaultRender(tokens, idx, options, env, self);
     };
+  }
+
+  // Tags the tenant summary's Findings table so the stylesheet can reach it.
+  // A core rule, not a renderer override: the work is on the token stream, and
+  // it runs once per render like the rest of the pipeline.
+  private installFindingsTable(): void {
+    this.md.core.ruler.push('findings_table', (state: any) => {
+      applyFindingsTable(state.tokens);
+    });
   }
 
   // Renders the Markdown file at `file`, caching by mtime + size. Throws if the

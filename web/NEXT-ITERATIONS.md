@@ -97,24 +97,24 @@ was. A regenerated `iis.mitarbeiterangebote-staging.de` summary renders exactly 
 zero drift: `#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats`. Because the
 structure is tight (a heading followed by one list or a short run of paragraphs), positional selectors that
 would be fragile in a resource document hold up here, so `tenant.hbs` can be styled **before** any of the
-steps above:
+steps above — `#recommendations + ol` and `[id="at-a-glance"] ~ p` hold up without any renderer change.
 
-```css
-#findings + ol { }                  /* the findings list as a callout */
-#recommendations + ol { }
-#findings + ol > li > strong { }     /* the bolded finding lead-in */
-```
+**Shipped: the Findings table.** Both tenants have since been regenerated, and the findings are now a table
+(`Severity | Finding | Affected | Documents`, severity from the closed set `critical`/`high`/`medium`) rather
+than a list. It is rendered by a core rule in `src/docs/findings-table.ts` that tags the table `.findings` and
+puts `data-severity` on each body row and severity cell, with `src/styles.css` drawing the severity as a
+masked SVG icon. Two decisions worth keeping:
 
-Two caveats, both being fixed on the Go side rather than worked around here:
+- **Keyed off the `Severity` header cell, not the `### Findings` heading.** The heading is equally
+  contractual, but matching on columns means the table keeps its treatment wherever the generator moves it,
+  and no other table in the corpus leads with a Severity column. `#findings` remains available for styling
+  the heading itself.
+- **Fixed a general bug in passing.** `.prose table` sets `white-space: nowrap` so wide assignment tables
+  scroll instead of wrapping mid-GUID. The findings table inherited it and ran its prose off-screen; any
+  future prose-bearing table needs the same opt-out.
 
-- **`#findings` is not yet a contract.** The regenerated summary emits `### Findings` / `### Recommendations`;
-  the older `cb-gmbh.com` one emits `**Findings**` / `**Recommendations**` as bold paragraphs, with no ids at
-  all. Declaring those two H3s is `../go/NEXT-ITERATIONS.md` §1e-i — do not ship CSS that depends on
-  `#findings` until it lands.
-- **Findings carry no severity**, so a report-only-Conditional-Access finding and a "verify this in the live
-  tenant" note look identical. §1e-ii adds it as a `**[critical]**` / `**[warning]**` / `**[info]**` prefix
-  the renderer lifts into a class — a small `inline`-rule counterpart to step 3 above, and the one place where
-  asking the model for a judgement is worth it (at most six per tenant, no regeneration cost).
+Still open for the findings block: `data-severity` is not yet used for anything beyond the icon (filtering or
+a severity summary would need it on a wrapper), and the `Affected` count is not linked to anything.
 
 Also unblocked by the same change: the **summary table of contents** listed at the top of this file. The four
 headings are now a declared contract with stable slugs, so a jump list no longer risks pointing at headings

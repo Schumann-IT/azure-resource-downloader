@@ -24,6 +24,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The tenant summary's Findings table is styled as a findings list, with the severity as an icon.**
+  A markdown-it core rule tags any table whose first header cell is `Severity` with `class="findings"`
+  and puts `data-severity` on each body row and on its severity cell, so `src/styles.css` can reach
+  them. The severity word is replaced visually by a masked SVG icon — an octagon for `critical`, a
+  triangle for `high`, a circle for `medium`, each with its own colour and a dark-mode variant — and a
+  coloured stripe down the row's leading edge. The table is keyed off its columns rather than off the
+  `### Findings` heading above it, so it keeps its treatment wherever the generator moves it, and a
+  severity outside the closed `critical`/`high`/`medium` set is left as plain text rather than being
+  given a misleading icon.
+
+  This is a rendering change only: the token rule mutates attributes and adds no markup, the single
+  `markdown-it` instance is unchanged, and no client-side JavaScript is involved — the icons are CSS
+  masks and the word stays in the DOM (pulled out of view, image-replacement style) so assistive
+  technology still reads it, with a `title` giving it back on hover. The severity vocabulary and the
+  column order are a contract from the CLI's generation template, not a guess by the browser.
+
 - **The exported source YAML is now browsable next to the documentation.**
   `GET /:tenant/_resource/<type>/<name>` renders the resource a document was written from, syntax
   highlighted, with every line addressable as `#L42`; `?raw` serves the same file as

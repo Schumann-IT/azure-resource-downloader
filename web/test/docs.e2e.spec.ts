@@ -55,6 +55,10 @@ generatedAt: 2026-01-01T00:00:00Z
 
 A firewall policy, unlike \`other_policy.yaml\` which is stricter.
 
+| Field | Value |
+|---|---|
+| Resource type | Microsoft.Graph/deviceManagementConfigurationPolicies |
+
 <details>
 <summary><code>firewall/enabled</code></summary>
 
@@ -80,6 +84,18 @@ A large, consistently named Intune estate.
 
 The firewall baseline is
 [Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md).
+
+### Findings
+
+| Severity | Finding | Affected | Documents |
+|---|---|---|---|
+| critical | Two credentials sit in the configuration in cleartext. | 2 | [Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md) |
+| medium | Six resources are configured but targeted at nothing. | 6 | — |
+| nonsense | An unrecognised severity must stay plain text. | 1 | — |
+
+### Recommendations
+
+1. Rotate both credentials.
 `;
 
 // A document the generation agent wrote without frontmatter: it has no known
@@ -284,6 +300,35 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).toMatch(
       /href="\/mytenant\/Microsoft\.Graph\/groups\/g1"[^>]*aria-current="page"/,
     );
+  });
+
+  it('tags the summary Findings table and its severities for the stylesheet', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+
+    // The table is found by its Severity header, and each body row carries the
+    // severity so CSS can draw an icon instead of the word.
+    expect(res.text).toMatch(/<table class="findings">/);
+    expect(res.text).toMatch(/<tr data-severity="critical">/);
+    expect(res.text).toMatch(/<tr data-severity="medium">/);
+    expect(res.text).toMatch(
+      /<td data-severity="critical" title="critical">critical<\/td>/,
+    );
+    // The word stays in the DOM: the icon is an image replacement, not a swap.
+    expect(res.text).toContain('>critical</td>');
+
+    // A value outside the closed set is left alone rather than mislabelled.
+    expect(res.text).not.toContain('data-severity="nonsense"');
+    expect(res.text).toContain('<td>nonsense</td>');
+  });
+
+  it('leaves tables without a Severity column untagged', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    expect(res.text).toContain('<table>');
+    expect(res.text).not.toContain('class="findings"');
   });
 
   it('reflects an edited summary.md on the next request without a restart', async () => {
