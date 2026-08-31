@@ -38,11 +38,14 @@ export interface IndexAssignments {
   targetedBy: number;
 }
 
-// A section of the tenant landing page: one resource type, its documents.
+// A section of the navigation: one resource type, its documents. `active` marks
+// the section holding the document being viewed, so the sidebar can render it
+// as an open <details> without any client-side JavaScript.
 export interface NavSection {
   key: string;
   label: string;
   items: NavItem[];
+  active: boolean;
 }
 
 export interface NavItem {
@@ -51,6 +54,7 @@ export interface NavItem {
   summary: string;
   documented: boolean;
   badges: string[];
+  active: boolean;
 }
 
 // Parses `docs/index.yaml`. Returns undefined for anything that is not a
@@ -97,28 +101,41 @@ export function parseTenantIndex(raw: string): TenantIndex | undefined {
   };
 }
 
-// Groups the index into the landing-page navigation. Grouping is by resource
-// type: `platformGroup`/`functionGroup` are optional enrichment the documents
-// do not carry yet, so they are surfaced as per-item badges instead of driving
-// the tree (see NEXT-ITERATIONS.md).
+// Groups the index into the navigation tree. Grouping is by resource type:
+// `platformGroup`/`functionGroup` are optional enrichment the documents do not
+// carry yet, so they are surfaced as per-item badges instead of driving the
+// tree (see NEXT-ITERATIONS.md).
+//
+// `activeDoc` is the extensionless document path of the page being viewed
+// (`Microsoft.Graph/groups/g1`), or '' on the tenant landing page.
 export function buildNavigation(
   index: TenantIndex,
   tenantId: string,
+  activeDoc = '',
 ): NavSection[] {
   const sections = new Map<string, NavSection>();
+  const active = stripExtension(activeDoc);
 
   for (const resource of index.resources) {
     let section = sections.get(resource.type);
     if (!section) {
-      section = { key: resource.type, label: typeLabel(resource.type), items: [] };
+      section = {
+        key: resource.type,
+        label: typeLabel(resource.type),
+        items: [],
+        active: false,
+      };
       sections.set(resource.type, section);
     }
+    const isActive = active !== '' && stripExtension(resource.doc) === active;
+    if (isActive) section.active = true;
     section.items.push({
       href: docHref(tenantId, resource.doc),
       label: resource.displayName || stripExtension(resource.doc),
       summary: resource.summary,
       documented: resource.documented,
       badges: badgesFor(resource),
+      active: isActive,
     });
   }
 

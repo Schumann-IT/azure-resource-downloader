@@ -37,6 +37,11 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/border-left/);
   });
 
+  it('includes the sidebar navigation disclosure styling', () => {
+    expect(css).toMatch(/\.nav-tree\s+summary/);
+    expect(css).toMatch(/\.nav-tree\s+summary:focus-visible/);
+  });
+
   it('includes dark-mode overrides for the disclosure blocks', () => {
     expect(css).toContain('prefers-color-scheme');
   });

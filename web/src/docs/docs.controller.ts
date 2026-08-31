@@ -1,15 +1,19 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
-import { TenantDiscoveryService } from './tenant-discovery.service';
+import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { resolveWithinTenant } from './path-safety';
-import { buildNavigation } from './tenant-index';
+import { buildNavigation, TenantIndex } from './tenant-index';
 
 // Paths at the docs root the CLI writes as tool input, not documentation:
 // generate.md is the agent prompt. They are never served. Matched without the
 // optional `.md` suffix, like every other route.
 const TOOL_ARTIFACTS = new Set(['generate']);
+
+// The tenant-wide management summary is the body of the tenant landing page,
+// so its own document route is a duplicate and redirects there.
+const SUMMARY_ROUTE = 'summary';
 
 @Controller()
 export class DocsController {
@@ -34,8 +38,10 @@ export class DocsController {
     res.json({ status: 'ok', tenants: tenants.length, documents, pending });
   }
 
-  // GET /:tenant — the tenant landing page, built from docs/index.yaml. The
-  // CLI no longer generates an index.md; navigation comes from the index.
+  // GET /:tenant — the tenant landing page: the generation agent's tenant-wide
+  // summary (docs/summary.md) as the body, with the index-driven navigation in
+  // the sidebar. The summary is optional — an export can carry a valid index
+  // and no summary — so a missing one falls back to listing the index.
   @Get(':tenant')
   async tenantIndex(
     @Param('tenant') tenant: string,
@@ -47,16 +53,23 @@ export class DocsController {
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, tenant, '');
 
+    let summary: string | null = null;
+    try {
+      const page = await this.renderer.render(info.summaryPath, {
+        tenant,
+        docDir: '',
+      });
+      summary = page.html;
+    } catch {
+      summary = null;
+    }
+
     res.render('tenant', {
       title: info.name,
       tenant,
       breadcrumb: [],
-      name: info.name,
-      generatedAt: index.generatedAt,
-      counts: index.counts,
-      complete: index.complete,
-      incompleteReason: index.incompleteReason,
-      sections: buildNavigation(index, tenant),
+      summary,
+      nav: this.nav(info, index, ''),
     });
   }
 
@@ -70,8 +83,13 @@ export class DocsController {
     const info = await this.discovery.get(tenant);
     if (!info) return this.notFound(res, tenant, relPath);
 
-    if (TOOL_ARTIFACTS.has(relPath.replace(/\.md$/i, '').toLowerCase())) {
+    const rootDoc = relPath.replace(/\.md$/i, '').toLowerCase();
+    if (TOOL_ARTIFACTS.has(rootDoc)) {
       return this.notFound(res, tenant, relPath);
+    }
+    if (rootDoc === SUMMARY_ROUTE) {
+      res.redirect(302, `/${tenant}`);
+      return;
     }
 
     const resolved = resolveWithinTenant(info.dir, relPath);
@@ -82,16 +100,36 @@ export class DocsController {
         tenant,
         docDir: this.docDir(relPath),
       });
+      const index = await this.discovery.getIndex(info);
       res.render('page', {
         title: page.title || relPath,
         body: page.html,
         tenant,
         breadcrumb: this.breadcrumb(relPath),
         meta: page.meta,
+        nav: index ? this.nav(info, index, relPath) : null,
       });
     } catch {
       this.notFound(res, tenant, relPath);
     }
+  }
+
+  // View model for the sidebar partial: the tenant metadata that used to sit on
+  // the landing page plus the navigation tree, so both survive on every page.
+  private nav(
+    info: TenantInfo,
+    index: TenantIndex,
+    activeDoc: string,
+  ): Record<string, unknown> {
+    return {
+      tenant: info.id,
+      name: info.name,
+      generatedAt: index.generatedAt,
+      counts: index.counts,
+      complete: index.complete,
+      incompleteReason: index.incompleteReason,
+      sections: buildNavigation(index, info.id, activeDoc),
+    };
   }
 
   private docDir(relPath: string): string {

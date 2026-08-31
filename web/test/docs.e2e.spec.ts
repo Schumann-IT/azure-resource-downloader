@@ -8,11 +8,12 @@ import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
 
 // Reproduces, as automated tests, the manual endpoint checks: discovery via
-// docs/index.yaml, picker, the index-driven tenant landing page, a nested
-// settings-catalog doc with <details> + cross-type ../groups link rewrite,
-// group page, 404, path traversal, the agent prompt not being served, and
-// no-restart refresh. Runs against a self-contained fixture tenant so it does
-// not depend on the real output/ export.
+// docs/index.yaml, picker, the summary-driven tenant landing page and its
+// index fallback, the sidebar navigation, a nested settings-catalog doc with
+// <details> + cross-type ../groups link rewrite, group page, 404, path
+// traversal, the agent prompt not being served, and no-restart refresh. Runs
+// against self-contained fixture tenants so it does not depend on the real
+// output/ export.
 
 const INDEX_YAML = `version: 1
 tenant: My Tenant
@@ -69,6 +70,16 @@ deep value
 Assigned to [Admins](../groups/g1.md).
 `;
 
+// The tenant-wide management summary the generation agent writes at the docs
+// root: its own H1, no frontmatter, links relative to docs/.
+const SUMMARY_MD = `# My Tenant — Intune and Entra configuration
+
+A large, consistently named Intune estate.
+
+The firewall baseline is
+[Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md).
+`;
+
 const GROUP_MD = `---
 source: g1.yaml
 sourceSha256: ee11
@@ -87,6 +98,7 @@ describe('Docs browser (e2e)', () => {
   let exportDir: string;
   let tenantDir: string;
   let policyFile: string;
+  let summaryFile: string;
 
   beforeAll(async () => {
     root = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-'));
@@ -103,6 +115,8 @@ describe('Docs browser (e2e)', () => {
     await fsp.mkdir(groupsDir, { recursive: true });
 
     await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
+    summaryFile = path.join(tenantDir, 'summary.md');
+    await fsp.writeFile(summaryFile, SUMMARY_MD);
     // The agent prompt lives next to the index and must never be served.
     await fsp.writeFile(path.join(tenantDir, 'generate.md'), '# agent prompt');
     policyFile = path.join(policyDir, 'p1.md');
@@ -115,6 +129,12 @@ describe('Docs browser (e2e)', () => {
     const trash = path.join(exportDir, '_to_delete', 'docs');
     await fsp.mkdir(trash, { recursive: true });
     await fsp.writeFile(path.join(trash, 'index.yaml'), INDEX_YAML);
+
+    // A tenant whose export carries no summary.md: the landing page must fall
+    // back to the index listing rather than 404.
+    const bareDir = path.join(root, 'nosummary', 'docs');
+    await fsp.mkdir(bareDir, { recursive: true });
+    await fsp.writeFile(path.join(bareDir, 'index.yaml'), INDEX_YAML);
 
     // An export whose docs/ folder has no index.yaml is not a tenant.
     const halfDir = path.join(root, 'half-baked', 'docs');
@@ -142,17 +162,17 @@ describe('Docs browser (e2e)', () => {
     await fsp.rm(root, { recursive: true, force: true });
   });
 
-  it('GET /healthz reports one tenant with the index counts', async () => {
+  it('GET /healthz reports the discovered tenants with the index counts', async () => {
     const res = await request(app.getHttpServer()).get('/healthz').expect(200);
     expect(res.body).toEqual({
       status: 'ok',
-      tenants: 1,
-      documents: 2,
-      pending: 1,
+      tenants: 2,
+      documents: 4,
+      pending: 2,
     });
   });
 
-  it('GET / lists exactly the real tenant with its index counts', async () => {
+  it('GET / lists exactly the real tenants with their index counts', async () => {
     const res = await request(app.getHttpServer()).get('/').expect(200);
     expect(res.text).toContain('mytenant');
     expect(res.text).toContain('2 documented');
@@ -163,23 +183,79 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).not.toContain('broken');
   });
 
-  it('GET /:tenant renders the index-driven landing page with routes per document', async () => {
+  it('GET /:tenant renders docs/summary.md as the landing body, links rewritten', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toContain('A large, consistently named Intune estate.');
+    // Summary links are relative to docs/ and become tenant routes.
+    expect(res.text).toContain(
+      'href="/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
+    );
+    // The summary owns the page heading — the view adds none of its own.
+    expect(res.text).not.toContain('listing the index instead');
+  });
+
+  it('GET /:tenant falls back to the index listing when there is no summary.md', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/nosummary')
+      .expect(200);
+    expect(res.text).toContain('listing the index instead');
+    expect(res.text).toContain('A firewall policy.');
+    expect(res.text).toContain(
+      'href="/nosummary/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
+    );
+  });
+
+  it('GET /:tenant/summary redirects to the landing page (the summary is its body)', async () => {
+    await request(app.getHttpServer())
+      .get('/mytenant/summary')
+      .expect(302)
+      .expect('Location', '/mytenant');
+    await request(app.getHttpServer())
+      .get('/mytenant/summary.md')
+      .expect(302)
+      .expect('Location', '/mytenant');
+  });
+
+  it('renders the sidebar navigation with the tenant metadata on the landing page', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant')
       .expect(200);
     expect(res.text).toContain('My Tenant');
+    expect(res.text).toContain('2 documented');
     expect(res.text).toContain('Policy One');
-    expect(res.text).toContain('A firewall policy.');
     expect(res.text).toContain(
-      'href="/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
+      'href="/mytenant/Microsoft.Graph/groups/g1"',
     );
-    // A not-yet-documented resource is listed as pending, honestly.
+    // A not-yet-documented resource stays visible as pending, honestly.
     expect(res.text).toContain('Compliance One');
     expect(res.text).toContain('pending');
     // Excluded bulk types are reported as counts only, never listed.
     expect(res.text).toContain(
       'Microsoft.Graph/windowsAutopilotDeviceIdentities',
     );
+  });
+
+  it('marks the current document in the sidebar and opens its section', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1')
+      .expect(200);
+    expect(res.text).toContain('nav-tree');
+    expect(res.text).toContain('<details open>');
+    expect(res.text).toMatch(
+      /href="\/mytenant\/Microsoft\.Graph\/groups\/g1"[^>]*aria-current="page"/,
+    );
+  });
+
+  it('reflects an edited summary.md on the next request without a restart', async () => {
+    const marker = `SUMMARY_PROBE_${Date.now()}`;
+    await fsp.writeFile(summaryFile, `${SUMMARY_MD}\n${marker}\n`);
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toContain(marker);
+    await fsp.writeFile(summaryFile, SUMMARY_MD);
   });
 
   it('does not serve the agent prompt (docs/generate.md)', async () => {
@@ -195,6 +271,7 @@ describe('Docs browser (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant')
       .expect(200);
+    // The index drives the sidebar, which is on the landing page too.
     expect(res.text).toContain('Policy Renamed');
     await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
   });

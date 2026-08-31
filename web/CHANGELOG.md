@@ -24,6 +24,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The tenant landing page is now the generation agent's summary (`docs/summary.md`).** The prompt's
+  section 7 writes a tenant-wide management summary at the docs root — findings, recommendations,
+  assignment posture and coverage caveats — and that is what `GET /:tenant` renders. It is deliberately
+  optional and is *not* a discovery marker: `docs/index.yaml` still is, and a tenant without a summary
+  falls back to the previous index listing rather than 404ing. Its existence is checked at render time,
+  not at discovery time, so a summary written after the 30 s discovery cache was filled still appears on
+  the next request. Freshness is unchanged in kind: the summary goes through the one
+  `MarkdownRendererService`, so it is cached by `mtimeMs` + `size` and a regenerated summary shows up
+  without a restart. Its links are relative to `docs/` and resolve through the existing rewriting with
+  `docDir: ''` — no change to `link-rewrite.ts`. The app remains read-only: nothing under the docs root
+  is written, moved or deleted.
+
+- **Sidebar navigation on every page (`views/partials/sidebar.hbs`).** The per-document list moved out of
+  the landing-page body into a persistent sidebar shared by the landing page and every document page, so
+  the tenant metadata (counts, export timestamp, incomplete-export banner, excluded bulk types) survives
+  everywhere instead of only on the landing page. It groups by resource type in one collapsible
+  `<details>` per type; `buildNavigation()` takes the current document and marks it (`aria-current`) and
+  its section (rendered `open`), which is what makes the tree usable **without any client-side
+  JavaScript** — the one non-negotiable a sidebar could easily have broken. On narrow viewports the
+  column stacks below the content (`flex-col-reverse`) rather than pushing the document down the page.
+  Grouping stays by type because `platformGroup`/`functionGroup` are still absent from the index
+  (see `NEXT-ITERATIONS.md`).
+
 - **Index-driven tenant landing page (`views/tenant.hbs`).** `GET /:tenant` no longer renders an
   `index.md`; it renders the navigation built from `docs/index.yaml`: resources grouped by type
   (sorted, with their document routes), the LLM-authored `summary` when present, a *pending* marker
@@ -32,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the excluded bulk types as counts, and a banner when the export reports itself incomplete. Still no
   client-side JavaScript. Grouping is by resource type because the documents do not yet carry the
   `platformGroup`/`functionGroup` frontmatter the index can enrich them with; when present they are
-  shown as badges (see `NEXT-ITERATIONS.md`).
+  shown as badges (see `NEXT-ITERATIONS.md`). This listing is now the *fallback* body, used when the
+  export carries no `docs/summary.md`; the tree itself moved into the sidebar (above).
 
 - **`docs/index.yaml` parsing and navigation building (`src/docs/tenant-index.ts`).** A pure,
   Nest-free module — parsing and grouping stay unit-testable without a module — with `js-yaml` added
@@ -49,6 +73,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder being skipped, `generate.md` not being served, and no-restart refresh of the index itself.
 
 ### Changed
+
+- **`GET /:tenant/summary` redirects (302) to `/:tenant`.** The summary *is* the landing page body, so
+  its own document route would serve the same content twice under two URLs. It is a redirect rather than
+  a 404 because, unlike `generate.md`, the file is documentation and links to it should land somewhere
+  sensible. `path-safety.ts` is untouched: this is a serving decision taken before any path resolution.
 
 - **`GET /healthz` reports `{ status, tenants, documents, pending }`.** `documents` is now the index's
   `counts.documented` (previously the manifest's resource count) and `pending` is new, so the health

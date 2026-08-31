@@ -1,0 +1,48 @@
+<aside class="nav-tree w-full lg:w-80 lg:shrink-0 lg:sticky lg:top-14 lg:self-start lg:max-h-[calc(100vh-4.5rem)] lg:overflow-y-auto lg:pr-2">
+  <a href="/{{tenant}}" class="block text-base font-semibold hover:underline">{{name}}</a>
+  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+    {{counts.documented}} documented{{#if counts.pending}} · {{counts.pending}} pending{{/if}}{{#if generatedAt}}<br />exported {{generatedAt}}{{/if}}
+  </p>
+
+  {{#unless complete}}
+    <p class="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+      This export is incomplete{{#if incompleteReason}}: {{incompleteReason}}{{/if}}.
+    </p>
+  {{/unless}}
+
+  {{#if sections.length}}
+    <nav class="mt-4 space-y-1" aria-label="Documents">
+      {{#each sections}}
+        <details{{#if this.active}} open{{/if}}>
+          <summary class="rounded px-1.5 py-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+            {{this.label}}
+            <span class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">{{this.items.length}}</span>
+          </summary>
+          <ul class="mt-1 mb-2 ml-3 border-l border-slate-200 dark:border-slate-700 pl-3 space-y-0.5">
+            {{#each this.items}}
+              <li>
+                <a
+                  href="{{this.href}}"
+                  {{#if this.active}}aria-current="page"{{/if}}
+                  class="block rounded px-1.5 py-1 text-sm {{#if this.active}}bg-slate-100 dark:bg-slate-800 font-medium text-brand-600 dark:text-brand-400{{else}}text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400{{/if}}"
+                >
+                  {{this.label}}
+                  {{#unless this.documented}}
+                    <span class="ml-1 text-xs text-slate-400 dark:text-slate-500">pending</span>
+                  {{/unless}}
+                </a>
+              </li>
+            {{/each}}
+          </ul>
+        </details>
+      {{/each}}
+    </nav>
+  {{/if}}
+
+  {{#if counts.excluded.length}}
+    <p class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+      Not documented (bulk types):
+      {{#each counts.excluded}}<span class="font-mono">{{this.type}}</span> ({{this.count}}){{#unless @last}} · {{/unless}}{{/each}}
+    </p>
+  {{/if}}
+</aside>

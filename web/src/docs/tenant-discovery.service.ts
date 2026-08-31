@@ -13,6 +13,11 @@ export interface TenantInfo {
   dir: string;
   // Absolute path to that folder's index.yaml.
   indexPath: string;
+  // Absolute path to the tenant-wide management summary the generation agent
+  // writes at the docs root. Optional: it is not a discovery marker and its
+  // existence is checked at render time, so a summary written after discovery
+  // was cached still shows up on the next request.
+  summaryPath: string;
   // In-scope resource counts, from the index (never by walking the tree).
   documented: number;
   pending: number;
@@ -22,6 +27,7 @@ export interface TenantInfo {
 
 export const DOCS_DIR = 'docs';
 export const INDEX_FILE = 'index.yaml';
+export const SUMMARY_FILE = 'summary.md';
 const MAX_DEPTH = 3;
 const TTL_MS = 30_000;
 
@@ -157,6 +163,7 @@ export class TenantDiscoveryService {
       name: index.tenant || id,
       dir: docsDir,
       indexPath,
+      summaryPath: path.join(docsDir, SUMMARY_FILE),
       documented: index.counts.documented,
       pending: index.counts.pending,
       generatedAt: index.generatedAt,

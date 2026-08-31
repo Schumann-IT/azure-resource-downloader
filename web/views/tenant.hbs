@@ -8,28 +8,22 @@
   </head>
   <body class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     {{> header}}
-    <main class="mx-auto max-w-5xl px-4 py-8">
-      <h1 class="text-2xl font-bold mb-1">{{name}}</h1>
+    <div class="mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
+      {{> sidebar nav}}
+      <main class="min-w-0 flex-1">
+      {{#if summary}}
+        <article class="prose prose-slate dark:prose-invert max-w-none">
+          {{{summary}}}
+        </article>
+      {{else}}
+      <h1 class="text-2xl font-bold mb-1">{{nav.name}}</h1>
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">
-        {{counts.documented}} documented{{#if counts.pending}} · {{counts.pending}} pending{{/if}}{{#if generatedAt}} · exported {{generatedAt}}{{/if}}
+        No <code class="font-mono">docs/summary.md</code> in this export — listing the index instead.
       </p>
 
-      {{#unless complete}}
-        <p class="mb-6 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-          This export is incomplete{{#if incompleteReason}}: {{incompleteReason}}{{/if}}.
-        </p>
-      {{/unless}}
-
-      {{#if counts.excluded.length}}
-        <p class="mb-6 text-xs text-slate-500 dark:text-slate-400">
-          Not documented (bulk types):
-          {{#each counts.excluded}}<span class="font-mono">{{this.type}}</span> ({{this.count}}){{#unless @last}} · {{/unless}}{{/each}}
-        </p>
-      {{/if}}
-
-      {{#if sections.length}}
+      {{#if nav.sections.length}}
         <div class="space-y-8">
-          {{#each sections}}
+          {{#each nav.sections}}
             <section>
               <h2 id="{{this.key}}" class="text-lg font-semibold mb-3">
                 {{this.label}}
@@ -66,6 +60,8 @@
           This tenant's <code class="font-mono">docs/index.yaml</code> lists no resources.
         </p>
       {{/if}}
-    </main>
+      {{/if}}
+      </main>
+    </div>
   </body>
 </html>

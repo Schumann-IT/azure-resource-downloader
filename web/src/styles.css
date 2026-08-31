@@ -74,6 +74,43 @@
   font-weight: 600;
 }
 
+/* -------------------------------------------------------------------------
+   Sidebar navigation. The tree collapses with <details> because there is no
+   client-side JavaScript; it lives outside .prose, so it needs its own
+   disclosure styling.
+   ------------------------------------------------------------------------- */
+.nav-tree summary {
+  cursor: pointer;
+  list-style: none;
+  display: list-item;
+}
+
+.nav-tree summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-tree summary::before {
+  content: "\25B8"; /* ▸ */
+  display: inline-block;
+  width: 0.875rem;
+  color: rgb(148, 163, 184);
+  transition: transform 0.15s ease;
+}
+
+.nav-tree details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.nav-tree summary:hover {
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.nav-tree summary:focus-visible,
+.nav-tree a:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
 /* Wide assignment tables (long GUIDs) scroll instead of overflowing. */
 .prose table {
   display: block;
@@ -98,5 +135,8 @@
   }
   .prose details[open] > summary {
     color: var(--color-brand-400);
+  }
+  .nav-tree summary:hover {
+    background: rgba(148, 163, 184, 0.14);
   }
 }

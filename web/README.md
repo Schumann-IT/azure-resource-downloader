@@ -12,10 +12,14 @@ mutates the export in any way.
 - **Tenant discovery** — walks `DOCS_ROOT` (up to 3 levels deep) and treats any directory that
   contains a readable `docs/index.yaml` as a tenant. That file is the navigation index written by
   `azure-rd docs generate-index`; documents are resolved against the `docs/` folder.
-- **Index-driven landing page** — `GET /:tenant` is generated from `docs/index.yaml` (there is no
-  `index.md` any more): resources grouped by type, with the LLM-authored summary, a *pending* marker
-  for resources that have no document yet, count-only assignment badges, and the excluded bulk types
-  reported as counts.
+- **Summary landing page** — `GET /:tenant` renders `docs/summary.md`, the tenant-wide management
+  summary the generation agent writes at the docs root. It is optional: an export that has no summary
+  falls back to listing `docs/index.yaml` (resources grouped by type, with the LLM-authored summary,
+  a *pending* marker for resources with no document yet, and count-only assignment badges).
+- **Sidebar navigation** — every page carries the index-driven tree: one collapsible `<details>` per
+  resource type, the section of the document being viewed opened and the document itself marked, plus
+  the tenant counts, export timestamp, the incomplete-export banner and the excluded bulk types.
+  Collapsing is pure HTML — there is still no client-side JavaScript.
 - **Rendering** — `markdown-it` with `html: true`, so the `<details>`/`<summary>` disclosure blocks
   that make up the bulk of the generated docs pass through untouched. Headings get anchors via
   `markdown-it-anchor`.
@@ -79,6 +83,7 @@ DOCS_ROOT=/path/to/output PORT=4000 npm run start:prod
     └── docs/
         ├── index.yaml             # required marker (azure-rd docs generate-index)
         ├── generate.md            # agent prompt — never served
+        ├── summary.md             # optional tenant summary — the landing page body
         └── Microsoft.Graph/
             └── <endpoint>/
                 └── <name>.md
@@ -103,7 +108,8 @@ Discovery rules:
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`). |
 | `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
-| `GET /:tenant` | The tenant landing page, generated from `docs/index.yaml`. |
+| `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. |
+| `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
 | `GET /:tenant/*path` | A document inside the tenant's `docs/` folder; the `.md` suffix is optional. |
 
 Anything that does not resolve to a Markdown file inside the tenant renders the 404 view. The 404
@@ -135,10 +141,11 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
 - `test/path-safety.spec.ts` — traversal, symlink escape, null bytes, absolute paths.
 - `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed or
   non-`version: 1` file) and navigation building.
-- `test/docs.e2e.spec.ts` — supertest against a self-contained fixture tenant in a temp dir:
-  discovery, picker, the index-driven landing page, nested `<details>`, cross-type link resolution,
-  404s, traversal, `generate.md` not being served, no-restart refresh of both a document and the
-  index.
+- `test/docs.e2e.spec.ts` — supertest against self-contained fixture tenants in a temp dir:
+  discovery, picker, the summary landing page and its index fallback, the `/:tenant/summary`
+  redirect, the sidebar with its active document, nested `<details>`, cross-type link resolution,
+  404s, traversal, `generate.md` not being served, no-restart refresh of a document, the summary and
+  the index.
 - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts the
   custom `<details>`/`<summary>` and dark-mode rules survive.
 
@@ -162,7 +169,7 @@ web/
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
 │       └── path-safety.ts               # the security boundary
-├── views/                               # Handlebars templates (+ partials/header.hbs)
+├── views/                               # Handlebars templates (+ partials/header.hbs, sidebar.hbs)
 ├── public/                              # app.css (generated, gitignored)
 └── test/
 ```
@@ -189,7 +196,7 @@ changes to the Go CLI go in [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 ## Known limitations
 
 Deliberate scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md) — no search, no
-syntax highlighting, single-segment tenant routes only, no sidebar navigation, no explicit
-dark-mode toggle. Navigation groups by resource type: the documents do not yet carry the
+syntax highlighting, single-segment tenant routes only, no table of contents for the summary, no
+explicit dark-mode toggle. Navigation groups by resource type: the documents do not yet carry the
 `platformGroup`/`functionGroup` frontmatter the index can enrich them with, so those are shown as
 badges when present rather than driving the tree.

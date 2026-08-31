@@ -106,6 +106,31 @@ describe('buildNavigation', () => {
     expect(pending!.documented).toBe(false);
   });
 
+  it('marks nothing active without a current document (the landing page)', () => {
+    expect(sections.every((s) => !s.active)).toBe(true);
+    expect(sections.every((s) => s.items.every((i) => !i.active))).toBe(true);
+  });
+
+  it('marks the current document and its section, with or without the .md suffix', () => {
+    for (const active of [
+      'Microsoft.Graph/deviceCompliancePolicies/win_os',
+      'Microsoft.Graph/deviceCompliancePolicies/win_os.md',
+    ]) {
+      const withActive = buildNavigation(index, 'contoso.com', active);
+      const compliance = withActive.find(
+        (s) => s.key === 'Microsoft.Graph/deviceCompliancePolicies',
+      )!;
+      expect(compliance.active).toBe(true);
+      expect(
+        compliance.items.filter((i) => i.active).map((i) => i.label),
+      ).toEqual(['Windows OS validation']);
+      const filters = withActive.find(
+        (s) => s.key === 'Microsoft.Graph/assignmentFilters',
+      )!;
+      expect(filters.active).toBe(false);
+    }
+  });
+
   it('summarises assignments as counts only', () => {
     const policy = sections[1].items.find(
       (i) => i.label === 'Windows OS validation',
