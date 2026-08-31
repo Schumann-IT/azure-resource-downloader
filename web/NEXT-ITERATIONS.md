@@ -197,6 +197,12 @@ matters more than the format.
 - **Zip contents**: `<domain> documentation/` (the space name) holding an overview page built from
   `summary.md` plus a grouped link list that replaces the sidebar, and one flat
   `<type leaf> — <displayName>.html` per document. No media folders (see the note).
+- **The overview's link list gets its own index pass**, in `confluence.ts`, rather than consuming
+  `buildNavigation()`. The two look alike but disagree on every particular: hrefs are page file names, not
+  app routes, there is no active item and no `<details>` nesting, skipped documents need a place, and the
+  page-name deduplication has to be the same pass that names the files. Bending `NavSection[]` to carry a
+  second href shape would put export concerns into the sidebar's model, so the duplication is the cheaper
+  side of the trade.
 - **Links**: rewrite the app routes already in the rendered HTML (`href^="/<tenant>/"`) to
   `<Page Name>.html`, which is unambiguous because the route shape and the index agree on the document path.
   In-document anchors (`#security`) will not survive — accepted loss. Heading permalinks are unwrapped
