@@ -20,6 +20,29 @@ interface CacheEntry {
 
 const MAX_ENTRIES = 500;
 
+// The generated documents echo their source file as a code-only paragraph under
+// the H1. That is the same value the frontmatter already carries, and the page
+// renders it as a link to the YAML view, so the echo is a duplicate. Dropped
+// here rather than in the body it belongs to: it is only removed when it
+// matches this document's own `source` (full path or basename) and sits alone on
+// its line, so prose that mentions another resource's `.yaml` is never touched.
+export function stripSourceEcho(content: string, source: unknown): string {
+  if (typeof source !== 'string' || !source) return content;
+  const alternatives = [source, source.split('/').pop() || source]
+    .filter((v, i, all) => !!v && all.indexOf(v) === i)
+    .map(escapeRegExp)
+    .join('|');
+  const echo = new RegExp(
+    `^\`(?:${alternatives})\`[ \\t]*(?:\\r?\\n)?(?:\\r?\\n)?`,
+    'im',
+  );
+  return content.replace(echo, '');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Owns a single markdown-it instance and an mtime-keyed render cache. A
 // regenerated document is picked up on the next request without a restart.
 @Injectable()
@@ -83,8 +106,9 @@ export class MarkdownRendererService implements OnModuleInit {
 
     const raw = await fs.readFile(file, 'utf8');
     const parsed = matter(raw);
-    const title = extractTitle(parsed.content);
-    const html = this.md.render(parsed.content, {
+    const content = stripSourceEcho(parsed.content, parsed.data.source);
+    const title = extractTitle(content);
+    const html = this.md.render(content, {
       tenant: env.tenant,
       docDir: env.docDir,
     });

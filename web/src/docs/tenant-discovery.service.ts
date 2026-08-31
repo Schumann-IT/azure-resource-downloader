@@ -13,6 +13,11 @@ export interface TenantInfo {
   dir: string;
   // Absolute path to that folder's index.yaml.
   indexPath: string;
+  // Absolute path to the folder the exported source YAML is resolved against:
+  // <export>/resources. A second, read-only served root; not a discovery
+  // marker, so an export whose docs/ were copied without resources/ stays a
+  // valid tenant whose YAML views simply 404.
+  resourcesDir: string;
   // Absolute path to the tenant-wide management summary the generation agent
   // writes at the docs root. Optional: it is not a discovery marker and its
   // existence is checked at render time, so a summary written after discovery
@@ -26,6 +31,7 @@ export interface TenantInfo {
 }
 
 export const DOCS_DIR = 'docs';
+export const RESOURCES_DIR = 'resources';
 export const INDEX_FILE = 'index.yaml';
 export const SUMMARY_FILE = 'summary.md';
 const MAX_DEPTH = 3;
@@ -163,6 +169,7 @@ export class TenantDiscoveryService {
       name: index.tenant || id,
       dir: docsDir,
       indexPath,
+      resourcesDir: path.join(dir, RESOURCES_DIR),
       summaryPath: path.join(docsDir, SUMMARY_FILE),
       documented: index.counts.documented,
       pending: index.counts.pending,

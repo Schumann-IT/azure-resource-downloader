@@ -24,6 +24,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The exported source YAML is now browsable next to the documentation.**
+  `GET /:tenant/_resource/<type>/<name>` renders the resource a document was written from, syntax
+  highlighted, with every line addressable as `#L42`; `?raw` serves the same file as
+  `text/plain; charset=utf-8` with `X-Content-Type-Options: nosniff` for copy-paste. A
+  **Documentation | YAML** switcher in the top bar flips between the two representations, and the
+  document's `source` frontmatter became a link to its YAML. `_resource` is a *representation* prefix,
+  not a path segment: it never appears in the breadcrumb and cannot collide with a resource type,
+  because no Azure/Graph type segment starts with `_`. Consequently `<export>/resources` is now a
+  **second served root** — the one architectural invariant this change replaces, and it is replaced by
+  an equally tight one rather than loosened: `resolveWithinRoot()` in `src/docs/path-safety.ts` is the
+  single guard for both roots and allows exactly **one** extension per root (`.md` for `docs/`,
+  `.yaml` for `resources/`, `.yml` deliberately not served), so a document can never be served from
+  the resources root, nor a resource from `docs/`, and `..` cannot cross between them; null bytes,
+  absolute paths and `..` are still rejected up front and containment is still re-verified *after*
+  `realpath()`. The app remains **read-only**: both routes only read, and nothing under the export is
+  written, moved or deleted. Freshness is unchanged in kind — highlighted output is cached by
+  `mtimeMs` + `size` in a bounded cache, so a re-downloaded resource appears without a restart.
+  Discovery is unchanged: `resources/` is *not* a marker, so an export whose `docs/` were copied
+  without it stays a valid tenant whose YAML views simply 404. Navigation stays purely index-derived —
+  a document's source is located by inverting the CLI's own `docs/<type>/<name>.md` ↔
+  `resources/<type>/<name>.yaml` mapping, so no directory is walked and the "counts and listings come
+  from the index" non-negotiable is untouched; resources the index only counts (excluded bulk types,
+  unreferenced groups) therefore have no YAML view yet (see `NEXT-ITERATIONS.md`). Highlighting uses
+  one `shiki` instance built in `onModuleInit` (mirroring the single `markdown-it` instance) and loaded
+  through `dynamic-import.ts` because `shiki` is ESM-only; it emits dual-theme CSS variables, so dark
+  mode and the `:target` line highlight stay `prefers-color-scheme`/CSS — **still no client-side
+  JavaScript**. Files above 512 KB, or a highlighter that failed to load, degrade to an escaped
+  `<pre>` instead of stalling or crashing a request.
+
 - **The tenant landing page is now the generation agent's summary (`docs/summary.md`).** The prompt's
   section 7 writes a tenant-wide management summary at the docs root — findings, recommendations,
   assignment posture and coverage caveats — and that is what `GET /:tenant` renders. It is deliberately
@@ -73,6 +102,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder being skipped, `generate.md` not being served, and no-restart refresh of the index itself.
 
 ### Changed
+
+- **A document's own source-file echo is no longer rendered.** The generated documents repeat their
+  source file as a code-only paragraph directly under the H1 (`` `resources/.../foo.yaml` `` or just
+  `` `foo.yaml` ``), which is the same value the frontmatter already carries and the page now renders as
+  a link to the YAML view — so it was shown twice. It is dropped at render time, before `markdown-it`
+  sees the body, and only when it matches *that document's* `source` (full path or basename) **and**
+  sits alone on its line; a sentence that mentions another resource's `.yaml` is untouched. Documents
+  without a `source` frontmatter are left exactly as they are. This is a rendering-only change: nothing
+  is written to the export, and the removal will become a no-op once the generation template stops
+  emitting the line.
 
 - **`GET /:tenant/summary` redirects (302) to `/:tenant`.** The summary *is* the landing page body, so
   its own document route would serve the same content twice under two URLs. It is a redirect rather than

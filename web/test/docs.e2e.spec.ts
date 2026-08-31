@@ -43,7 +43,7 @@ resources:
 `;
 
 const POLICY_MD = `---
-source: p1.yaml
+source: resources/Microsoft.Graph/deviceManagementConfigurationPolicies/p1.yaml
 sourceSha256: 845ddb
 promptSha256: 04cbf6
 generatedAt: 2026-01-01T00:00:00Z
@@ -51,7 +51,9 @@ generatedAt: 2026-01-01T00:00:00Z
 
 # Policy One
 
-A firewall policy.
+\`p1.yaml\`
+
+A firewall policy, unlike \`other_policy.yaml\` which is stricter.
 
 <details>
 <summary><code>firewall/enabled</code></summary>
@@ -80,6 +82,17 @@ The firewall baseline is
 [Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md).
 `;
 
+// A document the generation agent wrote without frontmatter: it has no known
+// source, so the top-bar switcher must not offer a YAML view for it.
+const COMPLIANCE_MD = `# Compliance One
+
+No frontmatter, so no source YAML is claimed.
+`;
+
+// The exported source YAML behind p1.md, mirroring docs/<type>/<name>.md as
+// resources/<type>/<name>.yaml.
+const POLICY_YAML = `id: 11111111-2222-3333-4444-555555555555\nname: Policy One\nsettings:\n  firewall:\n    enabled: true\n`;
+
 const GROUP_MD = `---
 source: g1.yaml
 sourceSha256: ee11
@@ -98,6 +111,7 @@ describe('Docs browser (e2e)', () => {
   let exportDir: string;
   let tenantDir: string;
   let policyFile: string;
+  let policyYamlFile: string;
   let summaryFile: string;
 
   beforeAll(async () => {
@@ -122,6 +136,30 @@ describe('Docs browser (e2e)', () => {
     policyFile = path.join(policyDir, 'p1.md');
     await fsp.writeFile(policyFile, POLICY_MD);
     await fsp.writeFile(path.join(groupsDir, 'g1.md'), GROUP_MD);
+
+    const complianceDir = path.join(
+      tenantDir,
+      'Microsoft.Graph',
+      'deviceCompliancePolicies',
+    );
+    await fsp.mkdir(complianceDir, { recursive: true });
+    await fsp.writeFile(path.join(complianceDir, 'c1.md'), COMPLIANCE_MD);
+
+    // The second served root: <export>/resources, a sibling of docs/.
+    const policyResourceDir = path.join(
+      exportDir,
+      'resources',
+      'Microsoft.Graph',
+      'deviceManagementConfigurationPolicies',
+    );
+    await fsp.mkdir(policyResourceDir, { recursive: true });
+    policyYamlFile = path.join(policyResourceDir, 'p1.yaml');
+    await fsp.writeFile(policyYamlFile, POLICY_YAML);
+    // A Markdown file inside resources/ must not become reachable.
+    await fsp.writeFile(
+      path.join(policyResourceDir, 'p1.md'),
+      '# not a resource',
+    );
 
     // A housekeeping directory that itself looks like an export: it must NOT be
     // surfaced as a second tenant (discovery stops at the matched tenant and
@@ -276,6 +314,20 @@ describe('Docs browser (e2e)', () => {
     await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
   });
 
+  it('drops the source echo under the H1 but keeps prose mentions of other resources', async () => {
+    const res = await request(app.getHttpServer())
+      .get(
+        '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    // The redundant `<source>.yaml` paragraph is gone from the body...
+    expect(res.text).not.toContain('<p><code>p1.yaml</code></p>');
+    // ...while a mention of another resource inside a sentence survives.
+    expect(res.text).toContain('<code>other_policy.yaml</code>');
+    // The H1 is untouched.
+    expect(res.text).toContain('Policy One');
+  });
+
   it('renders a settings-catalog doc: <details> pass through, ../groups link rewritten, frontmatter stripped', async () => {
     const res = await request(app.getHttpServer())
       .get(
@@ -320,6 +372,104 @@ describe('Docs browser (e2e)', () => {
     await request(app.getHttpServer())
       .get('/mytenant/..%2f..%2f..%2fetc%2fpasswd')
       .expect(404);
+  });
+
+  it('GET /:tenant/_resource/* renders the source YAML with line anchors', async () => {
+    const res = await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    expect(res.text).toContain('yaml-view');
+    // Highlighted, with a deep-linkable anchor and gutter link per line.
+    expect(res.text).toContain('id="L1"');
+    expect(res.text).toContain('href="#L1"');
+    expect(res.text).toContain('firewall');
+    // The breadcrumb shows the document path, never the _resource prefix.
+    expect(res.text).not.toContain('>_resource<');
+    // The sidebar still travels with the page.
+    expect(res.text).toContain('nav-tree');
+  });
+
+  it('serves ?raw as plain text with nosniff', async () => {
+    const res = await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1?raw',
+      )
+      .expect(200)
+      .expect('Content-Type', 'text/plain; charset=utf-8')
+      .expect('X-Content-Type-Options', 'nosniff');
+    expect(res.text).toBe(POLICY_YAML);
+  });
+
+  it('offers the Documentation/YAML switcher on both representations', async () => {
+    const doc = await request(app.getHttpServer())
+      .get(
+        '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    expect(doc.text).toContain(
+      'href="/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
+    );
+
+    const yaml = await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    expect(yaml.text).toMatch(
+      /href="\/mytenant\/_resource\/Microsoft\.Graph\/deviceManagementConfigurationPolicies\/p1"[^>]*aria-current="page"/,
+    );
+    // ...and back to the document.
+    expect(yaml.text).toContain(
+      'href="/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
+    );
+  });
+
+  it('omits the YAML switcher entry for a document without a source', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceCompliancePolicies/c1')
+      .expect(200);
+    expect(res.text).toContain('No frontmatter');
+    expect(res.text).not.toContain(
+      '/mytenant/_resource/Microsoft.Graph/deviceCompliancePolicies/c1',
+    );
+  });
+
+  it('404s for a missing resource, without leaking a filesystem path', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/_resource/Microsoft.Graph/groups/g1')
+      .expect(404);
+    expect(res.text).not.toContain(root);
+  });
+
+  it('does not serve a Markdown file from the resources root', async () => {
+    await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md',
+      )
+      .expect(404);
+  });
+
+  it('rejects traversal out of the resources root (into docs/)', async () => {
+    await request(app.getHttpServer())
+      .get('/mytenant/_resource/..%2fdocs%2fsummary')
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/mytenant/_resource/..%2f..%2f..%2fetc%2fpasswd')
+      .expect(404);
+  });
+
+  it('reflects a re-downloaded resource on the next request without a restart', async () => {
+    const marker = `yaml_probe_${Date.now()}`;
+    await fsp.writeFile(policyYamlFile, `${POLICY_YAML}${marker}: true\n`);
+    const res = await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    expect(res.text).toContain(marker);
+    await fsp.writeFile(policyYamlFile, POLICY_YAML);
   });
 
   it('reflects an edited document on the next request without a restart', async () => {

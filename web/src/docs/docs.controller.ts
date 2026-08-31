@@ -1,10 +1,17 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
 import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
-import { resolveWithinTenant } from './path-safety';
+import { YamlHighlighterService } from './yaml-highlighter.service';
+import { resolveResource, resolveWithinTenant } from './path-safety';
 import { buildNavigation, TenantIndex } from './tenant-index';
+
+// Route prefix for the source-YAML representation of a document. It is a
+// *representation*, not a path segment: it never appears in the breadcrumb, and
+// it cannot collide with a resource type because no Azure/Graph type segment
+// starts with `_`.
+export const RESOURCE_PREFIX = '_resource';
 
 // Paths at the docs root the CLI writes as tool input, not documentation:
 // generate.md is the agent prompt. They are never served. Matched without the
@@ -20,6 +27,7 @@ export class DocsController {
   constructor(
     private readonly discovery: TenantDiscoveryService,
     private readonly renderer: MarkdownRendererService,
+    private readonly highlighter: YamlHighlighterService,
   ) {}
 
   // GET / — tenant picker.
@@ -73,12 +81,62 @@ export class DocsController {
     });
   }
 
+  // GET /:tenant/_resource/*path — the exported source YAML behind a document,
+  // syntax highlighted; `?raw` serves it as plain text. Declared before the
+  // document catch-all so the prefix wins. Read-only, like every other route.
+  @Get(`:tenant/${RESOURCE_PREFIX}/*path`)
+  async resource(
+    @Param() params: any,
+    @Query('raw') raw: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const tenant: string = params.tenant;
+    const relPath = joinPath(params.path ?? params['0'] ?? '');
+
+    const info = await this.discovery.get(tenant);
+    if (!info) return this.notFound(res, tenant, relPath);
+
+    const resolved = resolveResource(info.resourcesDir, relPath);
+    if (!resolved) return this.notFound(res, tenant, relPath);
+
+    if (raw !== undefined) {
+      res.sendFile(resolved, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Disposition': 'inline',
+        },
+      });
+      return;
+    }
+
+    const docPath = stripExtension(relPath);
+    try {
+      const rendered = await this.highlighter.render(resolved);
+      const index = await this.discovery.getIndex(info);
+      res.render('resource', {
+        title: path.posix.basename(docPath),
+        tenant,
+        breadcrumb: this.breadcrumb(relPath),
+        source: `${docPath}.yaml`,
+        rawHref: `/${tenant}/${RESOURCE_PREFIX}/${docPath}?raw`,
+        body: rendered.html,
+        highlighted: rendered.highlighted,
+        lines: rendered.lines,
+        size: rendered.size,
+        views: this.views(tenant, docPath, 'resource'),
+        nav: index ? this.nav(info, index, docPath) : null,
+      });
+    } catch {
+      this.notFound(res, tenant, relPath);
+    }
+  }
+
   // GET /:tenant/*path — a document within the tenant.
   @Get(':tenant/*path')
   async doc(@Param() params: any, @Res() res: Response): Promise<void> {
     const tenant: string = params.tenant;
-    let relPath: any = params.path ?? params['0'] ?? '';
-    if (Array.isArray(relPath)) relPath = relPath.join('/');
+    const relPath = joinPath(params.path ?? params['0'] ?? '');
 
     const info = await this.discovery.get(tenant);
     if (!info) return this.notFound(res, tenant, relPath);
@@ -101,12 +159,21 @@ export class DocsController {
         docDir: this.docDir(relPath),
       });
       const index = await this.discovery.getIndex(info);
+      const docPath = stripExtension(relPath);
+      // The document's own path is what locates its source YAML (the export
+      // mirrors docs/<type>/<name>.md and resources/<type>/<name>.yaml), so
+      // `meta.source` stays a label and is only used as the has-a-source flag.
+      const hasSource = typeof page.meta.source === 'string' && !!page.meta.source;
       res.render('page', {
         title: page.title || relPath,
         body: page.html,
         tenant,
         breadcrumb: this.breadcrumb(relPath),
         meta: page.meta,
+        sourceHref: hasSource
+          ? `/${tenant}/${RESOURCE_PREFIX}/${docPath}`
+          : null,
+        views: hasSource ? this.views(tenant, docPath, 'doc') : null,
         nav: index ? this.nav(info, index, relPath) : null,
       });
     } catch {
@@ -132,14 +199,34 @@ export class DocsController {
     };
   }
 
+  // The document/YAML switcher for the top bar. Both representations share the
+  // same extensionless path, so no extra lookup is needed.
+  private views(
+    tenant: string,
+    docPath: string,
+    kind: 'doc' | 'resource',
+  ): Array<{ label: string; href: string; active: boolean }> {
+    return [
+      {
+        label: 'Documentation',
+        href: `/${tenant}/${docPath}`,
+        active: kind === 'doc',
+      },
+      {
+        label: 'YAML',
+        href: `/${tenant}/${RESOURCE_PREFIX}/${docPath}`,
+        active: kind === 'resource',
+      },
+    ];
+  }
+
   private docDir(relPath: string): string {
-    const dir = path.posix.dirname(relPath.replace(/\.md$/i, ''));
+    const dir = path.posix.dirname(stripExtension(relPath));
     return dir === '.' ? '' : dir;
   }
 
   private breadcrumb(relPath: string): Array<{ label: string }> {
-    return relPath
-      .replace(/\.md$/i, '')
+    return stripExtension(relPath)
       .split('/')
       .filter(Boolean)
       .map((label) => ({ label }));
@@ -150,4 +237,12 @@ export class DocsController {
       .status(404)
       .render('error', { title: 'Not found', tenant, requested });
   }
+}
+
+function joinPath(value: any): string {
+  return Array.isArray(value) ? value.join('/') : String(value ?? '');
+}
+
+function stripExtension(relPath: string): string {
+  return relPath.replace(/\.(md|yaml)$/i, '');
 }

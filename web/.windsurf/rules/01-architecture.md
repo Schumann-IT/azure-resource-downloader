@@ -13,7 +13,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 
 ## Context
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
-  Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`),
+  Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`), `shiki`,
   `gray-matter`, `js-yaml`, Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered.
 
@@ -24,14 +24,17 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   identically — new view/asset wiring goes here, never inline in `main.ts`.
 - `src/dynamic-import.ts` → `dynamicImport`, a `new Function('return import(specifier)')` escape
   hatch. Required because TypeScript would down-level `import()` to `require()`, which cannot load
-  ESM-only packages (`markdown-it-anchor` v9). Load ESM-only deps through it, never with `require`.
+  ESM-only packages (`markdown-it-anchor` v9, `shiki`). Load ESM-only deps through it, never with
+  `require`.
 - `src/docs/` → the single feature module (`DocsModule`):
   - `docs.controller.ts` — routes, breadcrumb, 404 mapping.
   - `tenant-discovery.service.ts` — `DOCS_ROOT` scan + TTL cache + `index.yaml` cache.
   - `tenant-index.ts` — pure functions (`parseTenantIndex`, `buildNavigation`).
   - `markdown-renderer.service.ts` — the one `markdown-it` instance + render cache.
+  - `yaml-highlighter.service.ts` — the one `shiki` highlighter + render cache.
   - `link-rewrite.ts` — pure functions (`rewriteHref`, `extractTitle`).
-  - `path-safety.ts` — `resolveWithinTenant`, the security boundary.
+  - `path-safety.ts` — `resolveWithinRoot` (+ the `resolveWithinTenant`/`resolveResource` wrappers),
+    the security boundary.
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
@@ -48,10 +51,13 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   No route may mutate state. Adding a write path is a design change, not a feature.
 
 ### Path safety
-- `resolveWithinTenant()` in `src/docs/path-safety.ts` is the **only** way a request-derived path may
-  become a filesystem path. Never `path.join` user input and read it directly.
+- `resolveWithinRoot()` in `src/docs/path-safety.ts` is the **only** way a request-derived path may
+  become a filesystem path — through `resolveWithinTenant()` for documents and `resolveResource()`
+  for source YAML. Never `path.join` user input and read it directly.
 - Its guarantees must be preserved: reject null bytes / absolute paths / `..` segments up front,
-  serve only `.md`, and re-verify containment **after** `realpath()` so symlinks cannot escape.
+  serve exactly **one** extension per root (`.md` under `docs/`, `.yaml` under `resources/`; `.yml`
+  is not served), and re-verify containment **after** `realpath()` so symlinks cannot escape. One
+  extension per root is what keeps the two roots apart — never widen it to an extension list.
 - Every change to that file needs a matching case in `test/path-safety.spec.ts`.
 - Error responses must not leak absolute filesystem paths (asserted in the e2e suite).
 
@@ -59,7 +65,10 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - A tenant is a directory containing a **readable, `version: 1`** `docs/index.yaml` — the navigation
   index written by `azure-rd docs generate-index`. There is no `index.md` and no `.doc-manifest.json`.
 - A tenant's document root is `<export>/docs`, not the export folder: that is what the relative
-  `.md` links inside the documents resolve against, and it keeps `resources/` out of the served tree.
+  `.md` links inside the documents resolve against. `<export>/resources` is a **second, separate**
+  served root (`.yaml` only, read-only) — never merge the two or resolve one against the other.
+- `resources/` is **not** a discovery marker: an export whose `docs/` were copied without it stays a
+  valid tenant whose YAML views 404.
 - `docs/generate.md` is tool input, not documentation — it is never served.
 - A matched tenant owns its whole subtree — do not descend into it looking for more tenants.
 - Skip directories starting with `_` or `.` (housekeeping folders such as `_to_delete/`).
@@ -67,6 +76,18 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - Counts shown to the user are **derived from the index** (`counts.documented` / `counts.pending` /
   `counts.excluded`), never by walking the tree.
 - A malformed/unreadable index makes the folder *not a tenant* — it must never crash discovery.
+
+### Source YAML view
+- Exactly **one** `shiki` highlighter, owned by `YamlHighlighterService` and built in `onModuleInit`.
+  It is loaded through `dynamicImport` (ESM-only) and a load failure must degrade to an escaped
+  `<pre>`, never crash the app; the same applies above the size cap.
+- A document's source is located by **inverting the CLI's mapping** (`docs/<type>/<name>.md` ↔
+  `resources/<type>/<name>.yaml`). The `source` frontmatter is a label, never a path input, and no
+  directory is walked to find or list resources.
+- `_resource` is a *representation* prefix, not a path segment: keep it out of the breadcrumb, and
+  keep its route declared **before** the `:tenant/*path` catch-all.
+- Highlighted HTML is trusted only because it comes from the highlighter; every other value in
+  `views/resource.hbs` stays escaped.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in

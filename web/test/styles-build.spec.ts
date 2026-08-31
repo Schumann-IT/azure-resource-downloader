@@ -46,6 +46,14 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toContain('prefers-color-scheme');
   });
 
+  it('includes the YAML view rules (shiki variables, gutter, :target)', () => {
+    expect(css).toContain('--shiki-light');
+    expect(css).toContain('--shiki-dark');
+    expect(css).toMatch(/\.yaml-view\s+\.line-no/);
+    expect(css).toMatch(/user-select:\s*none/);
+    expect(css).toMatch(/\.yaml-view\s+\.line:target/);
+  });
+
   it('still emits the typography prose classes', () => {
     expect(css).toMatch(/prose/);
   });

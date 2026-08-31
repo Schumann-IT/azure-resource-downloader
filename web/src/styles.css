@@ -111,6 +111,68 @@
   outline-offset: 2px;
 }
 
+/* -------------------------------------------------------------------------
+   Resource (YAML) view. shiki renders with `defaultColor: false`, so both
+   themes arrive as inline --shiki-light/--shiki-dark custom properties and
+   dark mode stays a media query — no client-side theme switching.
+   ------------------------------------------------------------------------- */
+.yaml-view pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  padding: 0.75rem 0.75rem 0.75rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.yaml-view .shiki,
+.yaml-view .shiki span:not(.line-no) {
+  color: var(--shiki-light);
+}
+
+.yaml-view .shiki {
+  background-color: var(--shiki-light-bg);
+}
+
+/* Each line is its own block so `#L42` can highlight the whole row. */
+.yaml-view .line {
+  display: block;
+  padding-right: 0.75rem;
+}
+
+.yaml-view .line:target {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+/* The gutter link makes a line addressable; `user-select: none` keeps the
+   numbers out of a copied selection. */
+.yaml-view .line-no {
+  display: inline-block;
+  width: 3.5rem;
+  padding-right: 1rem;
+  text-align: right;
+  color: rgb(148, 163, 184);
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.yaml-view .line-no:hover {
+  color: var(--color-brand-600);
+}
+
+.yaml-view .line-no:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: -2px;
+}
+
+/* Fallback for files above the highlight size cap. */
+.yaml-view .shiki-plain {
+  padding-left: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* Wide assignment tables (long GUIDs) scroll instead of overflowing. */
 .prose table {
   display: block;
@@ -138,5 +200,18 @@
   }
   .nav-tree summary:hover {
     background: rgba(148, 163, 184, 0.14);
+  }
+  .yaml-view .shiki,
+  .yaml-view .shiki span:not(.line-no) {
+    color: var(--shiki-dark);
+  }
+  .yaml-view .shiki {
+    background-color: var(--shiki-dark-bg);
+  }
+  .yaml-view .line:target {
+    background: rgba(96, 165, 250, 0.18);
+  }
+  .yaml-view .line-no:hover {
+    color: var(--color-brand-400);
   }
 }
