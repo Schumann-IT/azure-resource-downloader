@@ -670,6 +670,113 @@ from `resources/metadata.yaml`._
 - Findings are derived from the export alone; recommend verifying anything security-relevant against the
   live tenant.
 
+### Verify the summary (mandatory)
+
+`summary.md` is written after section 4's sweep has already run, and it lives at the `docs/` root the sweep
+skips — so it needs its own check. Run this once, after writing the file, and fix any failure before
+section 8. It enforces the contract declared above: the `# Tenant summary` preamble, the closed H2 set and
+order, the `### Findings` / `### Recommendations` H3 sub-vocabulary, and the findings table's columns, closed
+`Severity` values and severity ordering.
+
+````python
+#!/usr/bin/env python3
+"""Section 7 summary check. Run from the tenant folder after docs/summary.md is written. Exit 1 on any failure."""
+import pathlib, re, sys
+
+FENCE = re.compile(r"^\s*(```|~~~)")
+MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
+HEADING = re.compile(r"^(#+)\s+(.*\S)\s*$")
+
+H1 = "Tenant summary"
+H2 = ["Management summary", "At a glance", "Assignment posture", "Coverage caveats"]
+H3 = ["Findings", "Recommendations"]
+SEV = ["critical", "high", "medium"]
+COLS = ["Severity", "Finding", "Affected", "Documents"]
+
+problems = []
+def fail(msg):
+    problems.append(msg)
+    print(f"FAIL summary.md: {msg}")
+
+path = pathlib.Path("docs/summary.md")
+if not path.is_file():
+    print("FAIL summary.md: missing — not written")
+    sys.exit(1)
+lines = path.read_text(encoding="utf-8").splitlines()
+
+# Heading walk, skipping fenced code and marker-pair spans.
+in_fence = in_marker = False
+h1s, h2s, h3s, cur_h2 = [], [], [], -1
+for ln in lines:
+    if FENCE.match(ln):
+        in_fence = not in_fence
+        continue
+    if in_fence:
+        continue
+    mk = MARKER.match(ln)
+    if mk:
+        in_marker = mk.group(1) == "start"
+        continue
+    if in_marker:
+        continue
+    h = HEADING.match(ln)
+    if not h:
+        continue
+    level, title = len(h.group(1)), h.group(2).strip()
+    if level == 1:
+        h1s.append(title)
+    elif level == 2:
+        h2s.append(title)
+        cur_h2 += 1
+    elif level == 3:
+        h3s.append((cur_h2, title))
+
+if h1s != [H1]:
+    fail(f"preamble H1 must be exactly one '# {H1}', got {h1s}")
+if h2s != H2:
+    fail(f"H2 headings must be {H2} verbatim and in order, got {h2s}")
+misplaced = [t for i, t in h3s if i != 0]
+if misplaced:
+    fail(f"H3 headings are only allowed under Management summary; found: {misplaced}")
+found_h3 = [t for i, t in h3s if i == 0]
+if found_h3 != H3:
+    fail(f"H3 sub-vocabulary must be {H3} verbatim and in order, got {found_h3}")
+
+# Findings table: rows between '### Findings' and the next heading.
+grab, header, rows = False, None, []
+for ln in lines:
+    h = HEADING.match(ln)
+    if h:
+        if grab and len(h.group(1)) <= 3:
+            break
+        grab = len(h.group(1)) == 3 and h.group(2).strip() == "Findings"
+        continue
+    if grab and "|" in ln:
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if header is None:
+            header = cells
+        else:
+            rows.append(cells)
+
+if header is None:
+    fail("Findings section has no table")
+elif header != COLS:
+    fail(f"Findings table columns must be {COLS}, got {header}")
+else:
+    sev = [r[0].strip().lower().strip("*[] ") for r in rows if r]
+    bad = [s for s in sev if s not in SEV]
+    if bad:
+        fail(f"Findings Severity must be one of {SEV}; got {bad}")
+    rank = [SEV.index(s) for s in sev if s in SEV]
+    if rank != sorted(rank):
+        fail("Findings rows not sorted by severity (critical, then high, then medium)")
+
+print(f"summary.md: {len(problems)} problem(s)" if problems else "summary.md OK")
+sys.exit(1 if problems else 0)
+````
+
 ---
 
 ## 8. Report
@@ -677,8 +784,8 @@ from `resources/metadata.yaml`._
 Finish with:
 
 - documents written, and documents re-spliced
-- that `docs/summary.md` was written
-- checks passed at section 4 and at section 6, and anything you repaired
+- that `docs/summary.md` was written and passed its section 7 check
+- checks passed at sections 4, 6 and 7, and anything you repaired
 - every **dangling group reference** (an assigned GUID with no group in the export)
 - how many documents were migrated to markers
 - whether the export was marked incomplete, and why

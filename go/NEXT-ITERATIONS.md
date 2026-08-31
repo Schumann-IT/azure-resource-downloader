@@ -21,18 +21,14 @@ style each part of a document, without asking the LLM to hand-write layout.
 > pairs; and `docs/summary.md` got the same closed-set declaration for its four H2s. See the `[Unreleased]`
 > entry in `CHANGELOG.md`.
 >
-> **What remains** is an enforcement check for `docs/summary.md`: the three follow-ups the web side raised
-> (§1e-i to §1e-iii) have all shipped as declarations, but nothing validates them yet. A one-shot
-> regeneration of all existing documentation is still required and has not been run.
-
-### 1e enforcement
-
-A declaration is only worth as much as a check. `summary.md` sits at the `docs/` root, which the §4 checker
-skips, and has no `doc-prompt.md` to hold a `doc-headings` marker — so its contract cannot be validated the
-way per-type documents are. Add an explicit `summary.md` check: its closed H2 set, the `### Findings` /
-`### Recommendations` H3 sub-vocabulary (§1e-i), the findings table with its closed `Severity` column and
-severity-ordered rows (§1e-ii), and the fixed preamble — `# Tenant summary` H1 plus its orientation sentence
-(§1e-iii). All three are now declared; none is checked.
+> **The tenant summary is done too.** Its four H2s, the `### Findings` / `### Recommendations` H3
+> sub-vocabulary, the severity-sorted findings table with its closed `Severity` column, and the fixed
+> `# Tenant summary` preamble are all declared (§1e-i to §1e-iii) **and** validated by an explicit
+> `docs/summary.md` check in section 7 of `generate_prompt_template.md` (§1e enforcement) — it runs after the
+> file is written, since the section-4 sweep runs earlier and skips the `docs/` root.
+>
+> **What remains:** a one-shot regeneration of all existing documentation, which has not been run. The parked
+> idea below is deliberately not scheduled.
 
 ### Idea (parked): per-finding severity in document `Security` sections
 

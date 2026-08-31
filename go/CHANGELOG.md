@@ -29,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consistently (they previously varied between exports). Findings are now rendered as a table sorted by
   severity (most serious first) with a closed `Severity` column — `critical`, `high` or `medium` — so the
   landing page can rank and filter them. The summary's preamble is also fixed: a verbatim `# Tenant summary`
-  H1 followed by a single orientation sentence, so everything above the first H2 has a known shape.
+  H1 followed by a single orientation sentence, so everything above the first H2 has a known shape. A new
+  mandatory section-7 check validates `docs/summary.md` against all of the above — preamble, H2 set and order,
+  H3 sub-vocabulary, and the findings table's columns, closed `Severity` values and severity ordering — since
+  the section-4 sweep runs before the summary is written and skips the `docs/` root.
   **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
 - **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
   `doc-headings` marker for the default and ARM templates.
