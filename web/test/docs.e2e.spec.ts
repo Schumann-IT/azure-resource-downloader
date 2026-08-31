@@ -527,4 +527,102 @@ describe('Docs browser (e2e)', () => {
       .expect(200);
     expect(res.text).toContain(marker);
   });
+
+  it('offers the export as a plain download link on the tenant picker', async () => {
+    const res = await request(app.getHttpServer()).get('/').expect(200);
+    expect(res.text).toContain('href="/mytenant/_export/confluence"');
+    expect(res.text).toContain('href="/nosummary/_export/confluence"');
+    expect(res.text).toContain('One-way publish');
+
+    // ...and not on the tenant landing page, which is documentation only.
+    const landing = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(landing.text).not.toContain('_export');
+  });
+
+  it('exports the tenant as a Confluence-importable zip', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/_export/confluence')
+      .buffer()
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', 'application/zip')
+      .expect('Content-Disposition', 'attachment; filename="mytenant.zip"');
+
+    // Zip entry names are stored uncompressed in the local file headers, so the
+    // archive can be inspected without an unzip dependency.
+    const entries = (res.body as Buffer).toString('utf8');
+    // One folder, whose name becomes the space name.
+    expect(entries).toContain(
+      'My Tenant documentation/deviceManagementConfigurationPolicies — Policy One.html',
+    );
+    expect(entries).toContain('My Tenant documentation/groups — Admins.html');
+    // A pending document is exported too, so the space is not silently partial.
+    expect(entries).toContain(
+      'My Tenant documentation/deviceCompliancePolicies — Compliance One.html',
+    );
+    expect(entries).toContain('My Tenant documentation/Overview.html');
+  });
+
+  it('leaves the browser render cache and the docs root untouched', async () => {
+    const before = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1')
+      .expect(200);
+    const tree = await snapshot(root);
+
+    await request(app.getHttpServer())
+      .get('/mytenant/_export/confluence')
+      .buffer()
+      .parse(binaryParser)
+      .expect(200);
+
+    // The export renders with the same env as the browser, so it can neither
+    // poison nor bypass the mtime-keyed cache.
+    const after = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1')
+      .expect(200);
+    expect(after.text).toBe(before.text);
+    // Read-only: the archive is built in memory and streamed.
+    expect(await snapshot(root)).toEqual(tree);
+  });
+
+  it('404s an unknown export format and an unimplemented details strategy', async () => {
+    await request(app.getHttpServer())
+      .get('/mytenant/_export/docx')
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/mytenant/_export/confluence?details=headings')
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/nosuchtenant/_export/confluence')
+      .expect(404);
+  });
 });
+
+// superagent has no parser for application/zip, so collect the raw bytes.
+function binaryParser(res: any, cb: any): void {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+  res.on('end', () => cb(null, Buffer.concat(chunks)));
+}
+
+// Every file under `dir` with its size and mtime, for asserting that a request
+// wrote nothing.
+async function snapshot(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (current: string): Promise<void> => {
+    const entries = await fsp.readdir(current, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else {
+        const stat = await fsp.stat(full);
+        out.push(`${path.relative(dir, full)}:${stat.size}:${stat.mtimeMs}`);
+      }
+    }
+  };
+  await walk(dir);
+  return out;
+}

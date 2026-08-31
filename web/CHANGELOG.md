@@ -24,6 +24,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A tenant's documentation can be exported as Confluence HTML.**
+  `GET /:tenant/_export/confluence` streams one zip containing one folder, which is what Confluence's
+  HTML import expects: the folder name (`<tenant domain> documentation`) becomes the space name, and
+  each file name becomes a page title. Pages are titled `<type leaf> — <display name>` from
+  `docs/index.yaml` (falling back to the document's H1, then its base name), which is what keeps a
+  flat, hierarchy-less space readable and makes cross-type name clashes impossible; characters that
+  are illegal in a file name or a Confluence title are replaced, and a residual collision gets a
+  numbered suffix and a line on the overview page rather than overwriting a page. An `Overview.html`
+  built from `docs/summary.md` plus a grouped link list stands in for the sidebar, since an imported
+  space has no page tree, and each page opens with the provenance (source, export timestamp,
+  generation hashes) that stripping the frontmatter would otherwise lose. The export is offered as a
+  plain download link per tenant on the picker, keeping the tenant landing page documentation-only —
+  still no client-side JavaScript.
+
+  The non-negotiables are preserved as follows. **Read-only:** documents are enumerated from
+  `docs/index.yaml` and read through `resolveWithinTenant()`, the archive is assembled in memory and
+  streamed, and no temporary file is created — an e2e case asserts that an export changes not one byte
+  under the docs root. **One `markdown-it` instance, and the cache:** the exporter does not render, it
+  re-serialises the HTML the browser already produced with the same render env, so the mtime-keyed
+  render cache needs no extra key and cannot be poisoned or bypassed by an export (also asserted).
+  **Path safety:** untouched, and it is the reason images cannot travel — a served root hands out
+  exactly one extension, so an image travels as its `alt` text instead of the extension policy being
+  widened. `_export` is a representation prefix like `_resource`, declared before the document
+  catch-all, and an unknown format is a 404.
+
+  Serialisation is an allowlist, not a blocklist: HTML the importer does not preserve is unwrapped,
+  scripts and embeds are dropped, and an element name that is not HTML at all is escaped. That last
+  rule fixes a latent bug the export surfaced — macOS plist payloads are quoted in the documents with
+  bare angle brackets, which `html: true` already turns into phantom `<key>`/`<string>` elements in
+  the browser; the export now escapes them instead of shipping them. Heading permalinks and
+  in-document anchors are unwrapped (a flat space has nowhere to point them), and a link whose target
+  is not a page in the export degrades to its own text. A document the index lists but that cannot be
+  read is reported under *Not exported* on the overview page instead of failing the export, and zip
+  entries carry the export's own `generatedAt` rather than the wall clock, so re-exporting an
+  unchanged tenant produces the same bytes.
+
+  **Provisional and one-way**, as the README says: importing creates a space rather than updating one,
+  so re-importing yields a second space and edits made in Confluence are lost. The `<details>` blocks
+  that are the bulk of the documentation are passed through untouched, because Confluence's import FAQ
+  neither lists them as preserved nor says what it does with them and no instance was available to
+  settle it; the alternatives, and the media and per-format follow-ups, are in `NEXT-ITERATIONS.md`.
+  New dependencies: `htmlparser2` for the serialisation pass and `yazl` for the streamed zip.
+
 - **The tenant summary's Findings table is styled as a findings list, with the severity as an icon.**
   A markdown-it core rule tags any table whose first header cell is `Severity` with `class="findings"`
   and puts `data-severity` on each body row and on its severity cell, so `src/styles.css` can reach

@@ -34,6 +34,9 @@ mutates the export in any way.
   are shown as page metadata, the rest is never rendered into the body. The documents also echo their
   source file as a code-only paragraph under the H1; that duplicate is dropped at render time (only
   when it matches the document's own `source` and stands alone on its line).
+- **Confluence HTML export** — `GET /:tenant/_export/confluence` streams the whole tenant as a zip
+  ready for Confluence's HTML import, offered as a download link per tenant on the picker.
+  **Provisional** — see [Confluence export](#confluence-export) for what it cannot do.
 - **No-restart refresh** — regenerated documents, re-downloaded resources *and* a regenerated
   `index.yaml` appear on the next request (per-request `stat()` against an mtime/size-keyed cache);
   newly generated tenants appear within the 30 s discovery TTL.
@@ -122,10 +125,11 @@ Discovery rules:
 
 | Route | Response |
 | --- | --- |
-| `GET /` | Tenant picker (`views/picker.hbs`). |
+| `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
 | `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
+| `GET /:tenant/_export/confluence` | The whole tenant as a `application/zip` attachment for Confluence's HTML import. |
 | `GET /:tenant/_resource/*path` | The source YAML behind a document, syntax highlighted; the `.yaml` suffix is optional. |
 | `GET /:tenant/_resource/*path?raw` | The same file as `text/plain; charset=utf-8` (`nosniff`), for copy-paste. |
 | `GET /:tenant/*path` | A document inside the tenant's `docs/` folder; the `.md` suffix is optional. |
@@ -134,8 +138,49 @@ Anything that does not resolve to a Markdown file inside the tenant — or to a 
 `resources/` folder — renders the 404 view. The 404 page never leaks a filesystem path.
 `docs/generate.md` is tool input, not documentation, and is never served.
 
-`_resource` is a *representation* prefix, not a path segment: it never appears in the breadcrumb, and
-it cannot collide with a resource type because no Azure/Graph type segment starts with `_`.
+`_resource` and `_export` are *representation* prefixes, not path segments: they never appear in the
+breadcrumb, and they cannot collide with a resource type because no Azure/Graph type segment starts
+with `_`.
+
+## Confluence export
+
+`GET /:tenant/_export/confluence` returns one zip containing one folder, which is what Confluence's
+HTML import expects: the folder name becomes the space name, each `.html` file becomes a page, and
+**the file name becomes the page title**.
+
+- **Space name** — `<tenant domain> documentation`.
+- **Page titles** — `<type leaf> — <display name>`, taking the display name from `docs/index.yaml`,
+  then the document's H1, then the file's base name. Characters that are illegal in a file name or a
+  Confluence title are replaced, and a residual collision gets a `(2)` suffix and a line on the
+  overview page — never an overwrite.
+- **Overview page** — `Overview.html`, built from `docs/summary.md` plus a grouped link list that
+  stands in for the sidebar, since an imported space is a **flat** set of pages with no hierarchy.
+- **Provenance** — each page opens with the source, export timestamp and generation hashes from the
+  document's frontmatter, and a note that the page is generated.
+- **Determinism** — zip entries carry the export's own `generatedAt`, not the wall clock, so
+  exporting an unchanged tenant twice produces the same bytes.
+
+It stays read-only: documents are enumerated from `docs/index.yaml`, read through the same path guard
+as every other route, and the archive is assembled in memory and streamed — no temporary file, and
+nothing written under `DOCS_ROOT`. A document the index lists but that cannot be read is reported
+under *Not exported* on the overview page instead of failing the export.
+
+**Provisional, and one-way.** Import *creates* a space rather than updating one, so re-importing
+yields a second space — and edits made in Confluence are lost the next time the export is imported.
+Beyond that:
+
+- **`<details>` blocks are passed through untouched.** They are the bulk of the documentation, and
+  Confluence's import FAQ neither lists them as preserved nor says what happens to them. Passthrough
+  is what makes the first real import cheap to evaluate; alternatives are in
+  [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+- **No media.** Each served root hands out exactly one extension (`.md` under `docs/`), so the
+  exporter cannot read an image; images travel as their `alt` text.
+- **In-document anchors do not survive**, because the flat space has no place for them. Heading
+  permalinks are unwrapped, and a link whose target is not a page in the export degrades to its text.
+- **Only what the importer preserves is emitted.** The serialiser is an allowlist: unsupported HTML
+  is unwrapped, scripts and embeds are dropped, and a bare `<key>` in prose (macOS plist quotes are
+  full of them) is escaped rather than shipped as a phantom element.
+- **Source YAML is not attached.** Whole-tenant only — no per-type or single-document export.
 
 ## Security
 
@@ -172,7 +217,18 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
   redirect, the sidebar with its active document, nested `<details>`, cross-type link resolution,
   404s, traversal, `generate.md` not being served, no-restart refresh of a document, the summary and
   the index; plus the YAML view with its `#L` anchors, `?raw`, the top-bar switcher (and its absence
-  for a document without a `source`), and no-restart refresh of a re-downloaded resource.
+  for a document without a `source`), and no-restart refresh of a re-downloaded resource. For the
+  Confluence export: the content type, `Content-Disposition`, the space folder and page entries in the
+  zip, the download link being on the picker and not on the landing page, the 404s for an unknown format or an unimplemented `<details>` strategy, and — as the
+  read-only and cache invariants — that an export changes neither the browser's rendered HTML nor a
+  single byte under the docs root.
+- `test/export.spec.ts` — the Confluence exporter's pure modules: page-title derivation (illegal
+  characters, the display-name/H1/base-name fallbacks, deterministic deduplication), the allowlist
+  serialiser (a bare `<key>` escaped, unsupported HTML unwrapped, scripts dropped, heading permalinks
+  unwrapped, images reduced to `alt` text), href rewriting, and the format (space name, page plan,
+  provenance, the overview's grouped link list). The `<details>` fixture — nested blocks, a
+  group-label block with no value, a link inside a block, a value containing ` = ` — is where a
+  future transform gets its assertions.
 - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts the
   custom `<details>`/`<summary>`, YAML-view (shiki variables, line gutter, `:target`) and dark-mode
   rules survive.
@@ -197,7 +253,13 @@ web/
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
-│       └── path-safety.ts               # the security boundary
+│       ├── path-safety.ts               # the security boundary
+│       └── export/
+│           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
+│           ├── confluence.ts            # the format: space, page plan, overview, provenance
+│           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
+│           ├── page-name.ts             # page titles = file names, sanitised and deduplicated
+│           └── details-strategy.ts      # the seam for the open <details> question
 ├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}
 ├── public/                              # app.css (generated, gitignored)
 └── test/
@@ -230,6 +292,7 @@ changes to the Go CLI go in [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 Deliberate scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md) — no search, no
 highlighting of the code fences *inside* documents, no YAML view for resources the index does not
 list (excluded bulk types, unreferenced groups), single-segment tenant routes only, no table of
-contents for the summary, no explicit dark-mode toggle. Navigation groups by resource type: the documents do not yet carry the
+contents for the summary, no explicit dark-mode toggle, and no export format other than Confluence
+HTML (whose own limits are listed under [Confluence export](#confluence-export)). Navigation groups by resource type: the documents do not yet carry the
 `platformGroup`/`functionGroup` frontmatter the index can enrich them with, so those are shown as
 badges when present rather than driving the tree.
