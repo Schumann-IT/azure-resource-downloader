@@ -13,152 +13,54 @@ today*; this file is only for what was left out on purpose.
 **Goal.** Make the generated Markdown structurally predictable enough that the docs browser in `../web` can
 style each part of a document, without asking the LLM to hand-write layout.
 
-> **Status — implemented (Aug 2026).** §1a–1e have shipped. All seven templates carry the closed-set
-> declaration plus a machine-readable `<!-- doc-headings: … -->` marker that names each family's ordered H2
-> set and rides along into every type's `doc-prompt.md`; the three `&` headings were renamed; the setting
-> `<details>` blocks gained `data-setting`/`data-note`; and `generate_prompt_template.md` §4 gained a
-> **Heading vocabulary** check that reads the contract from each type's `doc-prompt.md` and validates every
-> document's H2s (membership, order, no duplicates), skipping H2s inside `<!-- …:start -->`/`<!-- …:end -->`
-> marker pairs so the tool-spliced `## Targeted by` block is exempt (kept out of the group set rather than
-> added to it). §1e shipped as a **declaration only** on `docs/summary.md`.
+> **Shipped.** The per-document section contract landed in full — all seven templates declare their H2 list
+> closed and verbatim and carry a `<!-- doc-headings: … -->` marker that rides into every type's
+> `doc-prompt.md`; the three `&` headings were renamed; the setting `<details>` blocks gained `data-setting` /
+> `data-note`; `generate_prompt_template.md` §4 enforces it with a *Heading vocabulary* check that reads each
+> family's set from its `doc-prompt.md` and exempts H2s inside `<!-- …:start -->`/`<!-- …:end -->` marker
+> pairs; and `docs/summary.md` got the same closed-set declaration for its four H2s. See the `[Unreleased]`
+> entry in `CHANGELOG.md`.
 >
-> **Still missing:** three follow-ups on `summary.md` found by reviewing a regenerated one — its H3
-> sub-vocabulary (`### Findings` / `### Recommendations`) is not declared and the two exports disagree,
-> its findings carry no severity, and its preamble is undeclared (§1e-i to §1e-iii) — plus automated
-> enforcement of those headings (`summary.md` sits at the `docs/` root, which §4 skips, and has no
-> `doc-prompt.md` to hold a marker). Per-finding severity in the per-document `Security` sections stays
-> deliberately postponed (see *What stays out of the prompt*). The web-side renderer that consumes all this
-> is in `../web/NEXT-ITERATIONS.md`, and the required one-shot regeneration of all existing documentation has
-> not been run yet.
+> **What remains** is confined to the tenant summary — three follow-ups the web side found while reviewing a
+> regenerated `summary.md` (§1e-i to §1e-iii), plus an enforcement check for that file. A one-shot
+> regeneration of all existing documentation is still required and has not been run.
 
-The seven prompt templates each end with a list of H2 sections the model must produce, in order:
+### 1e-i. Declare `summary.md`'s H3 sub-vocabulary
 
-```
-internal/models/documentation_prompt.tmpl          References · Lifecycle & operations · Security · Settings
-internal/handlers/graph/singleton_prompt.tmpl      References · Lifecycle & operations · Security · Settings
-internal/handlers/graph/group_prompt.tmpl          Membership · Usage as assignment target · Security · Properties
-internal/handlers/graph/record_prompt.tmpl         References · Lifecycle & operations · Properties
-internal/handlers/graph/credential_prompt.tmpl     References · Lifecycle & operations · Expiry & renewal · Security · Properties
-internal/handlers/graph/referenced_prompt.tmpl     References · Usage & references · Lifecycle & operations · Security · Definition
-internal/handlers/arm/arm_prompt.tmpl              References · Lifecycle & operations · Security · Properties
-```
+The **Management summary** section carries `### Findings` and `### Recommendations` sub-headings that §7 of
+`internal/docs/generate_prompt_template.md` never declares, and the two reference exports disagree on them.
+Give the summary's H3s the same closed-set-and-verbatim treatment the H2s got, so the web side can style and
+deep-link them.
 
-That list *was* described but never declared binding, and it had drifted. In the two reference exports, both
-generated before §1a landed:
+### 1e-ii. Give summary findings a severity
 
-- **`## Metadata` in 99 documents** — a second, model-invented metadata table, spread across every family
-  (conditional access 24, settings-catalog policies 22, groups 20, …), even though the fixed preamble
-  already mandates a metadata table above the first H2.
-- **`## Assignments` in 4 documents** — duplicating the marked assignments block.
+Summary findings currently carry no severity, so the landing page cannot rank or filter them. Declare a
+small, closed severity vocabulary for the **Findings** list in §7. This is the tenant-summary counterpart to
+— and distinct from — the per-document `Security` severity that stays out of scope (below): the summary makes
+at most six findings once per tenant, not a subjective call 400+ times across an export.
 
-Any drifting heading breaks a frontend that keys off the heading slug, so the contract has to become
-explicit before the web side can rely on it.
+### 1e-iii. Declare the summary preamble
 
-### 1a. Declare the heading list closed and verbatim
+The content above the first H2 (the posture/intro paragraph) is undeclared, so its shape is not guaranteed.
+State what the preamble must contain, the way the per-type templates fix their metadata table and summary
+paragraph.
 
-The highest-value change, and the reason for the rest. Append to the section list in **all seven**
-templates (diverge one and the vocabulary splits):
+### 1e enforcement
 
-```
-These H2 headings are a closed set and a machine contract: the documentation browser styles each section
-by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in
-the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`,
-`## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above,
-assignment information belongs in the assignments block above. If a finding fits no section, put it in the
-closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it.
-```
+The three declarations above are only worth as much as a check. `summary.md` sits at the `docs/` root, which
+the §4 checker skips, and has no `doc-prompt.md` to hold a `doc-headings` marker — so its contract cannot be
+validated the way per-type documents are. Add an explicit `summary.md` check (its closed H2 set, the H3
+sub-vocabulary from 1e-i, and the preamble from 1e-iii) to §4 or alongside it.
 
-### 1b. Drop `&` from three headings
+### Deliberately still out
 
-`markdown-it-anchor` slugifies `Lifecycle & operations` to `lifecycle-%26-operations` — URL-encoded, awkward
-in a CSS selector and in a deep link. Rename in the same pass:
-
-- `Lifecycle & operations` → `Lifecycle and operations` (six templates)
-- `Expiry & renewal` → `Expiry and renewal` (`credential_prompt.tmpl`)
-- `Usage & references` → `Usage and references` (`referenced_prompt.tmpl`)
-
-### 1c. Attributes on the setting `<details>` blocks
-
-The model already hand-writes these tags for every setting, so attributes cost nothing structurally. Extend
-the `Settings:` / `Properties:` / `Definition:` instructions:
-
-```
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g.
-  `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>`
-  shows — never invent or abbreviate it.
-- Add `data-note="security"` when the setting is one you called out in the Security section, or
-  `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the
-  attribute otherwise. Use no other value.
-```
-
-`data-setting` gives the browser a stable per-setting deep-link target; `data-note` carries the two
-judgements it cannot compute. **Deliberately excluded:** a `default` / `non-default` classification. That
-needs the service default, which the model would have to recall — exactly the hallucination these templates
-otherwise guard against.
-
-### 1d. Enforce it
-
-A contract nothing checks will drift again. `internal/docs/generate_prompt_template.md` §4 already runs
-structural checks; add a row (and the matching assertion in its Python checker):
-
-| Check | Expectation |
-|---|---|
-| Heading vocabulary | Every `##` outside fenced code blocks is in the closed set for that document's template family, spelled exactly, in order, without duplicates. |
-
-Same caveat as the existing *Heading structure* row: `deviceShellScripts` / `deviceManagementScripts`
-documents embed shell scripts whose `##` comment lines are not headings.
-
-**Implemented.** The closed set is not hardcoded in the checker: each template emits a
-`<!-- doc-headings: A | B | C -->` marker, so the assembled `doc-prompt.md` carries its own contract and the
-checker reads the ordered set from there (no Go→Python duplication of which family a type uses). The check
-also skips any `##` inside a `<!-- …:start -->`/`<!-- …:end -->` marker pair, which is how the tool-spliced
-`## Targeted by` block stays out of the group family's set instead of being added to it.
-
-### What stays out of the prompt
-
-The division of labour matters more than the wording — **never ask the model for something a program can
-derive**, because a bad batch can only be fixed by regenerating everything:
-
-| Hook | Produced by | Why not the prompt |
-|---|---|---|
-| `<section data-section="security">` wrappers | web renderer | Deterministic from the H2 slug; hand-written wrappers across 340+ documents would eventually be unbalanced |
-| A class on the metadata table | web renderer | Positional (first table after the H1 + summary) |
-| A wrapper around the assignments block | web renderer | The `<!-- assignments:start -->` / `<!-- assignments:end -->` markers already exist and are tool-maintained |
-| A document-family marker (`policy`, `group`, `arm`, …) | `docs generate-index` | Derivable from the resource type; the model would only be guessing at its own template |
-
-Per-finding severity tags in `Security` (`**[risk]**` / `**[review]**` / `**[ok]**`) are genuinely
-model-only information and tempting, but they are a subjective call made 400+ times with nothing able to
-validate them. Section-level styling gets most of the visual benefit — revisit once the vocabulary has
-proven stable, not in the same regeneration.
-
-### Cost and blast radius
-
-Editing any `.tmpl` changes that type's `promptSha256`, and `GeneratePrompt` classifies a document stale
-when `fm.promptSha256 != type` — so **every document of every affected type must be regenerated** (265 in
-`cb-gmbh.com` alone). This is therefore a *one-shot* change: land 1a–1d together, regenerate once. It is
-also why per-finding severity is postponed rather than bundled speculatively.
-
-Also touched: `internal/models/documentation_test.go` (asserts `"Lifecycle & operations:\n"`),
-`internal/handlers/graph/prompt_templates_test.go` and `internal/handlers/arm/prompt_templates_test.go`
-(per-family section lists), plus `CHANGELOG.md` — and the entry must state that a full regeneration is
-required.
-
-### 1e. The tenant summary has its own vocabulary
-
-`docs/summary.md` is written from `internal/docs/generate_prompt_template.md`, not from the per-type
-templates, and its four headings (`Management summary`, `At a glance`, `Assignment posture`,
-`Coverage caveats`) are already consistent across both exports. It is the body of the browser's tenant
-landing page, so it deserves the same "closed set, verbatim" declaration — but it is a separate edit that
-does **not** change `promptSha256`, so it can ship independently of 1a–1d.
-
-**Implemented (declaration only).** §7 of `generate_prompt_template.md` now declares the four headings a
-closed contract, to be written verbatim and unnumbered (`## Management summary`, `## At a glance`,
-`## Assignment posture`, `## Coverage caveats`). It is **not** enforced: `summary.md` lives at the `docs/`
-root, which the §4 checker skips, and has no `doc-prompt.md` to hold a `doc-headings` marker, so an automated
-check for it is still open.
+Per-finding severity tags in the per-document `Security` sections (`**[risk]**` / `**[review]**` /
+`**[ok]**`) are genuinely model-only information, but they are a subjective call made 400+ times with nothing
+able to validate them — distinct from the once-per-tenant summary findings in §1e-ii. Section-level styling
+already gets most of the visual benefit; revisit once the vocabulary has proven stable.
 
 ### Consumer
 
-The web-side renderer work that depends on this is written up in `../web/NEXT-ITERATIONS.md`
-("Section-level styling hooks"). The renderer changes there are useful on their own, but only become
-*reliable* once the vocabulary is closed and regenerated.
+The web-side renderer that depends on this is written up in `../web/NEXT-ITERATIONS.md` ("Section-level
+styling hooks"). Those changes become *reliable* only once the summary vocabulary above is closed and the
+documentation is regenerated.
