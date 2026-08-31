@@ -563,6 +563,116 @@ func TestGeneratePromptDeterministicAndDryRun(t *testing.T) {
 	}
 }
 
+func TestRenderSummaryFacts(t *testing.T) {
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z",
+		Tenant:      "example.com",
+		Run:         RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:                {HasAssignments: true},
+			groupsType:              {},
+			autopilotIdentitiesType: {},
+		},
+		Resources: map[string]ResourceMeta{
+			// p1: assigned to a dynamic group and to all users.
+			compType + "/p1.yaml": {
+				ResourceId: "p1", DisplayName: "P1", PresentInTenant: true, Platforms: "windows",
+				AssignmentTargets: []interface{}{groupTarget("G1"), allUsersTarget()},
+			},
+			// p2: present but configured-but-unassigned.
+			compType + "/p2.yaml": {ResourceId: "p2", DisplayName: "P2", PresentInTenant: true, Platforms: "macOS"},
+			// p3: gone from the tenant, retained.
+			compType + "/p3.yaml": {ResourceId: "p3", DisplayName: "P3", PresentInTenant: false},
+			// G1: a present dynamic group (counts everything present).
+			groupsType + "/g1.yaml": {
+				ResourceId: "G1", DisplayName: "Group One", PresentInTenant: true,
+				GroupTypes: []string{"DynamicMembership"},
+			},
+			// Autopilot record is counted too under "count everything present".
+			autopilotIdentitiesType + "/dev1.yaml": {ResourceId: "dev1", PresentInTenant: true},
+		},
+		NotListed: NotListedMeta{
+			Types: []string{"Microsoft.Graph/notlisted"},
+			Empty: []string{"Microsoft.Graph/empty"},
+		},
+	}
+
+	out := renderSummaryFacts(m, buildGroupInfo(m))
+
+	wants := []string{
+		"Export generated at: `2026-01-02T03:04:05Z`",
+		"Export complete: `true`",
+		"| " + compType + " | 2 | macOS, windows | yes |",
+		"| " + groupsType + " | 1 | — | no |",
+		"| " + autopilotIdentitiesType + " | 1 | — | no |",
+		"_4 resource(s) present across 3 type(s)._",
+		"- Assigned: 1 of 2 resources",
+		"- Configured but unassigned: 1",
+		"- Targets: All users ×1 · All devices ×0 · group targets ×1 (dynamic ×1 · assigned ×0 · dangling ×0)",
+		"Retained but no longer in tenant: 1",
+		"Types not listed (permissions): Microsoft.Graph/notlisted",
+		"Types that listed to zero: Microsoft.Graph/empty",
+	}
+	for _, w := range wants {
+		if !strings.Contains(out, w) {
+			t.Errorf("summary-facts missing %q in:\n%s", w, out)
+		}
+	}
+
+	// Deterministic across calls.
+	if out != renderSummaryFacts(m, buildGroupInfo(m)) {
+		t.Error("renderSummaryFacts must be deterministic")
+	}
+}
+
+func TestRenderSummaryFactsDanglingGroup(t *testing.T) {
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{compType: {HasAssignments: true}},
+		Resources: map[string]ResourceMeta{
+			compType + "/p1.yaml": {
+				ResourceId: "p1", PresentInTenant: true,
+				// G-missing has no group entry -> dangling target.
+				AssignmentTargets: []interface{}{groupTarget("G-missing")},
+			},
+		},
+	}
+	out := renderSummaryFacts(m, buildGroupInfo(m))
+	if !strings.Contains(out, "group targets ×1 (dynamic ×0 · assigned ×0 · dangling ×1)") {
+		t.Errorf("dangling group must be counted, got:\n%s", out)
+	}
+}
+
+func TestGeneratePromptWritesSummaryFacts(t *testing.T) {
+	tenantDir := t.TempDir()
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{compType: {PromptSha256: "p-comp"}},
+		Resources: map[string]ResourceMeta{
+			compType + "/a.yaml": {ResourceId: "a", SourceSha256: "sa", PresentInTenant: true, Platforms: "windows"},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	writePromptFile(t, filepath.Join(tenantDir, models.ResourcesDirName), compType)
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	out, err := os.ReadFile(res.OutPath)
+	if err != nil {
+		t.Fatalf("read prompt: %v", err)
+	}
+	body := string(out)
+	// The block markers survive and the facts are spliced between them.
+	if !strings.Contains(body, "<!-- summary-facts:start -->") || !strings.Contains(body, "<!-- summary-facts:end -->") {
+		t.Error("summary-facts markers must survive splicing")
+	}
+	if !strings.Contains(body, "| "+compType+" | 1 | windows | no |") {
+		t.Errorf("generate.md must carry the spliced summary facts:\n%s", body)
+	}
+}
+
 func TestValidateMarkers(t *testing.T) {
 	if err := validateMarkers(DefaultGeneratePromptTemplate(), requiredMarkers); err != nil {
 		t.Fatalf("default template must validate: %v", err)

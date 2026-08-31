@@ -9,7 +9,7 @@ import (
 
 // requiredMarkers are the marked blocks GeneratePrompt fills. Every one must be
 // present, matched and non-nested in the template before anything is written.
-var requiredMarkers = []string{"export", "worklist", "refmap", "resplice", "migrate"}
+var requiredMarkers = []string{"export", "worklist", "refmap", "resplice", "migrate", "summary-facts"}
 
 // validateMarkers checks that each named block appears exactly once as a
 // matched, correctly ordered start/end pair. It fails naming the offending
@@ -223,4 +223,171 @@ func hashCell(hash string) string {
 		return ""
 	}
 	return "`" + hash + "`"
+}
+
+// renderSummaryFacts renders the tenant-wide facts the agent narrates into
+// docs/summary.md: the export freshness, a per-type count of every resource
+// present in the tenant (all types, groups and Autopilot included) with the
+// platforms it covers and whether it has an assignments concept, the assignment
+// posture across assignment-capable types, and the coverage caveats. It is
+// computed from metadata.yaml, which is complete every run, so the summary is
+// correct even when the work list was empty. Facts only — grouping the types
+// into management areas is left to the agent's prose.
+func renderSummaryFacts(m *Metadata, groups map[string]groupInfo) string {
+	type typeAgg struct {
+		count     int
+		platforms map[string]bool
+	}
+	agg := map[string]*typeAgg{}
+
+	// Assignment posture, across assignment-capable present resources.
+	var assignable, assigned int
+	var allUsers, allDevices, groupTargets, dynamicGroups, assignedGroups, danglingGroups int
+	var gone int
+
+	for _, key := range sortedResourceKeys(m.Resources) {
+		entry := m.Resources[key]
+		rtype := typeOfKey(key)
+
+		if !entry.PresentInTenant {
+			gone++
+			continue
+		}
+
+		a := agg[rtype]
+		if a == nil {
+			a = &typeAgg{platforms: map[string]bool{}}
+			agg[rtype] = a
+		}
+		a.count++
+		for _, p := range splitCommaList(entry.Platforms) {
+			a.platforms[p] = true
+		}
+
+		if !m.Types[rtype].HasAssignments {
+			continue
+		}
+		assignable++
+		rows := parseAssignments(entry.AssignmentTargets)
+		if len(rows) > 0 {
+			assigned++
+		}
+		for _, r := range rows {
+			switch {
+			case r.groupID != "":
+				groupTargets++
+				switch gi, ok := groups[r.groupID]; {
+				case !ok || !gi.present:
+					danglingGroups++
+				case isDynamicGroup(gi):
+					dynamicGroups++
+				default:
+					assignedGroups++
+				}
+			case strings.Contains(r.targetKind, allUsersTargetKind):
+				allUsers++
+			case strings.Contains(r.targetKind, allDevicesTargetKind):
+				allDevices++
+			}
+		}
+	}
+
+	var b strings.Builder
+
+	// Export freshness, repeated here so the block is a self-contained source
+	// for the summary's frontmatter (generatedAt, exportComplete).
+	generatedAt := m.GeneratedAt
+	if generatedAt == "" {
+		generatedAt = "unknown"
+	}
+	fmt.Fprintf(&b, "Export generated at: `%s`\n", generatedAt)
+	if m.Run.Complete {
+		b.WriteString("Export complete: `true`\n\n")
+	} else {
+		reason := m.Run.IncompleteReason
+		if reason == "" {
+			reason = "no reason recorded"
+		}
+		fmt.Fprintf(&b, "Export complete: `false — %s`\n\n", reason)
+	}
+
+	b.WriteString("Resources present in tenant, by type (all types, groups and Autopilot included):\n\n")
+	b.WriteString("| Type | Count | Platforms | Has assignments |\n")
+	b.WriteString("|---|---|---|---|\n")
+	types := make([]string, 0, len(agg))
+	for t := range agg {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	total := 0
+	for _, t := range types {
+		a := agg[t]
+		total += a.count
+		has := "no"
+		if m.Types[t].HasAssignments {
+			has = "yes"
+		}
+		fmt.Fprintf(&b, "| %s | %d | %s | %s |\n", t, a.count, platformsCell(a.platforms), has)
+	}
+	fmt.Fprintf(&b, "\n_%d resource(s) present across %d type(s)._\n\n", total, len(types))
+
+	b.WriteString("Assignment posture (across assignment-capable types):\n")
+	fmt.Fprintf(&b, "- Assigned: %d of %d resources\n", assigned, assignable)
+	fmt.Fprintf(&b, "- Configured but unassigned: %d\n", assignable-assigned)
+	fmt.Fprintf(&b, "- Targets: All users ×%d · All devices ×%d · group targets ×%d (dynamic ×%d · assigned ×%d · dangling ×%d)\n\n",
+		allUsers, allDevices, groupTargets, dynamicGroups, assignedGroups, danglingGroups)
+
+	fmt.Fprintf(&b, "Retained but no longer in tenant: %d\n", gone)
+	fmt.Fprintf(&b, "Types not listed (permissions): %s\n", listOrNone(m.NotListed.Types))
+	fmt.Fprintf(&b, "Types that listed to zero: %s", listOrNone(m.NotListed.Empty))
+
+	return b.String()
+}
+
+// splitCommaList splits a comma-separated metadata field (e.g. platforms) into
+// its distinct, trimmed, non-empty values, in first-seen order.
+func splitCommaList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// platformsCell renders a type's collected platforms as a sorted, comma-joined
+// cell, or an em dash when none were recorded.
+func platformsCell(set map[string]bool) string {
+	if len(set) == 0 {
+		return "—"
+	}
+	ps := make([]string, 0, len(set))
+	for p := range set {
+		ps = append(ps, p)
+	}
+	sort.Strings(ps)
+	return strings.Join(ps, ", ")
+}
+
+// isDynamicGroup reports whether a group's membership is rule-based, so the
+// posture can split group targets into dynamic and assigned.
+func isDynamicGroup(gi groupInfo) bool {
+	for _, t := range gi.groupTypes {
+		if strings.EqualFold(t, "DynamicMembership") {
+			return true
+		}
+	}
+	return false
+}
+
+// listOrNone renders a slice as a sorted, comma-joined cell, or "none" when it
+// is empty, for the coverage caveats.
+func listOrNone(items []string) string {
+	if len(items) == 0 {
+		return "none"
+	}
+	sorted := append([]string(nil), items...)
+	sort.Strings(sorted)
+	return strings.Join(sorted, ", ")
 }

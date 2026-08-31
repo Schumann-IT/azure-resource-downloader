@@ -43,6 +43,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-prompt` now instructs the agent to write a tenant summary (`docs/summary.md`).** The
+  emitted prompt gained a final step: after every document is written and verified, the agent writes one
+  narrative landing-page overview of the tenant's Intune/Entra management posture, which the documentation
+  frontend renders as the tenant's index page. To keep it correct on an incremental run — where the work list
+  is only the changed documents — the summary is built from a new tool-injected **`summary-facts`** block
+  computed from `resources/metadata.yaml` (complete every run, so the summary is right even when the work list
+  was empty): per-type counts of every resource present in the tenant (all types, groups and Autopilot
+  included), the platforms each type covers, whether it has an assignments concept, the assignment posture
+  (assigned vs configured-but-unassigned; group targets split into dynamic/assigned/dangling; All users / All
+  devices), and coverage caveats (types not listed, types that listed empty, resources retained but gone from
+  the tenant). On top of those facts the prompt has the agent produce a fixed-length (~600–900 word)
+  management summary — findings and recommendations drawn only from the fact block, the reference map and a
+  bounded, mechanically-decidable signal sweep over `resources/` (not-in-force resources, unassigned
+  resources, dangling targets, credentials near expiry, unmasked plaintext credentials) — so a no-op run and a
+  full run yield the same page. Deeper per-resource analysis stays in the individual documents.
+  `docs/summary.md` is written by the agent, not by `azure-rd`, and the prompt's structural check now
+  tolerates tool-/agent-owned files at the `docs/` root (`generate.md`, `summary.md`).
+
+- **Tests** for `renderSummaryFacts`: per-type counts over present resources (groups and Autopilot included),
+  platform aggregation, the assignment posture math (assigned/unassigned, dynamic/assigned/dangling group
+  targets, All users/All devices), coverage caveats, dangling-group counting, determinism, and that the block
+  is spliced into `generate.md` between surviving markers.
+
 - **Tests** for the reproducibility fixes: colliding resources are written to distinct files with the
   lowest resource ID keeping the bare name, the collision naming is order-independent (feeding the same
   resources in reverse yields an identical id→name mapping) and lossless under a concurrent worker pool, the

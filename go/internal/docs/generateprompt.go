@@ -322,6 +322,7 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		{"refmap", renderRefmap(&m, referenced, groups)},
 		{"resplice", renderResplice(res.ForwardResplice, res.ReverseResplice)},
 		{"migrate", renderMigrate(res.Migrate)},
+		{"summary-facts", renderSummaryFacts(&m, groups)},
 	}
 	for _, b := range blocks {
 		out, err = spliceMarker(out, b.name, b.content)

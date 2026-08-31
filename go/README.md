@@ -770,6 +770,17 @@ never invented).
 its display name, document path and kind, so the agent renders assignment tables
 from those given facts without re-reading each group's YAML.
 
+**Tenant summary.** The prompt also instructs the agent, as its final step, to
+write `docs/summary.md` — a narrative landing-page overview of the tenant's
+management posture that the documentation frontend renders as the tenant's index
+page. It is built from a tool-injected **facts block**, computed from
+`metadata.yaml` and therefore tenant-wide and complete on every run (correct even
+when the work list was empty): counts per resource type, the platforms each
+covers, the assignment posture (assigned vs configured-but-unassigned; dynamic vs
+assigned groups; All users / All devices), and coverage caveats (types not
+listed, types that listed empty, resources retained but gone from the tenant).
+`docs/summary.md` is written by the agent, not by `azure-rd`.
+
 **Output & exit codes.** Under `--dry-run` nothing is written; it lists every
 pending item across all three sets (generate, re-splice, migrate) and warns if
 an older `generate.md` is still on disk. The export's `generatedAt` and

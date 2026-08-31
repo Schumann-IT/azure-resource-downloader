@@ -17,6 +17,7 @@ Marked blocks the tool replaces (start/end markers stay, content between them is
   resplice   documents needing one marked block re-rendered though their own resource did not change:
              assignments tables whose target names moved, and "Targeted by" blocks whose targeting moved
   migrate    documents predating the assignment markers; rendered as "none" when there are none
+  summary-facts  tenant-wide counts, platforms, assignment posture and coverage for the summary (section 7)
 
 Everything outside the markers is prose you can edit freely. Keep the markers matched and never nested.
 The existing `DOC-GENERATION-PROMPT.md` is the full-export procedure and is not used by this command.
@@ -97,8 +98,8 @@ every resource, so the export itself may lag the tenant. It does not stop you do
   That includes `metadata.yaml` — it belongs to `azure-rd`, not to you.
 - **Never compute a hash.** Every hash you write comes verbatim from the work-list row that names the
   document. This is the only place that rule is stated; it holds everywhere below.
-- **Write only the files named below**, plus the working files in `chunks/` that section 3 calls for. No
-  index, no summary document, no other scratch files left behind.
+- **Write only the files named below**, plus `docs/summary.md` (section 7) and the working files in
+  `chunks/` that section 3 calls for. No index, no other scratch files left behind.
 
 ---
 
@@ -357,6 +358,10 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         fail(doc, "file ends mid-block — likely truncated")
 
 for doc in pathlib.Path("docs").rglob("*.md"):
+    # Tool- and agent-owned files (generate.md, summary.md) live at the docs
+    # root; real documents are always at least two levels deep.
+    if doc.parent == pathlib.Path("docs"):
+        continue
     if doc not in seen:
         fail(doc, "document exists but is not in the work list")
 
@@ -501,11 +506,105 @@ reference map, so they only become meaningful once section 5 has run. Script the
 
 ---
 
-## 7. Report
+## 7. Tenant summary (write `docs/summary.md`)
+
+After every document is written and both verification passes are green, write one overview of the tenant's
+Intune/Entra management posture to `docs/summary.md`. It is the tenant's landing page in the documentation
+frontend — prose for an operator and the manager they report to; the machine-readable index lives in
+`index.yaml`. This is the only file besides the documents this run produces, and the only place section 0's
+"no summary document" rule is lifted.
+
+**The length is fixed: about one page, 600–900 words.** Do not ask the operator how long, how deep or how
+formal it should be — this line settles it. When something does not fit, cut detail, never a section.
+
+Write these four sections, in this order:
+
+**1. Management summary** — the top half of the page, and the only part that judges anything:
+
+- One paragraph on the overall posture: what is managed, how consistently, and whether the configuration
+  that exists is actually in force.
+- **Findings** — at most six, most serious first, one line each. A finding states a fact and its
+  consequence: *"All 24 Conditional Access policies are in report-only mode — no identity control in this
+  tenant is currently enforced."* Give the number of resources affected and link the documents that carry
+  the detail. Never reprint a credential value in this file: name the resource and the field that holds it.
+- **Recommendations** — at most four, each tied to a finding above and naming what to act on. Prefer the
+  concrete instruction (*"resolve or remove the 9 assignments pointing at the deleted group
+  `06f19a9f-…`"*) over the generic principle. Where acting needs information the export does not hold, say
+  what to check in the live tenant rather than guessing.
+
+**2. At a glance** — which platforms are managed and which management areas are present, with the per-type
+counts grouped into areas (compliance, device configuration / settings catalog, app protection, app
+deployment, enrollment / Autopilot, updates, scripts, Entra policies) in your own words, as prose or one
+small table. The block gives raw types; the grouping is yours. Name an area absent rather than omitting it
+silently, and make the area counts add up to the block's total.
+
+**3. Assignment posture** — assigned versus configured-but-unassigned, the balance of dynamic versus
+assigned groups and All users / All devices targets, and how many distinct groups actually carry the
+assignments. A tenant whose policies all hang off two or three membership rules is a different tenant from
+one that spreads across thirty, and the reader cannot see that from the totals alone.
+
+**4. Coverage caveats** — whether the export was incomplete and why, any type that could not be listed, any
+type that listed empty, and how many resources are retained but no longer in the tenant.
+
+Links in this file are relative to `docs/`, the directory it sits in — `Microsoft.Graph/groups/x.md`. That
+is neither the `../groups/x.md` form the documents use between themselves nor the `docs/`-prefixed form the
+reference map (5a) prints: when you lift a link from 5a, drop its leading `docs/`.
+
+### Where the facts come from
+
+Three inputs, and nothing else. Never re-read the document tree to count or conclude anything, and never
+carry over an observation an agent made earlier in this session — the summary must come out the same on a
+run that generated 148 documents and on a run that generated none.
+
+- The `summary-facts` block below: every count, platform and posture number.
+- The reference map in 5a: which groups are actually targeted, and how many there are.
+- A **signal sweep**: one script over `resources/`, run once, covering exactly these five checks and no
+  others. Report each signal with the resources it names, deduplicated.
+
+  | Signal | What to collect |
+  |---|---|
+  | Not in force | Resources whose own state field says they are not enforced — `state: enabledForReportingButNotEnforced`, `state: disabled`, `isEnabled: false` — counted per type. |
+  | Configured but unassigned | Assignment-capable resources with no assignment: display name and document path. |
+  | Dangling targets | Assigned group GUIDs with no group in the reference map, and how many resources assign each. |
+  | Credentials near expiry | Any expiry field (`expirationDateTime`, `tokenExpirationDateTime`, …) within 180 days of the export timestamp, and any already past it. Values are quoted in the YAML — match single, double and unquoted alike. |
+  | Plaintext credentials | A credential-shaped value the service did **not** mask, found by exactly three rules: (a) an XML/plist `<key>` naming a credential whose `<string>` holds one; (b) a scalar whose own key names a credential; (c) a `description` or `notes` value where a credential-shaped token follows a credential word. |
+
+  A value is **credential-shaped** when it is at least 10 characters and either a hex run of 16+ characters
+  or a mix of at least three character classes. Test the hex case first: a long hex key is
+  lowercase-alphanumeric and an identifier exclusion would otherwise swallow it. Not credential-shaped, and
+  never a finding: anything the service masked (`encryptedValueToken`, `*****`, redacted certificates),
+  GUIDs, URLs, and identifiers — `device_vendor_msft_…`, `com.apple.…`, bare snake_case, bare camelCase.
+  Do not widen rule (c) beyond free-text fields: run over a whole file it matches every camelCase setting
+  name in the export and buries the real hits.
+
+Nothing outside these three inputs belongs in the management summary. Deeper per-resource analysis — a
+baseline deviation, a contradictory condition, an unreachable policy — stays in that resource's own document
+and in the section 8 report; the summary points at the documents instead of restating them.
+
+<!-- summary-facts:start -->
+_Replaced by the tool: tenant-wide counts per type, platforms, assignment posture and coverage, computed
+from `resources/metadata.yaml`._
+<!-- summary-facts:end -->
+
+### Rules
+
+- Every finding and every recommendation names the count, resource or type it rests on. If the export
+  cannot support a judgement, say so plainly instead of hedging it into the text.
+- Close by naming the checks that ran. Absence of a finding is not a clean bill of health, and a bare list
+  of findings reads as a security review when it is not one.
+- No scoring, no maturity rating, no percentage the fact block does not contain, and no claim about
+  compliance with a benchmark — the export shows configuration, not effectiveness.
+- Findings are derived from the export alone; recommend verifying anything security-relevant against the
+  live tenant.
+
+---
+
+## 8. Report
 
 Finish with:
 
 - documents written, and documents re-spliced
+- that `docs/summary.md` was written
 - checks passed at section 4 and at section 6, and anything you repaired
 - every **dangling group reference** (an assigned GUID with no group in the export)
 - how many documents were migrated to markers
@@ -552,3 +651,25 @@ knowing before the splice runs over the whole tree. Section 6 asks whether the d
 which cannot be true until the splice has resolved every GUID and built both directions of the link graph.
 Running the referential checks early reports a failure on every document in the tree; running the structural
 checks only at the end means a truncated document is discovered after the splice has already processed it.
+
+### D. Why the summary is tool-fed and written last (7)
+
+The summary is tenant-wide, but this prompt is incremental: the work list is only the documents that changed,
+so counting it would describe the delta, not the tenant, and a no-op run would summarise nothing. The
+`summary-facts` block is computed from `metadata.yaml`, which is complete every run, so the summary stays
+correct regardless of how little changed. It is written last because it names the state the documents
+describe, and it is regenerated every run and never hash-tracked — it has no source of its own to compare
+against, so there is nothing to make it incremental.
+
+### E. Why the management summary is fed, not observed (7)
+
+The summary is regenerated on every run, including a run whose work list is empty and which therefore read
+no resource at all. If its findings came from the orchestrator's own reading, a no-op run would produce a
+thinner page than a full one, and the tenant's landing page would change meaning for reasons that have
+nothing to do with the tenant. Feeding it from the fact block and a closed signal list makes the page a
+function of the export, not of how much work the run happened to do. The length is fixed in the section for
+the same reason: a landing page that grows every run stops being one.
+
+The five signals are the ones that are both tenant-wide and mechanically decidable. Everything an operator
+would also want — whether a baseline deviation was deliberate, whether a policy's conditions can ever
+match — needs the judgement that went into the individual document, and belongs there.
