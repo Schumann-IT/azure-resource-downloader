@@ -34,11 +34,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   H3 sub-vocabulary, and the findings table's columns, closed `Severity` values and severity ordering — since
   the section-4 sweep runs before the summary is written and skips the `docs/` root.
   **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
+- **Documentation runs now persist their report to disk.** Section 8 of the generation prompt writes the
+  run report to `docs/report-<UTC-date>-<UTC-time>.md` (one file per run, never overwritten, not hash-tracked)
+  next to `docs/summary.md`, in addition to printing it. Like `summary.md` it lives at the `docs/` root and is
+  exempt from the section-4 stray-document sweep.
 - **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
   `doc-headings` marker for the default and ARM templates.
 
+### Security
+
+- **Per-resource documents no longer reprint credential-shaped secrets found in free-text.** Real tenant runs
+  surfaced unmasked secrets (a plist `REMOTEOFFICEAUTHKEY`, a profile-removal password in a `description`)
+  being copied verbatim into the generated documents, widening exposure from Intune readers to anyone with
+  read access to the docs. All six property-documenting prompt templates (default, singleton, group,
+  credential, referenced, ARM) now redact a credential-shaped value — one found in a free-text field
+  (`description`/`notes`) or a decoded embedded payload (plist/XML/base64) that the service did **not**
+  already mask — rendering `«redacted — secret present in source»` in its place, still documenting the field,
+  marking the block `data-note="security"`, and flagging it in the `Security` section as a credential to
+  rotate. The literal value remains only in the source YAML. Structured setting values are left verbatim, and
+  the `record` template (inventory types with no free-text fields) is unchanged.
+  **This changes those types' `promptSha256`, contributing to the full regeneration already required.**
+- **Tests** asserting the redaction rule renders in the default and ARM prompts.
+
 ### Fixed
 
+- **Documentation-run check script (`generate_prompt_template.md` §4) hardened against three false failures
+  real tenant runs hit.** The `<details>`/`</details>` balance check now ignores tags inside fenced code
+  blocks and inline code, so a document that merely *mentions* `<details>` (or embeds a shell script) is no
+  longer reported as imbalanced. A document that exists but is not in the work list is no longer flagged as a
+  stray — an incremental run legitimately leaves most documents untouched, and a document is retained when its
+  type was not regenerated (e.g. a type that could not be listed); it is now failed only when it is genuinely
+  a stray (no resource frontmatter) or misplaced (its `source` maps to a different derived path). The section-6
+  mtime baseline (`chunks/mtimes.json`) now covers the whole document tree rather than only the work list, and
+  is written once, so re-running §4 after the section-5 splice can no longer clobber the pre-splice snapshot.
 - **Exports are now reproducible: an unchanged tenant re-exports byte-for-byte identically.** Three sources of
   run-to-run noise were eliminated:
   - **Colliding display names.** A resource's file name is its sanitized display name, and two resources of the

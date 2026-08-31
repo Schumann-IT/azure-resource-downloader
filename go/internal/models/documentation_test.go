@@ -47,6 +47,7 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"group names are NOT resolved",
 		"never invent values",
 		"masked or redacted",
+		"credential-shaped",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)

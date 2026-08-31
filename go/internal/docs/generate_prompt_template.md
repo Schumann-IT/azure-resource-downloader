@@ -298,6 +298,7 @@ def fail(doc, msg):
 
 MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
 HEADING = re.compile(r"^(#+)\s+\S")
+INLINE = re.compile(r"`[^`]*`")
 _contracts = {}
 
 def heading_contract(src):
@@ -349,13 +350,16 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
 
-    in_fence, in_marker, h1, h2s = False, False, 0, []
+    in_fence, in_marker, h1, h2s, opens, closes = False, False, 0, [], 0, 0
     for line in text.splitlines():
         if FENCE.match(line):
             in_fence = not in_fence
             continue
         if in_fence:
             continue
+        bare = INLINE.sub("", line)  # a <details> mentioned in inline code is prose, not a tag
+        opens += bare.count("<details")
+        closes += bare.count("</details>")
         mk = MARKER.match(line)
         if mk:
             in_marker = mk.group(1) == "start"
@@ -374,7 +378,10 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
 
     contract = heading_contract(src)
     if contract is None:
-        fail(doc, "no doc-headings contract in its doc-prompt.md")
+        # Tolerated, not failed: the type's doc-prompt.md predates the
+        # doc-headings marker (e.g. a type that could not be listed and was not
+        # refreshed this run). There is nothing to validate against.
+        print(f"NOTE {doc}: no doc-headings contract in its doc-prompt.md — heading vocabulary not checked")
     else:
         allowed = set(contract)
         extra = [h for h in dict.fromkeys(h2s) if h not in allowed]
@@ -387,7 +394,6 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         if not all(h in it for h in h2s if h in allowed):
             fail(doc, "H2 headings out of contract order")
 
-    opens, closes = text.count("<details"), text.count("</details>")
     if opens != closes:
         fail(doc, f"<details> imbalance: {opens} open / {closes} close")
 
@@ -404,15 +410,36 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         fail(doc, "file ends mid-block — likely truncated")
 
 for doc in pathlib.Path("docs").rglob("*.md"):
-    # Tool- and agent-owned files (generate.md, summary.md) live at the docs
-    # root; real documents are always at least two levels deep.
+    # Tool- and agent-owned files (generate.md, summary.md, report-*.md) live at
+    # the docs root; real documents are always at least two levels deep.
     if doc.parent == pathlib.Path("docs"):
         continue
-    if doc not in seen:
-        fail(doc, "document exists but is not in the work list")
+    if doc in seen:
+        continue
+    # A document outside the work list is normal: an incremental run rewrites
+    # only what changed, and a document is legitimately retained when its type
+    # was not regenerated this run (e.g. a type that could not be listed). It is
+    # a problem only when it is a stray (no frontmatter tying it to a resource)
+    # or misplaced (its content belongs at a different derived path).
+    body = doc.read_text(encoding="utf-8")
+    fm = body.split("---\n", 2)[1] if body.startswith("---\n") and body.count("\n---\n") >= 1 else ""
+    m = re.search(r"^source:\s*(resources/\S+\.yaml)\s*$", fm, re.M)
+    if not m:
+        fail(doc, "untracked document with no resource frontmatter")
+        continue
+    want = pathlib.Path(re.sub(r"^resources/", "docs/", m.group(1)).removesuffix(".yaml") + ".md")
+    if doc != want:
+        fail(doc, f"misplaced document — its source maps to {want}")
 
-pathlib.Path("chunks/mtimes.json").write_text(json.dumps(
-    {str(p): p.stat().st_mtime for p in sorted(seen) if p.is_file()}, indent=0))
+# Baseline mtimes for section 6, covering the whole document tree (not just the
+# work list) so a retained document is present and shows unchanged rather than
+# as an extra. Write it once: re-running section 4 after the section-5 splice
+# must not overwrite the pre-splice baseline it compares against.
+snapshot = pathlib.Path("chunks/mtimes.json")
+if not snapshot.exists():
+    tree = [p for p in pathlib.Path("docs").rglob("*.md") if p.parent != pathlib.Path("docs")]
+    snapshot.write_text(json.dumps(
+        {str(p): p.stat().st_mtime for p in sorted(tree) if p.is_file()}, indent=0))
 print(f"\nchecked {len(expected)} documents at {time.strftime('%H:%M:%S')}")
 for msg, n in problems.most_common():
     print(f"{n:5d}  {msg}")
@@ -548,7 +575,7 @@ reference map, so they only become meaningful once section 5 has run. Script the
 | Link targets exist | Every relative link inside a marked block resolves to a file that exists under `docs/`. |
 | Marker pairs survived | The splice left every `assignments` and `targeted-by` pair matched and unnested. Re-run that check from section 4 — a bad splice is exactly how a pair gets broken. |
 | Hashes updated | Every document whose block was re-spliced carries the new `assignmentsSha256` / `targetedBySha256`. Any it kept from before will be re-spliced on every future run. |
-| Nothing else touched | Compare mtimes against the snapshot taken at the end of section 4. Only work-list documents, re-spliced documents and migrated documents may have changed. |
+| Nothing else touched | Compare mtimes against the snapshot taken at the end of section 4. Only work-list documents, re-spliced documents and migrated documents may have changed. A document outside the work list — e.g. one retained under a type that could not be listed — is in the snapshot and must be unchanged. |
 
 ---
 
@@ -781,7 +808,12 @@ sys.exit(1 if problems else 0)
 
 ## 8. Report
 
-Finish with:
+Write the run report to a new file `docs/report-<UTC-date>-<UTC-time>.md` — the run's finish time in UTC,
+e.g. `docs/report-2026-08-31-200617.md` (`report-YYYY-MM-DD-HHMMSS`) — and print the same text as the run's
+final output. One report per run: never overwrite an earlier report and never hash-track it. Like
+`summary.md` it lives at the `docs/` root, so the section-4 sweep leaves it untouched.
+
+The report must contain:
 
 - documents written, and documents re-spliced
 - that `docs/summary.md` was written and passed its section 7 check

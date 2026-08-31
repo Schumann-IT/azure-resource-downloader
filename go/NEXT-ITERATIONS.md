@@ -1,36 +1,55 @@
 # Next iterations — deliberately out of scope
 
-Planned work, deliberate scope cuts, and parked ideas for the Go CLI. Sections are numbered so the changelog
-can point at them (`See NEXT-ITERATIONS.md §1`). `README.md` stays the single source of truth for what the
-tool *does today*; this file is only for what was left out on purpose.
+Outstanding work and parked ideas for the Go CLI. Each numbered entry is a unit of planned work; **once its
+plan ships in full, the entry is removed** and its history lives in `CHANGELOG.md`. Ideas that are
+deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
+ship. `README.md` stays the single source of truth for what the tool *does today*.
 
 > The `§4` reference in the `[RC2]` changelog entry points at the previous edition of this file (retired in
 > `b9cc39b`) and is left as-is: released changelog sections are history, and that work — the forward
 > re-splice and the `assignmentsSha256` column — has since shipped.
 
-## 1. Section contract for the documentation prompts
+## 1. Redact free-text secrets
 
-**Goal.** Make the generated Markdown structurally predictable enough that the docs browser in `../web` can
-style each part of a document, without asking the LLM to hand-write layout.
+**Goal.** Bring every tenant's generated documentation back in sync with the prompts after a security fix to
+the per-type prompt templates: a full one-shot regeneration across every tenant.
 
-> **Shipped.** The per-document section contract landed in full — all seven templates declare their H2 list
-> closed and verbatim and carry a `<!-- doc-headings: … -->` marker that rides into every type's
-> `doc-prompt.md`; the three `&` headings were renamed; the setting `<details>` blocks gained `data-setting` /
-> `data-note`; `generate_prompt_template.md` §4 enforces it with a *Heading vocabulary* check that reads each
-> family's set from its `doc-prompt.md` and exempts H2s inside `<!-- …:start -->`/`<!-- …:end -->` marker
-> pairs; and `docs/summary.md` got the same closed-set declaration for its four H2s. See the `[Unreleased]`
-> entry in `CHANGELOG.md`.
+> **Why the templates changed.** Real tenant runs found credential-shaped secrets — a plist
+> `REMOTEOFFICEAUTHKEY`, a profile-removal password in a `description` — that the service returned unmasked
+> and the per-resource documents then reprinted verbatim, widening exposure from Intune readers to anyone
+> with read access to the docs. The fix teaches the prompts to redact such values: a free-text
+> credential-redaction rule was added to six per-type templates — `internal/models/documentation_prompt.tmpl`
+> (default) and the `singleton`, `group`, `credential`, `referenced` and `arm` overrides — so a
+> credential-shaped value in a free-text field (`description`/`notes`) or a decoded payload (plist/XML/base64)
+> that the service did not mask is rendered as `«redacted — secret present in source»`, still documented and
+> flagged in `Security`, with the literal value left only in the source YAML.
 >
-> **The tenant summary is done too.** Its four H2s, the `### Findings` / `### Recommendations` H3
-> sub-vocabulary, the severity-sorted findings table with its closed `Severity` column, and the fixed
-> `# Tenant summary` preamble are all declared (§1e-i to §1e-iii) **and** validated by an explicit
-> `docs/summary.md` check in section 7 of `generate_prompt_template.md` (§1e enforcement) — it runs after the
-> file is written, since the section-4 sweep runs earlier and skips the `docs/` root.
+> **Why that forces a regeneration.** Editing a `.tmpl` changes that type's assembled `doc-prompt.md`, and
+> therefore its `promptSha256`. The incremental engine hashes source + prompt + assignments, so on the next
+> `azure-rd docs generate-prompt` run every document of an affected type is flagged stale (prompt-hash
+> mismatch) and lands in the work list automatically — no manual list to maintain.
 >
-> **What remains:** a one-shot regeneration of all existing documentation, which has not been run. The parked
-> idea below is deliberately not scheduled.
+> **Scope.** Every type except the `record` family (`windowsAutopilotDeviceIdentities`, `deviceCategories`,
+> `ndesConnectors`, `mobileThreatDefenseConnectors`): its template was deliberately left unchanged, so those
+> documents are not reissued and keep their current `promptSha256`.
+>
+> **Not hash-affecting, but shipped in the same run.** The other edits to
+> `internal/docs/generate_prompt_template.md` — the §7 `summary.md` contract check, the §8 on-disk run report
+> (`docs/report-<date>-<time>.md`), and the three §4 checker fixes (`<details>` counting, retained-doc
+> tolerance, write-once mtime snapshot) — live in the *generation* prompt, not in any type's `doc-prompt.md`,
+> so they do not change `promptSha256`. They simply take effect on this same regeneration run.
 
-### Idea (parked): per-finding severity in document `Security` sections
+**Plan.**
+- Run the documentation regeneration once per tenant (`azure-rd docs generate-prompt`, then the doc pass).
+- Confirm completion via the run's own §4/§6/§7 checks and the new on-disk report; until it is done, the
+  on-disk documents lag the prompts for every non-`record` type.
+
+## Parked ideas
+
+Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
+ship and are removed. Each records why it is parked and what would make it worth doing.
+
+### Idea: per-finding severity in document `Security` sections
 
 Tag every individual security callout *inside each resource's document* with `**[risk]**` / `**[review]**` /
 `**[ok]**`, so the web side can colour or filter them. **Not planned — parked deliberately**, for three
@@ -43,16 +62,10 @@ reasons:
 - **Low marginal benefit.** Section-level styling (the `Security` H2 slug) already gives the frontend most of
   the visual win without the per-item risk.
 
-This is the opposite trade-off from the summary findings severity (§1e-ii), which is decided once per tenant
-on at most six findings — tiny blast radius, easy to eyeball — and was therefore done.
+This is the opposite trade-off from the tenant-summary findings severity, which is decided once per tenant on
+at most six findings — tiny blast radius, easy to eyeball — and was therefore done.
 
 **Revisit only if both hold:** (1) the closed-heading contract has proven stable across a real regeneration,
 with no drift observed in practice; and (2) the web side needs per-item severity that section-level styling
 cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
 seven templates and regenerate every document — and accept that it cannot be automatically validated.
-
-### Consumer
-
-The web-side renderer that depends on this is written up in `../web/NEXT-ITERATIONS.md` ("Section-level
-styling hooks"). Those changes become *reliable* only once the summary vocabulary above is closed and the
-documentation is regenerated.

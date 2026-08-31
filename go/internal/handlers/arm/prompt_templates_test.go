@@ -29,6 +29,7 @@ func TestArmPromptTemplateOverride(t *testing.T) {
 				"Azure resource type: " + handler.GetType(),
 				"RBAC role assignments are NOT part of this export",
 				"Properties:",
+				"credential-shaped",
 				"<!-- doc-headings: References | Lifecycle and operations | Security | Properties -->",
 			} {
 				if !strings.Contains(prompt, want) {
