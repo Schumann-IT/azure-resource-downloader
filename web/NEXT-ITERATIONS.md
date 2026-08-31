@@ -8,13 +8,6 @@ Outstanding work and parked ideas for the docs browser. `README.md` describes wh
 **Goal.** Make the parts of a rendered document individually addressable from CSS, so sections, settings and
 the assignments block can be styled distinctly instead of all reading as one undifferentiated article.
 
-> **Where we start.** `GET /:tenant/*path` renders the whole document into one `<article class="prose">`.
-> An audit of the two reference exports found these hooks *already usable*: `.prose details` /
-> `.prose summary` / `.prose details details`, `h2[id]` and `.header-anchor` from `markdown-it-anchor`
-> (`#references`, `#security`, `#settings`, `#properties`, `#membership`, `#targeted-by`, `#definition`, …),
-> `.prose > h1`, `.prose > h1 + p` (the summary paragraph, reliable because `stripSourceEcho` removes the
-> `` `x.yaml` `` echo first), `.prose > table:first-of-type`, and `.nav-tree` in the sidebar.
->
 > **The gaps, in priority order.** No section wrapper — everything between two H2s is a flat sibling run, so
 > a section cannot get a panel or its own density without `h2#settings ~ *` selectors that bleed into the
 > next section; this is the main gap and the only structural change on the list. The assignments block is
@@ -28,15 +21,13 @@ the assignments block can be styled distinctly instead of all reading as one und
 > source/generated line, the layout grid, `<main>`, the view switcher) is pure Tailwind utilities, so
 > `src/styles.css` cannot reach it.
 >
-> **Go-side dependency, now unblocked.** These hooks key off the H2 vocabulary, which used to be only
-> *described* by the prompt templates and had drifted (`## Metadata` in 99 documents, `## Assignments` in 4).
-> The CLI now declares a closed, verbatim H2 set per template (carried machine-readably in a
-> `<!-- doc-headings: … -->` marker), the three `&` headings were renamed, and setting `<details>` blocks
-> carry `data-setting` / `data-note`. **The regeneration has not happened**, so the documents on disk still
-> predate all of it. Everything up to and including the metadata-table class degrades gracefully on today's
-> documents (an unrecognised heading simply gets an unstyled `data-section`); the section wrapper and any
-> per-section visual treatment should land after the regeneration, and `data-setting` / `data-note` styling is
-> worth building only once documents actually carry them.
+> **Waiting on a regeneration.** These hooks key off the H2 vocabulary, which the CLI now declares as a
+> closed, verbatim set per template (carried machine-readably in a `<!-- doc-headings: … -->` marker), along
+> with `data-setting` / `data-note` on setting `<details>` blocks. **The documents on disk predate all of
+> it**, and still show the old drift (`## Metadata` in 99 of them, `## Assignments` in 4). Everything up to
+> and including the metadata-table class degrades gracefully on them (an unrecognised heading simply gets an
+> unstyled `data-section`); the section wrapper and any per-section visual treatment should land after the
+> regeneration, and `data-setting` / `data-note` styling is worth building only once documents carry them.
 >
 > **Not asked of the generator on purpose.** Section wrappers, the metadata-table class and the assignments
 > wrapper are all derivable here, and 340+ documents of hand-written wrapper tags would eventually produce
@@ -69,12 +60,12 @@ server-side and keeps the single `markdown-it` instance, and each step needs a c
 **Goal.** Let a reader of the tenant landing page act on the findings table — narrow it to what matters and
 get from a finding to the documents it affects.
 
-> The table is already tagged `.findings` with `data-severity` on each body row and severity cell (rendered
-> by `src/docs/findings-table.ts`, keyed off the `Severity` header cell so it survives the generator moving
-> the table), but `data-severity` drives nothing beyond the masked SVG icon and the `Affected` count is inert.
+> The hooks are in place — `src/docs/findings-table.ts` tags the table `.findings` and puts `data-severity`
+> on each body row and severity cell — but nothing consumes `data-severity` beyond the severity icon, the
+> `Affected` count is inert, and `#findings` is an unstyled H3 above a styled table.
 >
-> **General rule worth remembering.** `.prose table` sets `white-space: nowrap` so wide assignment tables
-> scroll instead of wrapping mid-GUID. Any prose-bearing table needs the same opt-out the findings table got.
+> **Caveat.** `.prose table` sets `white-space: nowrap` so wide assignment tables scroll instead of wrapping
+> mid-GUID. Any prose-bearing table needs an opt-out from it.
 
 **Plan.**
 
@@ -82,7 +73,7 @@ get from a finding to the documents it affects.
   filtering become expressible without client-side state.
 - Link the `Affected` count to the documents it names, reusing the same relative-link rewriting as document
   bodies.
-- Style `#findings` itself, which is still an unstyled H3 above a styled table.
+- Style `#findings` itself.
 
 ## 3. Summary table of contents
 
@@ -90,12 +81,12 @@ get from a finding to the documents it affects.
 they came for instead of scrolling.
 
 > The four summary H2s are a declared contract on the CLI side with stable, clean slugs —
-> `#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats` — so hard-coding them no
-> longer risks pointing at headings that may be renamed. `markdown-it-anchor` already emits the ids.
+> `#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats` — so they are safe to
+> hard-code, and `markdown-it-anchor` emits the ids without further work.
 >
 > The landing page's structure is tight (a heading followed by one list or a short run of paragraphs), so
-> positional selectors that would be fragile in a resource document hold up here: `#recommendations + ol`
-> and `[id="at-a-glance"] ~ p` work with no renderer change.
+> positional selectors that would be fragile in a resource document hold up here (`#recommendations + ol`,
+> `[id="at-a-glance"] ~ p`) and no renderer change is needed.
 
 **Plan.**
 
@@ -108,7 +99,7 @@ they came for instead of scrolling.
 **Goal.** Make the sidebar usable at export scale, where it lists every in-scope document (263 in the
 reference export) as a flat per-type tree with no way to narrow it and no context per item.
 
-> Summaries and badges exist today only on the index-listing fallback, not in the tree.
+> The item summaries and badges the index carries are rendered only by the listing fallback, not by the tree.
 >
 > **Excluded on purpose:** remembering which sections were open across navigations. That needs client-side
 > state, and no client-side JavaScript is a non-negotiable.
@@ -118,7 +109,7 @@ reference export) as a flat per-type tree with no way to narrow it and no contex
 - A filter over the tree that works without JavaScript (server-side query parameter narrowing the rendered
   items, with the current filter reflected in the URL).
 - Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
-  fallback already uses.
+  fallback reads.
 
 ## 5. Export a tenant's documentation as Confluence HTML
 
@@ -216,11 +207,11 @@ with the planned filter, or if a server-rendered query page turns out to be enou
 
 ### Idea: Syntax highlighting inside documents
 
-`shiki` highlights the source-YAML view, but the `yaml`/`bash`/`powershell`/`json`/`xml` fences *inside* the
-generated Markdown are still unstyled. `@shikijs/markdown-it` could reuse the highlighter
-`YamlHighlighterService` already owns, with the extra languages loaded. **Parked** because it costs render
-time and bundle-free CSS on every document for 182 fences in the whole reference corpus. **Revisit** if
-documents start carrying substantial code, or once the highlighter is warm anyway for other reasons.
+The `yaml`/`bash`/`powershell`/`json`/`xml` fences *inside* the generated Markdown are unstyled.
+`@shikijs/markdown-it` could reuse the highlighter `YamlHighlighterService` owns, with the extra languages
+loaded. **Parked** because it costs render time on every document for 182 fences in the whole reference
+corpus. **Revisit** if documents start carrying substantial code, or once the highlighter is warm anyway for
+other reasons.
 
 ### Idea: Multi-segment tenants
 
@@ -232,40 +223,39 @@ tenants under a grouping folder.
 ### Idea: Group-driven navigation
 
 `docs/index.yaml` can carry `platformGroup`/`functionGroup` per resource, so the landing page and sidebar
-tree could become platform → function instead of per resource type. **Parked** because the documents do not
-write those fields — the CLI generation template's required frontmatter does not ask for them — so the
-landing page groups by type and shows the groups as badges only when present. **Revisit** when the template
-requires both fields and a regenerated export actually carries them.
+tree could become platform → function instead of grouping by resource type. **Parked** because the documents
+do not write those fields — the CLI generation template's required frontmatter does not ask for them — so
+there is nothing to group by. **Revisit** when the template requires both fields and a regenerated export
+carries them.
 
 ### Idea: Explicit dark-mode toggle
 
-Theme selection currently follows `prefers-color-scheme` only. **Parked** because remembering a choice needs
-either client-side state or a cookie plus a mutating route, both of which cut against the no-JavaScript and
-read-only rules. **Revisit** if a reader needs one theme in a browser set to the other, e.g. for a
-presentation or a screenshot.
+Theme selection follows `prefers-color-scheme`, with no way to override it. **Parked** because remembering a
+choice needs either client-side state or a cookie plus a mutating route, both of which cut against the
+no-JavaScript and read-only rules. **Revisit** if a reader needs one theme in a browser set to the other,
+e.g. for a presentation or a screenshot.
 
 ### Idea: Watch-based cache invalidation
 
 An `fs.watch` layer could pre-warm and evict cache entries instead of validating them per request. **Parked**
-because the per-request `stat()` already delivers the no-restart freshness invariant at negligible cost.
-**Revisit** if `stat()` becomes measurable on a slow or networked docs root.
+because the per-request `stat()` delivers the no-restart freshness invariant at negligible cost. **Revisit**
+if `stat()` becomes measurable on a slow or networked docs root.
 
 ### Idea: A resource landing page
 
 A new `GET /:tenant/_resource` listing every source YAML (index-derived, plus the excluded types), linked
-once from the sidebar footer. Sidebar untouched, no extra tree. **Parked** because the top-bar
-**Documentation | YAML** switcher already reaches every resource that has a document, at the cost of one
-more route and view. **Revisit** if the switcher proves hard to find, or as the carrier for browsable
-excluded bulk types (below).
+once from the sidebar footer. Sidebar untouched, no extra tree. **Parked** because it costs a route and a
+view to reach resources the top-bar **Documentation | YAML** switcher already gets to. **Revisit** if the
+switcher proves hard to find, or as the carrier for browsable excluded bulk types (below).
 
 ### Idea: A two-group navigation tree
 
-`buildNavigation` returns two top-level `NavGroup`s (*Documentation*, *Resources*), each holding the existing
-per-type `NavSection[]`, with only the group containing the current page `open` and the active marker
-becoming `{ kind: 'doc' | 'resource', path }`. Both trees built in one index pass with two href shapes, so
-they cannot drift. **Parked** because the resource tree duplicates the doc tree (263 items twice in the
-reference export) and `sidebar.hbs` gains a second `<details>` level. **Revisit** only if the switcher turns
-out to be too hard to find and a landing page does not fix it.
+`buildNavigation` returns two top-level `NavGroup`s (*Documentation*, *Resources*), each holding the per-type
+`NavSection[]`, with only the group containing the current page `open` and the active marker becoming
+`{ kind: 'doc' | 'resource', path }`. Both trees built in one index pass with two href shapes, so they cannot
+drift. **Parked** because the resource tree duplicates the doc tree (263 items twice in the reference export)
+and `sidebar.hbs` gains a second `<details>` level. **Revisit** only if the **Documentation | YAML** switcher
+turns out to be too hard to find and a resource landing page does not fix it.
 
 ### Idea: Clickable breadcrumb segments
 
@@ -277,8 +267,8 @@ after a per-type listing page exists for another reason, when this becomes addit
 ### Idea: Browsable excluded bulk types
 
 Types the index merely counts under `counts.excluded` (Autopilot identities and the like), and any resource
-with no document, have no YAML view — which is what keeps navigation purely index-derived and the **"counts
-and listings derive from the index, never from walking the tree"** non-negotiable intact. Unreferenced
+with no document, are unreachable — which is what keeps navigation purely index-derived and the **"counts and
+listings derive from the index, never from walking the tree"** non-negotiable intact. Unreferenced
 `Microsoft.Graph/groups` (the CLI documents a group only when an assignment references it) are in the same
 bucket. **Parked** because serving them requires amending that non-negotiable. **Revisit** if operators ask
 for the raw bulk YAML; the shape is settled — for each type named in `counts.excluded`, a single

@@ -5,10 +5,6 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
-> The `§4` reference in the `[RC2]` changelog entry points at the previous edition of this file (retired in
-> `b9cc39b`) and is left as-is: released changelog sections are history, and that work — the forward
-> re-splice and the `assignmentsSha256` column — has since shipped.
-
 ## 1. Redact free-text secrets
 
 **Goal.** Bring every tenant's generated documentation back in sync with the prompts after a security fix to
