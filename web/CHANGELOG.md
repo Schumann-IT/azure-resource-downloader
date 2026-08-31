@@ -153,6 +153,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shells out to, or otherwise depends on the Go project, so it can be split into its own repository
   without changes.
 
+- **`NEXT-ITERATIONS.md` holds only outstanding work and parked ideas.** It had accumulated
+  descriptions of things that shipped — the source-YAML view, the Findings table, the Go-side heading
+  contract — which made it a second, drifting account of what the browser does. Those are removed:
+  this changelog is the record of what shipped and `README.md` of what exists today. What remains is
+  restructured into numbered `Goal`/`Notes`/`Plan` entries for work that is actually outstanding
+  (document styling hooks, the findings block, a summary table of contents, sidebar refinements,
+  Confluence HTML export) and a `Parked ideas` area where each idea states why it is parked and what
+  would make it worth doing. Entries are self-contained and get deleted once delivered, so numbering
+  shifts — nothing outside the file references a section number. No behaviour, route or dependency
+  changed.
+
 ## [RC1]
 
 First iteration: discover exported tenants on disk and render their generated Markdown as HTML.
