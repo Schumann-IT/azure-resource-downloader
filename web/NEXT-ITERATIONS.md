@@ -130,6 +130,12 @@ matters more than the format.
 > **creates** a space rather than updating one, so re-importing yields a second space or a conflict: this is
 > a **one-way publish** and the README must say so.
 >
+> **Media cannot ship in v1.** `resolveWithinRoot()` serves exactly one extension per root (`.md` under
+> `docs/`) and widening that to an extension list is a non-negotiable, so the exporter has no legal way to
+> read an image out of the docs root. The two images in the corpus therefore travel as their `alt` text and
+> no per-page media folder is produced. Reinstating media needs a third served root with its own single
+> extension policy, which is a design change, not a bullet.
+>
 > **What the corpus contains** (two reference exports, 411 served documents, 6.4 MB of Markdown):
 > **7,208 `<details>`/`<summary>` blocks** — up to 317 in one document, nested up to 5 deep — 14,345 inline
 > `<code>`, 6,048 table rows, 182 fenced code blocks (which flatten to plain text), 2 images, and **44
@@ -138,62 +144,86 @@ matters more than the format.
 > them into bogus elements in the browser — harmless there, unknown on import. So the exporter must
 > serialise through an **allowlist that escapes anything not in it**.
 >
-> **`<details>` is the one open decision.** It is the dominant element and the architecture notes call it
-> *the* documentation, it is not on the supported list, and the FAQ does not say what happens to it — so
-> passing it through is a gamble on undefined behaviour. Four candidates, to be compared from a real import
-> rather than from the FAQ: **A, bold paragraph + blockquote** (lowest effort, keeps nesting visually and the
-> `path = value` summary verbatim, loses the collapse affordance — a 317-setting document becomes one very
-> long page); **B, headings by depth** (the only option giving each setting its own anchor and search entry,
-> but a 317-entry page outline, and depth 5 does not fit under `h6`); **C, one table per settings section**
-> (most information per screen and matches how these documents are read, but flattens nesting, has no home
-> for group-label blocks such as `Sub-options (1)`, and is the only option that must **parse** the summary
-> into key/value — so the only one that can be silently wrong when a value itself contains ` = `);
-> **D, passthrough**, not a shipping candidate but the cheapest way to turn the FAQ's silence into a fact,
-> and if the importer keeps the block it beats all three transforms.
+> **`<details>` stays open, deliberately.** It is the dominant element and the architecture notes call it
+> *the* documentation, it is not on the supported list, and the FAQ does not say what happens to it. No
+> Confluence instance is available to settle it, and choosing between the transforms from the FAQ alone would
+> be guessing, so **v1 ships passthrough** and the export is marked provisional in the README. The
+> alternatives, for whoever runs the first real import: **A, bold paragraph + blockquote** (lowest effort,
+> keeps nesting visually and the `path = value` summary verbatim, loses the collapse affordance — a
+> 317-setting document becomes one very long page); **B, headings by depth** (the only option giving each
+> setting its own anchor and search entry, but a 317-entry page outline, and depth 5 does not fit under
+> `h6`); **C, one table per settings section** (most information per screen and matches how these documents
+> are read, but flattens nesting, has no home for group-label blocks such as `Sub-options (1)`, and is the
+> only option that must **parse** the summary into key/value — so the only one that can be silently wrong
+> when a value itself contains ` = `). Passthrough is what makes that import cheap to run.
 >
-> **Traps.** The render cache is keyed by file path only, so an export render would return or poison the
-> browser's HTML, and the second `<details>` strategy tried would silently serve the first one's output —
-> mode and strategy must be part of the cache key, or export renders must not be cached while the strategies
-> are compared. Page titles come from basenames, which are unique in both reference tenants today (the CLI
-> dedupes slugs with a hash suffix) but must hard-fail rather than overwrite on a collision; the longest is
-> 87 characters, so check Confluence's title limit.
+> **The exporter transforms HTML, it does not render.** The `<details>` blocks reach `markdown-it` as raw
+> `html_block` tokens, so every strategy is a DOM transform anyway. Doing the whole export as one pass over
+> the *already rendered* HTML — details strategy, allowlist, link rewriting, serialisation — means the
+> exporter never calls `md.render`, so the single-instance rule is untouched and the **render cache needs no
+> new key**: the cache is keyed by file path plus `mtimeMs`/`size`, and an export that re-rendered with a
+> different mode or strategy would otherwise poison it or silently serve the previous strategy's output. The
+> price is one HTML parser dependency.
+>
+> **Traps.** `markdown-it-anchor` wraps every heading in an `<a href="#slug">` permalink; left alone, every
+> heading in Confluence is a dead link, so the pass must unwrap them. Page titles double as file names, so
+> they must survive both a zip entry and Confluence: `/ \ : * ? " < > |` are illegal in either, and
+> `displayName` values from Intune contain them routinely. A whole-tenant export renders and serialises 263
+> documents in one request, on one thread.
+>
+> **Decisions taken.** Space (= folder) name `<domain> documentation`. Page title
+> `<type leaf> — <displayName>.html`, which is collision-free by construction and gives the flat space a
+> usable alphabetical order (longest current display name is 87 characters, well under Confluence's 255).
+> `displayName` comes from `docs/index.yaml`, falling back to the document H1 and then the CLI basename. A
+> residual collision gets a deterministic suffix and a line in the overview — never an overwrite, and never
+> a failed export.
 
 **Plan.**
 
 - **Route**: `GET /:tenant/_export/confluence` → `200 application/zip` with
   `Content-Disposition: attachment; filename="<tenant>.zip"`. `_export` is a representation prefix like
   `_resource`, so declare it **before** the `:tenant/*path` catch-all; no resource type segment starts with
-  `_`, so it cannot collide.
-- **Layout** under `src/docs/export/`: `confluence.ts` (the format), `html-allowlist.ts` (the serialiser),
-  `details-strategy.ts` (`type DetailsStrategy = 'blockquote' | 'headings' | 'table' | 'passthrough'`), each
+  `_`, so it cannot collide. An unknown format segment is a 404, not a 500.
+- **Layout** under `src/docs/export/`: `confluence.ts` (the format), `html-allowlist.ts` (the serialiser,
+  escaping anything not on the supported list and unwrapping heading permalinks), `page-name.ts` (title and
+  file-name derivation, sanitisation, deduplication), `details-strategy.ts`
+  (`type DetailsStrategy = 'passthrough'` — one member in v1, and the seam the transforms land in), each
   pure and Nest-free, plus one thin `ExportService` doing the zip and the streaming so a second format drops
-  in without touching the controller. Add a streaming zip dependency (`archiver` or `yazl`).
-- **Zip contents**: `<tenant>/` (the space name) holding a `<Tenant> overview.html` built from `summary.md`
-  plus a grouped link list that replaces the sidebar, one flat `<page>.html` per document, and a `<page>/`
-  folder only for pages that have media.
-- **Select the `<details>` strategy with a query parameter** (`?details=headings`), defaulting to A. A route
-  parameter, not a new configuration mechanism — the environment-variables-only rule stands and the
-  browser's own rendering is unchanged.
-- **Run the comparison spike**, passthrough first: import one zip per strategy into a scratch space and
-  check whether the block survives, whether the 317-setting document is usable, whether per-setting anchors
-  exist and whether search finds setting names. Record the answer here and **delete the losing strategies**.
-- **Links**: add a second `rewriteHref` mode producing `<a href="<Page Name>.html">`. Keep the single
-  `markdown-it` instance by making the mode part of the existing env, not a second instance. In-document
-  anchors (`#security`) will not survive — accepted loss.
+  in without touching the controller. Dependencies: `htmlparser2` for the DOM pass and `yazl` for the zip
+  (buffers in, stream out — nothing walks the filesystem, so `archiver`'s feature set is dead weight).
+- **One HTML pass, no re-render**: take the HTML the existing renderer already produced, and in a single
+  parse do the details strategy, the allowlist escaping, the permalink unwrapping and the link rewriting.
+  Because nothing is rendered, the `markdown-it` instance and the render cache are untouched.
+- **Zip contents**: `<domain> documentation/` (the space name) holding an overview page built from
+  `summary.md` plus a grouped link list that replaces the sidebar, and one flat
+  `<type leaf> — <displayName>.html` per document. No media folders (see the note).
+- **Links**: rewrite the app routes already in the rendered HTML (`href^="/<tenant>/"`) to
+  `<Page Name>.html`, which is unambiguous because the route shape and the index agree on the document path.
+  In-document anchors (`#security`) will not survive — accepted loss. Heading permalinks are unwrapped
+  rather than rewritten.
 - **Provenance**: frontmatter is stripped before rendering, so emit `source`, `generatedAt` and the shas as
   a small table at the top of each page, with a line saying the page is generated and local edits are lost
   on the next import.
+- **Degrade, do not fail**: a document that has become unreadable is skipped and listed in the overview
+  under a "not exported" heading, matching the missing-document-is-normal rule everywhere else.
+- **Stay off the event loop**: stream pages into the zip as they are produced and yield between documents,
+  so a 263-document export does not stall every other request.
 - **Keep read-only honest**: build the zip in memory and stream it; nothing is written under `DOCS_ROOT`,
   and an unavoidable temp file belongs in `os.tmpdir()`. Enumerate documents from `docs/index.yaml` and read
   each through `resolveWithinTenant()`. Offer the export as a plain download link in the tenant top bar — no
   client-side JavaScript.
-- **Omit the YAML view** in v1; attaching source YAML as page media is a follow-up.
-- **Tests**: e2e for the content type, `Content-Disposition` and a `<tenant>/<page>.html` entry from a
-  fixture; unit tests for each strategy against one shared fixture (nested block, group-label block with no
-  value, a body with a link, a value containing ` = `), the allowlist serialiser **including that `<key>` in
-  prose is escaped**, the export link mode and the title-collision failure; a case proving two strategies of
-  the same document return different bodies (this is what catches the cache-key trap); and an assertion that
-  the export never writes inside the docs root. No network, temp-dir fixtures as everywhere else.
+- **Omit the YAML view** in v1; attaching source YAML as page media is a follow-up, and blocked by the same
+  single-extension-per-root constraint as images.
+- **Mark it provisional** in the README: one-way publish, `<details>` passed through untested, no media.
+- **Tests**: e2e for the content type, `Content-Disposition` and a `<space>/<page>.html` entry from a
+  fixture; unit tests for the allowlist serialiser (**including that `<key>` in prose is escaped**, that an
+  unsupported element's text survives, and that a heading permalink is unwrapped), for page-name derivation
+  (illegal characters, index `displayName` vs. H1 vs. basename fallback, deterministic dedupe), for the link
+  rewriting, and for the details strategy against one shared fixture (nested block, group-label block with
+  no value, a body with a link, a value containing ` = `) so the transforms have a home when one is chosen;
+  plus a case proving a document rendered for the browser and exported yields the browser's HTML unchanged
+  in the cache, and an assertion that the export never writes inside the docs root. No network, temp-dir
+  fixtures as everywhere else.
 
 ## Parked ideas
 
