@@ -640,8 +640,11 @@ Key fields:
   `displayName`, `presentInTenant`, raw `assignmentTargets`, and sidecar
   artifact names. Group entries additionally record `groupTypes` and
   `securityEnabled` (raw facts, used by `docs generate-prompt` to resolve a
-  referenced group's kind). The map key is the resource's path relative to
-  `resources/`.
+  referenced group's kind). Compliance policies additionally record
+  `notificationTemplateRefs` — the notification message template GUIDs their
+  noncompliance actions reference — used by `docs generate-prompt` to build each
+  template's reverse **Used by** index. The map key is the resource's path
+  relative to `resources/`.
 - **`notListed`** — types that could not be listed (permissions) and types that
   listed to zero resources this run.
 
@@ -713,6 +716,7 @@ By default (pass `--no-prompt`, or `no-prompt: true` in the config file, to skip
 - **Flag security-sensitive settings** — secrets, certificates, encryption, conditional-access conditions, and deviations from baselines.
 - **Document lifecycle and operations** — deprecation/migration status, effect of deleting or unassigning the resource, renewal/expiry obligations, and a recommended review cadence.
 - **Explain assignments accurately** — include/exclude targets and filters; the prompt states that targets carry group IDs only (names are exported separately via `Microsoft.Graph/groups`), so the model never invents group names.
+- **Wrap notification-template references (compliance policies)** — when a type references `Microsoft.Graph/notificationMessageTemplates` in its noncompliance actions (set via `ResourceDocumentation.ReferencesNotificationTemplates`, currently `deviceCompliancePolicies` and `compliancePolicies`), the prompt instructs the model to wrap that reference in `<!-- notifications:start -->` / `<!-- notifications:end -->` markers and resolve the template name from the reference map, so `docs generate-prompt` can re-splice the block when the template is renamed.
 - **Follow a closed heading contract** — each prompt declares its H2 sections as a fixed, verbatim set (recorded in a `<!-- doc-headings: … -->` comment) so a docs browser can style and deep-link sections by heading; each setting `<details>` block also carries a `data-setting="<YAML path>"` deep-link target and an optional `data-note="security"|"inert"` hint.
 
 Each resource type produces its **own dedicated prompt** (not a single shared template): the prompt is tailored with that type's purpose, notable settings, embedded payloads to expand, required read permissions, lifecycle notes, related exported types, subtype guidance for polymorphic types, and a **verified Microsoft Learn API-reference link** (plus best-practice baselines for security-sensitive types). It is produced by each handler's `GetDocumentationPrompt()` method via `models.BuildDocumentationPrompt(models.ResourceDocumentation{...})`, which renders a Go `text/template` (embedded default: `internal/models/documentation_prompt.tmpl`) with the type's metadata as data; a resource type can supply its own template through the `Template` field of `models.ResourceDocumentation` (a `join` helper is available, and `models.DefaultDocumentationPromptTemplate()` returns the default text as a starting point). Resource-type families whose shape does not match the default policy-style layout use dedicated override templates: groups (`internal/handlers/graph/group_prompt.tmpl`), tenant-wide singletons (`singleton_prompt.tmpl`), credential/token records (`credential_prompt.tmpl`), inventory records (`record_prompt.tmpl`), objects referenced by ID from other policies (`referenced_prompt.tmpl`) and all ARM types (`internal/handlers/arm/arm_prompt.tmpl`). ARM handlers supply this metadata inline; Microsoft Graph constructors set it as a `models.ResourceDocumentation{...}` literal on the shared `GraphCollectionHandler`. To use a prompt, paste it together with a resource YAML from the same directory into an LLM.
@@ -755,21 +759,31 @@ in `metadata.yaml`. The command computes two lists in one pass over the export:
   group name, group kind (assigned/dynamic · security/Microsoft 365), filter
   name and include/exclude — into an `assignmentsSha256` (forward) and, for a
   referenced group, hashes the resources targeting it into a `targetedBySha256`
-  (reverse). A current document whose recorded hash no longer matches is a
+  (reverse). Notification message templates get the same treatment in both
+  directions: the command hashes the compliance policies that reference the
+  template into a `usedBySha256` (reverse), so the template document's **Used by**
+  block re-splices when a referencing policy is added, removed or renamed; and it
+  hashes the *resolved* template name each compliance policy notifies through into
+  a `notificationsSha256` (forward), so the policy document's
+  **noncompliance-notification** block re-splices when the template it names is
+  renamed. A current document whose recorded hash no longer matches is a
   **re-splice** (its marked block must be re-rendered, not the whole page); a
-  current document that predates the assignment markers is a **migrate** (the
-  markers must be inserted first). A document already in list 1 is never also in
-  list 2 — regenerating it renders the block fresh anyway.
+  current document that predates the assignment or notification markers is a
+  **migrate** (the markers must be inserted first). A document already in list 1
+  is never also in list 2 — regenerating it renders the block fresh anyway.
 
 Resources marked `presentInTenant: false` are reported as orphaned documents
 (never deleted); types with no `doc-prompt.md` are reported as ungeneratable
-(e.g. an export run with `--no-prompt`); and assignment target groups or filters
-with no entry in the export are reported as **dangling** (kept as raw GUIDs,
-never invented).
+(e.g. an export run with `--no-prompt`); and assignment target groups or filters,
+or notification templates referenced by a noncompliance action, with no entry in
+the export are reported as **dangling** (kept as raw GUIDs, never invented).
 
-**Reference map.** The emitted prompt resolves every referenced group GUID to
+**Reference maps.** The emitted prompt resolves every referenced group GUID to
 its display name, document path and kind, so the agent renders assignment tables
-from those given facts without re-reading each group's YAML.
+from those given facts without re-reading each group's YAML. A parallel
+notification-template map resolves every template GUID to its name, document and
+the resources that reference it, so each template's **Used by** block is rendered
+from the same facts.
 
 **Tenant summary.** The prompt also instructs the agent, as its final step, to
 write `docs/summary.md` — a narrative landing-page overview of the tenant's
@@ -919,6 +933,7 @@ Currently supported Azure resource types:
 > - `Microsoft.Graph/compliancePolicies` (Settings Catalog based, currently Linux) is fetched with `$expand=settings,scheduledActionsForRule(...)` and named via its `name` field.
 > - `Microsoft.Graph/groupPolicyConfigurations` (Administrative Templates) additionally downloads the `definitionValues?$expand=definition` child collection so each configured ADMX setting carries its definition metadata.
 > - `Microsoft.Graph/deviceManagementIntents` (legacy Endpoint Security) additionally downloads the `settings` child collection.
+> - `Microsoft.Graph/notificationMessageTemplates` is fetched with `$expand=localizedNotificationMessages` so each template's per-locale subject and message body (its actual content) are inlined. Best-effort: the template is still exported without its content if the expand fails.
 > - `Microsoft.Graph/deviceComplianceScripts` (Windows **custom compliance** scripts) carry a single base64 `detectionScriptContent`, decoded by the base64-decode transformer (inline by default, or a `*_detection.ps1` sidecar in file mode). Assignments are inlined. Distinct from `deviceHealthScripts` (Remediations).
 > - `Microsoft.Graph/reusablePolicySettings` are reusable settings (e.g. firewall rule groups, certificates) referenced **by ID** from Endpoint Security / Settings Catalog policies; exporting them keeps those references resolvable. A plain GET returns the full `settingInstance` tree.
 > - `Microsoft.Graph/mobileThreatDefenseConnectors` configure MTD partner integrations (e.g. Microsoft Defender for Endpoint) across Windows/macOS/iOS/Android. Connectors have no display name, so the item ID (partner identifier) is used as the name.

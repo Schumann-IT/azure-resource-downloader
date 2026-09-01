@@ -89,6 +89,10 @@ type WorkItem struct {
 	// in its frontmatter. It is set only for assignment-capable types; blank
 	// for types with no assignments concept.
 	AssignmentsSha256 string
+	// NotificationsSha256 is the forward hash for the document's noncompliance-
+	// notification block. It is set only for resources that reference a
+	// notification message template; blank otherwise.
+	NotificationsSha256 string
 }
 
 // RespliceItem is one document whose marked block must be re-rendered even
@@ -136,6 +140,19 @@ type GeneratePromptResult struct {
 	// must be re-rendered because the set of resources targeting the group
 	// changed.
 	ReverseResplice []RespliceItem
+	// UsedByResplice lists current notification-message-template documents whose
+	// "Used by" block must be re-rendered because the set of resources
+	// referencing the template in a noncompliance action changed. It is the
+	// template analogue of ReverseResplice.
+	UsedByResplice []RespliceItem
+	// DanglingTemplateIDs are notification-template GUIDs referenced by a
+	// noncompliance action with no template in the export.
+	DanglingTemplateIDs []string
+	// NotificationsResplice lists current documents whose noncompliance-
+	// notification block must be re-rendered because a notification template they
+	// name was renamed (or appeared/disappeared). It is the forward counterpart
+	// of UsedByResplice.
+	NotificationsResplice []RespliceItem
 	// Migrate lists current documents of an assignment-capable type that predate
 	// the assignment markers, so the markers must be inserted before the block
 	// can be spliced.
@@ -150,6 +167,8 @@ func (r *GeneratePromptResult) HasPendingWork() bool {
 	return len(r.ToGenerate) > 0 ||
 		len(r.ForwardResplice) > 0 ||
 		len(r.ReverseResplice) > 0 ||
+		len(r.UsedByResplice) > 0 ||
+		len(r.NotificationsResplice) > 0 ||
 		len(r.Migrate) > 0
 }
 
@@ -198,14 +217,21 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 	groups := buildGroupInfo(&m)
 	filters := buildFilterInfo(&m)
 	targetedBy := buildTargetedBy(&m)
+	// The template used-by index resolves every template's "Used by" hash and
+	// rendered table from one source, exactly like the group targeted-by index.
+	usedBy := buildUsedByTemplate(&m)
+	// tmplNames resolves a referenced template id to its current display name for
+	// the forward notification hash, mirroring how groups resolve for assignments.
+	tmplNames := templateNames(&m)
 
 	res := &GeneratePromptResult{
-		ExportGeneratedAt: m.GeneratedAt,
-		ExportComplete:    m.Run.Complete,
-		IncompleteReason:  m.Run.IncompleteReason,
-		DanglingGroupIDs:  dangling,
-		DanglingFilterIDs: danglingFilterIDs(&m, filters),
-		ReferencedGroups:  len(referenced),
+		ExportGeneratedAt:   m.GeneratedAt,
+		ExportComplete:      m.Run.Complete,
+		IncompleteReason:    m.Run.IncompleteReason,
+		DanglingGroupIDs:    dangling,
+		DanglingFilterIDs:   danglingFilterIDs(&m, filters),
+		DanglingTemplateIDs: danglingTemplateIDs(&m),
+		ReferencedGroups:    len(referenced),
 	}
 
 	// Whether a type's doc-prompt.md is present, computed once per type.
@@ -263,6 +289,9 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 			if tm.HasAssignments {
 				item.AssignmentsSha256 = assignmentsSha256(parseAssignments(entry.AssignmentTargets), groups, filters)
 			}
+			if len(entry.NotificationTemplateRefs) > 0 {
+				item.NotificationsSha256 = notificationRefsSha256(tmplNames, entry.NotificationTemplateRefs)
+			}
 			res.ToGenerate = append(res.ToGenerate, item)
 			continue
 		}
@@ -293,6 +322,35 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 			}
 		}
 
+		// List 2, forward notifications: a resource that references notification
+		// templates is current, but a template it names was renamed (or appeared/
+		// disappeared) since its noncompliance-notification block was rendered.
+		// Gated on the resource actually referencing a template — a policy that
+		// notifies via no template has no such block. A document predating the
+		// notification markers is migrated first, exactly like assignments.
+		if len(entry.NotificationTemplateRefs) > 0 {
+			want := notificationRefsSha256(tmplNames, entry.NotificationTemplateRefs)
+			if !hasNotificationsMarker(docBytes) {
+				res.Migrate = append(res.Migrate, WorkItem{
+					ResourceType:        rtype,
+					SourcePath:          srcRel(key),
+					DocPath:             docRel(key),
+					Reason:              "document predates the noncompliance-notification markers",
+					SourceSha256:        entry.SourceSha256,
+					PromptSha256:        tm.PromptSha256,
+					NotificationsSha256: want,
+				})
+			} else if want != fm.NotificationsSha256 {
+				res.NotificationsResplice = append(res.NotificationsResplice, RespliceItem{
+					ResourceType: rtype,
+					SourcePath:   srcRel(key),
+					DocPath:      docRel(key),
+					Reason:       notificationsRespliceReason(fm.NotificationsSha256),
+					Hash:         want,
+				})
+			}
+		}
+
 		// List 2, reverse: a group document is current but the set of resources
 		// targeting it changed. Groups have no assignments concept of their own,
 		// so this is independent of HasAssignments.
@@ -303,6 +361,23 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 					SourcePath:   srcRel(key),
 					DocPath:      docRel(key),
 					Reason:       reverseRespliceReason(fm.TargetedBySha256),
+					Hash:         want,
+				})
+			}
+		}
+
+		// List 2, used-by: a notification-message-template document is current but
+		// the set of resources referencing it in a noncompliance action changed.
+		// Templates have no assignments concept of their own, so this is
+		// independent of HasAssignments — the template analogue of the group
+		// reverse re-splice above.
+		if rtype == notificationMessageTemplatesType {
+			if want := usedBySha256(usedBy[entry.ResourceId]); want != fm.UsedBySha256 {
+				res.UsedByResplice = append(res.UsedByResplice, RespliceItem{
+					ResourceType: rtype,
+					SourcePath:   srcRel(key),
+					DocPath:      docRel(key),
+					Reason:       usedByRespliceReason(fm.UsedBySha256),
 					Hash:         want,
 				})
 			}
@@ -320,7 +395,8 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		{"export", renderExport(opts.TenantDir, &m)},
 		{"worklist", renderWorklist(res.ToGenerate)},
 		{"refmap", renderRefmap(&m, referenced, groups)},
-		{"resplice", renderResplice(res.ForwardResplice, res.ReverseResplice)},
+		{"usedbymap", renderUsedByMap(&m, usedBy)},
+		{"resplice", renderResplice(res.ForwardResplice, res.ReverseResplice, res.UsedByResplice, res.NotificationsResplice)},
 		{"migrate", renderMigrate(res.Migrate)},
 		{"summary-facts", renderSummaryFacts(&m, groups)},
 	}
@@ -422,14 +498,41 @@ func reverseRespliceReason(existing string) string {
 	return "the set of resources targeting this group changed"
 }
 
+// usedByRespliceReason mirrors reverseRespliceReason for a notification-message-
+// template's Used by block.
+func usedByRespliceReason(existing string) string {
+	if existing == "" {
+		return "Used by block never spliced (no usedBySha256 recorded)"
+	}
+	return "the set of resources referencing this template changed"
+}
+
+// notificationsRespliceReason mirrors forwardRespliceReason for a policy's
+// noncompliance-notification block.
+func notificationsRespliceReason(existing string) string {
+	if existing == "" {
+		return "notification block never spliced (no notificationsSha256 recorded)"
+	}
+	return "a notification template this resource references was renamed or changed presence"
+}
+
+// hasNotificationsMarker reports whether a document already carries the
+// noncompliance-notification splice markers. A current resource that references
+// a template but lacks them predates the markers and must be migrated first.
+func hasNotificationsMarker(docBytes []byte) bool {
+	return bytes.Contains(docBytes, []byte("<!-- notifications:start -->"))
+}
+
 // docFrontmatter is the self-describing state a generated document records.
 type docFrontmatter struct {
-	Source            string `yaml:"source"`
-	SourceSha256      string `yaml:"sourceSha256"`
-	PromptSha256      string `yaml:"promptSha256"`
-	AssignmentsSha256 string `yaml:"assignmentsSha256"`
-	TargetedBySha256  string `yaml:"targetedBySha256"`
-	GeneratedAt       string `yaml:"generatedAt"`
+	Source              string `yaml:"source"`
+	SourceSha256        string `yaml:"sourceSha256"`
+	PromptSha256        string `yaml:"promptSha256"`
+	AssignmentsSha256   string `yaml:"assignmentsSha256"`
+	TargetedBySha256    string `yaml:"targetedBySha256"`
+	UsedBySha256        string `yaml:"usedBySha256"`
+	NotificationsSha256 string `yaml:"notificationsSha256"`
+	GeneratedAt         string `yaml:"generatedAt"`
 	// Summary, PlatformGroup and FunctionGroup are the LLM-authored index
 	// signals: a one-line purpose and the navigation grouping the model chose
 	// for this resource. generate-index reads them to build docs/index.yaml;

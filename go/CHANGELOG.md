@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`notificationMessageTemplates` now export their actual content.** The handler only did a plain item GET,
+  which omits `localizedNotificationMessages` — the per-locale subject and message body that are the template's
+  real payload — because Graph returns that navigation property only on request. Each template is now fetched with
+  `$expand=localizedNotificationMessages` (best-effort: a failure warns and still exports the template without its
+  content), matching the embedded-payload the type's documentation prompt already promised.
+
 - **Documentation-run check script (`generate_prompt_template.md` §4) hardened against three false failures
   real tenant runs hit.** The `<details>`/`</details>` balance check now ignores tags inside fenced code
   blocks and inline code, so a document that merely *mentions* `<details>` (or embeds a shell script) is no
@@ -100,6 +106,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still documenting every setting.
 
 ### Added
+
+- **Notification message templates are now cross-referenced with the compliance policies that use them.**
+  Every `notificationMessageTemplates` document gains a **Used by** block listing the compliance policies
+  that reference the template in a noncompliance action — the template counterpart of a group's **Targeted
+  by** block. `download` records a new `notificationTemplateRefs` fact per compliance policy in
+  `resources/metadata.yaml` (the template GUIDs its `scheduledActionsForRule` noncompliance actions
+  reference, zero-GUID "no template" sentinel dropped), and `docs generate-prompt` inverts it into a
+  per-template used-by index: it emits a template reference map (GUID → name, document and referencing
+  resources, dangling GUIDs flagged), hashes the referencing set into a `usedBySha256` so a template document
+  re-splices when a referencing policy is added, removed or renamed, and reports dangling template references.
+  **This is a new metadata fact, so existing exports must be re-downloaded to populate it; the reverse block
+  appears on the run after a template's document is first generated, exactly like a group's Targeted by
+  block.**
+- **The forward direction now re-splices too: a compliance policy's document names the template it notifies
+  through, and re-renders that reference when the template is renamed — without regenerating the page.** This
+  mirrors the assignments forward re-splice one type over. A new `ResourceDocumentation.ReferencesNotificationTemplates`
+  flag (set on `deviceCompliancePolicies` and `compliancePolicies`) extends the default documentation prompt
+  with an instruction to wrap the noncompliance-notification reference in `<!-- notifications:start -->` /
+  `<!-- notifications:end -->` markers and resolve the template name from the reference map. `docs generate-prompt`
+  hashes the resolved reference into a `notificationsSha256`, so renaming (or adding/removing) a referenced
+  template re-splices only that block in each referencing policy document; policies whose document predates
+  the marker are migrated first, exactly like assignments. **Setting the flag changes those two types'
+  `doc-prompt.md`, so their `promptSha256` moves and their documents regenerate once (picking up the marker)
+  on the next run after a re-download.**
+- **Tests** for the used-by hash (change detection, empty-set stability, order independence), the forward
+  `notificationsSha256` (template rename, dangling reference, order independence, empty-set stability), the
+  reverse index and dangling-template detection, the used-by and notifications re-splice/migrate
+  classification, the rendered template reference map, the compliance-policy `notificationTemplateRefs`
+  extraction, and the conditional notification-marker instruction in the documentation prompt.
 
 - **`docs generate-prompt` now instructs the agent to write a tenant summary (`docs/summary.md`).** The
   emitted prompt gained a final step: after every document is written and verified, the agent writes one

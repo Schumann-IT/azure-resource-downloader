@@ -83,6 +83,14 @@ type ResourceDocumentation struct {
 	// SubtypeNote explains how to handle polymorphic types whose concrete
 	// schema is selected by @odata.type (e.g. mobileApps, deviceConfigurations).
 	SubtypeNote string
+	// ReferencesNotificationTemplates marks a type whose noncompliance actions
+	// (scheduledActionsForRule) reference Microsoft.Graph/notificationMessageTemplates
+	// by id. When true the prompt instructs the model to wrap that reference in
+	// the `notifications` splice markers and resolve the template name from the
+	// reference map, so docs generate-prompt can re-splice the block when a
+	// referenced template is renamed — the forward counterpart of a template's
+	// reverse "Used by" block.
+	ReferencesNotificationTemplates bool
 	// Links holds curated reference URLs for this resource type. All subfields
 	// are optional and are omitted from the prompt when empty.
 	Links ResourceLinks

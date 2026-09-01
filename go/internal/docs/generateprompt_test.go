@@ -214,14 +214,17 @@ func TestGeneratePromptReferencedGroups(t *testing.T) {
 // docFM describes the frontmatter (and optional assignment markers) to write
 // into a generated document for list-2 tests.
 type docFM struct {
-	srcSha         string
-	promptSha      string
-	assignmentsSha string
-	targetedBySha  string
-	withMarkers    bool
-	summary        string
-	platformGroup  string
-	functionGroup  string
+	srcSha                  string
+	promptSha               string
+	assignmentsSha          string
+	targetedBySha           string
+	usedBySha               string
+	notificationsSha        string
+	withMarkers             bool
+	withNotificationsMarker bool
+	summary                 string
+	platformGroup           string
+	functionGroup           string
 }
 
 // writeDocFM writes a document for a metadata key with the given frontmatter and
@@ -243,6 +246,12 @@ func writeDocFM(t *testing.T, tenantDir, key string, fm docFM) {
 	if fm.targetedBySha != "" {
 		fmt.Fprintf(&b, "targetedBySha256: %s\n", fm.targetedBySha)
 	}
+	if fm.usedBySha != "" {
+		fmt.Fprintf(&b, "usedBySha256: %s\n", fm.usedBySha)
+	}
+	if fm.notificationsSha != "" {
+		fmt.Fprintf(&b, "notificationsSha256: %s\n", fm.notificationsSha)
+	}
 	if fm.summary != "" {
 		fmt.Fprintf(&b, "summary: %s\n", fm.summary)
 	}
@@ -255,6 +264,9 @@ func writeDocFM(t *testing.T, tenantDir, key string, fm docFM) {
 	b.WriteString("generatedAt: 2026-01-01T00:00:00Z\n---\n# doc\n")
 	if fm.withMarkers {
 		b.WriteString("\n<!-- assignments:start -->\ntable\n<!-- assignments:end -->\n")
+	}
+	if fm.withNotificationsMarker {
+		b.WriteString("\n<!-- notifications:start -->\nnotifies via template\n<!-- notifications:end -->\n")
 	}
 	if err := os.WriteFile(docPath, []byte(b.String()), 0644); err != nil {
 		t.Fatalf("write doc: %v", err)

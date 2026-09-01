@@ -73,3 +73,72 @@ func TestBuildResourceFactsGroupFields(t *testing.T) {
 		t.Errorf("non-group must not record group facts: %+v", plain)
 	}
 }
+
+func TestNotificationTemplateRefsFromData(t *testing.T) {
+	rule := func(templateIDs ...string) map[string]interface{} {
+		configs := make([]interface{}, 0, len(templateIDs))
+		for _, id := range templateIDs {
+			configs = append(configs, map[string]interface{}{
+				"actionType":             "notification",
+				"notificationTemplateId": id,
+			})
+		}
+		return map[string]interface{}{"scheduledActionConfigurations": configs}
+	}
+
+	cases := []struct {
+		name string
+		data map[string]interface{}
+		want []string
+	}{
+		{"absent", map[string]interface{}{"platforms": "windows"}, nil},
+		{
+			"single reference",
+			map[string]interface{}{"scheduledActionsForRule": []interface{}{rule("T1")}},
+			[]string{"T1"},
+		},
+		{
+			"dedup and sentinel dropped",
+			map[string]interface{}{"scheduledActionsForRule": []interface{}{
+				rule("T1", "00000000-0000-0000-0000-000000000000", "T1"),
+				rule("T2", ""),
+			}},
+			[]string{"T1", "T2"},
+		},
+		{
+			"malformed entries ignored",
+			map[string]interface{}{"scheduledActionsForRule": []interface{}{
+				"not-a-map",
+				map[string]interface{}{"scheduledActionConfigurations": "not-a-list"},
+				rule("T3"),
+			}},
+			[]string{"T3"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := notificationTemplateRefsFromData(tc.data)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("index %d: got %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+
+	// A compliance policy's refs surface on its facts; the zero-GUID sentinel is
+	// dropped so a block/retire action never looks like a template reference.
+	facts := buildResourceFacts(&models.TransformResult{
+		ResourceID:  "pol",
+		DisplayName: "Policy",
+		CleanedData: map[string]interface{}{
+			"scheduledActionsForRule": []interface{}{rule("T1")},
+		},
+	}, []byte("displayName: Policy\n"))
+	if len(facts.NotificationTemplateRefs) != 1 || facts.NotificationTemplateRefs[0] != "T1" {
+		t.Errorf("NotificationTemplateRefs = %v, want [T1]", facts.NotificationTemplateRefs)
+	}
+}

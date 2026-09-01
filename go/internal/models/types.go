@@ -126,6 +126,13 @@ type ResourceFacts struct {
 	// is a decision the renderer makes.
 	GroupTypes      []string
 	SecurityEnabled *bool
+	// NotificationTemplateRefs are the notification message template GUIDs this
+	// resource references through its noncompliance actions
+	// (scheduledActionsForRule). It is a fact — the set of ids read from the
+	// resource — so a later step can build a template's reverse "Used by" index
+	// without re-opening every compliance policy. Empty for resources with no
+	// such references.
+	NotificationTemplateRefs []string
 }
 
 // TransformedResource represents a fully transformed Azure resource

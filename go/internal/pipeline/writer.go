@@ -352,17 +352,60 @@ func buildResourceFacts(tr *models.TransformResult, yamlData []byte) *models.Res
 	}
 
 	return &models.ResourceFacts{
-		SourceSha256:      hex.EncodeToString(sum[:]),
-		ResourceID:        tr.ResourceID,
-		DisplayName:       tr.DisplayName,
-		ODataType:         stringFromData(tr.CleanedData, "@odata.type"),
-		Platforms:         stringFromData(tr.CleanedData, "platforms"),
-		Technologies:      stringFromData(tr.CleanedData, "technologies"),
-		Artifacts:         artifactNames,
-		AssignmentTargets: assignmentTargetsFromData(tr.CleanedData),
-		GroupTypes:        stringSliceFromData(tr.CleanedData, "groupTypes"),
-		SecurityEnabled:   boolPtrFromData(tr.CleanedData, "securityEnabled"),
+		SourceSha256:             hex.EncodeToString(sum[:]),
+		ResourceID:               tr.ResourceID,
+		DisplayName:              tr.DisplayName,
+		ODataType:                stringFromData(tr.CleanedData, "@odata.type"),
+		Platforms:                stringFromData(tr.CleanedData, "platforms"),
+		Technologies:             stringFromData(tr.CleanedData, "technologies"),
+		Artifacts:                artifactNames,
+		AssignmentTargets:        assignmentTargetsFromData(tr.CleanedData),
+		GroupTypes:               stringSliceFromData(tr.CleanedData, "groupTypes"),
+		SecurityEnabled:          boolPtrFromData(tr.CleanedData, "securityEnabled"),
+		NotificationTemplateRefs: notificationTemplateRefsFromData(tr.CleanedData),
 	}
+}
+
+// notificationTemplateRefsFromData returns the notification message template
+// GUIDs a resource references through its noncompliance actions
+// (scheduledActionsForRule[].scheduledActionConfigurations[].notificationTemplateId),
+// deduplicated and in first-seen order. The zero-GUID "no template" sentinel and
+// empty ids are dropped. It is tolerant of missing or malformed fields: a bad
+// entry contributes nothing and never panics. Returns nil when there are none.
+func notificationTemplateRefsFromData(data map[string]interface{}) []string {
+	rules, ok := data["scheduledActionsForRule"].([]interface{})
+	if !ok || len(rules) == 0 {
+		return nil
+	}
+	const noTemplateSentinel = "00000000-0000-0000-0000-000000000000"
+	seen := map[string]bool{}
+	var ids []string
+	for _, rawRule := range rules {
+		rule, ok := rawRule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		configs, ok := rule["scheduledActionConfigurations"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, rawCfg := range configs {
+			cfg, ok := rawCfg.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			id, ok := cfg["notificationTemplateId"].(string)
+			if !ok || id == "" || id == noTemplateSentinel || seen[id] {
+				continue
+			}
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
 }
 
 // stringSliceFromData returns the string elements at key in the cleaned data,
