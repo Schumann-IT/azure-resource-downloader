@@ -34,10 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   H3 sub-vocabulary, and the findings table's columns, closed `Severity` values and severity ordering — since
   the section-4 sweep runs before the summary is written and skips the `docs/` root.
   **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
-- **Documentation runs now persist their report to disk.** Section 8 of the generation prompt writes the
-  run report to `docs/report-<UTC-date>-<UTC-time>.md` (one file per run, never overwritten, not hash-tracked)
-  next to `docs/summary.md`, in addition to printing it. Like `summary.md` it lives at the `docs/` root and is
-  exempt from the section-4 stray-document sweep.
+- **Documentation runs now persist their report to disk, and the report reproduces the run's plan.** Section 8
+  of the generation prompt writes the run report to `docs/report-<UTC-date>-<UTC-time>.md` (one file per run,
+  never overwritten, not hash-tracked) next to `docs/summary.md`, in addition to printing it; writing the file
+  is now stated as mandatory — printing is not a substitute and the run is not finished until the file exists.
+  The report must now also reproduce the section 1 work list in full (every document to generate and re-splice,
+  grouped by type with the reason each was listed) so it stands alone as the record of what the run set out to
+  do, even though the plan was an input to the run rather than something the report list asked for. Like
+  `summary.md` it lives at the `docs/` root and is exempt from the section-4 stray-document sweep.
 - **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
   `doc-headings` marker for the default and ARM templates.
 

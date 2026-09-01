@@ -875,11 +875,17 @@ sys.exit(1 if problems else 0)
 
 Write the run report to a new file `docs/report-<UTC-date>-<UTC-time>.md` — the run's finish time in UTC,
 e.g. `docs/report-2026-08-31-200617.md` (`report-YYYY-MM-DD-HHMMSS`) — and print the same text as the run's
-final output. One report per run: never overwrite an earlier report and never hash-track it. Like
-`summary.md` it lives at the `docs/` root, so the section-4 sweep leaves it untouched.
+final output. Writing the file to disk is mandatory, not optional: printing the report is never a substitute
+for saving it, and a run has not finished until the file exists. One report per run: never overwrite an
+earlier report and never hash-track it. Like `summary.md` it lives at the `docs/` root, so the section-4
+sweep leaves it untouched.
 
 The report must contain:
 
+- **the plan the run executed** — reproduce the section 1 work list in full (every document to generate and
+  to re-splice, grouped by type, with the reason each was listed). Include it even though the plan was an
+  input to the run and was never explicitly asked for in this list: the report must stand alone as the record
+  of what the run set out to do and what it did, so a reader never has to go back to the prompt to see the plan.
 - documents written, and documents re-spliced
 - that `docs/summary.md` was written and passed its section 7 check
 - checks passed at sections 4, 6 and 7, and anything you repaired
