@@ -3,6 +3,7 @@ import { DocsController } from './docs.controller';
 import { TenantDiscoveryService } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
+import { ExportService } from './export/export.service';
 
 @Module({
   controllers: [DocsController],
@@ -10,6 +11,7 @@ import { YamlHighlighterService } from './yaml-highlighter.service';
     TenantDiscoveryService,
     MarkdownRendererService,
     YamlHighlighterService,
+    ExportService,
   ],
 })
 export class DocsModule {}

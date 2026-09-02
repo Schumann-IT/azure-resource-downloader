@@ -131,6 +131,11 @@ type ResourceMeta struct {
 	// "dynamic security group" phrasing is left to the renderer.
 	GroupTypes      []string `yaml:"groupTypes,omitempty"`
 	SecurityEnabled *bool    `yaml:"securityEnabled,omitempty"`
+	// NotificationTemplateRefs are the notification message template GUIDs this
+	// resource references through its noncompliance actions, retained so docs
+	// generate-prompt can build a template's reverse "Used by" index from
+	// metadata.yaml alone. Empty for resources with no such references.
+	NotificationTemplateRefs []string `yaml:"notificationTemplateRefs,omitempty"`
 }
 
 // NotListedMeta records this run's types that could not be listed (permissions)
@@ -351,18 +356,19 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 			// Successful write: upsert full facts.
 			key := relKey(resourcesDir, r.YAMLPath)
 			m.Resources[key] = ResourceMeta{
-				ResourceId:        r.Facts.ResourceID,
-				DisplayName:       r.Facts.DisplayName,
-				SourceSha256:      r.Facts.SourceSha256,
-				ODataType:         r.Facts.ODataType,
-				Platforms:         r.Facts.Platforms,
-				Technologies:      r.Facts.Technologies,
-				Artifacts:         sortedCopy(r.Facts.Artifacts),
-				PresentInTenant:   true,
-				LastSeenAt:        now,
-				AssignmentTargets: r.Facts.AssignmentTargets,
-				GroupTypes:        sortedCopy(r.Facts.GroupTypes),
-				SecurityEnabled:   r.Facts.SecurityEnabled,
+				ResourceId:               r.Facts.ResourceID,
+				DisplayName:              r.Facts.DisplayName,
+				SourceSha256:             r.Facts.SourceSha256,
+				ODataType:                r.Facts.ODataType,
+				Platforms:                r.Facts.Platforms,
+				Technologies:             r.Facts.Technologies,
+				Artifacts:                sortedCopy(r.Facts.Artifacts),
+				PresentInTenant:          true,
+				LastSeenAt:               now,
+				AssignmentTargets:        r.Facts.AssignmentTargets,
+				GroupTypes:               sortedCopy(r.Facts.GroupTypes),
+				SecurityEnabled:          r.Facts.SecurityEnabled,
+				NotificationTemplateRefs: sortedCopy(r.Facts.NotificationTemplateRefs),
 			}
 			presentKeys[key] = true
 

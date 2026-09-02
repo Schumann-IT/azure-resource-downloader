@@ -36,9 +36,9 @@ log-level: "info"
 #  - Microsoft.Graph/windowsFeatureUpdateProfiles
 #  - Microsoft.Graph/windowsQualityUpdateProfiles
 
-transformers:
-  - name: base64-decode
-  - name: name-sanitization
+#transformers:
+#  - name: base64-decode
+#  - name: name-sanitization
 
 #filters:
 #  # Only export resources whose name starts with "GBL_"

@@ -62,3 +62,40 @@ func TestSharedPromptTemplateOverrides(t *testing.T) {
 		})
 	}
 }
+
+// TestCompliancePolicyPromptWrapsNotifications verifies both compliance-policy
+// handlers instruct wrapping the noncompliance-notification reference in the
+// splice markers, so a template rename can re-splice that block. Types that do
+// not reference templates must not carry the instruction.
+func TestCompliancePolicyPromptWrapsNotifications(t *testing.T) {
+	referencing := []func() (*GraphCollectionHandler, error){
+		func() (*GraphCollectionHandler, error) {
+			return NewDeviceCompliancePolicyHandler(fakeTokenCredential{})
+		},
+		func() (*GraphCollectionHandler, error) { return NewCompliancePolicyHandler(fakeTokenCredential{}) },
+	}
+	for _, newHandler := range referencing {
+		handler, err := newHandler()
+		if err != nil {
+			t.Fatalf("constructor unexpected error: %v", err)
+		}
+		prompt := handler.GetDocumentationPrompt()
+		for _, want := range []string{
+			"`<!-- notifications:start -->` / `<!-- notifications:end -->` markers",
+			"notificationTemplateId",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Errorf("%s: prompt missing %q", handler.GetType(), want)
+			}
+		}
+	}
+
+	// A non-referencing type reuses the default template without the marker.
+	other, err := NewDeviceCategoryHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("constructor unexpected error: %v", err)
+	}
+	if strings.Contains(other.GetDocumentationPrompt(), "<!-- notifications:start -->") {
+		t.Error("deviceCategories must not carry the notification-marker instruction")
+	}
+}

@@ -8,21 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Breaking
-
-- **A tenant is now a directory containing `docs/index.yaml`; `index.md` and `.doc-manifest.json` are
-  gone.** The CLI stopped generating both: `azure-rd docs generate-index` writes a machine-readable
-  navigation index instead, and the manifest was retired because `resources/metadata.yaml` plus the
-  documents' frontmatter already carry the generation state it used to hold. Discovery is keyed off
-  that file, and a tenant's document root is now `<export>/docs` rather than the export folder — which
-  is what the relative `../<type>/<name>.md` links inside the documents were always relative to, so
-  cross-document links resolve without a rewrite change. An export that has not had
-  `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
-  a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
-  is still bounded, and counts are still derived from the index rather than by walking the tree. A
-  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
-
 ### Added
+
+- **A tenant's documentation can be exported as Confluence HTML.**
+  `GET /:tenant/_export/confluence` streams one zip containing one folder, which is what Confluence's
+  HTML import expects: the folder name (`<tenant domain> documentation`) becomes the space name, and
+  each file name becomes a page title. Pages are titled `<type leaf> — <display name>` from
+  `docs/index.yaml` (falling back to the document's H1, then its base name), which is what keeps a
+  flat, hierarchy-less space readable and makes cross-type name clashes impossible; characters that
+  are illegal in a file name or a Confluence title are replaced, and a residual collision gets a
+  numbered suffix and a line on the overview page rather than overwriting a page. An `Overview.html`
+  built from `docs/summary.md` plus a grouped link list stands in for the sidebar, since an imported
+  space has no page tree, and each page opens with the provenance (source, export timestamp,
+  generation hashes) that stripping the frontmatter would otherwise lose. The export is offered as a
+  plain download link per tenant on the picker, keeping the tenant landing page documentation-only —
+  still no client-side JavaScript.
+
+  The non-negotiables are preserved as follows. **Read-only:** documents are enumerated from
+  `docs/index.yaml` and read through `resolveWithinTenant()`, the archive is assembled in memory and
+  streamed, and no temporary file is created — an e2e case asserts that an export changes not one byte
+  under the docs root. **One `markdown-it` instance, and the cache:** the exporter does not render, it
+  re-serialises the HTML the browser already produced with the same render env, so the mtime-keyed
+  render cache needs no extra key and cannot be poisoned or bypassed by an export (also asserted).
+  **Path safety:** untouched, and it is the reason images cannot travel — a served root hands out
+  exactly one extension, so an image travels as its `alt` text instead of the extension policy being
+  widened. `_export` is a representation prefix like `_resource`, declared before the document
+  catch-all, and an unknown format is a 404.
+
+  Serialisation is an allowlist, not a blocklist: HTML the importer does not preserve is unwrapped,
+  scripts and embeds are dropped, and an element name that is not HTML at all is escaped. That last
+  rule fixes a latent bug the export surfaced — macOS plist payloads are quoted in the documents with
+  bare angle brackets, which `html: true` already turns into phantom `<key>`/`<string>` elements in
+  the browser; the export now escapes them instead of shipping them. Heading permalinks and
+  in-document anchors are unwrapped (a flat space has nowhere to point them), and a link whose target
+  is not a page in the export degrades to its own text. A document the index lists but that cannot be
+  read is reported under *Not exported* on the overview page instead of failing the export, and zip
+  entries carry the export's own `generatedAt` rather than the wall clock, so re-exporting an
+  unchanged tenant produces the same bytes.
+
+  **Provisional and one-way**, as the README says: importing creates a space rather than updating one,
+  so re-importing yields a second space and edits made in Confluence are lost. The `<details>` blocks
+  that are the bulk of the documentation are passed through untouched, because Confluence's import FAQ
+  neither lists them as preserved nor says what it does with them and no instance was available to
+  settle it; the alternatives, and the media and per-format follow-ups, are in `NEXT-ITERATIONS.md`.
+  New dependencies: `htmlparser2` for the serialisation pass and `yazl` for the streamed zip.
 
 - **The tenant summary's Findings table is styled as a findings list, with the severity as an icon.**
   A markdown-it core rule tags any table whose first header cell is `Severity` with `class="findings"`
@@ -117,7 +146,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now also covers the landing page, a pending resource, the excluded-type counts, the malformed-index
   folder being skipped, `generate.md` not being served, and no-restart refresh of the index itself.
 
+- **Each declared document section now has a visual identity.** The CLI declares every document
+  type's `##` headings as a closed, verbatim set (the `<!-- doc-headings: … -->` contract in its
+  `doc-prompt.md`), so the heading text is a machine contract rather than prose. `section-hooks.ts`
+  puts `data-section="<slug>"` on every `h2`/`h3` and `class="doc-section-heading"` on the ones in
+  that vocabulary, and the stylesheet gives each an icon and one of four role colours — risk
+  (*Security*, *Findings*, *Expiry and renewal*, *Coverage caveats*), substance (*Settings*,
+  *Properties*, *Definition*, *Membership*), relations (*Usage as assignment target*, *Usage and
+  references*, *Assignment posture*, *Targeted by*) and meta (*References*, *Lifecycle and
+  operations*, the summary's own four sections). Four roles rather than fourteen colours, reusing the
+  findings-table hues so a Security section and a critical finding read as one language. A heading
+  *outside* the vocabulary keeps the attribute and gets no treatment at all, which is what makes this
+  safe on the documents currently on disk: they predate the contract, and an unrecognised heading such
+  as `## Metadata` renders exactly as it did before.
+
+  Two more hooks come with it. The tool-maintained marker pairs become selectable elements — a matched
+  `<!-- assignments:start -->` / `<!-- assignments:end -->` pair (likewise `targeted-by` and
+  `notifications`) renders as `<div class="doc-assignments">`, because an HTML comment survives into
+  the DOM under `html: true` but cannot be styled, and an unmatched marker is deliberately left as a
+  comment rather than emitting an unbalanced element. And the metadata table each document opens with
+  is classed `.doc-metadata`, located as the first table after the H1 rather than by
+  `table:first-of-type`, which breaks on the 99 reference documents that open with an extra heading;
+  it opts out of the shared wide-table `nowrap` the same way `.findings` does. The templates gained
+  the matching chrome hooks (`#doc-page`, `.doc-main`, `.doc-body`, `.doc-source`, `.site-header`,
+  `.view-switcher`).
+
+  The non-negotiables hold. **No client-side JavaScript:** icons are masked SVGs driven by one custom
+  property per section, so a single value covers light and dark, and the `:target` landing highlight is
+  plain CSS. **One `markdown-it` instance:** all of it is one linear core rule over the token stream,
+  pushed after the findings rule, inside the existing render and its mtime-keyed cache — no extra pass
+  and no per-request instance. **Confluence export unaffected:** `<div>` and `<section>` unwrap and
+  neither `class` nor `data-*` is on an element allowlist, asserted in `test/export.spec.ts`.
+
+- **Each section is now an element, so it can carry a panel and its own density.** Everything between two
+  H2s is wrapped in `<section class="doc-section" data-section="…">` with the same slug as its heading.
+  This is what the heading hooks could not give: `h2#settings ~ *` is the only alternative and it bleeds
+  into every section that follows. With it, *Settings*, *Properties*, *Definition* and *Membership* drop
+  into a denser mode — smaller type, tighter `<details>` margins, a shaded rail at depth — which is the
+  point, because one document in the reference export carries 317 settings nested five levels deep;
+  *Security* and *Expiry and renewal* get a rail and deliberately **no** tint, so they stay a signal
+  rather than decoration; *References* becomes a tighter, breakable link list; and the summary's
+  *At a glance* table takes the same wide-table `nowrap` opt-out `.findings` has.
+
+  An H2 *inside* a matched marker pair never opens a section. That one rule is what guarantees
+  well-formed output — a section can only close at an H2 outside every spliced block, so a block is
+  always wholly inside one section and can never be straddled — and it is also the right reading: the
+  spliced `## Used by` and `## Targeted by` blocks belong to the section they were spliced into. Verified
+  against both reference tenants: balanced wrappers on every document family, and no marker block cut in
+  half.
+
+  **The Confluence export is byte-identical to before this change** — checked by exporting both reference
+  tenants from this build and from the previous revision and diffing the unpacked zips. `<section>` is on
+  the importer's unwrap list, and the wrapper is emitted as a non-block token on purpose: a block token
+  carries a trailing newline, which the unwrapping serialiser keeps, and that would have added a blank
+  line to all 264 pages for a wrapper that exists only for the stylesheet. Against Atlassian's
+  [HTML import FAQ](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/),
+  the exported pages still contain only supported constructs — headings, paragraphs, lists, tables, links,
+  inline code, quotes, `strong`/`em` — with `lang`, `charset` and `href` as the only attributes anywhere;
+  no `nav`, `figure`, `iframe`, `button`, no styled text, and none of the new `class`/`data-*` hooks.
+
+- **Setting blocks are styled from the attributes the generator now writes.** Every block is emitted as
+  `<details data-setting="<exact YAML path>">`, with `data-note="security"` for a setting called out in
+  the Security section and `data-note="inert"` for one that is present but has no effect (7324 and 1967
+  occurrences respectively across the reference exports). A `security` block gets the risk rail and a
+  `security` chip on its own `<summary>`; an `inert` block is de-emphasised behind a dashed rail with a
+  `no effect` chip. The chips are `::after` content driven by one custom property, so they cost no markup
+  and no JavaScript, and they are decorative by construction — the same fact is stated in the block's
+  prose, so nothing is lost where CSS is not. `>` throughout, so a nested block never inherits its
+  parent's chip.
+
+- **`used-by` joins the tool-maintained marker blocks.** The regenerated exports splice a reverse-reference
+  block into notification-template documents (11 pairs), which the browser had no element for. It now
+  renders as `<div class="doc-used-by">` and `## Used by` is part of the declared section vocabulary,
+  sharing the relations role and icon with `## Targeted by`.
+
+  Still outstanding: `data-family` / `data-type` on `<article>`, so a group and a credential document can
+  differ — see [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+
 ### Changed
+
+- **BREAKING: A tenant is now a directory containing `docs/index.yaml`; `index.md` and `.doc-manifest.json` are
+  gone.** The CLI stopped generating both: `azure-rd docs generate-index` writes a machine-readable
+  navigation index instead, and the manifest was retired because `resources/metadata.yaml` plus the
+  documents' frontmatter already carry the generation state it used to hold. Discovery is keyed off
+  that file, and a tenant's document root is now `<export>/docs` rather than the export folder — which
+  is what the relative `../<type>/<name>.md` links inside the documents were always relative to, so
+  cross-document links resolve without a rewrite change. An export that has not had
+  `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
+  a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
+  is still bounded, and counts are still derived from the index rather than by walking the tree. A
+  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
+
+- **Heading anchors are no longer percent-encoded.** `markdown-it-anchor`'s default slug encodes
+  anything outside its allowed set, which produced ids only selectable as
+  `[id="lifecycle-%26-operations"]` and a `%E2%80%94` in every `summary.md` H1 anchor. A local
+  `slugify` replaces it, so those become `#lifecycle-and-operations` and a clean title slug.
+  **Existing links to a heading anchor that contained an encoded character will not resolve any more**
+  — in-document anchors are generated, never hand-written, so this affects bookmarks and external
+  links only. `&` slugs to `and` on purpose: a heading spelled `Lifecycle & operations` (as the
+  documents on disk still spell it) and `Lifecycle and operations` (as the current contract requires)
+  get the same anchor and the same section identity, so neither the URLs nor the styling move again at
+  the regeneration.
 
 - **A document's own source-file echo is no longer rendered.** The generated documents repeat their
   source file as a code-only paragraph directly under the H1 (`` `resources/.../foo.yaml` `` or just
@@ -228,8 +357,6 @@ First iteration: discover exported tenants on disk and render their generated Ma
     traversal, and an edited file being reflected on the next request;
   - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts
     the custom `<details>`/`<summary>` and dark-mode rules survive.
-
-### Known limitations
 
 Deliberate iteration-1 scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md): no
 search, no syntax highlighting, single-segment tenant routes only, no manifest-driven navigation

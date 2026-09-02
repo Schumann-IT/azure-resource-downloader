@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -9,7 +10,7 @@ import (
 
 // requiredMarkers are the marked blocks GeneratePrompt fills. Every one must be
 // present, matched and non-nested in the template before anything is written.
-var requiredMarkers = []string{"export", "worklist", "refmap", "resplice", "migrate", "summary-facts"}
+var requiredMarkers = []string{"export", "worklist", "refmap", "usedbymap", "resplice", "migrate", "summary-facts"}
 
 // validateMarkers checks that each named block appears exactly once as a
 // matched, correctly ordered start/end pair. It fails naming the offending
@@ -106,11 +107,12 @@ func renderWorklist(items []WorkItem) string {
 
 		spec := fmt.Sprintf("resources/%s/%s", t, docPromptFileName)
 		fmt.Fprintf(&b, "### %s — spec: `%s`\n\n", t, spec)
-		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 |\n")
-		b.WriteString("|---|---|---|---|---|---|\n")
+		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |\n")
+		b.WriteString("|---|---|---|---|---|---|---|---|\n")
 		for _, r := range rows {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s |\n",
-				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256, hashCell(r.AssignmentsSha256))
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s | %s | %s |\n",
+				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256,
+				hashCell(r.AssignmentsSha256), hashCell(r.NotificationsSha256), hashCell(r.UsedBySha256))
 		}
 		b.WriteString("\n")
 	}
@@ -151,39 +153,92 @@ func renderRefmap(m *Metadata, referenced map[string]bool, groups map[string]gro
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderResplice renders the two re-splice groups: documents whose own
-// assignments block must be re-rendered (forward), and group documents whose
-// "Targeted by" block must be re-rendered (reverse). Each row carries the new
-// hash the agent must write into that document's frontmatter after splicing. It
-// is "none" only when both sets are empty.
-func renderResplice(forward, reverse []RespliceItem) string {
-	if len(forward) == 0 && len(reverse) == 0 {
-		return "_No documents need re-splicing — every current document's assignment and targeting blocks match the export._"
+// renderResplice renders the four re-splice groups, each a document needing one
+// marked block re-rendered while the rest of the page stays untouched:
+// forward (the document's own assignments block), reverse (a group's "Targeted
+// by" block), used-by (a template's "Used by" block) and notifications (a
+// policy's noncompliance-notification block). Each row carries the new hash the
+// agent must write into that document's frontmatter after splicing. It is
+// "none" only when all four sets are empty.
+func renderResplice(forward, reverse, usedby, notifications []RespliceItem) string {
+	if len(forward) == 0 && len(reverse) == 0 && len(usedby) == 0 && len(notifications) == 0 {
+		return "_No documents need re-splicing — every current document's assignment, targeting, usage and notification blocks match the export._"
 	}
 
 	var b strings.Builder
 
 	b.WriteString("**Forward — re-render the document's own assignments block (write the new `assignmentsSha256`):**\n\n")
-	if len(forward) == 0 {
-		b.WriteString("_None._\n")
-	} else {
-		b.WriteString("| Document | Type | Reason | assignmentsSha256 |\n")
-		b.WriteString("|---|---|---|---|\n")
-		for _, it := range sortedResplice(forward) {
-			fmt.Fprintf(&b, "| `%s` | %s | %s | `%s` |\n", it.DocPath, it.ResourceType, it.Reason, it.Hash)
-		}
-	}
+	respliceTable(&b, forward, "assignmentsSha256")
 
 	b.WriteString("\n**Reverse — re-render the group document's `Targeted by` block (write the new `targetedBySha256`):**\n\n")
-	if len(reverse) == 0 {
-		b.WriteString("_None._")
-	} else {
-		b.WriteString("| Document | Type | Reason | targetedBySha256 |\n")
-		b.WriteString("|---|---|---|---|\n")
-		for _, it := range sortedResplice(reverse) {
-			fmt.Fprintf(&b, "| `%s` | %s | %s | `%s` |\n", it.DocPath, it.ResourceType, it.Reason, it.Hash)
+	respliceTable(&b, reverse, "targetedBySha256")
+
+	b.WriteString("\n**Used-by — re-render the template document's `Used by` block (write the new `usedBySha256`):**\n\n")
+	respliceTable(&b, usedby, "usedBySha256")
+
+	b.WriteString("\n**Notifications — re-render the policy's noncompliance-notification block (write the new `notificationsSha256`):**\n\n")
+	respliceTable(&b, notifications, "notificationsSha256")
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// respliceTable writes one re-splice subsection's table (or "_None._") into b,
+// with hashColumn naming the frontmatter hash the agent must record.
+func respliceTable(b *strings.Builder, items []RespliceItem, hashColumn string) {
+	if len(items) == 0 {
+		b.WriteString("_None._\n")
+		return
+	}
+	fmt.Fprintf(b, "| Document | Type | Reason | %s |\n", hashColumn)
+	b.WriteString("|---|---|---|---|\n")
+	for _, it := range sortedResplice(items) {
+		fmt.Fprintf(b, "| `%s` | %s | %s | `%s` |\n", it.DocPath, it.ResourceType, it.Reason, it.Hash)
+	}
+}
+
+// renderUsedByMap lists every notification message template present in the
+// export as GUID → name and document path, with the resources that reference it
+// in a noncompliance action, so the agent renders each template's "Used by"
+// block from the same facts the used-by hash was computed from. Referenced GUIDs
+// with no template in the export are flagged dangling.
+func renderUsedByMap(m *Metadata, usedBy map[string][]usedByRow) string {
+	keyByID := templateKeyByID(m)
+	dangling := danglingTemplateIDs(m)
+
+	if len(keyByID) == 0 && len(dangling) == 0 {
+		return "_No notification message templates are present or referenced in this export._"
+	}
+
+	ids := make([]string, 0, len(keyByID))
+	for id := range keyByID {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var b strings.Builder
+	for _, id := range ids {
+		key := keyByID[id]
+		entry := m.Resources[key]
+		name := entry.DisplayName
+		if name == "" {
+			name = id
 		}
-		return strings.TrimRight(b.String(), "\n")
+		rows := usedBy[id]
+		if len(rows) == 0 {
+			fmt.Fprintf(&b, "- `%s` → [%s](%s) — not referenced by any resource\n", id, name, docRel(key))
+			continue
+		}
+		fmt.Fprintf(&b, "- `%s` → [%s](%s) — used by %d resource(s):\n", id, name, docRel(key), len(rows))
+		for _, r := range sortedUsedBy(rows) {
+			rn := r.resourceName
+			if rn == "" {
+				rn = path.Base(r.sourceKey)
+			}
+			fmt.Fprintf(&b, "  - [%s](%s) · %s\n", rn, docRel(r.sourceKey), r.resourceType)
+		}
+	}
+	for _, id := range dangling {
+		fmt.Fprintf(&b, "- `%s` → ⚠️ not in export (dangling)\n", id)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

@@ -14,8 +14,11 @@ Marked blocks the tool replaces (start/end markers stay, content between them is
   export     paths of the export being documented, plus its freshness
   worklist   the resources to document, grouped by type, with the reason each is listed
   refmap     assignment target GUID -> group name/document, resolved from metadata.yaml
+  usedbymap  notification-template GUID -> template name/document and the resources that reference it
   resplice   documents needing one marked block re-rendered though their own resource did not change:
-             assignments tables whose target names moved, and "Targeted by" blocks whose targeting moved
+             assignments tables whose target names moved, "Targeted by" blocks whose targeting moved,
+             "Used by" blocks whose referencing resources moved, and noncompliance-notification blocks
+             whose referenced template was renamed
   migrate    documents predating the assignment markers; rendered as "none" when there are none
   summary-facts  tenant-wide counts, platforms, assignment posture and coverage for the summary (section 7)
 
@@ -112,15 +115,17 @@ _Replaced by the tool. Shape:_
 
 ### Microsoft.Graph/deviceCompliancePolicies — spec: `resources/Microsoft.Graph/deviceCompliancePolicies/doc-prompt.md`
 
-| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 |
-|---|---|---|---|---|---|
-| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` |
+| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |
+|---|---|---|---|---|---|---|---|
+| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` | `a3f8b91e…` | |
 
 _…one section per resource type, then a tally: N documents to write across M types._
 <!-- worklist:end -->
 
 The hashes on each row are the values to write into that document's frontmatter (section 2), given to you
 precisely so you never have to compute one. `assignmentsSha256` is blank for types that have no assignments.
+`notificationsSha256` is blank unless the resource references a notification template in a noncompliance
+action. `usedBySha256` is blank unless the resource is a notification message template.
 
 Note that `promptSha256` is a property of the *type*, not of the file: every row under one `###` heading
 carries the same value. Read it once per type and reuse it — never copy it once per row.
@@ -166,7 +171,9 @@ destroying the mtime evidence section 6 depends on.
 
 `assignmentsSha256` covers the resolved contents of the assignments block — the target groups' names and
 kinds, the filters' names — which is how the next run notices that a group was renamed even though this
-resource never changed. Group documents additionally carry `targetedBySha256`; see 5d.
+resource never changed. Group documents additionally carry `targetedBySha256`, notification message
+template documents carry `usedBySha256`, and documents that reference a notification template in a
+noncompliance action carry `notificationsSha256`; see 5d.
 
 This frontmatter is how the next incremental run knows whether your document is still current. A document
 without it is treated as stale and regenerated from scratch every time.
@@ -190,6 +197,12 @@ Bare GUIDs here are correct and expected — section 5 resolves them. Emit the m
 no assignments; put the sentence saying so between them. Omit them only for types with no concept of
 assignments. Never nest markers, never emit a start without its end, never put anything that is not about
 assignments between them. Section 5 depends on this being a deterministic splice.
+
+The same contract applies to two more marked blocks, wherever the spec calls for them: `<!-- targeted-by -->`
+around a group document's list of the resources that assign it, and `<!-- notifications:start -->` /
+`<!-- notifications:end -->` around a policy's reference to the notification message template its noncompliance
+actions send through. Unlike assignments, the notifications block is emitted **only** when the resource
+actually references a template — omit it entirely otherwise, since there is nothing to re-splice.
 
 ---
 
@@ -397,7 +410,7 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
     if opens != closes:
         fail(doc, f"<details> imbalance: {opens} open / {closes} close")
 
-    for marker in ("assignments", "targeted-by"):
+    for marker in ("assignments", "targeted-by", "used-by", "notifications"):
         s, e = text.count(f"<!-- {marker}:start -->"), text.count(f"<!-- {marker}:end -->")
         if s != e:
             fail(doc, f"{marker} markers unbalanced: {s} start / {e} end")
@@ -521,15 +534,18 @@ directions. Such documents never appear in the work list. Each needs **one marke
 left completely alone**: do not regenerate them, do not re-read their specs.
 
 <!-- resplice:start -->
-_Replaced by the tool, in two groups: documents whose **assignments** block must be re-rendered (with the
-resolved targets and the new `assignmentsSha256`), and group documents whose **Targeted by** block must be
-re-rendered (with the targeting resources and the new `targetedBySha256`). Rendered as "none" when nothing
-needs re-splicing._
+_Replaced by the tool, in four groups: documents whose **assignments** block must be re-rendered (with the
+resolved targets and the new `assignmentsSha256`), group documents whose **Targeted by** block must be
+re-rendered (with the targeting resources and the new `targetedBySha256`), notification message template
+documents whose **Used by** block must be re-rendered (with the referencing resources and the new
+`usedBySha256`), and policy documents whose **noncompliance-notification** block must be re-rendered (with the
+resolved template name and the new `notificationsSha256`). Rendered as "none" when nothing needs re-splicing._
 <!-- resplice:end -->
 
 After splicing, update that document's frontmatter with the hash the tool gave you — `assignmentsSha256` for
-a forward re-splice, `targetedBySha256` for a reverse one. A document whose block you re-rendered but whose
-hash you did not update will be re-spliced again on every future run.
+a forward re-splice, `targetedBySha256` for a reverse one, `usedBySha256` for a used-by one,
+`notificationsSha256` for a notifications one. A document whose block you re-rendered but whose hash you did
+not update will be re-spliced again on every future run.
 
 The `Targeted by` block is wrapped in its own markers:
 
@@ -549,17 +565,68 @@ Sort by resource type then name, and state the total above the table. Build it b
 that produced the forward tables, so the two directions cannot disagree. Never hand this block to an agent —
 it is generated data, and a model rewriting it will paraphrase names and break links.
 
+The notification message template `Used by` block works exactly the same way, one direction over: it lists
+the compliance policies that reference the template in a noncompliance action, built from the template
+reference map in 5f. Wrap it in its own markers:
+
+```markdown
+<!-- used-by:start -->
+## Used by
+
+3 resources reference this template in a noncompliance action.
+
+| Resource | Type |
+|---|---|
+| [GBL_C_PRD_D_WIN_OS_validation](../deviceCompliancePolicies/gbl_c_prd_d_win_os_validation.md) | deviceCompliancePolicies |
+<!-- used-by:end -->
+```
+
+State the total above the table and sort by resource type then name. A template no resource references gets
+one sentence between the markers: *"No resource references this template in a noncompliance action."* — a
+finding worth stating plainly, exactly like an unassigned resource. Drive it from the reference map in 5f,
+never from re-reading compliance policies, and never hand it to an agent.
+
+The **forward** counterpart lives inside a *policy* document, not a template document: a compliance policy
+whose noncompliance actions send through a notification template names that template in its Settings section,
+wrapped in its own markers so a template rename re-splices just that reference — not the whole page:
+
+```markdown
+<!-- notifications:start -->
+Noncompliance actions notify through [Compliance email](../notificationMessageTemplates/compliance_email.md).
+<!-- notifications:end -->
+```
+
+Resolve the template name and its document from the same 5f reference map used for the reverse block, so the
+two directions cannot disagree; keep the raw GUID and mark it `⚠️ not in export` for a dangling reference.
+This block appears **only** for policies that actually reference a template.
+
 ### 5e. Migrate documents written before markers existed
 
 Documents predating the markers need them inserted before 5c can splice anything; see appendix B.
 
 <!-- migrate:start -->
-_Replaced by the tool: documents that have an assignments table but no `<!-- assignments:start -->` marker.
-Rendered as "none" when there are none._
+_Replaced by the tool: current documents missing a marker their content needs — an assignments table with no
+`<!-- assignments:start -->` marker, or a template-referencing policy with no `<!-- notifications:start -->`
+marker. The row's reason names which. Rendered as "none" when there are none._
 <!-- migrate:end -->
 
 For each, insert the markers around the existing block without altering anything else, then apply 5c
 normally. This is a one-off per document; once migrated the markers persist.
+
+### 5f. Notification template reference map (given)
+
+<!-- usedbymap:start -->
+_Replaced by the tool: notification message template GUID → display name, its document path, and the
+resources that reference it in a noncompliance action (name, document, type), resolved from `metadata.yaml`.
+A template no resource references is listed as such; a referenced GUID with no template in the export is
+flagged dangling._
+<!-- usedbymap:end -->
+
+This is the used-by counterpart of the assignment reference map in 5a: it already carries every template's
+name, document and referencing resources, so build each `Used by` block (and, if a compliance policy
+document mentions the template it notifies through, the forward mention) directly from it. A GUID flagged
+**dangling** has no template in the export — usually deleted from the tenant while still referenced; keep the
+raw GUID, mark it `⚠️ not in export`, and list every one in your final report.
 
 ---
 
@@ -571,10 +638,10 @@ reference map, so they only become meaningful once section 5 has run. Script the
 | Check | Expectation |
 |---|---|
 | Assignment resolution | No bare group GUID remains inside a marked block without a resolved name beside it or an explicit `⚠️ not in export`. |
-| Link symmetry | Every group linked from a policy's assignment table has a document, and that document's **Targeted by** list contains that policy. Both directions come from one lookup, so a mismatch means the splice went wrong. |
+| Link symmetry | Every group linked from a policy's assignment table has a document, and that document's **Targeted by** list contains that policy. Every template a compliance policy references — both from that policy's **noncompliance-notification** block and from the template's **Used by** list — agrees in both directions. Each direction comes from one lookup, so a mismatch means the splice went wrong. |
 | Link targets exist | Every relative link inside a marked block resolves to a file that exists under `docs/`. |
-| Marker pairs survived | The splice left every `assignments` and `targeted-by` pair matched and unnested. Re-run that check from section 4 — a bad splice is exactly how a pair gets broken. |
-| Hashes updated | Every document whose block was re-spliced carries the new `assignmentsSha256` / `targetedBySha256`. Any it kept from before will be re-spliced on every future run. |
+| Marker pairs survived | The splice left every `assignments`, `targeted-by`, `used-by` and `notifications` pair matched and unnested. Re-run that check from section 4 — a bad splice is exactly how a pair gets broken. |
+| Hashes updated | Every document whose block was re-spliced carries the new `assignmentsSha256` / `targetedBySha256` / `usedBySha256` / `notificationsSha256`. Any it kept from before will be re-spliced on every future run. |
 | Nothing else touched | Compare mtimes against the snapshot taken at the end of section 4. Only work-list documents, re-spliced documents and migrated documents may have changed. A document outside the work list — e.g. one retained under a type that could not be listed — is in the snapshot and must be unchanged. |
 
 ---
@@ -810,15 +877,22 @@ sys.exit(1 if problems else 0)
 
 Write the run report to a new file `docs/report-<UTC-date>-<UTC-time>.md` — the run's finish time in UTC,
 e.g. `docs/report-2026-08-31-200617.md` (`report-YYYY-MM-DD-HHMMSS`) — and print the same text as the run's
-final output. One report per run: never overwrite an earlier report and never hash-track it. Like
-`summary.md` it lives at the `docs/` root, so the section-4 sweep leaves it untouched.
+final output. Writing the file to disk is mandatory, not optional: printing the report is never a substitute
+for saving it, and a run has not finished until the file exists. One report per run: never overwrite an
+earlier report and never hash-track it. Like `summary.md` it lives at the `docs/` root, so the section-4
+sweep leaves it untouched.
 
 The report must contain:
 
+- **the plan the run executed** — reproduce the section 1 work list in full (every document to generate and
+  to re-splice, grouped by type, with the reason each was listed). Include it even though the plan was an
+  input to the run and was never explicitly asked for in this list: the report must stand alone as the record
+  of what the run set out to do and what it did, so a reader never has to go back to the prompt to see the plan.
 - documents written, and documents re-spliced
 - that `docs/summary.md` was written and passed its section 7 check
 - checks passed at sections 4, 6 and 7, and anything you repaired
 - every **dangling group reference** (an assigned GUID with no group in the export)
+- every **dangling notification template reference** (a template GUID a noncompliance action references with no template in the export)
 - how many documents were migrated to markers
 - whether the export was marked incomplete, and why
 - substantive findings the analysis surfaced: baseline deviations, disabled controls, secrets present,
@@ -835,18 +909,25 @@ Nothing here is an instruction. It exists so the procedure above can stay short.
 
 ### A. Why re-splicing exists (5d)
 
-Two marked blocks are rendered from information that lives outside the document's own resource, so either can
-go stale while the document around it is still correct:
+Four marked blocks are rendered from information that lives outside the document's own resource, in three
+directions, so any of them can go stale while the document around it is still correct:
 
-- **Forward** — a document's own assignments table prints its target groups' *names*. The resource stores
-  only GUIDs, so renaming a group in the tenant leaves every policy targeting it printing a stale name while
-  no policy's YAML moved.
+- **Forward** — a document's own assignments table prints its target groups' *names*, and a compliance
+  policy's noncompliance-notification block prints its notification template's *name*. The resource stores
+  only GUIDs, so renaming a group or a template in the tenant leaves every referencing policy printing a
+  stale name while no policy's YAML moved. `assignmentsSha256` catches the first, `notificationsSha256` the
+  second.
 - **Reverse** — a group document's `Targeted by` block lists *other* resources' assignments. Re-point a
   policy from one group to another and both groups' reverse indexes are wrong while neither group's YAML
   moved.
+- **Used-by** — a notification message template document's `Used by` block lists the *other* resources
+  (compliance policies) that reference the template in a noncompliance action. Point a policy's noncompliance
+  action at a different template, or rename a referencing policy, and both templates' used-by indexes are
+  wrong while neither template's YAML moved. This is the reverse case one type over: groups are targeted by
+  assignments, templates are used by noncompliance actions.
 
-Neither case can appear in the work list, because nothing about those documents' own resources changed. That
-is the whole reason 5d exists as a separate step with its own list.
+None of these cases can appear in the work list, because nothing about those documents' own resources
+changed. That is the whole reason 5d exists as a separate step with its own list.
 
 ### B. Why marker migration exists (5e)
 

@@ -214,14 +214,17 @@ func TestGeneratePromptReferencedGroups(t *testing.T) {
 // docFM describes the frontmatter (and optional assignment markers) to write
 // into a generated document for list-2 tests.
 type docFM struct {
-	srcSha         string
-	promptSha      string
-	assignmentsSha string
-	targetedBySha  string
-	withMarkers    bool
-	summary        string
-	platformGroup  string
-	functionGroup  string
+	srcSha                  string
+	promptSha               string
+	assignmentsSha          string
+	targetedBySha           string
+	usedBySha               string
+	notificationsSha        string
+	withMarkers             bool
+	withNotificationsMarker bool
+	summary                 string
+	platformGroup           string
+	functionGroup           string
 }
 
 // writeDocFM writes a document for a metadata key with the given frontmatter and
@@ -243,6 +246,12 @@ func writeDocFM(t *testing.T, tenantDir, key string, fm docFM) {
 	if fm.targetedBySha != "" {
 		fmt.Fprintf(&b, "targetedBySha256: %s\n", fm.targetedBySha)
 	}
+	if fm.usedBySha != "" {
+		fmt.Fprintf(&b, "usedBySha256: %s\n", fm.usedBySha)
+	}
+	if fm.notificationsSha != "" {
+		fmt.Fprintf(&b, "notificationsSha256: %s\n", fm.notificationsSha)
+	}
 	if fm.summary != "" {
 		fmt.Fprintf(&b, "summary: %s\n", fm.summary)
 	}
@@ -255,6 +264,9 @@ func writeDocFM(t *testing.T, tenantDir, key string, fm docFM) {
 	b.WriteString("generatedAt: 2026-01-01T00:00:00Z\n---\n# doc\n")
 	if fm.withMarkers {
 		b.WriteString("\n<!-- assignments:start -->\ntable\n<!-- assignments:end -->\n")
+	}
+	if fm.withNotificationsMarker {
+		b.WriteString("\n<!-- notifications:start -->\nnotifies via template\n<!-- notifications:end -->\n")
 	}
 	if err := os.WriteFile(docPath, []byte(b.String()), 0644); err != nil {
 		t.Fatalf("write doc: %v", err)
@@ -697,6 +709,58 @@ func TestSpliceMarker(t *testing.T) {
 	}
 	if !strings.Contains(s, "<!-- x:start -->\nNEW\n<!-- x:end -->") {
 		t.Errorf("markers must be preserved around new content: %q", s)
+	}
+}
+
+func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
+	items := []WorkItem{
+		{
+			ResourceType:        compType,
+			SourcePath:          "resources/" + compType + "/pol.yaml",
+			DocPath:             "docs/" + compType + "/pol.md",
+			Reason:              "resource changed",
+			SourceSha256:        "src-hash",
+			PromptSha256:        "prompt-hash",
+			AssignmentsSha256:   "assign-hash",
+			NotificationsSha256: "notif-hash",
+		},
+		{
+			ResourceType: notificationMessageTemplatesType,
+			SourcePath:   "resources/" + notificationMessageTemplatesType + "/t1.yaml",
+			DocPath:      "docs/" + notificationMessageTemplatesType + "/t1.md",
+			Reason:       "no document",
+			SourceSha256: "src-t1",
+			PromptSha256: "prompt-t1",
+			UsedBySha256: "usedby-hash",
+		},
+	}
+	out := renderWorklist(items)
+
+	// Header must include all hash columns.
+	if !strings.Contains(out, "| notificationsSha256 |") {
+		t.Error("worklist table must have a notificationsSha256 column")
+	}
+	if !strings.Contains(out, "| usedBySha256 |") {
+		t.Error("worklist table must have a usedBySha256 column")
+	}
+	// The compliance policy row must render the notifications hash.
+	if !strings.Contains(out, "`notif-hash`") {
+		t.Errorf("compliance policy row must render notificationsSha256, got:\n%s", out)
+	}
+	// The template row must render the used-by hash.
+	if !strings.Contains(out, "`usedby-hash`") {
+		t.Errorf("template row must render usedBySha256, got:\n%s", out)
+	}
+	// Empty hash columns must render as empty cells (not backticked).
+	// The template row has no notificationsSha256 or assignmentsSha256.
+	if strings.Contains(out, "`notif-hash`") && strings.Contains(out, "`usedby-hash`") {
+		// Both hashes present — verify they are on different rows.
+		lines := strings.Split(out, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "`usedby-hash`") && strings.Contains(line, "`notif-hash`") {
+				t.Error("usedBySha256 and notificationsSha256 must not be on the same row")
+			}
+		}
 	}
 }
 

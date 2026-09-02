@@ -121,6 +121,19 @@ func TestBuildDocumentationPromptOptionalFields(t *testing.T) {
 			mutate: func(d *ResourceDocumentation) { d.KeySettings = nil },
 			absent: []string{"give particular attention to:"},
 		},
+		{
+			name:   "notification template instruction absent by default",
+			mutate: func(*ResourceDocumentation) {},
+			absent: []string{"<!-- notifications:start -->"},
+		},
+		{
+			name:   "notification template instruction rendered when set",
+			mutate: func(d *ResourceDocumentation) { d.ReferencesNotificationTemplates = true },
+			present: []string{
+				"scheduledActionsForRule[].scheduledActionConfigurations[].notificationTemplateId",
+				"`<!-- notifications:start -->` / `<!-- notifications:end -->` markers",
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,59 +1,40 @@
 # Next iterations
 
-Outstanding work and parked ideas for the docs browser. `README.md` describes what it does today and
-`CHANGELOG.md` records what shipped; neither is repeated here.
+Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it
+does today and `CHANGELOG.md` records what shipped; neither is repeated here.
 
-## 1. Section-level styling hooks for the document page
+## 1. Per-document identity on the article
 
-**Goal.** Make the parts of a rendered document individually addressable from CSS, so sections, settings and
-the assignments block can be styled distinctly instead of all reading as one undifferentiated article.
+**Goal.** Let a reader tell what *kind* of resource a page describes before reading it, and let the
+stylesheet treat a group, a credential and a settings-catalog policy differently. `<article>` currently
+carries no per-document hook, so all six document families render identically.
 
-> **The gaps, in priority order.** No section wrapper — everything between two H2s is a flat sibling run, so
-> a section cannot get a panel or its own density without `h2#settings ~ *` selectors that bleed into the
-> next section; this is the main gap and the only structural change on the list. The assignments block is
-> invisible to CSS: `<!-- assignments:start -->` / `<!-- assignments:end -->` survive into the DOM
-> (`html: true`) but HTML comments are not selectable, even though the markers are a *tool-maintained
-> contract* and therefore a better hook than any positional selector. The metadata table has no class, and
-> `table:first-of-type` breaks the moment a document opens with an extra heading (99 documents in the
-> reference exports do). `Lifecycle & operations` slugs to `lifecycle-%26-operations`, usable only as
-> `[id="lifecycle-%26-operations"]`. Setting `<details>` depth is positional. `<article>` has no
-> per-document hook, so a group document and a Win32 app document render identically. Template chrome (the
-> source/generated line, the layout grid, `<main>`, the view switcher) is pure Tailwind utilities, so
-> `src/styles.css` cannot reach it.
+> **`data-family` cannot come from `docs/index.yaml`.** `IndexResource` carries
+> `type/doc/displayName/summary/documented/scope/platformGroup/functionGroup/odataType/platforms/assignments`
+> and no family or prompt-template field; the frontmatter carries none either. The document's **own H2 set**
+> is the carrier, and in the reference exports it partitions cleanly — 340 documents with
+> *References | Lifecycle and operations | Security | Settings* (the `default`/`singleton` contract, which
+> share one heading list and so cannot be told apart), 36 `group`, 25 `referenced`, 6 `record`, 4
+> `credential`, 0 `arm`. Match the set, ignoring the spliced `Targeted by` / `Used by` headings, and emit
+> nothing when it matches no contract. Do not infer the family from the resource type, and do not add a
+> seventh vocabulary here — if a family needs to be distinguishable beyond its headings, ask the CLI for the
+> field.
 >
-> **Waiting on a regeneration.** These hooks key off the H2 vocabulary, which the CLI now declares as a
-> closed, verbatim set per template (carried machine-readably in a `<!-- doc-headings: … -->` marker), along
-> with `data-setting` / `data-note` on setting `<details>` blocks. **The documents on disk predate all of
-> it**, and still show the old drift (`## Metadata` in 99 of them, `## Assignments` in 4). Everything up to
-> and including the metadata-table class degrades gracefully on them (an unrecognised heading simply gets an
-> unstyled `data-section`); the section wrapper and any per-section visual treatment should land after the
-> regeneration, and `data-setting` / `data-note` styling is worth building only once documents carry them.
+> **`data-type` is free**: it is the document's own directory (`Microsoft.Graph/groups`), already known to the
+> controller.
 >
-> **Not asked of the generator on purpose.** Section wrappers, the metadata-table class and the assignments
-> wrapper are all derivable here, and 340+ documents of hand-written wrapper tags would eventually produce
-> unbalanced HTML that only a regeneration could fix.
+> **What it buys**, and the reason it is worth doing at all rather than being merely available: a credential
+> document can lead with its expiry, a `record` document can drop the assignment vocabulary it never uses,
+> and `[data-family="group"] [data-section="properties"]` can differ from the same section on a policy — none
+> of which is expressible today.
 
-**Plan.** Cheapest first; the first two are self-contained and worth doing on their own. All of it stays
-server-side and keeps the single `markdown-it` instance, and each step needs a case in
-`test/docs.e2e.spec.ts`.
+**Plan.**
 
-- **Semantic classes in the templates**: `#doc-page` on `<body>`, `.doc-main`, `.doc-source` on the
-  source/generated line, `.doc-body` alongside `prose` on `<article>`, `.site-header`, `.view-switcher`.
-  Template-only, no renderer change.
-- **`data-section` on headings**: a `heading_open` rule adding `class="doc-section-heading"` and
-  `data-section="<slug>"`, plus a custom `slugify` that drops the percent-encoding (`%26` from
-  `Lifecycle & operations`, `%E2%80%94` from the em dash in every `summary.md` H1). Enables
-  `[data-section="security"]` without touching document structure; the slug change alters existing anchor
-  URLs, so it needs a changelog note.
-- **Turn the assignment markers into elements**: an `html_block` rule mapping the `assignments:start`/`end`
-  and `targeted-by:start`/`end` marker pairs to `<div class="doc-assignments">` and `.doc-targeted-by`.
-- **Class the metadata table** by its position *after* the H1 and summary paragraph rather than by
-  `first-of-type`.
-- **`data-family` / `data-type` on `<article>`**, from the document path and (for the family) from
-  `docs/index.yaml` — the CLI knows which prompt template a type uses; the frontend must not guess.
-- **Wrap each H2 run in `<section class="doc-section" data-section="…">`** via a token post-process. Solves
-  the main gap and is the only invasive item; it also changes the `details details` depth selectors, so do it
-  last and only when per-section backgrounds are actually wanted.
+- **Derive the family from the observed H2 slugs** in a pure helper next to `section-hooks.ts`, with a case
+  per contract in a unit spec, including a document whose set matches none.
+- **Expose `family` and `type` from the render** and put `data-family` / `data-type` on `<article>` in
+  `page.hbs`, with a case in `test/docs.e2e.spec.ts`.
+- **Only then** add per-family CSS, so the attribute does not ship as decoration.
 
 ## 2. Findings block beyond the severity icon
 
@@ -66,14 +47,21 @@ get from a finding to the documents it affects.
 >
 > **Caveat.** `.prose table` sets `white-space: nowrap` so wide assignment tables scroll instead of wrapping
 > mid-GUID. Any prose-bearing table needs an opt-out from it.
+>
+> **The filter mechanism is expressible without JavaScript**, which is what makes this entry worth doing:
+> renderer-emitted sibling anchors plus `:target`, e.g.
+> `#sev-critical:target ~ .findings tbody tr:not([data-severity="critical"]) { display: none }`. It needs the
+> anchors to be siblings of the table, so the wrapper below is a prerequisite, and it spends the URL fragment
+> — which already belongs to `#findings` — so a **Show all** reset link is part of the feature, not a
+> refinement.
 
 **Plan.**
 
-- Put `data-severity` on a wrapper (or a per-severity count line) so a severity summary and CSS-only
-  filtering become expressible without client-side state.
-- Link the `Affected` count to the documents it names, reusing the same relative-link rewriting as document
-  bodies.
-- Style `#findings` itself.
+- Put `data-severity` on a wrapper emitted next to the table, with one anchor per severity and a **Show all**
+  reset, so the `:target` filtering above and a per-severity count line become expressible.
+- Link the `Affected` count to the documents the row names, reusing the same relative-link rewriting as
+  document bodies — or drop the count, since the `Documents` column already links.
+- Style `#findings` itself, with the risk-role icon and colour the Security section uses.
 
 ## 3. Summary table of contents
 
@@ -90,8 +78,11 @@ they came for instead of scrolling.
 
 **Plan.**
 
-- Render the jump list in `tenant.hbs` from the known heading set, skipping entries whose heading is absent
-  so an older summary degrades to a shorter list.
+- Render the jump list in `tenant.hbs` from the known heading set, as a labelled `<nav>`, skipping entries
+  whose heading is absent so an older summary degrades to a shorter list, and omitting it entirely in the
+  index-listing branch where there is no summary at all.
+- Nest `#findings` and `#recommendations` under *Management summary* — they are the entries a reader actually
+  jumps to — reusing the same closed H3 vocabulary the CLI declares.
 - Assert in `test/docs.e2e.spec.ts` that the list links to the ids the rendered summary actually contains.
 
 ## 4. Sidebar refinements
@@ -111,43 +102,23 @@ reference export) as a flat per-type tree with no way to narrow it and no contex
 - Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
   fallback reads.
 
-## 5. Export a tenant's documentation as Confluence HTML
+## 5. Settle how a settings block is represented in the Confluence export
 
-**Goal.** Publish a tenant's documentation into systems the operator's organisation already reads, without
-turning the browser into a writer. Several formats are wanted; Confluence HTML is the first, and the seam
-matters more than the format.
+**Goal.** Make an imported space usable for the reader who came for one setting. The export ships the
+`<details>` blocks untouched, which is a probe rather than an answer: nobody has yet seen what the importer
+does with them.
 
-> **The Confluence contract**, from [Atlassian's HTML import FAQ](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/),
-> which the exporter has to satisfy exactly: upload is **one `.zip` containing one folder**, the folder name
-> becomes the space name, each `.html` file becomes a page and **the file name becomes the page title**; a
-> page's media sits in a folder named after that page; import needs create-space permission and an
-> attachment size limit above the zip. Preserved: headings, paragraphs, bold, italic, links, images, tables,
-> lists, quotes, dividers, inline code, superscript, centre alignment, emoji. Not preserved: `<title>`,
-> `<figure>`, `<nav>`, `<iframe>`, `<button>`, audio — and **code blocks arrive as plain text**.
->
-> **Two consequences.** There is **no page hierarchy** — a space is a flat set of pages, so our
-> `docs/<type>/<name>.md` tree and the sidebar cannot come along (`<nav>` is unsupported anyway). And import
-> **creates** a space rather than updating one, so re-importing yields a second space or a conflict: this is
-> a **one-way publish** and the README must say so.
->
-> **Media cannot ship in v1.** `resolveWithinRoot()` serves exactly one extension per root (`.md` under
-> `docs/`) and widening that to an extension list is a non-negotiable, so the exporter has no legal way to
-> read an image out of the docs root. The two images in the corpus therefore travel as their `alt` text and
-> no per-page media folder is produced. Reinstating media needs a third served root with its own single
-> extension policy, which is a design change, not a bullet.
->
 > **What the corpus contains** (two reference exports, 411 served documents, 6.4 MB of Markdown):
 > **7,208 `<details>`/`<summary>` blocks** — up to 317 in one document, nested up to 5 deep — 14,345 inline
-> `<code>`, 6,048 table rows, 182 fenced code blocks (which flatten to plain text), 2 images, and **44
-> literal angle brackets in prose** (`<key>`, `<endpoint>`, `<string>`, …). That last one is a latent bug the
-> export surfaces: macOS plist payloads are quoted with bare angle brackets and `html: true` already turns
-> them into bogus elements in the browser — harmless there, unknown on import. So the exporter must
-> serialise through an **allowlist that escapes anything not in it**.
+> `<code>`, 6,048 table rows and 182 fenced code blocks (which
+> [the importer flattens to plain text](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)).
+> A single page therefore has to carry up to 317 settings, five levels deep, with no collapse affordance if
+> the importer drops the block.
 >
-> **`<details>` stays open, deliberately.** It is the dominant element and the architecture notes call it
-> *the* documentation, it is not on the supported list, and the FAQ does not say what happens to it. No
-> Confluence instance is available to settle it, and choosing between the transforms from the FAQ alone would
-> be guessing, so **v1 ships passthrough** and the export is marked provisional in the README. The
+> **Why it is open.** `<details>` is the dominant element and the architecture notes call it *the*
+> documentation, it is not on the importer's preserved list, and the FAQ does not say what it does with it.
+> No Confluence instance was available to settle it, and choosing between the transforms from the FAQ alone
+> would be guessing — so passthrough shipped, and the README calls the export provisional. The
 > alternatives, for whoever runs the first real import: **A, bold paragraph + blockquote** (lowest effort,
 > keeps nesting visually and the `path = value` summary verbatim, loses the collapse affordance — a
 > 317-setting document becomes one very long page); **B, headings by depth** (the only option giving each
@@ -157,79 +128,67 @@ matters more than the format.
 > only option that must **parse** the summary into key/value — so the only one that can be silently wrong
 > when a value itself contains ` = `). Passthrough is what makes that import cheap to run.
 >
-> **The exporter transforms HTML, it does not render.** The `<details>` blocks reach `markdown-it` as raw
-> `html_block` tokens, so every strategy is a DOM transform anyway. Doing the whole export as one pass over
-> the *already rendered* HTML — details strategy, allowlist, link rewriting, serialisation — means the
-> exporter never calls `md.render`, so the single-instance rule is untouched and the **render cache needs no
-> new key**: the cache is keyed by file path plus `mtimeMs`/`size`, and an export that re-rendered with a
-> different mode or strategy would otherwise poison it or silently serve the previous strategy's output. The
-> price is one HTML parser dependency.
->
-> **Traps.** `markdown-it-anchor` wraps every heading in an `<a href="#slug">` permalink; left alone, every
-> heading in Confluence is a dead link, so the pass must unwrap them. Page titles double as file names, so
-> they must survive both a zip entry and Confluence: `/ \ : * ? " < > |` are illegal in either, and
-> `displayName` values from Intune contain them routinely. A whole-tenant export renders and serialises 263
-> documents in one request, on one thread.
->
-> **Decisions taken.** Space (= folder) name `<domain> documentation`. Page title
-> `<type leaf> — <displayName>.html`, which is collision-free by construction and gives the flat space a
-> usable alphabetical order (longest current display name is 87 characters, well under Confluence's 255).
-> `displayName` comes from `docs/index.yaml`, falling back to the document H1 and then the CLI basename. A
-> residual collision gets a deterministic suffix and a line in the overview — never an overwrite, and never
-> a failed export.
+> **The seam already exists.** `src/docs/export/details-strategy.ts` has one member and one decision
+> function; a transform is a second member plus a branch in the serialiser, which works on the rendered DOM,
+> so nothing about the single `markdown-it` instance or its cache is involved. `test/export.spec.ts` holds
+> the shared fixture the transforms have to answer for — a nested block, a group-label block with no value,
+> a link inside a block, and a value that itself contains ` = ` (the trap that makes C parse-dependent).
+> `?details=` already 404s for anything not implemented, so adding a second value is additive.
 
 **Plan.**
 
-- **Route**: `GET /:tenant/_export/confluence` → `200 application/zip` with
-  `Content-Disposition: attachment; filename="<tenant>.zip"`. `_export` is a representation prefix like
-  `_resource`, so declare it **before** the `:tenant/*path` catch-all; no resource type segment starts with
-  `_`, so it cannot collide. An unknown format segment is a 404, not a 500.
-- **Layout** under `src/docs/export/`: `confluence.ts` (the format), `html-allowlist.ts` (the serialiser,
-  escaping anything not on the supported list and unwrapping heading permalinks), `page-name.ts` (title and
-  file-name derivation, sanitisation, deduplication), `details-strategy.ts`
-  (`type DetailsStrategy = 'passthrough'` — one member in v1, and the seam the transforms land in), each
-  pure and Nest-free, plus one thin `ExportService` doing the zip and the streaming so a second format drops
-  in without touching the controller. Dependencies: `htmlparser2` for the DOM pass and `yazl` for the zip
-  (buffers in, stream out — nothing walks the filesystem, so `archiver`'s feature set is dead weight).
-- **One HTML pass, no re-render**: take the HTML the existing renderer already produced, and in a single
-  parse do the details strategy, the allowlist escaping, the permalink unwrapping and the link rewriting.
-  Because nothing is rendered, the `markdown-it` instance and the render cache are untouched.
-- **Zip contents**: `<domain> documentation/` (the space name) holding an overview page built from
-  `summary.md` plus a grouped link list that replaces the sidebar, and one flat
-  `<type leaf> — <displayName>.html` per document. No media folders (see the note).
-- **The overview's link list gets its own index pass**, in `confluence.ts`, rather than consuming
-  `buildNavigation()`. The two look alike but disagree on every particular: hrefs are page file names, not
-  app routes, there is no active item and no `<details>` nesting, skipped documents need a place, and the
-  page-name deduplication has to be the same pass that names the files. Bending `NavSection[]` to carry a
-  second href shape would put export concerns into the sidebar's model, so the duplication is the cheaper
-  side of the trade.
-- **Links**: rewrite the app routes already in the rendered HTML (`href^="/<tenant>/"`) to
-  `<Page Name>.html`, which is unambiguous because the route shape and the index agree on the document path.
-  In-document anchors (`#security`) will not survive — accepted loss. Heading permalinks are unwrapped
-  rather than rewritten.
-- **Provenance**: frontmatter is stripped before rendering, so emit `source`, `generatedAt` and the shas as
-  a small table at the top of each page, with a line saying the page is generated and local edits are lost
-  on the next import.
-- **Degrade, do not fail**: a document that has become unreadable is skipped and listed in the overview
-  under a "not exported" heading, matching the missing-document-is-normal rule everywhere else.
-- **Stay off the event loop**: stream pages into the zip as they are produced and yield between documents,
-  so a 263-document export does not stall every other request.
-- **Keep read-only honest**: build the zip in memory and stream it; nothing is written under `DOCS_ROOT`,
-  and an unavoidable temp file belongs in `os.tmpdir()`. Enumerate documents from `docs/index.yaml` and read
-  each through `resolveWithinTenant()`. Offer the export as a plain download link in the tenant top bar — no
-  client-side JavaScript.
-- **Omit the YAML view** in v1; attaching source YAML as page media is a follow-up, and blocked by the same
-  single-extension-per-root constraint as images.
-- **Mark it provisional** in the README: one-way publish, `<details>` passed through untested, no media.
-- **Tests**: e2e for the content type, `Content-Disposition` and a `<space>/<page>.html` entry from a
-  fixture; unit tests for the allowlist serialiser (**including that `<key>` in prose is escaped**, that an
-  unsupported element's text survives, and that a heading permalink is unwrapped), for page-name derivation
-  (illegal characters, index `displayName` vs. H1 vs. basename fallback, deterministic dedupe), for the link
-  rewriting, and for the details strategy against one shared fixture (nested block, group-label block with
-  no value, a body with a link, a value containing ` = `) so the transforms have a home when one is chosen;
-  plus a case proving a document rendered for the browser and exported yields the browser's HTML unchanged
-  in the cache, and an assertion that the export never writes inside the docs root. No network, temp-dir
-  fixtures as everywhere else.
+- **Import one passthrough zip into a scratch space** and answer four questions: does the block survive at
+  all, is the 317-setting document usable, does each setting have an anchor, and does search find a setting
+  name. Also check the page size the importer accepts — the largest current page is 50 kB of HTML.
+- **Record the answer in this entry**, so the next attempt does not re-run the experiment.
+- **If passthrough survives**, drop the *provisional* wording from the README's Confluence section and note
+  in `CHANGELOG.md` what the import actually does with the block.
+- **Otherwise implement exactly one transform** as a second `DetailsStrategy`, against the fixture that is
+  already in `test/export.spec.ts`. Accept both values on `?details=` while the comparison is open, then
+  default to the winner and delete the loser — a query parameter is not a configuration mechanism and must
+  not outlive the comparison.
+- **Re-check the assignment and metadata tables** in whichever representation wins: `.prose table` does not
+  travel, so a table that relied on the browser's horizontal scroll may need different markup.
+
+## Standing decisions
+
+Decisions that are not work items but constrain the work items below, recorded so the next iteration does
+not relitigate them.
+
+### Export entry points live on the tenant picker
+
+**Decision.** Every export a *whole tenant* produces is offered on the tenant picker (`GET /`), on that
+tenant's card, as a plain `<a download>` with the one-way-publish caveat beside it. Not on the tenant
+landing page, not in the top bar, not on document pages.
+
+**Why.** The landing page belongs to `docs/summary.md` — it is documentation, and the view adds no chrome of
+its own to it. The picker is where a tenant is chosen *as a whole*, which is exactly the scope an export
+operates on, so the button sits with the noun it applies to and stays out of the reading flow. It also means
+one place to look per tenant instead of a control repeated on every page.
+
+**How it extends to the planned types.**
+
+- **Further whole-tenant formats** (single-file HTML, DOCX, PDF, Markdown bundle — see the parked idea):
+  additional sibling links on the same card, under one `Export:` label once there is more than one. **No
+  dropdown, no picker widget** — that needs client-side JavaScript, which is a non-negotiable. If the row of
+  formats ever stops fitting, the answer is a per-tenant export *page* (`GET /:tenant/_export`) listing the
+  formats, not a control that needs scripting.
+- **Partial exports** (one resource type, one document, summary only): these are the one case that must
+  *not* be on the picker, because the picker cannot express the scope. Their entry point belongs next to the
+  thing being exported — the document top bar next to the **Documentation | YAML** switcher for a single
+  document, a sidebar section header for one type — and the picker keeps whole-tenant formats only.
+- **Media and source YAML as attachments**: no entry point of its own. It changes what an existing export
+  *contains*, never where it is offered.
+- **Confluence REST API synchronisation**: not a download, and it mutates a remote system, so it cannot be
+  an `<a>` at all — it needs a POST, and no route may mutate state today. It gets no control until that
+  design change is actually made, and if it ever does it must be visibly distinct from a download rather
+  than sitting in the same row.
+
+**What any new entry point has to keep.** A plain anchor with `download` and no client-side JavaScript; the
+route shape `/:tenant/_export/<format>` behind the `_export` representation prefix, declared before the
+document catch-all; the one-way/provisional caveat rendered next to the link rather than only in the README;
+no anchor nested inside another anchor (the picker card is a wrapper element for exactly this reason); and a
+dark-mode variant plus a visible `:focus-visible` outline.
 
 ## Parked ideas
 
@@ -313,18 +272,34 @@ TTL, unreadable ⇒ empty), producing file names only, with counts still taken f
 UX questions: whether a `readdir`-vs-`counts.excluded` mismatch should be flagged as a stale index, and
 whether resources without documentation should be visually de-emphasised.
 
+### Idea: Media and source YAML as page attachments
+
+Confluence's HTML import gives each page a media folder named after it, which is where the two images in the
+reference corpus — and, in principle, each document's source YAML — could travel. **Parked** because
+`resolveWithinRoot()` serves exactly **one** extension per root (`.md` under `docs/`, `.yaml` under
+`resources/`), and widening that to an extension list is a non-negotiable: images currently travel as their
+`alt` text and the export attaches nothing. Doing it properly means a third served root with its own single
+extension policy — a design change, not a feature. **Revisit** if generated documents start carrying
+diagrams that matter, or if readers of an imported space ask for the YAML next to the page. It gets no entry
+point of its own either way (see *Export entry points live on the tenant picker*).
+
 ### Idea: Confluence REST API synchronisation
 
 Create and update pages in place, with labels, a page tree and attachments — the proper answer to "keep
 Confluence up to date". **Parked** because it is a much larger feature than HTML import: authentication, a
 persisted mapping from resource to page id, and conflict handling, the last two of which sit awkwardly with
 a read-only browser that stores no state. **Revisit** once one-way HTML publishing is in real use and its
-re-import cost is felt.
+re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
+system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
+picker*).
 
 ### Idea: Further export formats and partial exports
 
 Single-file HTML, DOCX, PDF via a print stylesheet, a Markdown bundle; and exporting one type, one document
-or only the summary. **Parked** deliberately: whole-tenant Confluence HTML first, and the `src/docs/export/`
-seam exists so none of these has to rewrite the controller. **Revisit** per format when someone actually
-needs it. Preserving the document tree in an export is not expressible through Confluence HTML import at all
-— re-parenting by hand or the REST API are the only routes.
+or only the summary. **Parked** deliberately: the Confluence exporter is whole-tenant only, and the
+`src/docs/export/` seam exists so a second format is a second `ExportService` method plus its own format
+module, with the controller and the serialiser untouched. **Revisit** per format when someone actually needs
+it. Preserving the document tree in an export is not expressible through Confluence HTML import at all —
+re-parenting by hand or the REST API are the only routes. Where each of these would be offered is already
+settled, including why the partial exports are the exception: see *Export entry points live on the tenant
+picker*.

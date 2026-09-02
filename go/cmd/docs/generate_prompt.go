@@ -246,6 +246,9 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 	for _, id := range res.DanglingFilterIDs {
 		log.Warn("Dangling assignment target: filter not in export", "filter_id", id)
 	}
+	for _, id := range res.DanglingTemplateIDs {
+		log.Warn("Dangling notification template reference: template not in export", "template_id", id)
+	}
 
 	// The three work sets are independent: a run can have nothing to generate
 	// yet still need blocks re-spliced or documents migrated.
@@ -277,6 +280,18 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 			log.Info("  targeting block stale", "doc", it.DocPath, "reason", it.Reason)
 		}
 	}
+	if len(res.UsedByResplice) > 0 {
+		log.Info("Notification template documents whose 'Used by' block must be re-spliced", "count", len(res.UsedByResplice))
+		for _, it := range res.UsedByResplice {
+			log.Info("  usage block stale", "doc", it.DocPath, "reason", it.Reason)
+		}
+	}
+	if len(res.NotificationsResplice) > 0 {
+		log.Info("Policy documents whose noncompliance-notification block must be re-spliced", "count", len(res.NotificationsResplice))
+		for _, it := range res.NotificationsResplice {
+			log.Info("  notification block stale", "doc", it.DocPath, "reason", it.Reason)
+		}
+	}
 
 	if dryRun {
 		log.Info("Dry-run: prompt not written", "would_write", res.OutPath)
@@ -287,6 +302,8 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 			"generate", len(res.ToGenerate),
 			"migrate", len(res.Migrate),
 			"resplice_forward", len(res.ForwardResplice),
-			"resplice_reverse", len(res.ReverseResplice))
+			"resplice_reverse", len(res.ReverseResplice),
+			"resplice_used_by", len(res.UsedByResplice),
+			"resplice_notifications", len(res.NotificationsResplice))
 	}
 }
