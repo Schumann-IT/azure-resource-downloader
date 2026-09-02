@@ -59,12 +59,42 @@ A firewall policy, unlike \`other_policy.yaml\` which is stricter.
 |---|---|
 | Resource type | Microsoft.Graph/deviceManagementConfigurationPolicies |
 
-<details>
+<!-- assignments:start -->
+
+| Direction | Target |
+|---|---|
+| include | 11111111-2222-3333-4444-555555555555 |
+
+<!-- assignments:end -->
+
+## References
+
+Assigned to [Admins](../groups/g1.md).
+
+<!-- used-by:start -->
+
+## Used by
+
+Spliced into the middle of a section by the CLI.
+
+<!-- used-by:end -->
+
+## Lifecycle & operations
+
+The older spelling of the heading, as it still sits on disk.
+
+## Metadata
+
+A heading the current contract does not declare.
+
+## Settings
+
+<details data-setting="settings[0].value" data-note="security">
 <summary><code>firewall/enabled</code></summary>
 
 value: true
 
-<details>
+<details data-setting="settings[0].children[0].value" data-note="inert">
 <summary>nested child</summary>
 
 deep value
@@ -72,13 +102,13 @@ deep value
 </details>
 
 </details>
-
-Assigned to [Admins](../groups/g1.md).
 `;
 
 // The tenant-wide management summary the generation agent writes at the docs
 // root: its own H1, no frontmatter, links relative to docs/.
 const SUMMARY_MD = `# My Tenant — Intune and Entra configuration
+
+## Management summary
 
 A large, consistently named Intune estate.
 
@@ -323,6 +353,134 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).toContain('<td>nonsense</td>');
   });
 
+  it('tags declared document sections and leaves undeclared headings unstyled', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+
+    // A heading in the CLI's closed set is addressable *and* styled.
+    expect(res.text).toMatch(
+      /<h2 id="settings"[^>]*data-section="settings"[^>]*class="doc-section-heading"/,
+    );
+    expect(res.text).toMatch(/data-section="references"/);
+    // `Lifecycle & operations` and `Lifecycle and operations` are one section,
+    // so the styling survives the pending regeneration either way.
+    expect(res.text).toMatch(
+      /<h2 id="lifecycle-and-operations"[^>]*class="doc-section-heading"/,
+    );
+    // ...and no percent-encoded id is emitted for it any more.
+    expect(res.text).not.toContain('lifecycle-%26-operations');
+
+    // A heading outside the vocabulary stays addressable but borrows no
+    // section's identity.
+    expect(res.text).toMatch(/<h2 id="metadata"[^>]*data-section="metadata"/);
+    expect(res.text).not.toMatch(
+      /<h2 id="metadata"[^>]*class="doc-section-heading"/,
+    );
+  });
+
+  it('tags the summary sections on the tenant landing page', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toMatch(
+      /<h2 id="management-summary"[^>]*data-section="management-summary"/,
+    );
+    // The findings/recommendations H3 vocabulary is declared too.
+    expect(res.text).toMatch(
+      /<h3 id="findings"[^>]*data-section="findings"[^>]*class="doc-section-heading"/,
+    );
+    expect(res.text).toMatch(/data-section="recommendations"/);
+    // The em dash in the H1 no longer percent-encodes into the anchor.
+    expect(res.text).not.toContain('%E2%80%94');
+  });
+
+  it('wraps each H2 run in a section carrying the same slug', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+
+    expect(res.text).toContain(
+      '<section class="doc-section" data-section="settings">',
+    );
+    expect(res.text).toContain(
+      '<section class="doc-section" data-section="lifecycle-and-operations">',
+    );
+    // An undeclared heading is still a section — it just gets no styling.
+    expect(res.text).toContain(
+      '<section class="doc-section" data-section="metadata">',
+    );
+    // Every section closes: one wrapper per H2 that opened one.
+    const opens = (res.text.match(/<section class="doc-section"/g) || []).length;
+    const closes = (res.text.match(/<\/section>/g) || []).length;
+    expect(opens).toBe(closes);
+
+    // The wrapper emits no newline of its own. The Confluence exporter unwraps
+    // `<section>` but keeps the text between the tags, so a block token would
+    // put a blank line into every exported page for a browser-only wrapper.
+    expect(res.text).toMatch(/<section class="doc-section"[^>]*><h2/);
+    expect(res.text).not.toMatch(/<section class="doc-section"[^>]*>\n/);
+
+    // The H1, the metadata table and the assignments block stay in the
+    // pre-section prelude, before the first wrapper.
+    expect(res.text.indexOf('class="doc-metadata"')).toBeLessThan(
+      res.text.indexOf('<section class="doc-section"'),
+    );
+  });
+
+  it('does not let a spliced block straddle a section boundary', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+
+    // `## Used by` is spliced inside the References section, so it must not open
+    // a section of its own — that would close References inside the block's div
+    // and emit mis-nested HTML.
+    expect(res.text).toContain('<div class="doc-used-by">');
+    expect(res.text).not.toMatch(
+      /<section class="doc-section" data-section="used-by"/,
+    );
+    // The heading itself is still styled and addressable.
+    expect(res.text).toMatch(
+      /<h2 id="used-by"[^>]*data-section="used-by"[^>]*class="doc-section-heading"/,
+    );
+    // The block opens and closes inside one section.
+    const body = res.text;
+    const div = body.indexOf('<div class="doc-used-by">');
+    const divEnd = body.indexOf('</div>', div);
+    expect(body.slice(div, divEnd)).not.toContain('</section>');
+  });
+
+  it('turns the assignments marker pair into a selectable element', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    expect(res.text).toContain('<div class="doc-assignments">');
+    // The comments are gone, so nothing selectable is left behind.
+    expect(res.text).not.toContain('assignments:start');
+    expect(res.text).not.toContain('assignments:end');
+  });
+
+  it('classes the metadata table but not the assignments table', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    expect((res.text.match(/class="doc-metadata"/g) || []).length).toBe(1);
+    // The metadata table is the first one; the assignments table is untagged.
+    expect(res.text.indexOf('class="doc-metadata"')).toBeLessThan(
+      res.text.indexOf('<div class="doc-assignments">'),
+    );
+    expect(res.text).toContain('<table>');
+  });
+
+  it('does not class the summary findings table as metadata', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toContain('<table class="findings">');
+    expect(res.text).not.toContain('doc-metadata');
+  });
+
   it('leaves tables without a Severity column untagged', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
@@ -379,10 +537,14 @@ describe('Docs browser (e2e)', () => {
         '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
       )
       .expect(200);
-    // Raw HTML <details> blocks survive (html: true), nested included.
-    expect((res.text.match(/<details>/g) || []).length).toBeGreaterThanOrEqual(
+    // Raw HTML <details> blocks survive (html: true), nested included, with the
+    // generator's own data-setting/data-note attributes untouched.
+    expect((res.text.match(/<details /g) || []).length).toBeGreaterThanOrEqual(
       2,
     );
+    expect(res.text).toContain('data-setting="settings[0].value"');
+    expect(res.text).toContain('data-note="security"');
+    expect(res.text).toContain('data-note="inert"');
     // Cross-type ../groups/g1.md resolved to an absolute app route.
     expect(res.text).toContain(
       'href="/mytenant/Microsoft.Graph/groups/g1"',

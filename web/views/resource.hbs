@@ -6,12 +6,12 @@
     <title>{{title}}</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+  <body id="resource-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     {{> header}}
-    <div class="mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
+    <div class="doc-layout mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
       {{#if nav}}{{> sidebar nav}}{{/if}}
-      <main class="min-w-0 flex-1">
-        <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+      <main class="doc-main min-w-0 flex-1">
+        <p class="doc-source mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
           <span>exported source <code class="font-mono">resources/{{source}}</code></span>
           <span>·</span>
           <span>{{lines}} lines</span>

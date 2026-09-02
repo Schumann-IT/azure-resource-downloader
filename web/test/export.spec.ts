@@ -197,6 +197,41 @@ describe('the allowlist serialiser', () => {
     expect(html).toBe('<h2>Security</h2>');
   });
 
+  it('carries the section styling hooks through as plain structure', () => {
+    // The browser's section hooks are a stylesheet concern only: the marker
+    // wrapper unwraps and the heading's class/data-section are not on any
+    // element allowlist, so an export is unaffected by them.
+    expect(
+      toConfluenceHtml(
+        '<div class="doc-assignments"><p>Assigned.</p></div>',
+        options(),
+      ),
+    ).toBe('<p>Assigned.</p>');
+    expect(
+      toConfluenceHtml(
+        '<h2 id="security" class="doc-section-heading" data-section="security">Security</h2>',
+        options(),
+      ),
+    ).toBe('<h2>Security</h2>');
+    expect(
+      toConfluenceHtml('<table class="doc-metadata"><tr><td>v</td></tr></table>', options()),
+    ).toContain('<table>');
+    // The section wrapper unwraps too, so the export is flat as before.
+    expect(
+      toConfluenceHtml(
+        '<section class="doc-section" data-section="settings"><p>kept</p></section>',
+        options(),
+      ),
+    ).toBe('<p>kept</p>');
+    // The generator's own setting attributes are not on the <details> allowlist.
+    expect(
+      toConfluenceHtml(
+        '<details data-setting="a.b" data-note="security"><summary>s</summary></details>',
+        options(),
+      ),
+    ).toBe('<details><summary>s</summary></details>');
+  });
+
   it('drops elements whose content must not travel', () => {
     expect(
       toConfluenceHtml('<p>a</p><script>alert(1)</script><p>b</p>', options()),

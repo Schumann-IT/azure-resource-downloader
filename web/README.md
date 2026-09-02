@@ -212,11 +212,19 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
   one-extension-per-root rule for both roots.
 - `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed or
   non-`version: 1` file) and navigation building.
+- `test/section-hooks.spec.ts` — heading slugs (the em dash, `&` → `and`, inline markup), the
+  declared-vs-undeclared heading split, matched and unmatched marker pairs with the ranges they report,
+  section wrapping (including that an H2 inside a spliced block never opens one), and locating the
+  metadata table.
 - `test/docs.e2e.spec.ts` — supertest against self-contained fixture tenants in a temp dir:
   discovery, picker, the summary landing page and its index fallback, the `/:tenant/summary`
   redirect, the sidebar with its active document, nested `<details>`, cross-type link resolution,
   404s, traversal, `generate.md` not being served, no-restart refresh of a document, the summary and
-  the index; plus the YAML view with its `#L` anchors, `?raw`, the top-bar switcher (and its absence
+  the index; the section hooks (a declared heading styled, an undeclared one left alone, one balanced
+  `<section>` per H2 run, a spliced `used-by` block that no section straddles, the assignments marker
+  pair as an element, the generator's `data-setting`/`data-note` passed through, the metadata table
+  classed and the findings table not);
+  plus the YAML view with its `#L` anchors, `?raw`, the top-bar switcher (and its absence
   for a document without a `source`), and no-restart refresh of a re-downloaded resource. For the
   Confluence export: the content type, `Content-Disposition`, the space folder and page entries in the
   zip, the download link being on the picker and not on the landing page, the 404s for an unknown format or an unimplemented `<details>` strategy, and — as the
@@ -230,8 +238,8 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
   group-label block with no value, a link inside a block, a value containing ` = ` — is where a
   future transform gets its assertions.
 - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts the
-  custom `<details>`/`<summary>`, YAML-view (shiki variables, line gutter, `:target`) and dark-mode
-  rules survive.
+  custom `<details>`/`<summary>`, YAML-view (shiki variables, line gutter, `:target`), findings-table,
+  section-identity (icons, role tokens, marker blocks, metadata table) and dark-mode rules survive.
 
 Tests never hit the network and never read the real `output/` export.
 
@@ -253,6 +261,8 @@ web/
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
+│       ├── findings-table.ts            # the summary's Findings table → .findings + data-severity
+│       ├── section-hooks.ts             # heading slugs, data-section, marker blocks, metadata table
 │       ├── path-safety.ts               # the security boundary
 │       └── export/
 │           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
@@ -270,6 +280,44 @@ web/
 Server-rendered Handlebars + Tailwind CSS v4 with `@tailwindcss/typography`; no client-side
 JavaScript. Syntax highlighting is server-side (`shiki`, dual-theme output), so dark mode and the
 `#L42` line highlight are plain `prefers-color-scheme` and `:target` CSS.
+
+### Section styling
+
+The CLI declares each document type's `##` headings as a closed, verbatim set (the
+`<!-- doc-headings: … -->` contract in its `doc-prompt.md`), which makes the heading text a machine
+contract rather than prose. `src/docs/section-hooks.ts` uses it to give the stylesheet something to
+reach:
+
+- **`data-section="<slug>"` on every `h2`/`h3`**, plus `class="doc-section-heading"` on the ones whose
+  heading is in the declared vocabulary. Each of those gets an icon and one of four role colours
+  (risk, substance, relations, meta) drawn as a masked SVG, so one value drives both themes. A heading
+  outside the vocabulary keeps the attribute and gets **no** treatment, which is why documents
+  generated before the contract still render as plain prose.
+- **Heading ids are slugged locally** rather than by `markdown-it-anchor`'s percent-encoding default,
+  so `#lifecycle-and-operations` replaces `#lifecycle-%26-operations` and the em dash in a
+  `summary.md` H1 no longer produces `%E2%80%94`. `&` slugs to `and`, so a heading has the same anchor
+  and the same section identity whichever way it is spelled.
+- **Each H2 run is wrapped in `<section class="doc-section" data-section="…">`**, which is what lets a
+  section own a panel, a rail or its own density — unreachable from the heading alone, because
+  `h2#settings ~ *` bleeds into every section that follows. *Settings*, *Properties*, *Definition* and
+  *Membership* switch to a denser mode (one document in the reference export holds 317 settings nested
+  five deep); *Security* and *Expiry and renewal* get a rail and deliberately no tint.
+- **The tool-maintained marker pairs become elements**: a matched
+  `<!-- assignments:start -->` / `<!-- assignments:end -->` pair (likewise `targeted-by`, `used-by` and
+  `notifications`) renders as a `<div class="doc-assignments">`, because an HTML comment survives into
+  the DOM but cannot be selected. An unmatched marker is left as a comment. An H2 *inside* a matched pair
+  never opens a section — that single rule is what keeps a spliced block from being straddled by a
+  `<section>`, and it keeps `## Used by` reading as part of the section it was spliced into.
+- **Setting blocks are styled from their own attributes.** The generator opens each as
+  `<details data-setting="<YAML path>">` and marks it `data-note="security"` or `data-note="inert"`;
+  those get a risk rail plus a `security` chip, and a dashed, de-emphasised frame plus a `no effect`
+  chip, respectively. The chips are `::after` content on the block's own `<summary>` — decorative only,
+  since the same fact is in the prose.
+- **The metadata table** each document opens with is classed `.doc-metadata` — found as the first
+  table after the H1, so an extra heading before it does not break the match.
+
+None of this reaches the Confluence export: `<div>` and `<section>` unwrap and the attributes are not on
+any element allowlist, so an exported page is unaffected.
 
 Because the utility classes live in `.hbs` files outside the CSS directory, `src/styles.css` declares
 `@source "../views/**/*.hbs"` — new templates outside `views/` must be added there or their classes

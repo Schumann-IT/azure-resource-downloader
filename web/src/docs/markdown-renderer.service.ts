@@ -4,6 +4,13 @@ import matter from 'gray-matter';
 import { dynamicImport } from '../dynamic-import';
 import { rewriteHref, extractTitle, LinkEnv } from './link-rewrite';
 import { applyFindingsTable } from './findings-table';
+import {
+  applyMarkerBlocks,
+  applyMetadataTable,
+  applySectionHeadings,
+  slugifyHeading,
+  wrapSections,
+} from './section-hooks';
 
 export interface RenderedPage {
   html: string;
@@ -66,10 +73,14 @@ export class MarkdownRendererService implements OnModuleInit {
     this.md.use(anchor, {
       permalink: anchor.permalink.headerLink(),
       tabIndex: false,
+      // The plugin's default percent-encodes anything outside its allowed set,
+      // which leaves ids only selectable as `[id="lifecycle-%26-operations"]`.
+      slugify: slugifyHeading,
     });
 
     this.installLinkRewriter();
     this.installFindingsTable();
+    this.installSectionHooks();
   }
 
   // Overrides the link renderer so `.md` hrefs become app routes at render time.
@@ -103,6 +114,27 @@ export class MarkdownRendererService implements OnModuleInit {
   private installFindingsTable(): void {
     this.md.core.ruler.push('findings_table', (state: any) => {
       applyFindingsTable(state.tokens);
+    });
+  }
+
+  // Tags the document's sections, its tool-maintained marker blocks and its
+  // metadata table so the stylesheet can reach them. Pushed after the findings
+  // rule, because the metadata table is identified as the first table that is
+  // *not* a findings table.
+  private installSectionHooks(): void {
+    this.md.core.ruler.push('doc_sections', (state: any) => {
+      applySectionHeadings(state.tokens);
+      const markers = applyMarkerBlocks(state.tokens);
+      applyMetadataTable(state.tokens);
+      // Last: wrapping changes token indices, and it needs the heading slugs
+      // and the marker ranges the earlier passes produced. `state.Token` is the
+      // constructor markdown-it's own renderer expects.
+      state.tokens = wrapSections(
+        state.tokens,
+        (type: string, tag: string, nesting: number) =>
+          new state.Token(type, tag, nesting),
+        markers,
+      );
     });
   }
 

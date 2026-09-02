@@ -160,7 +160,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now also covers the landing page, a pending resource, the excluded-type counts, the malformed-index
   folder being skipped, `generate.md` not being served, and no-restart refresh of the index itself.
 
+- **Each declared document section now has a visual identity.** The CLI declares every document
+  type's `##` headings as a closed, verbatim set (the `<!-- doc-headings: … -->` contract in its
+  `doc-prompt.md`), so the heading text is a machine contract rather than prose. `section-hooks.ts`
+  puts `data-section="<slug>"` on every `h2`/`h3` and `class="doc-section-heading"` on the ones in
+  that vocabulary, and the stylesheet gives each an icon and one of four role colours — risk
+  (*Security*, *Findings*, *Expiry and renewal*, *Coverage caveats*), substance (*Settings*,
+  *Properties*, *Definition*, *Membership*), relations (*Usage as assignment target*, *Usage and
+  references*, *Assignment posture*, *Targeted by*) and meta (*References*, *Lifecycle and
+  operations*, the summary's own four sections). Four roles rather than fourteen colours, reusing the
+  findings-table hues so a Security section and a critical finding read as one language. A heading
+  *outside* the vocabulary keeps the attribute and gets no treatment at all, which is what makes this
+  safe on the documents currently on disk: they predate the contract, and an unrecognised heading such
+  as `## Metadata` renders exactly as it did before.
+
+  Two more hooks come with it. The tool-maintained marker pairs become selectable elements — a matched
+  `<!-- assignments:start -->` / `<!-- assignments:end -->` pair (likewise `targeted-by` and
+  `notifications`) renders as `<div class="doc-assignments">`, because an HTML comment survives into
+  the DOM under `html: true` but cannot be styled, and an unmatched marker is deliberately left as a
+  comment rather than emitting an unbalanced element. And the metadata table each document opens with
+  is classed `.doc-metadata`, located as the first table after the H1 rather than by
+  `table:first-of-type`, which breaks on the 99 reference documents that open with an extra heading;
+  it opts out of the shared wide-table `nowrap` the same way `.findings` does. The templates gained
+  the matching chrome hooks (`#doc-page`, `.doc-main`, `.doc-body`, `.doc-source`, `.site-header`,
+  `.view-switcher`).
+
+  The non-negotiables hold. **No client-side JavaScript:** icons are masked SVGs driven by one custom
+  property per section, so a single value covers light and dark, and the `:target` landing highlight is
+  plain CSS. **One `markdown-it` instance:** all of it is one linear core rule over the token stream,
+  pushed after the findings rule, inside the existing render and its mtime-keyed cache — no extra pass
+  and no per-request instance. **Confluence export unaffected:** `<div>` and `<section>` unwrap and
+  neither `class` nor `data-*` is on an element allowlist, asserted in `test/export.spec.ts`.
+
+- **Each section is now an element, so it can carry a panel and its own density.** Everything between two
+  H2s is wrapped in `<section class="doc-section" data-section="…">` with the same slug as its heading.
+  This is what the heading hooks could not give: `h2#settings ~ *` is the only alternative and it bleeds
+  into every section that follows. With it, *Settings*, *Properties*, *Definition* and *Membership* drop
+  into a denser mode — smaller type, tighter `<details>` margins, a shaded rail at depth — which is the
+  point, because one document in the reference export carries 317 settings nested five levels deep;
+  *Security* and *Expiry and renewal* get a rail and deliberately **no** tint, so they stay a signal
+  rather than decoration; *References* becomes a tighter, breakable link list; and the summary's
+  *At a glance* table takes the same wide-table `nowrap` opt-out `.findings` has.
+
+  An H2 *inside* a matched marker pair never opens a section. That one rule is what guarantees
+  well-formed output — a section can only close at an H2 outside every spliced block, so a block is
+  always wholly inside one section and can never be straddled — and it is also the right reading: the
+  spliced `## Used by` and `## Targeted by` blocks belong to the section they were spliced into. Verified
+  against both reference tenants: balanced wrappers on every document family, and no marker block cut in
+  half.
+
+  **The Confluence export is byte-identical to before this change** — checked by exporting both reference
+  tenants from this build and from the previous revision and diffing the unpacked zips. `<section>` is on
+  the importer's unwrap list, and the wrapper is emitted as a non-block token on purpose: a block token
+  carries a trailing newline, which the unwrapping serialiser keeps, and that would have added a blank
+  line to all 264 pages for a wrapper that exists only for the stylesheet. Against Atlassian's
+  [HTML import FAQ](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/),
+  the exported pages still contain only supported constructs — headings, paragraphs, lists, tables, links,
+  inline code, quotes, `strong`/`em` — with `lang`, `charset` and `href` as the only attributes anywhere;
+  no `nav`, `figure`, `iframe`, `button`, no styled text, and none of the new `class`/`data-*` hooks.
+
+- **Setting blocks are styled from the attributes the generator now writes.** Every block is emitted as
+  `<details data-setting="<exact YAML path>">`, with `data-note="security"` for a setting called out in
+  the Security section and `data-note="inert"` for one that is present but has no effect (7324 and 1967
+  occurrences respectively across the reference exports). A `security` block gets the risk rail and a
+  `security` chip on its own `<summary>`; an `inert` block is de-emphasised behind a dashed rail with a
+  `no effect` chip. The chips are `::after` content driven by one custom property, so they cost no markup
+  and no JavaScript, and they are decorative by construction — the same fact is stated in the block's
+  prose, so nothing is lost where CSS is not. `>` throughout, so a nested block never inherits its
+  parent's chip.
+
+- **`used-by` joins the tool-maintained marker blocks.** The regenerated exports splice a reverse-reference
+  block into notification-template documents (11 pairs), which the browser had no element for. It now
+  renders as `<div class="doc-used-by">` and `## Used by` is part of the declared section vocabulary,
+  sharing the relations role and icon with `## Targeted by`.
+
+  Still outstanding: `data-family` / `data-type` on `<article>`, so a group and a credential document can
+  differ — see [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+
 ### Changed
+
+- **Heading anchors are no longer percent-encoded.** `markdown-it-anchor`'s default slug encodes
+  anything outside its allowed set, which produced ids only selectable as
+  `[id="lifecycle-%26-operations"]` and a `%E2%80%94` in every `summary.md` H1 anchor. A local
+  `slugify` replaces it, so those become `#lifecycle-and-operations` and a clean title slug.
+  **Existing links to a heading anchor that contained an encoded character will not resolve any more**
+  — in-document anchors are generated, never hand-written, so this affects bookmarks and external
+  links only. `&` slugs to `and` on purpose: a heading spelled `Lifecycle & operations` (as the
+  documents on disk still spell it) and `Lifecycle and operations` (as the current contract requires)
+  get the same anchor and the same section identity, so neither the URLs nor the styling move again at
+  the regeneration.
 
 - **A document's own source-file echo is no longer rendered.** The generated documents repeat their
   source file as a code-only paragraph directly under the H1 (`` `resources/.../foo.yaml` `` or just

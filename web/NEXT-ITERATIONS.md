@@ -3,57 +3,38 @@
 Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it
 does today and `CHANGELOG.md` records what shipped; neither is repeated here.
 
-## 1. Section-level styling hooks for the document page
+## 1. Per-document identity on the article
 
-**Goal.** Make the parts of a rendered document individually addressable from CSS, so sections, settings and
-the assignments block can be styled distinctly instead of all reading as one undifferentiated article.
+**Goal.** Let a reader tell what *kind* of resource a page describes before reading it, and let the
+stylesheet treat a group, a credential and a settings-catalog policy differently. `<article>` currently
+carries no per-document hook, so all six document families render identically.
 
-> **The gaps, in priority order.** No section wrapper — everything between two H2s is a flat sibling run, so
-> a section cannot get a panel or its own density without `h2#settings ~ *` selectors that bleed into the
-> next section; this is the main gap and the only structural change on the list. The assignments block is
-> invisible to CSS: `<!-- assignments:start -->` / `<!-- assignments:end -->` survive into the DOM
-> (`html: true`) but HTML comments are not selectable, even though the markers are a *tool-maintained
-> contract* and therefore a better hook than any positional selector. The metadata table has no class, and
-> `table:first-of-type` breaks the moment a document opens with an extra heading (99 documents in the
-> reference exports do). `Lifecycle & operations` slugs to `lifecycle-%26-operations`, usable only as
-> `[id="lifecycle-%26-operations"]`. Setting `<details>` depth is positional. `<article>` has no
-> per-document hook, so a group document and a Win32 app document render identically. Template chrome (the
-> source/generated line, the layout grid, `<main>`, the view switcher) is pure Tailwind utilities, so
-> `src/styles.css` cannot reach it.
+> **`data-family` cannot come from `docs/index.yaml`.** `IndexResource` carries
+> `type/doc/displayName/summary/documented/scope/platformGroup/functionGroup/odataType/platforms/assignments`
+> and no family or prompt-template field; the frontmatter carries none either. The document's **own H2 set**
+> is the carrier, and in the reference exports it partitions cleanly — 340 documents with
+> *References | Lifecycle and operations | Security | Settings* (the `default`/`singleton` contract, which
+> share one heading list and so cannot be told apart), 36 `group`, 25 `referenced`, 6 `record`, 4
+> `credential`, 0 `arm`. Match the set, ignoring the spliced `Targeted by` / `Used by` headings, and emit
+> nothing when it matches no contract. Do not infer the family from the resource type, and do not add a
+> seventh vocabulary here — if a family needs to be distinguishable beyond its headings, ask the CLI for the
+> field.
 >
-> **Waiting on a regeneration.** These hooks key off the H2 vocabulary, which the CLI now declares as a
-> closed, verbatim set per template (carried machine-readably in a `<!-- doc-headings: … -->` marker), along
-> with `data-setting` / `data-note` on setting `<details>` blocks. **The documents on disk predate all of
-> it**, and still show the old drift (`## Metadata` in 99 of them, `## Assignments` in 4). Everything up to
-> and including the metadata-table class degrades gracefully on them (an unrecognised heading simply gets an
-> unstyled `data-section`); the section wrapper and any per-section visual treatment should land after the
-> regeneration, and `data-setting` / `data-note` styling is worth building only once documents carry them.
+> **`data-type` is free**: it is the document's own directory (`Microsoft.Graph/groups`), already known to the
+> controller.
 >
-> **Not asked of the generator on purpose.** Section wrappers, the metadata-table class and the assignments
-> wrapper are all derivable here, and 340+ documents of hand-written wrapper tags would eventually produce
-> unbalanced HTML that only a regeneration could fix.
+> **What it buys**, and the reason it is worth doing at all rather than being merely available: a credential
+> document can lead with its expiry, a `record` document can drop the assignment vocabulary it never uses,
+> and `[data-family="group"] [data-section="properties"]` can differ from the same section on a policy — none
+> of which is expressible today.
 
-**Plan.** Cheapest first; the first two are self-contained and worth doing on their own. All of it stays
-server-side and keeps the single `markdown-it` instance, and each step needs a case in
-`test/docs.e2e.spec.ts`.
+**Plan.**
 
-- **Semantic classes in the templates**: `#doc-page` on `<body>`, `.doc-main`, `.doc-source` on the
-  source/generated line, `.doc-body` alongside `prose` on `<article>`, `.site-header`, `.view-switcher`.
-  Template-only, no renderer change.
-- **`data-section` on headings**: a `heading_open` rule adding `class="doc-section-heading"` and
-  `data-section="<slug>"`, plus a custom `slugify` that drops the percent-encoding (`%26` from
-  `Lifecycle & operations`, `%E2%80%94` from the em dash in every `summary.md` H1). Enables
-  `[data-section="security"]` without touching document structure; the slug change alters existing anchor
-  URLs, so it needs a changelog note.
-- **Turn the assignment markers into elements**: an `html_block` rule mapping the `assignments:start`/`end`
-  and `targeted-by:start`/`end` marker pairs to `<div class="doc-assignments">` and `.doc-targeted-by`.
-- **Class the metadata table** by its position *after* the H1 and summary paragraph rather than by
-  `first-of-type`.
-- **`data-family` / `data-type` on `<article>`**, from the document path and (for the family) from
-  `docs/index.yaml` — the CLI knows which prompt template a type uses; the frontend must not guess.
-- **Wrap each H2 run in `<section class="doc-section" data-section="…">`** via a token post-process. Solves
-  the main gap and is the only invasive item; it also changes the `details details` depth selectors, so do it
-  last and only when per-section backgrounds are actually wanted.
+- **Derive the family from the observed H2 slugs** in a pure helper next to `section-hooks.ts`, with a case
+  per contract in a unit spec, including a document whose set matches none.
+- **Expose `family` and `type` from the render** and put `data-family` / `data-type` on `<article>` in
+  `page.hbs`, with a case in `test/docs.e2e.spec.ts`.
+- **Only then** add per-family CSS, so the attribute does not ship as decoration.
 
 ## 2. Findings block beyond the severity icon
 
@@ -66,14 +47,21 @@ get from a finding to the documents it affects.
 >
 > **Caveat.** `.prose table` sets `white-space: nowrap` so wide assignment tables scroll instead of wrapping
 > mid-GUID. Any prose-bearing table needs an opt-out from it.
+>
+> **The filter mechanism is expressible without JavaScript**, which is what makes this entry worth doing:
+> renderer-emitted sibling anchors plus `:target`, e.g.
+> `#sev-critical:target ~ .findings tbody tr:not([data-severity="critical"]) { display: none }`. It needs the
+> anchors to be siblings of the table, so the wrapper below is a prerequisite, and it spends the URL fragment
+> — which already belongs to `#findings` — so a **Show all** reset link is part of the feature, not a
+> refinement.
 
 **Plan.**
 
-- Put `data-severity` on a wrapper (or a per-severity count line) so a severity summary and CSS-only
-  filtering become expressible without client-side state.
-- Link the `Affected` count to the documents it names, reusing the same relative-link rewriting as document
-  bodies.
-- Style `#findings` itself.
+- Put `data-severity` on a wrapper emitted next to the table, with one anchor per severity and a **Show all**
+  reset, so the `:target` filtering above and a per-severity count line become expressible.
+- Link the `Affected` count to the documents the row names, reusing the same relative-link rewriting as
+  document bodies — or drop the count, since the `Documents` column already links.
+- Style `#findings` itself, with the risk-role icon and colour the Security section uses.
 
 ## 3. Summary table of contents
 
@@ -90,8 +78,11 @@ they came for instead of scrolling.
 
 **Plan.**
 
-- Render the jump list in `tenant.hbs` from the known heading set, skipping entries whose heading is absent
-  so an older summary degrades to a shorter list.
+- Render the jump list in `tenant.hbs` from the known heading set, as a labelled `<nav>`, skipping entries
+  whose heading is absent so an older summary degrades to a shorter list, and omitting it entirely in the
+  index-listing branch where there is no summary at all.
+- Nest `#findings` and `#recommendations` under *Management summary* — they are the entries a reader actually
+  jumps to — reusing the same closed H3 vocabulary the CLI declares.
 - Assert in `test/docs.e2e.spec.ts` that the list links to the ids the rendered summary actually contains.
 
 ## 4. Sidebar refinements

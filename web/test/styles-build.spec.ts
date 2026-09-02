@@ -69,6 +69,48 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/text-indent:\s*-9999px/);
   });
 
+  it('includes the section identity rules (icons, roles, dark lift)', () => {
+    expect(css).toContain('.doc-section-heading');
+    expect(css).toContain('--section-icon');
+    expect(css).toContain('--section-color');
+    expect(css).toMatch(/mask:\s*var\(--section-icon\)/);
+    // One declaration per section of the closed heading vocabulary.
+    expect(css).toMatch(/\[data-section=["']security["']\]/);
+    expect(css).toMatch(/\[data-section=["']settings["']\]/);
+    expect(css).toMatch(/\[data-section=["']lifecycle-and-operations["']\]/);
+    expect(css).toMatch(/\[data-section=["']management-summary["']\]/);
+    // The four role hues are one token each, so dark mode is one place.
+    expect(css).toContain('--sec-risk');
+    expect(css).toContain('--sec-relation');
+    // A sticky top bar would otherwise cover an anchored heading.
+    expect(css).toMatch(/scroll-margin-top/);
+  });
+
+  it('includes the section wrapper panels and the density mode', () => {
+    expect(css).toContain('.doc-section');
+    // Risk sections get a rail; substance sections get their own density.
+    expect(css).toMatch(/\.doc-section\[data-section=["']security["']\]/);
+    expect(css).toMatch(/\.doc-section\[data-section=["']settings["']\]\s+details/);
+    expect(css).toMatch(/\.doc-section\[data-section=["']references["']\]/);
+  });
+
+  it('includes the setting-block note treatments', () => {
+    expect(css).toMatch(/details\[data-note=["']security["']\]/);
+    expect(css).toMatch(/details\[data-note=["']inert["']\]/);
+    // The chips are CSS-only, so the label has to come from a custom property.
+    expect(css).toContain('--note-label');
+    expect(css).toMatch(/content:\s*var\(--note-label\)/);
+  });
+
+  it('includes the tool-maintained marker blocks and the metadata table', () => {
+    expect(css).toContain('.doc-assignments');
+    expect(css).toContain('.doc-targeted-by');
+    expect(css).toContain('.doc-used-by');
+    expect(css).toContain('.doc-notifications');
+    // The metadata table opts out of the shared wide-table `nowrap`.
+    expect(css).toMatch(/\.prose\s+table\.doc-metadata/);
+  });
+
   it('still emits the typography prose classes', () => {
     expect(css).toMatch(/prose/);
   });
