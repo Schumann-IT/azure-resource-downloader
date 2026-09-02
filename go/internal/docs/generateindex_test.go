@@ -199,6 +199,97 @@ func TestGenerateIndexBucketsAndEnrichment(t *testing.T) {
 	}
 }
 
+func TestGenerateIndexWithTaxonomy(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	tax := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+			{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+			{ID: "empty-prog", Label: "Never matches", Match: []TaxonomyRule{{Name: "zzzznomatch"}}},
+		},
+	}
+
+	res, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: tax})
+	if err != nil {
+		t.Fatalf("GenerateIndex: %v", err)
+	}
+	// The pending policy (no platforms) matches nothing.
+	if res.Uncategorised != 1 {
+		t.Errorf("uncategorised = %d, want 1", res.Uncategorised)
+	}
+
+	idx := loadIndex(t, res.OutPath)
+
+	// Vocabularies are always emitted from the model constants, in order.
+	if len(idx.Vocabularies.Platform) != len(models.PlatformGroups) || idx.Vocabularies.Platform[0] != models.PlatformGroups[0] {
+		t.Errorf("platform vocabulary = %v, want %v", idx.Vocabularies.Platform, models.PlatformGroups)
+	}
+	if len(idx.Vocabularies.Function) != len(models.FunctionGroups) {
+		t.Errorf("function vocabulary length = %d, want %d", len(idx.Vocabularies.Function), len(models.FunctionGroups))
+	}
+
+	// The full registry is emitted in display order, zero-count programme kept.
+	wantReg := []IndexProgramme{
+		{ID: "windows-device", Label: "Windows device config", Count: 1},
+		{ID: "groups", Label: "Assignment groups", Count: 1},
+		{ID: "empty-prog", Label: "Never matches", Count: 0},
+	}
+	if len(idx.Programmes) != len(wantReg) {
+		t.Fatalf("programmes = %+v, want %+v", idx.Programmes, wantReg)
+	}
+	for i, w := range wantReg {
+		if idx.Programmes[i] != w {
+			t.Errorf("programmes[%d] = %+v, want %+v", i, idx.Programmes[i], w)
+		}
+	}
+
+	// The documented Windows device policy carries the windows-device group.
+	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
+	if doc == nil {
+		t.Fatal("documented policy missing from index")
+	}
+	if len(doc.Groups) != 1 || doc.Groups[0].ID != "windows-device" || doc.Groups[0].Label != "Windows device config" {
+		t.Errorf("policy groups = %+v, want [windows-device]", doc.Groups)
+	}
+
+	// The referenced group carries the groups programme.
+	grp := resourceByDoc(idx, "Microsoft.Graph/groups/g1.md")
+	if grp == nil {
+		t.Fatal("referenced group missing from index")
+	}
+	if len(grp.Groups) != 1 || grp.Groups[0].ID != "groups" {
+		t.Errorf("group groups = %+v, want [groups]", grp.Groups)
+	}
+
+	// The pending policy matched nothing, so it carries no groups.
+	pend := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_u_win_pending.md")
+	if pend == nil {
+		t.Fatal("pending policy missing from index")
+	}
+	if len(pend.Groups) != 0 {
+		t.Errorf("pending groups = %+v, want none", pend.Groups)
+	}
+}
+
+func TestGenerateIndexInvalidTaxonomy(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	// Duplicate id is rejected by the compiler.
+	bad := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "a", Label: "A", Match: []TaxonomyRule{{Name: "x"}}},
+			{ID: "a", Label: "B", Match: []TaxonomyRule{{Name: "y"}}},
+		},
+	}
+
+	if _, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: bad}); err == nil {
+		t.Fatal("expected GenerateIndex to fail on an invalid taxonomy")
+	}
+}
+
 func TestGenerateIndexDeterministicAndDryRun(t *testing.T) {
 	tenantDir := indexScenario(t)
 

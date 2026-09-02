@@ -852,6 +852,39 @@ pending. Excluded bulk types (unreferenced groups, autopilot device identities)
 are reported as counts only, never listed. Run it **after** a documentation pass
 so the newly written summaries and grouping are picked up.
 
+The header also carries the closed grouping **`vocabularies`** — the ordered
+`platform` and `function` group names, straight from the tool's built-in
+constants — so a consumer orders navigation from the data rather than from a
+copy that would drift.
+
+### Grouping resources into programmes (`taxonomy:`)
+
+Define a **`taxonomy:`** section in a config file (loaded with `--config`) to
+classify each resource into one or more **programmes** — real-world initiatives
+like *CIS L1 hardening* or *Defender* that span several resource types. It is a
+config section like `filters:` and `transformers:` (there is no CLI flag): a
+curated set of rules over facts the export already carries (`name` as a regex
+over the display name, `type`, `odataType`, `platforms`, `scope`). A programme
+matches a resource if **any** of its rules matches, and within a rule every
+field must match. The result is emitted two ways:
+
+- Each resource gains a **`groups`** list (many-to-many), each entry a stable
+  `id` (safe to put in a URL, survives a label rename) and a display `label`.
+- The header gains a **`programmes`** registry: every programme the taxonomy
+  defines, in display order, with a per-tenant match `count` — zero-count
+  programmes are kept, since "this programme matched nothing here" is itself
+  information.
+
+Grouping is resolved once, here in the CLI, so every consumer (the browser and
+the Confluence export) reads the same fields. It records rules, never facts, so
+editing it never requires re-downloading a tenant — change it and re-run
+`generate-index`. With no `taxonomy:` section, no programme grouping is emitted
+and the index falls back to per-type grouping. Resources matching no programme
+are reported as **uncategorised** so a taxonomy that quietly stops matching is
+visible. See the commented **Taxonomy** section in
+[`config.example.yaml`](config.example.yaml) for the full schema and a worked
+example.
+
 ```bash
 # Resolve the tenant via az login, then write docs/index.yaml
 azure-rd docs generate-index
@@ -861,6 +894,9 @@ azure-rd docs generate-index --domain contoso.onmicrosoft.com
 
 # Preview what the index would contain without writing it
 azure-rd docs generate-index --domain contoso.onmicrosoft.com --dry-run
+
+# Group resources into programmes: load a config with a taxonomy: section
+azure-rd docs generate-index --config azure-rd.yaml
 ```
 
 ## 🎯 Supported Resource Types

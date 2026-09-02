@@ -21,8 +21,11 @@ import (
 const IndexFileName = "index.yaml"
 
 // indexVersion is the schema version of index.yaml. Bump it only on an
-// incompatible change to the shape the frontend consumes.
-const indexVersion = 1
+// incompatible change to the shape the frontend consumes. Version 2 added the
+// grouping contract: the header `vocabularies` and `programmes`, and the
+// per-resource `groups`. The frontend accepts any version >= 1 and ignores
+// fields it does not know, so the bump is additive.
+const indexVersion = 2
 
 // Built-in assignment targets carry no group id; they are recognised by their
 // @odata.type so the index can report "all users" / "all devices" as facts.
@@ -43,6 +46,11 @@ type GenerateIndexOptions struct {
 	// OutPath is where index.yaml is written. Empty defaults to
 	// TenantDir/docs/index.yaml.
 	OutPath string
+	// Taxonomy, when non-nil, is the curated `taxonomy:` config section whose
+	// programme rules classify each resource into the per-resource `groups` and
+	// the header registry. Nil leaves both empty and the index falls back to
+	// per-type grouping.
+	Taxonomy *TaxonomyConfig
 	// DryRun withholds the write: the index is still assembled and reported.
 	DryRun bool
 }
@@ -53,13 +61,43 @@ type GenerateIndexOptions struct {
 // any time. It carries no wall-clock time — generatedAt mirrors the export — so
 // re-running over an unchanged export produces byte-identical output.
 type IndexFile struct {
-	Version          int             `yaml:"version"`
-	Tenant           string          `yaml:"tenant"`
-	GeneratedAt      string          `yaml:"generatedAt"`
-	Complete         bool            `yaml:"complete"`
-	IncompleteReason string          `yaml:"incompleteReason,omitempty"`
-	Counts           IndexCounts     `yaml:"counts"`
-	Resources        []IndexResource `yaml:"resources"`
+	Version          int               `yaml:"version"`
+	Tenant           string            `yaml:"tenant"`
+	GeneratedAt      string            `yaml:"generatedAt"`
+	Complete         bool              `yaml:"complete"`
+	IncompleteReason string            `yaml:"incompleteReason,omitempty"`
+	Vocabularies     IndexVocabularies `yaml:"vocabularies"`
+	Programmes       []IndexProgramme  `yaml:"programmes,omitempty"`
+	Counts           IndexCounts       `yaml:"counts"`
+	Resources        []IndexResource   `yaml:"resources"`
+}
+
+// IndexVocabularies carries the closed grouping vocabularies in display order,
+// one list per axis, so a consumer orders navigation from the data rather than
+// from a copy of the vocabulary that would drift. Both mirror the source-of-
+// truth constants in internal/models.
+type IndexVocabularies struct {
+	Platform []string `yaml:"platform"`
+	Function []string `yaml:"function"`
+}
+
+// IndexProgramme is one entry in the header programme registry: a stable id, a
+// display label, and the number of resources matched in this tenant. The full
+// registry is emitted in display order including programmes with a zero count,
+// since "this programme is empty here" is itself information a consumer cannot
+// recover from per-resource membership alone.
+type IndexProgramme struct {
+	ID    string `yaml:"id"`
+	Label string `yaml:"label"`
+	Count int    `yaml:"count"`
+}
+
+// IndexGroup is one programme membership on a resource: a stable id (the value
+// a consumer puts in a URL, which must survive a label rename) paired with a
+// display label.
+type IndexGroup struct {
+	ID    string `yaml:"id"`
+	Label string `yaml:"label"`
 }
 
 // IndexCounts summarises the export for the picker and the "not documented"
@@ -88,6 +126,7 @@ type IndexResource struct {
 	FunctionGroup string            `yaml:"functionGroup,omitempty"`
 	ODataType     string            `yaml:"odataType,omitempty"`
 	Platforms     string            `yaml:"platforms,omitempty"`
+	Groups        []IndexGroup      `yaml:"groups,omitempty"`
 	Assignments   *IndexAssignments `yaml:"assignments,omitempty"`
 }
 
@@ -116,7 +155,10 @@ type GenerateIndexResult struct {
 	Documented  int
 	Pending     int
 	Orphans     int
-	Excluded    map[string]int
+	// Uncategorised counts listed resources that matched no programme. It is
+	// meaningful only when a taxonomy was supplied; without one it is zero.
+	Uncategorised int
+	Excluded      map[string]int
 }
 
 // GenerateIndex builds docs/index.yaml from resources/metadata.yaml, enriched
@@ -148,6 +190,14 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		return nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", ErrTenantMismatch, m.Tenant, opts.ExpectDomain)
 	}
 
+	var tax *taxonomy
+	if opts.Taxonomy != nil {
+		tax, err = compileTaxonomy(*opts.Taxonomy)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	referenced, _ := referencedGroups(&m)
 	targetedBy := buildTargetedBy(&m)
 
@@ -157,8 +207,16 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		GeneratedAt:      m.GeneratedAt,
 		Complete:         m.Run.Complete,
 		IncompleteReason: m.Run.IncompleteReason,
-		Counts:           IndexCounts{Excluded: map[string]int{}},
+		Vocabularies: IndexVocabularies{
+			Platform: models.PlatformGroups,
+			Function: models.FunctionGroups,
+		},
+		Counts: IndexCounts{Excluded: map[string]int{}},
 	}
+
+	// programmeCounts accumulates per-programme matches across listed resources
+	// so the header registry can report a count per programme, zero included.
+	programmeCounts := map[string]int{}
 	res := &GenerateIndexResult{
 		Tenant:      m.Tenant,
 		GeneratedAt: m.GeneratedAt,
@@ -210,12 +268,39 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 			}
 		}
 
+		// Classify into programmes when a taxonomy was supplied. classify
+		// returns registry (display) order, so groups are deterministic; a
+		// resource matching nothing is counted as uncategorised.
+		if tax != nil {
+			matched := tax.classify(taxonomyFacts{
+				name:      ir.DisplayName,
+				rtype:     rtype,
+				odataType: entry.ODataType,
+				platforms: entry.Platforms,
+				scope:     ir.Scope,
+			})
+			for _, p := range matched {
+				ir.Groups = append(ir.Groups, IndexGroup{ID: p.id, Label: p.label})
+				programmeCounts[p.id]++
+			}
+			if len(matched) == 0 {
+				res.Uncategorised++
+			}
+		}
+
 		idx.Resources = append(idx.Resources, ir)
 		if ir.Documented {
 			idx.Counts.Documented++
 		} else {
 			idx.Counts.Pending++
 		}
+	}
+
+	// Emit the full programme registry in display order, including programmes
+	// with a zero count, so a consumer can render the facet chooser and see that
+	// a programme matched nothing here.
+	for _, p := range tax.registry() {
+		idx.Programmes = append(idx.Programmes, IndexProgramme{ID: p.id, Label: p.label, Count: programmeCounts[p.id]})
 	}
 
 	res.Documented = idx.Counts.Documented

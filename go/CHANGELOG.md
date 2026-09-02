@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-index` groups documentation by purpose, not just by endpoint, via a `taxonomy:` config
+  section.** A new config-file section (see the commented **Taxonomy** block in `config.example.yaml`)
+  classifies each exported resource into one or more **programmes** — real-world initiatives like CIS L1
+  hardening, Defender or VPN that span several resource types — using rules over facts the export already
+  carries (`name` regex, `type`, `odataType`, `platforms`, `scope`). It is a config-only section like
+  `filters:` and `transformers:` (there is no CLI flag), read with `viper.UnmarshalKey` so it survives
+  viper's lowercasing of config keys. The classification is resolved once, in the CLI, into `docs/index.yaml`,
+  so the docs browser and the Confluence export read the same grouping. Each resource gains a many-to-many
+  `groups` list (stable `id` + display `label`), and the index header gains a `programmes` registry (every
+  programme in display order with a per-tenant match `count`, zero-count programmes kept) and the closed
+  grouping `vocabularies` (the ordered `platform`/`function` group names). Resources matching no programme
+  are reported as **uncategorised** so a taxonomy that quietly stops matching is visible. With no `taxonomy:`
+  section the index is unchanged apart from the always-emitted `vocabularies`, and grouping falls back to
+  per-type — the default `config.example.yaml` keeps the section commented out, preserving the "loading the
+  example == no config" guarantee. The `index.yaml` schema version is bumped to 2; the change is additive, so
+  existing consumers that ignore unknown fields are unaffected.
+  - **Tests** for the taxonomy rule engine (validation, OR-of-rules / AND-within-a-rule, registry order,
+    case-insensitive regexes, and a viper round-trip guarding the `odataType` key-lowercasing gotcha), for
+    `generate-index` end-to-end with a taxonomy (per-resource groups, the zero-count registry entry, the
+    emitted vocabularies and the uncategorised count), and a `config.example.yaml` no-op assertion that the
+    taxonomy stays inert.
+
 - **`azure-rd --debug` prints a diagnostic report of the current Azure session.** Run with no subcommand, it
   authenticates exactly as `download` would and reports how the tool is authenticated (Azure CLI session vs.
   device-code app registration), the signed-in identity, the resolved tenant, subscription and output

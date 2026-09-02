@@ -1,69 +1,116 @@
-log-level: "info"
+output: "../output"
 
-# Resource type filter - restrict the download to these registered types.
-# Derived from the resource types present in ./output. Equivalent to repeating
-# --type; the flag overrides this value.
-#type:
-#  - Microsoft.Graph/applePushNotificationCertificate
-#  - Microsoft.Graph/assignmentFilters
-#  - Microsoft.Graph/authenticationMethodsPolicy
-#  - Microsoft.Graph/authenticationStrengthPolicies
-#  - Microsoft.Graph/authorizationPolicy
-#  - Microsoft.Graph/conditionalAccessPolicies
-#  - Microsoft.Graph/depOnboardingSettings
-#  - Microsoft.Graph/deviceCompliancePolicies
-#  - Microsoft.Graph/deviceConfigurations
-#  - Microsoft.Graph/deviceCustomAttributeShellScripts
-#  - Microsoft.Graph/deviceEnrollmentConfigurations
-#  - Microsoft.Graph/deviceHealthScripts
-#  - Microsoft.Graph/deviceManagement
-#  - Microsoft.Graph/deviceManagementConfigurationPolicies
-#  - Microsoft.Graph/deviceManagementScripts
-#  - Microsoft.Graph/deviceShellScripts
-#  - Microsoft.Graph/groupPolicyConfigurations
-#  - Microsoft.Graph/groups
-#  - Microsoft.Graph/intuneBrandingProfiles
-#  - Microsoft.Graph/mobileApps
-#  - Microsoft.Graph/mobileThreatDefenseConnectors
-#  - Microsoft.Graph/notificationMessageTemplates
-#  - Microsoft.Graph/onPremisesSynchronization
-#  - Microsoft.Graph/organization
-#  - Microsoft.Graph/organizationalBranding
-#  - Microsoft.Graph/roleScopeTags
-#  - Microsoft.Graph/windowsAutopilotDeploymentProfiles
-#  - Microsoft.Graph/windowsAutopilotDeviceIdentities
-#  - Microsoft.Graph/windowsDriverUpdateProfiles
-#  - Microsoft.Graph/windowsFeatureUpdateProfiles
-#  - Microsoft.Graph/windowsQualityUpdateProfiles
-
-#transformers:
-#  - name: base64-decode
-#  - name: name-sanitization
-
-#filters:
-#  # Only export resources whose name starts with "GBL_"
-#  Microsoft.Graph/assignmentFilters:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/deviceCompliancePolicies:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/deviceConfigurations:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/deviceCustomAttributeShellScripts:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/deviceEnrollmentConfigurations:
-#    displayName: "GBL_.*"
-#  # Settings catalog policies expose the title via "name", not "displayName"
-#  Microsoft.Graph/deviceManagementConfigurationPolicies:
-#    name: "GBL_.*"
-#  Microsoft.Graph/deviceManagementScripts:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/deviceShellScripts:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/groupPolicyConfigurations:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/notificationMessageTemplates:
-#    displayName: "GBL_.*"
-#  Microsoft.Graph/windowsAutopilotDeploymentProfiles:
-#    displayName: "GBL_.*"
+dry-run: false
 
 resolve-secrets: true
+
+prune: false
+
+log-level: "info"
+
+transformers:
+  - name: name-sanitization
+  - name: base64-decode
+
+# filters:
+#   # only export device configurations whose displayName starts with "GBL_"
+#   Microsoft.Graph/deviceConfigurations:
+#     displayName: "GBL_.*"
+#
+#   # combine multiple properties (both must match)
+#   Microsoft.Graph/groups:
+#     displayName: "^IT-.*"
+#     mailEnabled: "true"
+#
+#   # anchor a regex for an exact prefix on storage accounts
+#   Microsoft.Storage/storageAccounts:
+#     name: "^prod"
+
+taxonomy:
+  version: 1
+  programmes:
+    # CIS hardening baselines — names carry a _CIS_ token (and usually an _L1 / -L1 level).
+    - id: cis-hardening
+      label: CIS hardening
+      match:
+        - name: '_cis_'
+        - name: '[_-]l1$'
+
+    # Compliance validation policies and their noncompliance notifications.
+    - id: compliance
+      label: Compliance
+      match:
+        - name: 'validation'
+        - type: Microsoft.Graph/deviceCompliancePolicies
+        - type: Microsoft.Graph/compliancePolicies
+
+    # Microsoft Defender for Endpoint / next-gen protection / ASR.
+    - id: defender
+      label: Defender / MDE
+      match:
+        - name: '(?:mde|defender|\bngp\b|\basr\b)'
+        - type: Microsoft.Graph/mobileThreatDefenseConnectors
+
+    # VPN configuration and clean-up.
+    - id: vpn
+      label: VPN
+      match:
+        - name: 'vpn'
+
+    # Windows Update: rings, feature and driver update profiles.
+    - id: windows-update
+      label: Windows Update
+      match:
+        - name: '(?:updatering|windows-update)'
+        - type: Microsoft.Graph/windowsFeatureUpdateProfiles
+        - type: Microsoft.Graph/windowsDriverUpdateProfiles
+
+    # Enrollment & Autopilot provisioning (device identities are bulk-excluded).
+    - id: enrollment
+      label: Enrollment & Autopilot
+      match:
+        - name: '(?:autopilot|_ade\b|enrollment)'
+        - type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
+        - type: Microsoft.Graph/deviceEnrollmentConfigurations
+        - type: Microsoft.Graph/depOnboardingSettings
+
+    # Identity & conditional access.
+    - id: identity-access
+      label: Identity & conditional access
+      match:
+        - name: '(?:\bca\d{2}|\bmfa\b|2fa|passwordless|phishing|whfb)'
+        - type: Microsoft.Graph/conditionalAccessPolicies
+        - type: Microsoft.Graph/authenticationStrengthPolicies
+        - type: Microsoft.Graph/authenticationMethodsPolicy
+        - type: Microsoft.Graph/authorizationPolicy
+
+    # Disk / device encryption.
+    - id: encryption
+      label: Encryption
+      match:
+        - name: '(?:bitlocker|filevault|encryption)'
+
+    # Hybrid Entra domain join provisioning and its target groups.
+    - id: hybrid-join
+      label: Hybrid domain join
+      match:
+        - name: '(?:hybridjoin|domjoin)'
+
+    # Local Administrator Password Solution.
+    - id: laps
+      label: LAPS
+      match:
+        - name: '\blaps\b'
+
+    # Host firewall configuration.
+    - id: firewall
+      label: Firewall
+      match:
+        - name: 'firewall'
+
+    # Application delivery and app configuration.
+    - id: app-delivery
+      label: App delivery
+      match:
+        - type: Microsoft.Graph/mobileApps
+        - name: '_app_'
