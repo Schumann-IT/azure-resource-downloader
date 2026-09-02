@@ -102,6 +102,111 @@ reference export) as a flat per-type tree with no way to narrow it and no contex
 - Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
   fallback reads.
 
+## 5. Group-driven navigation, with a programme facet over it
+
+**Goal.** Let a reader find a resource by what it *is for* — its platform, its function, and the programme
+it belongs to — instead of by Azure/Graph resource type. The type tree is the vendor's taxonomy: an
+administrator looking for "how are Macs hardened" has to know that the answer is spread over
+`deviceConfigurations`, `deviceManagementConfigurationPolicies` and `deviceShellScripts` before they can
+start.
+
+> **The shape, in two dimensions.** A **spine of platform → function**, one path to each document,
+> replacing the per-type sections; a **programme facet over it** (`CIS L1 hardening`, `Defender / MDE`,
+> `VPN`, `Update rings`, `Autopilot`, `App delivery`) that is **many-to-many** — a resource belongs to a
+> programme *and* keeps its place in the spine, which is exactly what a single-parent tree cannot express —
+> rendered as a filter and alongside the existing `badgesFor()` badges, never as a second tree; and the
+> endpoint type kept as a *filter* rather than as the structure, since it is still the right lens when
+> someone is reasoning about the API rather than about the tenant.
+>
+> **The web side must not compute any of it.** It is tempting to derive both dimensions here from
+> `odataType`/`platforms`/naming conventions — 93 of 225 named resources match
+> `GBL_<kind>_<env>_<scope>_[CIS_]<platform>_<area>[_L1]`, and one rule over that catches all 32 CIS-named
+> resources. But `src/docs/export/confluence.ts` is a second consumer of the same index, and anything
+> derived inside `buildNavigation()` is invisible to it: an exported space would silently fall back to
+> endpoint grouping while the browser showed programmes. The taxonomy is resolved once at index time, in
+> the CLI, so both consumers read the same fields — the producer-side entry is *Group documentation by
+> purpose, resolved at index time* in `go/NEXT-ITERATIONS.md`.
+>
+> **Which is why the source of a programme is not this entry's decision to make**, only its constraint.
+> Four candidates are on the table: **a) model-authored per document**, a third frontmatter field with a
+> closed vocabulary — captures intent, but costs a full regeneration and gives each document exactly one
+> programme, which CIS hardening does not fit; **b) derived from the resource name**, deterministic and
+> free (`GBL_AF_PRD_D_WIN_MGM_ModernWorkplace` → `MGM_ModernWorkplace`), but it assumes a naming convention
+> not every tenant follows; **c) a curated taxonomy resolved at index time**, rules over facts plus name
+> patterns, multi-valued and needing no regeneration, at the price of a file to maintain whose rules rot
+> silently; **d) no programme facet at all**, if platform × function answers the question. The Go entry
+> currently leans to model-authored axes as the spine with a curated index-time taxonomy as the programme
+> dimension; whatever is picked, **the browser reads the fields the index carries and adds none of its
+> own**. What the choice does decide here is cardinality —
+> single-valued is a tree level, multi-valued can only be a filter — so the facet UI waits until that is
+> settled rather than guessing.
+>
+> **Nothing carries the data yet.** In the reference export `platformGroup` and `functionGroup` are
+> populated on **0** of 263 resources (against `platforms` 73, `odataType` 137, `scope` 93, `assignments`
+> 231), because the CLI's generation template does not ask the documents for them. Grouping by fields that
+> are empty everywhere yields one *Ungrouped* section, which is worse than grouping by type — so this entry
+> is only implementable behind a degradation rule, not a flag day.
+>
+> **What is cheap once the index carries it.** Hrefs come from the index `doc` field and are independent of
+> how `buildNavigation()` groups, so **regrouping the sidebar changes no URLs** — no redirects, and no
+> broken links into an already-imported Confluence space. `sidebar.hbs` renders `nav.sections` purely from
+> data, so the spine is a data change plus one nesting level in the partial. A facet switch is a route or a
+> query parameter reflected in the URL, never a widget: no client-side JavaScript.
+
+**What the CLI must provide before the spine can be built.** Implementation starts when all three hold;
+none of them can be substituted here.
+
+- **The two fields, actually populated** on in-scope resources in `docs/index.yaml`. The harvest is already
+  wired on the producer side — the values are empty because no prompt asks for them — so this costs a full
+  documentation regeneration.
+- **A declared vocabulary with a display order, carried in the data.** Ordering "by the declared vocabulary"
+  is only possible if the order is readable at runtime: either the index header carries the vocabulary per
+  axis in display order (self-describing, no shared constant to drift), or it is published as a constant
+  this project copies — which is then a contract in two repositories. The first is strongly preferred, and
+  it is the requirement most easily forgotten, because on the producer side the vocabulary looks like a
+  prompt-authoring concern.
+- **Defined semantics for "no group"**, distinguishing *the model did not classify this* from *this type has
+  no meaningful platform* (a tenant-level singleton is not an uncategorised Windows resource). Either an
+  explicit value, or a written statement that empty means uncategorised and which types are expected to be
+  empty. Without it the uncategorised bucket silently merges a real gap with a category error.
+
+**Release ordering is a constraint today, and cheap to remove.** `parseTenantIndex()` rejects anything whose
+`version` is not exactly `1`, and the index is also the *tenant marker* — so if the CLI bumps the schema to
+carry these fields, every export disappears from the picker and every route 404s, rather than degrading to
+the current tree. Unknown *fields* are already ignored, so the fix is the version comparison alone.
+
+**And, additionally, before the programme facet:** a multi-valued membership field carrying a **stable id**
+(it becomes the facet value in the URL, so renaming a programme must not break a bookmark) **and a display
+label**; plus, to render the chooser, the set of programmes that exist — from per-resource membership alone,
+a programme with no matches in this tenant is invisible, which is itself information.
+
+**Plan.**
+
+- **Accept a later index schema first**, before the CLI ships anything: make `parseTenantIndex()` take any
+  integer `version >= 1` and carry the parsed value, with a case in `test/tenant-index.spec.ts` and one in
+  the e2e suite proving a newer index still *discovers* as a tenant. It is a few lines, it is worth having
+  whether or not the rest of this entry ever happens, and it means the two projects can release in either
+  order.
+- **Ship the spine first, the programme facet second**, and treat them as separate deliveries: the spine
+  needs one group per document, the facet needs multi-valued membership, and building the facet UI before
+  the CLI emits real membership is guessing at its cardinality.
+- **Group in a pure function** next to `buildNavigation()` in `src/docs/tenant-index.ts`, reading only what
+  the index carries and deriving nothing, taking the facet as an argument, ordering groups by the declared
+  vocabulary rather than alphabetically, and putting uncategorised documents in a named bucket that is
+  **always rendered** — a taxonomy that quietly stops matching must show up as a full bucket, never as a
+  thinning tree. Cases in `test/tenant-index.spec.ts` for a fully grouped index, a partially grouped one,
+  and an index with no grouping at all; the last must produce today's per-type tree unchanged.
+- **Nest the spine in `sidebar.hbs`** as one more `<details>` level, and put the active facet in the URL so
+  the choice survives a reload without state. If a tree filter exists by then, it narrows whichever
+  grouping is active rather than only the type tree.
+- **Keep the endpoint type reachable** as a filter or an alternate facet once it is no longer the
+  structure, so an API-shaped question is still answerable.
+- **Drop the grouping badges** from the listing fallback once the same values drive the tree, so a resource
+  does not state its group twice on one screen.
+- **Verify both consumers agree** before calling it done: the Confluence export groups its overview page
+  from the same fields, so a grouped browser and an endpoint-grouped export means the taxonomy leaked into
+  `buildNavigation()` after all.
+
 ## Standing decisions
 
 Decisions that are not work items but constrain the work items below, recorded so the next iteration does
@@ -166,14 +271,6 @@ Discovery walks up to 3 levels, but routing uses a single `:tenant` segment, so 
 folders are addressable. **Parked** because nested tenants would need a different route shape, which
 interacts with every `_`-prefixed representation prefix. **Revisit** the first time a real export tree nests
 tenants under a grouping folder.
-
-### Idea: Group-driven navigation
-
-`docs/index.yaml` can carry `platformGroup`/`functionGroup` per resource, so the landing page and sidebar
-tree could become platform → function instead of grouping by resource type. **Parked** because the documents
-do not write those fields — the CLI generation template's required frontmatter does not ask for them — so
-there is nothing to group by. **Revisit** when the template requires both fields and a regenerated export
-carries them.
 
 ### Idea: Explicit dark-mode toggle
 
