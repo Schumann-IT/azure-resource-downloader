@@ -10,6 +10,26 @@
     </p>
   {{/unless}}
 
+  {{#if programmes.length}}
+    <nav class="mt-4" aria-label="Programme filter">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Programme</p>
+      <ul class="mt-1.5 flex flex-wrap gap-1">
+        {{#each programmes}}
+          <li>
+            <a
+              href="{{this.href}}"
+              {{#if this.active}}aria-current="true"{{/if}}
+              class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs {{#if this.active}}border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-950/50 dark:text-brand-300 font-medium{{else}}border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400{{/if}}"
+            >
+              {{this.label}}
+              <span class="{{#if this.active}}text-brand-600 dark:text-brand-400{{else}}text-slate-400 dark:text-slate-500{{/if}}">{{this.count}}</span>
+            </a>
+          </li>
+        {{/each}}
+      </ul>
+    </nav>
+  {{/if}}
+
   {{#if sections.length}}
     <nav class="mt-4 space-y-1" aria-label="Documents">
       {{#each sections}}
@@ -37,6 +57,12 @@
         </details>
       {{/each}}
     </nav>
+  {{else}}
+    {{#if programmes.length}}
+      <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+        No documents in this programme.
+      </p>
+    {{/if}}
   {{/if}}
 
   {{#if counts.excluded.length}}

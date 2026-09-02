@@ -15,10 +15,23 @@ import { configureViews } from '../src/configure-app';
 // against self-contained fixture tenants so it does not depend on the real
 // output/ export.
 
-const INDEX_YAML = `version: 1
+// A version-2 index, as `docs generate-index` writes it with a `taxonomy:`
+// section: the header programme registry (a zero-count programme kept) and
+// many-to-many per-resource membership.
+const INDEX_YAML = `version: 2
 tenant: My Tenant
 generatedAt: "2026-01-01T00:00:00Z"
 complete: true
+vocabularies:
+    platform: [Windows, macOS, n/a]
+    function: [Compliance, Security]
+programmes:
+    - id: firewall
+      label: Firewall
+      count: 1
+    - id: vpn
+      label: VPN
+      count: 0
 counts:
     documented: 2
     pending: 1
@@ -30,6 +43,9 @@ resources:
       displayName: Policy One
       summary: A firewall policy.
       documented: true
+      groups:
+        - id: firewall
+          label: Firewall
       assignments:
         groups: 1
     - type: Microsoft.Graph/groups
@@ -225,6 +241,16 @@ describe('Docs browser (e2e)', () => {
     await fsp.mkdir(halfDir, { recursive: true });
     await fsp.writeFile(path.join(halfDir, 'stray.md'), '# half');
 
+    // An index from a newer CLI: a later schema version and fields this build
+    // knows nothing about must still discover as a tenant, because the index is
+    // the tenant marker — refusing it would hide the export entirely.
+    const futureDir = path.join(root, 'future', 'docs');
+    await fsp.mkdir(futureDir, { recursive: true });
+    await fsp.writeFile(
+      path.join(futureDir, 'index.yaml'),
+      'version: 3\ntenant: Future Tenant\nsomethingNew: [a]\nresources: []\n',
+    );
+
     // A docs/index.yaml the parser rejects makes the folder *not* a tenant
     // instead of crashing discovery.
     const brokenDir = path.join(root, 'broken', 'docs');
@@ -250,7 +276,7 @@ describe('Docs browser (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/healthz').expect(200);
     expect(res.body).toEqual({
       status: 'ok',
-      tenants: 2,
+      tenants: 3,
       documents: 4,
       pending: 2,
     });
@@ -261,6 +287,8 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).toContain('mytenant');
     expect(res.text).toContain('2 documented');
     expect(res.text).toContain('1 pending');
+    // A newer index schema still lists; only unparseable ones drop out.
+    expect(res.text).toContain('future');
     // The housekeeping / marker-less / malformed folders are not tenants.
     expect(res.text).not.toContain('_to_delete');
     expect(res.text).not.toContain('half-baked');
@@ -289,6 +317,91 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).toContain(
       'href="/nosummary/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
     );
+  });
+
+  // Handlebars escapes `=` inside an attribute as `&#x3D;`, which the HTML parser
+  // decodes back to `=`, so the rendered links work; the assertions have to match
+  // the source as escaped.
+  const q = (base: string, programme: string) =>
+    `href="${base}?programme&#x3D;${programme}"`;
+
+  // The filter narrows the navigation, not the page body: the tenant summary and
+  // a document's own text still say whatever they say. Exclusion is therefore
+  // asserted against the sidebar only.
+  const sidebarOf = (html: string) =>
+    html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
+
+  it('badges a resource with its programmes in the index listing', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/nosummary')
+      .expect(200);
+    expect(res.text).toContain('Firewall');
+  });
+
+  it('offers the programme filter from the index registry, zero-count included', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(res.text).toContain('Programme');
+    expect(res.text).toContain(q('/mytenant', 'firewall'));
+    // A programme that matched nothing here is still offered: "empty in this
+    // tenant" is information the registry carries on purpose.
+    expect(res.text).toContain(q('/mytenant', 'vpn'));
+    expect(res.text).toContain(q('/mytenant', '_uncategorised'));
+  });
+
+  it('GET /:tenant?programme= narrows the tree to that programme', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant?programme=firewall')
+      .expect(200);
+    expect(sidebarOf(res.text)).toContain('Policy One');
+    expect(sidebarOf(res.text)).not.toContain('Admins');
+    // The choice rides along in every document link, so it survives a click.
+    expect(res.text).toContain(
+      q(
+        '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+        'firewall',
+      ),
+    );
+  });
+
+  it('GET /:tenant?programme=_uncategorised shows exactly what the taxonomy missed', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant?programme=_uncategorised')
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    expect(sidebar).toContain('Admins');
+    expect(sidebar).toContain('Compliance One');
+    expect(sidebar).not.toContain('Policy One');
+  });
+
+  it('says so plainly when a programme matches nothing in this tenant', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant?programme=vpn')
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    expect(sidebar).toContain('No documents in this programme');
+    expect(sidebar).not.toContain('Policy One');
+  });
+
+  it('ignores an unknown programme instead of rendering an empty tenant', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant?programme=nope')
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    expect(sidebar).toContain('Policy One');
+    expect(sidebar).toContain('Admins');
+  });
+
+  it('keeps the document you are on in its sidebar even when filtered out', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1?programme=firewall')
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    expect(sidebar).toContain('Admins');
+    expect(sidebar).toContain(q('/mytenant/Microsoft.Graph/groups/g1', 'firewall'));
+    // The filter is still the active one, not silently reset by the visit.
+    expect(sidebar).toContain('aria-current="true"');
   });
 
   it('GET /:tenant/summary redirects to the landing page (the summary is its body)', async () => {

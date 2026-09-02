@@ -20,6 +20,9 @@ mutates the export in any way.
   resource type, the section of the document being viewed opened and the document itself marked, plus
   the tenant counts, export timestamp, the incomplete-export banner and the excluded bulk types.
   Collapsing is pure HTML — there is still no client-side JavaScript.
+- **Programme filter** — when the index carries a taxonomy (`azure-rd docs generate-index` with a
+  `taxonomy:` config section), the sidebar offers the programmes it declares and `?programme=<id>`
+  narrows the tree to one of them, server-side. See [Programme filter](#programme-filter).
 - **Source YAML view** — every document links to the exported resource it was written from
   (`GET /:tenant/_resource/<type>/<name>`), syntax highlighted with `shiki`, one addressable line per
   `#L42` anchor, and `?raw` for plain text. A **Documentation | YAML** switcher in the top bar flips
@@ -103,9 +106,11 @@ DOCS_ROOT=/path/to/output PORT=4000 npm run start:prod
 
 Discovery rules:
 
-- A directory counts as a tenant when `docs/index.yaml` exists **and parses** as a `version: 1`
-  index; a malformed or unreadable index makes the folder *not* a tenant instead of crashing
-  discovery.
+- A directory counts as a tenant when `docs/index.yaml` exists **and parses** as an index object
+  with an integer `version` of **1 or later**; a malformed or unreadable index makes the folder *not*
+  a tenant instead of crashing discovery. Later schema versions and unknown fields are accepted and
+  ignored — the index is the tenant marker, so rejecting a newer schema would hide the export
+  entirely rather than degrade a page.
 - Documents are resolved against `<tenant>/docs`, which is what the relative `../<type>/<name>.md`
   links inside the documents are relative to. Source YAML is resolved against the sibling
   `<tenant>/resources` — a second, separate served root, restricted to `.yaml`.
@@ -127,7 +132,7 @@ Discovery rules:
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
 | `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
-| `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. |
+| `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes `?programme=<id>`. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
 | `GET /:tenant/_export/confluence` | The whole tenant as a `application/zip` attachment for Confluence's HTML import. |
 | `GET /:tenant/_resource/*path` | The source YAML behind a document, syntax highlighted; the `.yaml` suffix is optional. |
@@ -141,6 +146,36 @@ Anything that does not resolve to a Markdown file inside the tenant — or to a 
 `_resource` and `_export` are *representation* prefixes, not path segments: they never appear in the
 breadcrumb, and they cannot collide with a resource type because no Azure/Graph type segment starts
 with `_`.
+
+## Programme filter
+
+`azure-rd docs generate-index` can classify each resource into **programmes** — real-world initiatives
+like CIS hardening, Defender or VPN that span several resource types — from a `taxonomy:` section in the
+CLI's config. When it does, `docs/index.yaml` carries a header `programmes` registry (`id`, `label`,
+per-tenant `count`) and many-to-many `groups` on each resource.
+
+The browser **reads that membership and derives none of its own**: the same classification drives the
+sidebar here and the grouped overview page of the Confluence export, which is only true because the CLI
+resolves it once, at index time.
+
+- Every page that shows the sidebar accepts **`?programme=<id>`**, which narrows the tree to that
+  programme's documents and rides along in every link, so the choice survives navigation and a reload
+  with no client-side state.
+- **`?programme=_uncategorised`** lists what the taxonomy matched to nothing. It is always offered, so a
+  taxonomy that stops matching shows up as a full bucket rather than as a quietly thinning tree.
+- Programmes with **no matches in this tenant are still listed** — "empty here" is information — and
+  selecting one says so instead of rendering a blank sidebar.
+- The **document you are viewing stays in its sidebar** even when the active filter excludes it, and an
+  unknown `?programme=` value is ignored rather than rendering what would look like an empty tenant.
+- An index written **without** a taxonomy (or by an older CLI) offers no filter and renders exactly the
+  per-type tree it always did.
+
+The filter narrows *navigation*, not page bodies: a document and the tenant summary still say whatever
+they say. The Confluence export is unaffected — it always exports the whole tenant.
+
+Grouping documents by **platform and function** instead of by resource type is the other half of this
+and is not implemented: it needs `platformGroup`/`functionGroup` in the documents' frontmatter, which
+the CLI does not yet ask the generation agent for. See [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
 
 ## Confluence export
 
@@ -209,8 +244,10 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
 
 - `test/path-safety.spec.ts` — traversal, symlink escape, null bytes, absolute paths, and the
   one-extension-per-root rule for both roots.
-- `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed or
-  non-`version: 1` file) and navigation building.
+- `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed file,
+  acceptance of a later schema version, and the programme registry/`groups`/vocabularies surface),
+  navigation building, and the programme filter (narrowing, the uncategorised bucket, filter hrefs,
+  the active document surviving a filter, and an index without a taxonomy staying unfiltered).
 - `test/section-hooks.spec.ts` — heading slugs (the em dash, `&` → `and`, inline markup), the
   declared-vs-undeclared heading split, matched and unmatched marker pairs with the ranges they report,
   section wrapping (including that an H2 inside a spliced block never opens one), and locating the
@@ -256,7 +293,7 @@ web/
 │       ├── docs.module.ts
 │       ├── docs.controller.ts           # routes, breadcrumb, 404 mapping
 │       ├── tenant-discovery.service.ts  # DOCS_ROOT scan + 30 s TTL cache + index cache
-│       ├── tenant-index.ts              # docs/index.yaml parsing + navigation building
+│       ├── tenant-index.ts              # docs/index.yaml parsing + navigation + programme filter
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction

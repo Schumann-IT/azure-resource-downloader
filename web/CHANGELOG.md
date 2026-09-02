@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The sidebar can be filtered by programme, from the taxonomy the CLI resolves.**
+  `docs generate-index` with a `taxonomy:` section classifies each resource into programmes — CIS hardening,
+  Defender, VPN and so on, initiatives that span several resource types — and writes a header `programmes`
+  registry plus many-to-many `groups` per resource into `docs/index.yaml`. Every page that renders the
+  sidebar now offers those programmes and accepts **`?programme=<id>`**, narrowing the tree server-side, with
+  the choice carried in every document link so it survives navigation and a reload. **No client-side
+  JavaScript**: the filter is a query parameter and a set of links, not a widget. Membership is **read, never
+  derived** — deriving it here would have made the browser and the Confluence export, which is a second
+  consumer of the same index, group differently.
+
+  What the design protects: **`?programme=_uncategorised`** is always offered and lists what the taxonomy
+  matched to nothing, so a taxonomy that stops matching appears as a full bucket instead of a quietly
+  thinning tree; **zero-count programmes stay listed** because "empty in this tenant" is information the
+  registry carries on purpose, and selecting one says so rather than rendering a blank sidebar; the
+  **document you are viewing is always kept in its own sidebar**, even when the active filter excludes it;
+  an **unknown `?programme=` is ignored** instead of rendering what would look like an empty tenant; and an
+  index with **no taxonomy is unfilterable** and renders exactly the per-type tree it did before. Resources
+  now also carry their programme labels as badges in the index listing, so membership is visible from a
+  resource and not only from the chooser. Grouping *by* platform and function — replacing the per-type tree —
+  is deliberately not part of this: it needs frontmatter the CLI does not yet request, see
+  [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+
 - **A tenant's documentation can be exported as Confluence HTML.**
   `GET /:tenant/_export/confluence` streams one zip containing one folder, which is what Confluence's
   HTML import expects: the folder name (`<tenant domain> documentation`) becomes the space name, and
@@ -239,7 +261,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
   a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
   is still bounded, and counts are still derived from the index rather than by walking the tree. A
-  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
+  malformed or unreadable index makes the folder *not a tenant* instead of crashing discovery.
 
 - **Heading anchors are no longer percent-encoded.** `markdown-it-anchor`'s default slug encodes
   anything outside its allowed set, which produced ids only selectable as
@@ -296,6 +318,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would make it worth doing. Entries are self-contained and get deleted once delivered, so numbering
   shifts — nothing outside the file references a section number. No behaviour, route or dependency
   changed.
+
+### Fixed
+
+- **Tenants written by a current CLI are discovered again: the index schema gate accepts `version >= 1`.**
+  `docs generate-index` bumped `docs/index.yaml` to `version: 2` when it added per-resource `groups` and the
+  header `programmes`/`vocabularies`. `parseTenantIndex()` required exactly `1`, and the index is *also* the
+  tenant marker — so every real export vanished from the picker and every document route 404ed, an outright
+  disappearance rather than a degradation (`DOCS_ROOT=../output` reported `{"tenants":0}`). Any integer
+  version `>= 1` now parses, the value is carried on `TenantIndex` instead of being hard-coded, and unknown
+  fields are ignored as they always were — which is what makes the CLI's additive bump additive in practice.
+  A non-integer version, a version below 1 and a malformed file are still rejected, so such a folder is still
+  *not a tenant* and discovery still cannot crash on one.
 
 ## [RC1]
 

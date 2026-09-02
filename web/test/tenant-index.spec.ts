@@ -1,4 +1,10 @@
-import { buildNavigation, parseTenantIndex } from '../src/docs/tenant-index';
+import {
+  buildNavigation,
+  buildProgrammeFilters,
+  isKnownProgramme,
+  parseTenantIndex,
+  UNCATEGORISED,
+} from '../src/docs/tenant-index';
 
 const INDEX_YAML = `version: 1
 tenant: contoso.com
@@ -62,12 +68,25 @@ describe('parseTenantIndex', () => {
     });
   });
 
-  it('rejects anything that is not a version-1 index (folder is then not a tenant)', () => {
+  it('rejects anything that is not an index object (folder is then not a tenant)', () => {
     expect(parseTenantIndex('version: [oops\n')).toBeUndefined();
     expect(parseTenantIndex('')).toBeUndefined();
     expect(parseTenantIndex('- a\n- b\n')).toBeUndefined();
-    expect(parseTenantIndex('version: 2\ntenant: x\n')).toBeUndefined();
     expect(parseTenantIndex('version: 1\n')).toBeUndefined();
+    expect(parseTenantIndex('version: 0\ntenant: x\n')).toBeUndefined();
+    expect(parseTenantIndex('version: one\ntenant: x\n')).toBeUndefined();
+  });
+
+  it('accepts a later schema version and ignores fields it does not know', () => {
+    // The index is also the tenant marker, so refusing a newer schema would make
+    // the tenant disappear rather than degrade.
+    const index = parseTenantIndex(
+      'version: 3\ntenant: x\nsomethingNew: [a]\n' +
+        'resources:\n  - type: T\n    doc: T/a.md\n    alsoNew: true\n',
+    );
+    expect(index).toBeDefined();
+    expect(index!.version).toBe(3);
+    expect(index!.resources).toHaveLength(1);
   });
 
   it('tolerates a missing resources list and unexpected field types', () => {
@@ -75,6 +94,170 @@ describe('parseTenantIndex', () => {
     expect(index).toBeDefined();
     expect(index!.resources).toEqual([]);
     expect(index!.counts).toEqual({ documented: 0, pending: 0, excluded: [] });
+  });
+});
+
+// A version-2 index as `docs generate-index` writes it with a `taxonomy:`
+// section: the header programme registry (zero-count entries kept) plus
+// many-to-many per-resource membership.
+const PROGRAMME_YAML = `version: 2
+tenant: contoso.com
+vocabularies:
+    platform: [Windows, macOS, n/a]
+    function: [Compliance, Security]
+programmes:
+    - id: cis-hardening
+      label: CIS hardening
+      count: 2
+    - id: vpn
+      label: VPN
+      count: 0
+resources:
+    - type: Microsoft.Graph/deviceCompliancePolicies
+      doc: Microsoft.Graph/deviceCompliancePolicies/win_os.md
+      displayName: Windows OS validation
+      documented: true
+      groups:
+        - id: cis-hardening
+          label: CIS hardening
+        - id: defender
+          label: Defender / MDE
+    - type: Microsoft.Graph/deviceShellScripts
+      doc: Microsoft.Graph/deviceShellScripts/mac_cis.md
+      displayName: macOS CIS script
+      documented: true
+      groups:
+        - id: cis-hardening
+          label: CIS hardening
+    - type: Microsoft.Graph/assignmentFilters
+      doc: Microsoft.Graph/assignmentFilters/mac_intel.md
+      displayName: Intel Macs
+      documented: true
+`;
+
+describe('parseTenantIndex (version 2 grouping surface)', () => {
+  const index = parseTenantIndex(PROGRAMME_YAML)!;
+
+  it('reads the programme registry in the index order, keeping zero counts', () => {
+    expect(index.programmes).toEqual([
+      { id: 'cis-hardening', label: 'CIS hardening', count: 2 },
+      { id: 'vpn', label: 'VPN', count: 0 },
+    ]);
+  });
+
+  it('reads the axis vocabularies in their declared display order', () => {
+    expect(index.vocabularies.platform).toEqual(['Windows', 'macOS', 'n/a']);
+    expect(index.vocabularies.function).toEqual(['Compliance', 'Security']);
+  });
+
+  it('reads many-to-many membership as stable id plus display label', () => {
+    expect(index.resources[0].groups).toEqual([
+      { id: 'cis-hardening', label: 'CIS hardening' },
+      { id: 'defender', label: 'Defender / MDE' },
+    ]);
+    expect(index.resources[2].groups).toEqual([]);
+  });
+
+  it('leaves an index without a taxonomy with no programmes and no groups', () => {
+    const plain = parseTenantIndex(INDEX_YAML)!;
+    expect(plain.programmes).toEqual([]);
+    expect(plain.vocabularies).toEqual({ platform: [], function: [] });
+    expect(plain.resources.every((r) => r.groups.length === 0)).toBe(true);
+  });
+});
+
+describe('programme filter', () => {
+  const index = parseTenantIndex(PROGRAMME_YAML)!;
+
+  it('narrows the tree to the programme, reading membership and deriving none', () => {
+    const sections = buildNavigation(index, 'contoso.com', '', 'cis-hardening');
+    // Sections keep their type ordering; only the membership decides who is in.
+    expect(sections.flatMap((s) => s.items).map((i) => i.label)).toEqual([
+      'Windows OS validation',
+      'macOS CIS script',
+    ]);
+  });
+
+  it('keeps the active programme in every document href so it survives a click', () => {
+    const sections = buildNavigation(index, 'contoso.com', '', 'cis-hardening');
+    expect(sections[0].items[0].href).toBe(
+      '/contoso.com/Microsoft.Graph/deviceCompliancePolicies/win_os?programme=cis-hardening',
+    );
+  });
+
+  it('collects the resources no programme matched under the uncategorised bucket', () => {
+    const sections = buildNavigation(index, 'contoso.com', '', UNCATEGORISED);
+    expect(sections.flatMap((s) => s.items).map((i) => i.label)).toEqual([
+      'Intel Macs',
+    ]);
+  });
+
+  it('keeps the document being viewed even when the filter excludes it', () => {
+    const sections = buildNavigation(
+      index,
+      'contoso.com',
+      'Microsoft.Graph/assignmentFilters/mac_intel',
+      'cis-hardening',
+    );
+    const filters = sections.find(
+      (s) => s.key === 'Microsoft.Graph/assignmentFilters',
+    )!;
+    expect(filters.active).toBe(true);
+    expect(filters.items.map((i) => i.label)).toEqual(['Intel Macs']);
+  });
+
+  it('badges each resource with the programmes it belongs to', () => {
+    const sections = buildNavigation(index, 'contoso.com');
+    const policy = sections
+      .flatMap((s) => s.items)
+      .find((i) => i.label === 'Windows OS validation')!;
+    expect(policy.badges.slice(0, 2)).toEqual([
+      'CIS hardening',
+      'Defender / MDE',
+    ]);
+  });
+
+  it('offers All, every declared programme in order, and uncategorised', () => {
+    const filters = buildProgrammeFilters(index, '/contoso.com');
+    expect(filters.map((f) => [f.id, f.count])).toEqual([
+      ['', 3],
+      ['cis-hardening', 2],
+      ['vpn', 0],
+      [UNCATEGORISED, 1],
+    ]);
+    expect(filters[0].active).toBe(true);
+    expect(filters[0].href).toBe('/contoso.com');
+    expect(filters[1].href).toBe('/contoso.com?programme=cis-hardening');
+    expect(filters[3].href).toBe(`/contoso.com?programme=${UNCATEGORISED}`);
+  });
+
+  it('marks the active choice and hangs the filter off the current page', () => {
+    const base = '/contoso.com/Microsoft.Graph/deviceShellScripts/mac_cis';
+    const filters = buildProgrammeFilters(index, base, 'cis-hardening');
+    expect(filters.filter((f) => f.active).map((f) => f.id)).toEqual([
+      'cis-hardening',
+    ]);
+    expect(filters[1].href).toBe(`${base}?programme=cis-hardening`);
+  });
+
+  it('offers no filter at all for an index without a taxonomy', () => {
+    const plain = parseTenantIndex(INDEX_YAML)!;
+    expect(buildProgrammeFilters(plain, '/contoso.com')).toEqual([]);
+    expect(buildNavigation(plain, 'contoso.com', '', 'cis-hardening')).toEqual(
+      buildNavigation(plain, 'contoso.com'),
+    );
+  });
+
+  it('recognises only the values this index can serve', () => {
+    expect(isKnownProgramme(index, '')).toBe(true);
+    expect(isKnownProgramme(index, 'vpn')).toBe(true);
+    expect(isKnownProgramme(index, UNCATEGORISED)).toBe(true);
+    expect(isKnownProgramme(index, 'nope')).toBe(false);
+    // Membership a resource carries but the registry does not declare is not a
+    // filter value: the registry is the source of truth for what exists.
+    expect(isKnownProgramme(index, 'defender')).toBe(false);
+    const plain = parseTenantIndex(INDEX_YAML)!;
+    expect(isKnownProgramme(plain, UNCATEGORISED)).toBe(false);
   });
 });
 

@@ -73,12 +73,14 @@ taxonomy:
         - type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
         - type: Microsoft.Graph/deviceEnrollmentConfigurations
         - type: Microsoft.Graph/depOnboardingSettings
+        - type: Microsoft.Graph/applePushNotificationCertificate
+        - type: Microsoft.Graph/intuneBrandingProfiles
 
     # Identity & conditional access.
     - id: identity-access
       label: Identity & conditional access
       match:
-        - name: '(?:\bca\d{2}|\bmfa\b|2fa|passwordless|phishing|whfb)'
+        - name: '(?:\bca\d{2}|\bmfa\b|2fa|passwordless|phishing|whfb|sso|cloudtrust)'
         - type: Microsoft.Graph/conditionalAccessPolicies
         - type: Microsoft.Graph/authenticationStrengthPolicies
         - type: Microsoft.Graph/authenticationMethodsPolicy
@@ -95,12 +97,14 @@ taxonomy:
       label: Hybrid domain join
       match:
         - name: '(?:hybridjoin|domjoin)'
+        - type: Microsoft.Graph/onPremisesSynchronization
 
-    # Local Administrator Password Solution.
+    # Local Administrator Password Solution. Bare 'laps' (not \blaps\b): an
+    # underscore is a word char, so \b never fires in Account_LAPS-*.
     - id: laps
       label: LAPS
       match:
-        - name: '\blaps\b'
+        - name: 'laps'
 
     # Host firewall configuration.
     - id: firewall
@@ -114,3 +118,52 @@ taxonomy:
       match:
         - type: Microsoft.Graph/mobileApps
         - name: '_app_'
+        - name: '(?:auto[ _-]?update|onedrive|teamviewer)'
+
+    # Proactive remediations and platform scripts (Windows/macOS).
+    - id: scripts
+      label: Scripts & remediations
+      match:
+        - type: Microsoft.Graph/deviceHealthScripts
+        - type: Microsoft.Graph/deviceManagementScripts
+        - type: Microsoft.Graph/deviceShellScripts
+        - type: Microsoft.Graph/deviceCustomAttributeShellScripts
+
+    # Assignment targeting: security/dynamic groups and assignment filters.
+    - id: targeting
+      label: Targeting (groups & filters)
+      match:
+        - type: Microsoft.Graph/groups
+        - type: Microsoft.Graph/assignmentFilters
+
+    # Endpoint OS hardening that does not carry a _CIS_ token.
+    - id: security-hardening
+      label: Security hardening
+      match:
+        - name: '(?:applocker|secure ?boot|\bsmb\b|llmnr|mdns|ipv6|windows-components)'
+
+    # Network & connectivity (Wi-Fi, wired, proxy). VPN stays its own programme.
+    - id: network
+      label: Network & connectivity
+      match:
+        - name: '(?:wifi|wi-fi|wlan|ethernet|proxy)'
+
+    # RBAC and delegated administration.
+    - id: governance
+      label: Governance & RBAC
+      match:
+        - type: Microsoft.Graph/roleScopeTags
+        - type: Microsoft.Graph/roleDefinitions
+
+    # Tenant-wide / org singletons.
+    - id: tenant-config
+      label: Tenant configuration
+      match:
+        - type: Microsoft.Graph/deviceManagement
+        - type: Microsoft.Graph/organization
+
+    # General endpoint baseline tweaks (logging, telemetry, UX, power, conflicts).
+    - id: endpoint-baseline
+      label: Endpoint baseline config
+      match:
+        - name: '(?:logging|health ?monitoring|datensammlung|telemetr|diagnostic|taskbar|widget|location ?service|energie|mdm wins)'

@@ -5,7 +5,12 @@ import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { resolveResource, resolveWithinTenant } from './path-safety';
-import { buildNavigation, TenantIndex } from './tenant-index';
+import {
+  buildNavigation,
+  buildProgrammeFilters,
+  isKnownProgramme,
+  TenantIndex,
+} from './tenant-index';
 import { ExportService } from './export/export.service';
 
 // Route prefix for the source-YAML representation of a document. It is a
@@ -62,6 +67,7 @@ export class DocsController {
   @Get(':tenant')
   async tenantIndex(
     @Param('tenant') tenant: string,
+    @Query('programme') programme: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
@@ -86,7 +92,7 @@ export class DocsController {
       tenant,
       breadcrumb: [],
       summary,
-      nav: this.nav(info, index, ''),
+      nav: this.nav(info, index, '', `/${tenant}`, programme),
     });
   }
 
@@ -119,6 +125,7 @@ export class DocsController {
   async resource(
     @Param() params: any,
     @Query('raw') raw: string | undefined,
+    @Query('programme') programme: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const tenant: string = params.tenant;
@@ -156,7 +163,15 @@ export class DocsController {
         lines: rendered.lines,
         size: rendered.size,
         views: this.views(tenant, docPath, 'resource'),
-        nav: index ? this.nav(info, index, docPath) : null,
+        nav: index
+          ? this.nav(
+              info,
+              index,
+              docPath,
+              `/${tenant}/${RESOURCE_PREFIX}/${docPath}`,
+              programme,
+            )
+          : null,
       });
     } catch {
       this.notFound(res, tenant, relPath);
@@ -165,7 +180,11 @@ export class DocsController {
 
   // GET /:tenant/*path — a document within the tenant.
   @Get(':tenant/*path')
-  async doc(@Param() params: any, @Res() res: Response): Promise<void> {
+  async doc(
+    @Param() params: any,
+    @Query('programme') programme: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
     const tenant: string = params.tenant;
     const relPath = joinPath(params.path ?? params['0'] ?? '');
 
@@ -205,7 +224,9 @@ export class DocsController {
           ? `/${tenant}/${RESOURCE_PREFIX}/${docPath}`
           : null,
         views: hasSource ? this.views(tenant, docPath, 'doc') : null,
-        nav: index ? this.nav(info, index, relPath) : null,
+        nav: index
+          ? this.nav(info, index, relPath, `/${tenant}/${docPath}`, programme)
+          : null,
       });
     } catch {
       this.notFound(res, tenant, relPath);
@@ -213,12 +234,18 @@ export class DocsController {
   }
 
   // View model for the sidebar partial: the tenant metadata that used to sit on
-  // the landing page plus the navigation tree, so both survive on every page.
+  // the landing page, the programme filter and the navigation tree, so all three
+  // survive on every page. An unknown `?programme=` is ignored rather than
+  // rendering an empty tree that would look like a broken tenant.
   private nav(
     info: TenantInfo,
     index: TenantIndex,
     activeDoc: string,
+    basePath: string,
+    programme: string | undefined,
   ): Record<string, unknown> {
+    const active =
+      programme && isKnownProgramme(index, programme) ? programme : '';
     return {
       tenant: info.id,
       name: info.name,
@@ -226,7 +253,8 @@ export class DocsController {
       counts: index.counts,
       complete: index.complete,
       incompleteReason: index.incompleteReason,
-      sections: buildNavigation(index, info.id, activeDoc),
+      programmes: buildProgrammeFilters(index, basePath, active),
+      sections: buildNavigation(index, info.id, activeDoc, active),
     };
   }
 
