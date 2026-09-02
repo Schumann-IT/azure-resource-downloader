@@ -115,15 +115,17 @@ _Replaced by the tool. Shape:_
 
 ### Microsoft.Graph/deviceCompliancePolicies — spec: `resources/Microsoft.Graph/deviceCompliancePolicies/doc-prompt.md`
 
-| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 |
-|---|---|---|---|---|---|
-| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` |
+| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |
+|---|---|---|---|---|---|---|---|
+| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` | `a3f8b91e…` | |
 
 _…one section per resource type, then a tally: N documents to write across M types._
 <!-- worklist:end -->
 
 The hashes on each row are the values to write into that document's frontmatter (section 2), given to you
 precisely so you never have to compute one. `assignmentsSha256` is blank for types that have no assignments.
+`notificationsSha256` is blank unless the resource references a notification template in a noncompliance
+action. `usedBySha256` is blank unless the resource is a notification message template.
 
 Note that `promptSha256` is a property of the *type*, not of the file: every row under one `###` heading
 carries the same value. Read it once per type and reuse it — never copy it once per row.

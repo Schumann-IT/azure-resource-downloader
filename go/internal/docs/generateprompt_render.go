@@ -107,11 +107,12 @@ func renderWorklist(items []WorkItem) string {
 
 		spec := fmt.Sprintf("resources/%s/%s", t, docPromptFileName)
 		fmt.Fprintf(&b, "### %s — spec: `%s`\n\n", t, spec)
-		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 |\n")
-		b.WriteString("|---|---|---|---|---|---|\n")
+		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |\n")
+		b.WriteString("|---|---|---|---|---|---|---|---|\n")
 		for _, r := range rows {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s |\n",
-				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256, hashCell(r.AssignmentsSha256))
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s | %s | %s |\n",
+				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256,
+				hashCell(r.AssignmentsSha256), hashCell(r.NotificationsSha256), hashCell(r.UsedBySha256))
 		}
 		b.WriteString("\n")
 	}

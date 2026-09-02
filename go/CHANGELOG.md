@@ -16,110 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target a subsequent download would use. It writes nothing and is safe to run at any time. The Azure auth
   flags (`--subscription`, `--client-id`, `--tenant-id`) are accepted on the root command for this purpose.
 
-### Changed
-
-- **The generated documentation prompts now declare a closed, machine-readable set of H2 section headings.** The
-  seven prompt templates each ended with a section list that was described but never binding, and in real exports
-  the model invented extra headings (`## Metadata` in 99 documents, `## Assignments` in 4), which breaks a docs
-  browser that styles and deep-links sections by their heading slug. Each template now states that its headings
-  are a closed contract to be written verbatim, in order, with no others, and records the exact ordered list in a
-  `<!-- doc-headings: … -->` comment that carries into every type's `doc-prompt.md`. Three headings were renamed to
-  produce clean anchor slugs — `Lifecycle & operations` → `Lifecycle and operations`, `Expiry & renewal` →
-  `Expiry and renewal`, `Usage & references` → `Usage and references`. Each setting `<details>` block now carries a
-  `data-setting="<exact YAML path>"` deep-link target and an optional `data-note="security"|"inert"` hint. The
-  incremental generation prompt (`internal/docs/generate_prompt_template.md`) gained a **Heading vocabulary** check
-  (section 4) that validates every document's H2s against its type's `doc-headings` list, ignoring headings inside
-  `<!-- …:start -->`/`<!-- …:end -->` marker pairs so the tool-spliced `## Targeted by` block is exempt.
-  The tenant summary (`docs/summary.md`, section 7) now declares the same closed contract for its four H2
-  headings — `## Management summary`, `## At a glance`, `## Assignment posture`, `## Coverage caveats` — written
-  verbatim, unnumbered and in order, so the landing page slugs the same way as every document. Its Findings and
-  Recommendations are now declared as verbatim `### Findings` / `### Recommendations` H3 headings, and the
-  summary's H3 vocabulary is closed to exactly those two, so the browser can style and deep-link them
-  consistently (they previously varied between exports). Findings are now rendered as a table sorted by
-  severity (most serious first) with a closed `Severity` column — `critical`, `high` or `medium` — so the
-  landing page can rank and filter them. The summary's preamble is also fixed: a verbatim `# Tenant summary`
-  H1 followed by a single orientation sentence, so everything above the first H2 has a known shape. A new
-  mandatory section-7 check validates `docs/summary.md` against all of the above — preamble, H2 set and order,
-  H3 sub-vocabulary, and the findings table's columns, closed `Severity` values and severity ordering — since
-  the section-4 sweep runs before the summary is written and skips the `docs/` root.
-  **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
-- **Documentation runs now persist their report to disk, and the report reproduces the run's plan.** Section 8
-  of the generation prompt writes the run report to `docs/report-<UTC-date>-<UTC-time>.md` (one file per run,
-  never overwritten, not hash-tracked) next to `docs/summary.md`, in addition to printing it; writing the file
-  is now stated as mandatory — printing is not a substitute and the run is not finished until the file exists.
-  The report must now also reproduce the section 1 work list in full (every document to generate and re-splice,
-  grouped by type with the reason each was listed) so it stands alone as the record of what the run set out to
-  do, even though the plan was an input to the run rather than something the report list asked for. Like
-  `summary.md` it lives at the `docs/` root and is exempt from the section-4 stray-document sweep.
-- **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
-  `doc-headings` marker for the default and ARM templates.
-
-### Security
-
-- **Per-resource documents no longer reprint credential-shaped secrets found in free-text.** Real tenant runs
-  surfaced unmasked secrets (a plist `REMOTEOFFICEAUTHKEY`, a profile-removal password in a `description`)
-  being copied verbatim into the generated documents, widening exposure from Intune readers to anyone with
-  read access to the docs. All six property-documenting prompt templates (default, singleton, group,
-  credential, referenced, ARM) now redact a credential-shaped value — one found in a free-text field
-  (`description`/`notes`) or a decoded embedded payload (plist/XML/base64) that the service did **not**
-  already mask — rendering `«redacted — secret present in source»` in its place, still documenting the field,
-  marking the block `data-note="security"`, and flagging it in the `Security` section as a credential to
-  rotate. The literal value remains only in the source YAML. Structured setting values are left verbatim, and
-  the `record` template (inventory types with no free-text fields) is unchanged.
-  **This changes those types' `promptSha256`, contributing to the full regeneration already required.**
-- **Tests** asserting the redaction rule renders in the default and ARM prompts.
-
-### Fixed
-
-- **`notificationMessageTemplates` now export their actual content.** The handler only did a plain item GET,
-  which omits `localizedNotificationMessages` — the per-locale subject and message body that are the template's
-  real payload — because Graph returns that navigation property only on request. Each template is now fetched with
-  `$expand=localizedNotificationMessages` (best-effort: a failure warns and still exports the template without its
-  content), matching the embedded-payload the type's documentation prompt already promised.
-
-- **Documentation-run check script (`generate_prompt_template.md` §4) hardened against three false failures
-  real tenant runs hit.** The `<details>`/`</details>` balance check now ignores tags inside fenced code
-  blocks and inline code, so a document that merely *mentions* `<details>` (or embeds a shell script) is no
-  longer reported as imbalanced. A document that exists but is not in the work list is no longer flagged as a
-  stray — an incremental run legitimately leaves most documents untouched, and a document is retained when its
-  type was not regenerated (e.g. a type that could not be listed); it is now failed only when it is genuinely
-  a stray (no resource frontmatter) or misplaced (its `source` maps to a different derived path). The section-6
-  mtime baseline (`chunks/mtimes.json`) now covers the whole document tree rather than only the work list, and
-  is written once, so re-running §4 after the section-5 splice can no longer clobber the pre-splice snapshot.
-- **Exports are now reproducible: an unchanged tenant re-exports byte-for-byte identically.** Three sources of
-  run-to-run noise were eliminated:
-  - **Colliding display names.** A resource's file name is its sanitized display name, and two resources of the
-    same type can share one — several default Intune `deviceEnrollmentConfigurations` are all named *"All users
-    and all devices"*, and a `winGetApp` and a `macOSLobApp` can both be named *"3CX"*. The writer used the
-    display name directly, so colliding siblings overwrote one another on disk **and** collapsed into a single
-    `metadata.yaml` entry (the key is the file path); because the pipeline writes concurrently, *which* sibling
-    survived varied run to run, silently dropping the rest. The writer now buffers its input and assigns names
-    in a deterministic order (sorted by type, sanitized name, resource ID): the lowest resource ID keeps the
-    bare `<name>.yaml` and every other collision is written to `<name>_<disc>.yaml`, where `<disc>` is a short,
-    stable token derived from its resource ID. No resource is lost, each keeps its own metadata entry, the
-    bare-name owner no longer depends on processing order, and every disambiguation is logged as a warning.
-  - **Unstable scalar array order.** Microsoft Graph returns some multivalued attributes (e.g. `proxyAddresses`)
-    in a different order per read. All-string arrays are now sorted during transformation (the array analogue of
-    the YAML marshaller already sorting map keys); arrays containing objects keep their order, which can be
-    significant.
-  - **Volatile server-generated identifiers.** The `Microsoft.Graph/applePushNotificationCertificate` singleton
-    returns a fresh `id` GUID on every read. That `id` is now dropped from the exported YAML via a new per-type
-    normalization hook, and the singleton is identified by its stable `appleIdentifier` (which the file is named
-    after) instead of the GUID, so its `resourceId` in `resources/metadata.yaml` is also stable across runs.
-    After these three fixes, two runs of an unchanged tenant produce identical resource YAML and `doc-prompt.md`
-    files, and a `metadata.yaml` that differs only in its timestamps.
-
-- **`config.example.yaml` is now a true no-op when loaded unmodified.** The example's own header promises that
-  loading it behaves exactly like running with no config file, but its `transformers` block spelled out each
-  transformer's settings (`clean-empty: true`, the full `base64-decode` block). Those values matched the runtime
-  defaults functionally, yet writing them changed the transform-config hash recorded in `resources/metadata.yaml`
-  (`transformConfigSha256` is a byte hash of the transformer config), so a run that loaded the example diverged
-  from one that did not. The default pipeline is now written as bare transformer names (empty settings, identical
-  hash) and every per-transformer option is illustrated in comments instead — restoring the no-op guarantee while
-  still documenting every setting.
-
-### Added
-
 - **Notification message templates are now cross-referenced with the compliance policies that use them.**
   Every `notificationMessageTemplates` document gains a **Used by** block listing the compliance policies
   that reference the template in a noncompliance action — the template counterpart of a group's **Targeted
@@ -230,6 +126,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The generated documentation prompts now declare a closed, machine-readable set of H2 section headings.** The
+  seven prompt templates each ended with a section list that was described but never binding, and in real exports
+  the model invented extra headings (`## Metadata` in 99 documents, `## Assignments` in 4), which breaks a docs
+  browser that styles and deep-links sections by their heading slug. Each template now states that its headings
+  are a closed contract to be written verbatim, in order, with no others, and records the exact ordered list in a
+  `<!-- doc-headings: … -->` comment that carries into every type's `doc-prompt.md`. Three headings were renamed to
+  produce clean anchor slugs — `Lifecycle & operations` → `Lifecycle and operations`, `Expiry & renewal` →
+  `Expiry and renewal`, `Usage & references` → `Usage and references`. Each setting `<details>` block now carries a
+  `data-setting="<exact YAML path>"` deep-link target and an optional `data-note="security"|"inert"` hint. The
+  incremental generation prompt (`internal/docs/generate_prompt_template.md`) gained a **Heading vocabulary** check
+  (section 4) that validates every document's H2s against its type's `doc-headings` list, ignoring headings inside
+  `<!-- …:start -->`/`<!-- …:end -->` marker pairs so the tool-spliced `## Targeted by` block is exempt.
+  The tenant summary (`docs/summary.md`, section 7) now declares the same closed contract for its four H2
+  headings — `## Management summary`, `## At a glance`, `## Assignment posture`, `## Coverage caveats` — written
+  verbatim, unnumbered and in order, so the landing page slugs the same way as every document. Its Findings and
+  Recommendations are now declared as verbatim `### Findings` / `### Recommendations` H3 headings, and the
+  summary's H3 vocabulary is closed to exactly those two, so the browser can style and deep-link them
+  consistently (they previously varied between exports). Findings are now rendered as a table sorted by
+  severity (most serious first) with a closed `Severity` column — `critical`, `high` or `medium` — so the
+  landing page can rank and filter them. The summary's preamble is also fixed: a verbatim `# Tenant summary`
+  H1 followed by a single orientation sentence, so everything above the first H2 has a known shape. A new
+  mandatory section-7 check validates `docs/summary.md` against all of the above — preamble, H2 set and order,
+  H3 sub-vocabulary, and the findings table's columns, closed `Severity` values and severity ordering — since
+  the section-4 sweep runs before the summary is written and skips the `docs/` root.
+  **This changes every type's `promptSha256`, so a full regeneration of all existing documentation is required.**
+- **Documentation runs now persist their report to disk, and the report reproduces the run's plan.** Section 8
+  of the generation prompt writes the run report to `docs/report-<UTC-date>-<UTC-time>.md` (one file per run,
+  never overwritten, not hash-tracked) next to `docs/summary.md`, in addition to printing it; writing the file
+  is now stated as mandatory — printing is not a substitute and the run is not finished until the file exists.
+  The report must now also reproduce the section 1 work list in full (every document to generate and re-splice,
+  grouped by type with the reason each was listed) so it stands alone as the record of what the run set out to
+  do, even though the plan was an input to the run rather than something the report list asked for. Like
+  `summary.md` it lives at the `docs/` root and is exempt from the section-4 stray-document sweep.
+- **Tests** for the closed-heading contract: the prompt-template tests now assert the renamed headings and the
+  `doc-headings` marker for the default and ARM templates.
+
 - **`--exit-code` now gates on any pending work.** It returns `3` when documents need generating **or**
   re-splicing **or** migrating, not merely when documents are missing, so a clean CI run means every document
   on disk matches the export.
@@ -243,6 +175,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Version is injected at build time.** `rootCmd.Version` resolves from an ldflags-injected string, falling
   back to `debug.ReadBuildInfo()`; the `Makefile` injects the version on `build`/`install`.
+
+### Fixed
+
+- **Notification message templates no longer churn on every export.** The `lastModifiedDateTime` inside
+  each `localizedNotificationMessages` entry was stamped by the Graph API with the response time rather
+  than the tenant's actual modification time, giving every template a new `sourceSha256` on every run even
+  when nothing changed. A `normalize` function now strips the volatile field before serialization, matching
+  the pattern already used for `applePushNotificationCertificate`'s server-regenerated `id`.
+
+- **Work list now carries `notificationsSha256` and `usedBySha256` for regenerated documents.** When a
+  compliance policy or notification template was regenerated (list 1), the worklist table only supplied
+  `assignmentsSha256` — the `notificationsSha256` (for policies referencing a template) and `usedBySha256`
+  (for templates referenced by policies) were computed but never rendered. The agent therefore wrote no
+  hash into the frontmatter, causing every such document to appear for re-splice on the next run and every
+  run after that. The worklist table now includes both columns, and `WorkItem` carries a new `UsedBySha256`
+  field computed for `notificationMessageTemplates` in the list-1 path.
+
+- **Tests** for the three fixes: list-1 `UsedBySha256` propagation for templates, list-1
+  `NotificationsSha256` propagation for compliance policies, and the worklist table rendering all five
+  hash columns.
+
+- **`notificationMessageTemplates` now export their actual content.** The handler only did a plain item GET,
+  which omits `localizedNotificationMessages` — the per-locale subject and message body that are the template's
+  real payload — because Graph returns that navigation property only on request. Each template is now fetched with
+  `$expand=localizedNotificationMessages` (best-effort: a failure warns and still exports the template without its
+  content), matching the embedded-payload the type's documentation prompt already promised.
+
+- **Documentation-run check script (`generate_prompt_template.md` §4) hardened against three false failures
+  real tenant runs hit.** The `<details>`/`</details>` balance check now ignores tags inside fenced code
+  blocks and inline code, so a document that merely *mentions* `<details>` (or embeds a shell script) is no
+  longer reported as imbalanced. A document that exists but is not in the work list is no longer flagged as a
+  stray — an incremental run legitimately leaves most documents untouched, and a document is retained when its
+  type was not regenerated (e.g. a type that could not be listed); it is now failed only when it is genuinely
+  a stray (no resource frontmatter) or misplaced (its `source` maps to a different derived path). The section-6
+  mtime baseline (`chunks/mtimes.json`) now covers the whole document tree rather than only the work list, and
+  is written once, so re-running §4 after the section-5 splice can no longer clobber the pre-splice snapshot.
+- **Exports are now reproducible: an unchanged tenant re-exports byte-for-byte identically.** Three sources of
+  run-to-run noise were eliminated:
+  - **Colliding display names.** A resource's file name is its sanitized display name, and two resources of the
+    same type can share one — several default Intune `deviceEnrollmentConfigurations` are all named *"All users
+    and all devices"*, and a `winGetApp` and a `macOSLobApp` can both be named *"3CX"*. The writer used the
+    display name directly, so colliding siblings overwrote one another on disk **and** collapsed into a single
+    `metadata.yaml` entry (the key is the file path); because the pipeline writes concurrently, *which* sibling
+    survived varied run to run, silently dropping the rest. The writer now buffers its input and assigns names
+    in a deterministic order (sorted by type, sanitized name, resource ID): the lowest resource ID keeps the
+    bare `<name>.yaml` and every other collision is written to `<name>_<disc>.yaml`, where `<disc>` is a short,
+    stable token derived from its resource ID. No resource is lost, each keeps its own metadata entry, the
+    bare-name owner no longer depends on processing order, and every disambiguation is logged as a warning.
+  - **Unstable scalar array order.** Microsoft Graph returns some multivalued attributes (e.g. `proxyAddresses`)
+    in a different order per read. All-string arrays are now sorted during transformation (the array analogue of
+    the YAML marshaller already sorting map keys); arrays containing objects keep their order, which can be
+    significant.
+  - **Volatile server-generated identifiers.** The `Microsoft.Graph/applePushNotificationCertificate` singleton
+    returns a fresh `id` GUID on every read. That `id` is now dropped from the exported YAML via a new per-type
+    normalization hook, and the singleton is identified by its stable `appleIdentifier` (which the file is named
+    after) instead of the GUID, so its `resourceId` in `resources/metadata.yaml` is also stable across runs.
+    After these three fixes, two runs of an unchanged tenant produce identical resource YAML and `doc-prompt.md`
+    files, and a `metadata.yaml` that differs only in its timestamps.
+
+- **`config.example.yaml` is now a true no-op when loaded unmodified.** The example's own header promises that
+  loading it behaves exactly like running with no config file, but its `transformers` block spelled out each
+  transformer's settings (`clean-empty: true`, the full `base64-decode` block). Those values matched the runtime
+  defaults functionally, yet writing them changed the transform-config hash recorded in `resources/metadata.yaml`
+  (`transformConfigSha256` is a byte hash of the transformer config), so a run that loaded the example diverged
+  from one that did not. The default pipeline is now written as bare transformer names (empty settings, identical
+  hash) and every per-transformer option is illustrated in comments instead — restoring the no-op guarantee while
+  still documenting every setting.
+
+### Security
+
+- **Per-resource documents no longer reprint credential-shaped secrets found in free-text.** Real tenant runs
+  surfaced unmasked secrets (a plist `REMOTEOFFICEAUTHKEY`, a profile-removal password in a `description`)
+  being copied verbatim into the generated documents, widening exposure from Intune readers to anyone with
+  read access to the docs. All six property-documenting prompt templates (default, singleton, group,
+  credential, referenced, ARM) now redact a credential-shaped value — one found in a free-text field
+  (`description`/`notes`) or a decoded embedded payload (plist/XML/base64) that the service did **not**
+  already mask — rendering `«redacted — secret present in source»` in its place, still documenting the field,
+  marking the block `data-note="security"`, and flagging it in the `Security` section as a credential to
+  rotate. The literal value remains only in the source YAML. Structured setting values are left verbatim, and
+  the `record` template (inventory types with no free-text fields) is unchanged.
+  **This changes those types' `promptSha256`, contributing to the full regeneration already required.**
+- **Tests** asserting the redaction rule renders in the default and ARM prompts.
 
 ## [RC2]
 
@@ -379,6 +393,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.windsurf/rules` were updated to match the new flag structure, export layout, prune guards and pipeline
   invariants.
 
+- **BREAKING: Flags must now follow the subcommand.** `--type`, `--resource-group`, `--workers`, `--subscription`,
+  `--client-id` and `--tenant-id` moved from persistent root flags to per-command flags, so
+  `azure-rd --type X download` no longer parses. Use `azure-rd download --type X`. `--config`, `--output`,
+  `--dry-run` and `--log-level` remain global and may still be given in either position.
+- **BREAKING: `--write-prompts` no longer exists**; prompts are written by default and `--no-prompt` opts out.
+- **BREAKING: Downloaded files moved into `resources/`.** Exports produced by earlier versions need their
+  `<APIType>/` trees moved under `resources/`, or regenerating.
+
 ### Fixed
 
 - **Cancelled requests produced no result at all.** All three pipeline stages emitted a single error result
@@ -409,13 +431,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`config-tailored-intune.yaml` still set the removed `write-prompts` key**, which viper no longer reads.
   Replaced with the equivalent `no-prompt: false` so the intent survives instead of sitting dead in the file.
-
-### Breaking
-
-- **Flags must now follow the subcommand.** `--type`, `--resource-group`, `--workers`, `--subscription`,
-  `--client-id` and `--tenant-id` moved from persistent root flags to per-command flags, so
-  `azure-rd --type X download` no longer parses. Use `azure-rd download --type X`. `--config`, `--output`,
-  `--dry-run` and `--log-level` remain global and may still be given in either position.
-- **`--write-prompts` no longer exists**; prompts are written by default and `--no-prompt` opts out.
-- **Downloaded files moved into `resources/`.** Exports produced by earlier versions need their
-  `<APIType>/` trees moved under `resources/`, or regenerating.

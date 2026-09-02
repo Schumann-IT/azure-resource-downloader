@@ -712,6 +712,58 @@ func TestSpliceMarker(t *testing.T) {
 	}
 }
 
+func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
+	items := []WorkItem{
+		{
+			ResourceType:        compType,
+			SourcePath:          "resources/" + compType + "/pol.yaml",
+			DocPath:             "docs/" + compType + "/pol.md",
+			Reason:              "resource changed",
+			SourceSha256:        "src-hash",
+			PromptSha256:        "prompt-hash",
+			AssignmentsSha256:   "assign-hash",
+			NotificationsSha256: "notif-hash",
+		},
+		{
+			ResourceType: notificationMessageTemplatesType,
+			SourcePath:   "resources/" + notificationMessageTemplatesType + "/t1.yaml",
+			DocPath:      "docs/" + notificationMessageTemplatesType + "/t1.md",
+			Reason:       "no document",
+			SourceSha256: "src-t1",
+			PromptSha256: "prompt-t1",
+			UsedBySha256: "usedby-hash",
+		},
+	}
+	out := renderWorklist(items)
+
+	// Header must include all hash columns.
+	if !strings.Contains(out, "| notificationsSha256 |") {
+		t.Error("worklist table must have a notificationsSha256 column")
+	}
+	if !strings.Contains(out, "| usedBySha256 |") {
+		t.Error("worklist table must have a usedBySha256 column")
+	}
+	// The compliance policy row must render the notifications hash.
+	if !strings.Contains(out, "`notif-hash`") {
+		t.Errorf("compliance policy row must render notificationsSha256, got:\n%s", out)
+	}
+	// The template row must render the used-by hash.
+	if !strings.Contains(out, "`usedby-hash`") {
+		t.Errorf("template row must render usedBySha256, got:\n%s", out)
+	}
+	// Empty hash columns must render as empty cells (not backticked).
+	// The template row has no notificationsSha256 or assignmentsSha256.
+	if strings.Contains(out, "`notif-hash`") && strings.Contains(out, "`usedby-hash`") {
+		// Both hashes present — verify they are on different rows.
+		lines := strings.Split(out, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "`usedby-hash`") && strings.Contains(line, "`notif-hash`") {
+				t.Error("usedBySha256 and notificationsSha256 must not be on the same row")
+			}
+		}
+	}
+}
+
 func TestParseFrontmatter(t *testing.T) {
 	valid := []byte("---\nsource: a.yaml\nsourceSha256: abc\npromptSha256: def\n---\n# body\n")
 	fm, ok := parseFrontmatter(valid)

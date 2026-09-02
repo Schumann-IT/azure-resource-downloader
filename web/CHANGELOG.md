@@ -8,20 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Breaking
-
-- **A tenant is now a directory containing `docs/index.yaml`; `index.md` and `.doc-manifest.json` are
-  gone.** The CLI stopped generating both: `azure-rd docs generate-index` writes a machine-readable
-  navigation index instead, and the manifest was retired because `resources/metadata.yaml` plus the
-  documents' frontmatter already carry the generation state it used to hold. Discovery is keyed off
-  that file, and a tenant's document root is now `<export>/docs` rather than the export folder — which
-  is what the relative `../<type>/<name>.md` links inside the documents were always relative to, so
-  cross-document links resolve without a rewrite change. An export that has not had
-  `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
-  a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
-  is still bounded, and counts are still derived from the index rather than by walking the tree. A
-  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
-
 ### Added
 
 - **A tenant's documentation can be exported as Confluence HTML.**
@@ -239,6 +225,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: A tenant is now a directory containing `docs/index.yaml`; `index.md` and `.doc-manifest.json` are
+  gone.** The CLI stopped generating both: `azure-rd docs generate-index` writes a machine-readable
+  navigation index instead, and the manifest was retired because `resources/metadata.yaml` plus the
+  documents' frontmatter already carry the generation state it used to hold. Discovery is keyed off
+  that file, and a tenant's document root is now `<export>/docs` rather than the export folder — which
+  is what the relative `../<type>/<name>.md` links inside the documents were always relative to, so
+  cross-document links resolve without a rewrite change. An export that has not had
+  `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
+  a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
+  is still bounded, and counts are still derived from the index rather than by walking the tree. A
+  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
+
 - **Heading anchors are no longer percent-encoded.** `markdown-it-anchor`'s default slug encodes
   anything outside its allowed set, which produced ids only selectable as
   `[id="lifecycle-%26-operations"]` and a `%E2%80%94` in every `summary.md` H1 anchor. A local
@@ -359,8 +357,6 @@ First iteration: discover exported tenants on disk and render their generated Ma
     traversal, and an edited file being reflected on the next request;
   - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts
     the custom `<details>`/`<summary>` and dark-mode rules survive.
-
-### Known limitations
 
 Deliberate iteration-1 scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md): no
 search, no syntax highlighting, single-segment tenant routes only, no manifest-driven navigation

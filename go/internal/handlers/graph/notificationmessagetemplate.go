@@ -93,5 +93,20 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			}
 			return ""
 		},
+		normalize: func(properties map[string]interface{}) {
+			// localizedNotificationMessages[].lastModifiedDateTime is stamped
+			// by the Graph API with the response time rather than the tenant's
+			// actual modification time, so it changes on every read and makes
+			// sourceSha256 churn. Strip it to keep the exported YAML stable.
+			msgs, ok := properties["localizedNotificationMessages"].([]interface{})
+			if !ok {
+				return
+			}
+			for _, m := range msgs {
+				if msg, ok := m.(map[string]interface{}); ok {
+					delete(msg, "lastModifiedDateTime")
+				}
+			}
+		},
 	}, nil
 }

@@ -93,6 +93,9 @@ type WorkItem struct {
 	// notification block. It is set only for resources that reference a
 	// notification message template; blank otherwise.
 	NotificationsSha256 string
+	// UsedBySha256 is the reverse hash for a notification template's "Used by"
+	// block. It is set only for notificationMessageTemplates; blank otherwise.
+	UsedBySha256 string
 }
 
 // RespliceItem is one document whose marked block must be re-rendered even
@@ -291,6 +294,9 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 			}
 			if len(entry.NotificationTemplateRefs) > 0 {
 				item.NotificationsSha256 = notificationRefsSha256(tmplNames, entry.NotificationTemplateRefs)
+			}
+			if rtype == notificationMessageTemplatesType {
+				item.UsedBySha256 = usedBySha256(usedBy[entry.ResourceId])
 			}
 			res.ToGenerate = append(res.ToGenerate, item)
 			continue

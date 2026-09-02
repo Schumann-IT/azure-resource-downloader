@@ -260,6 +260,75 @@ func TestGeneratePromptNotificationsMigrate(t *testing.T) {
 	}
 }
 
+func TestGeneratePromptList1CarriesUsedBySha256(t *testing.T) {
+	// Build a scenario where the template has no document (list 1) but the
+	// referencing policy does, so only the template lands in ToGenerate.
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:     {PromptSha256: "p-comp"},
+			templateType: {PromptSha256: "p-tmpl"},
+		},
+		Resources: map[string]ResourceMeta{
+			compType + "/policy.yaml": {
+				ResourceId: "pol", DisplayName: "Policy", SourceSha256: "s-pol", PresentInTenant: true,
+				NotificationTemplateRefs: []string{"T1"},
+			},
+			templateType + "/t1.yaml": {
+				ResourceId: "T1", DisplayName: "Compliance email", SourceSha256: "s-t1", PresentInTenant: true,
+			},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	writePromptFile(t, resourcesDir, compType)
+	writePromptFile(t, resourcesDir, templateType)
+	// Policy has a current doc; template has none → template lands in list 1.
+	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp"})
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	var found *WorkItem
+	for i := range res.ToGenerate {
+		if res.ToGenerate[i].DocPath == "docs/"+templateType+"/t1.md" {
+			found = &res.ToGenerate[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("template must be in ToGenerate (no doc), got %+v", res.ToGenerate)
+	}
+	want := usedByHash(m, "T1")
+	if found.UsedBySha256 != want {
+		t.Errorf("UsedBySha256 = %q, want %q", found.UsedBySha256, want)
+	}
+}
+
+func TestGeneratePromptList1CarriesNotificationsSha256(t *testing.T) {
+	tenantDir, m := policyTemplateScenario(t)
+	// Policy document is missing — it lands in list 1 (no doc).
+	// The work item must carry NotificationsSha256.
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	var found *WorkItem
+	for i := range res.ToGenerate {
+		if res.ToGenerate[i].DocPath == "docs/"+compType+"/policy.md" {
+			found = &res.ToGenerate[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("policy must be in ToGenerate (no doc), got %+v", res.ToGenerate)
+	}
+	want := notifHash(m, []string{"T1"})
+	if found.NotificationsSha256 != want {
+		t.Errorf("NotificationsSha256 = %q, want %q", found.NotificationsSha256, want)
+	}
+}
+
 func TestGeneratePromptUsedByMap(t *testing.T) {
 	tenantDir := t.TempDir()
 	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
