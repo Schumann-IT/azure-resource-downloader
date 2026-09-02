@@ -205,6 +205,11 @@ azure-rd --help
 # List supported resource types (uses the signed-in user's default subscription)
 azure-rd list
 
+# Print a diagnostic report of the current Azure session (writes nothing):
+# authentication method, signed-in identity, tenant, subscription, output
+# directory and registered handler count a download would use right now.
+azure-rd --debug
+
 # Download a specific resource (uses default subscription)
 azure-rd download \
   --resource-id "/subscriptions/.../resourceGroups/my-rg"

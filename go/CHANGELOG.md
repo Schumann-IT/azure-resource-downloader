@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`azure-rd --debug` prints a diagnostic report of the current Azure session.** Run with no subcommand, it
+  authenticates exactly as `download` would and reports how the tool is authenticated (Azure CLI session vs.
+  device-code app registration), the signed-in identity, the resolved tenant, subscription and output
+  directory, and how many resource-type handlers are registered — so you can confirm which identity and
+  target a subsequent download would use. It writes nothing and is safe to run at any time. The Azure auth
+  flags (`--subscription`, `--client-id`, `--tenant-id`) are accepted on the root command for this purpose.
+
 ### Changed
 
 - **The generated documentation prompts now declare a closed, machine-readable set of H2 section headings.** The

@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
+	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/cmdutil"
+	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 
 	"github.com/spf13/cobra"
@@ -30,6 +35,7 @@ var (
 	flagOutput     string
 	flagDryRun     bool
 	flagLogLevel   string
+	flagDebug      bool
 )
 
 // rootCmd represents the base command
@@ -46,8 +52,14 @@ It's designed to be easily extensible with support for multiple Azure resource t
 Authentication reuses your existing Azure CLI session (run 'az login' first); the
 same delegated token is used for both ARM and Microsoft Graph calls. To download
 Microsoft Graph/Intune types that need scopes the Azure CLI app cannot provide,
-sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
+sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).
+
+Run 'azure-rd --debug' (with no subcommand) to print a diagnostic report of the
+current Azure session — how the tool is authenticated, who is signed in, and which
+tenant, subscription and output directory a download would use right now. It writes
+nothing and is safe to run at any time.`,
 	Version: resolveVersion(),
+	RunE:    runRoot,
 }
 
 // resolveVersion returns the tool version, preferring an ldflags-injected value,
@@ -122,6 +134,15 @@ func init() {
 	_ = viper.BindPFlag("dry-run", rootCmd.PersistentFlags().Lookup("dry-run"))
 	_ = viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 
+	// The root command itself does one thing besides dispatching to subcommands:
+	// with --debug (and no subcommand) it prints a diagnostic report of the
+	// current Azure session. That report authenticates exactly like download, so
+	// the auth flags are registered locally on root — NOT persistently, so the
+	// subcommands keep declaring their own copies via cmdutil and do not silently
+	// inherit them.
+	rootCmd.Flags().BoolVar(&flagDebug, "debug", false, "print a diagnostic report of the current Azure session and exit (no files written)")
+	cmdutil.AddAzureAuthFlags(rootCmd)
+
 	// Subcommand packages that live in their own directory register through a
 	// constructor (they cannot import package cmd without a cycle). Flat-file
 	// commands in package cmd still self-register in their own init().
@@ -163,4 +184,90 @@ func initConfig() {
 	if configFileUsed != "" {
 		logger.Default.Info("Using config file", "path", configFileUsed)
 	}
+}
+
+// runRoot handles a bare `azure-rd` invocation (no subcommand). With --debug it
+// prints the current Azure session report; otherwise it prints help, matching
+// Cobra's default behaviour for a command with no action.
+func runRoot(cmd *cobra.Command, args []string) error {
+	if !flagDebug {
+		return cmd.Help()
+	}
+	return runDebugReport(cmd)
+}
+
+// runDebugReport authenticates exactly as `download` would and reports how the
+// tool is authenticated, who is signed in, and which tenant, subscription and
+// output directory a download would use right now. It writes nothing.
+func runDebugReport(cmd *cobra.Command) error {
+	// Bind this command's local flags to viper before reading any values so the
+	// flag > env > config > default precedence holds.
+	cmdutil.BindFlags(cmd)
+
+	ctx := context.Background()
+	log := logger.Default
+
+	sub := viper.GetString("subscription")
+	clientID := viper.GetString("client-id")
+	tenantID := viper.GetString("tenant-id")
+	output := viper.GetString("output")
+
+	// Report the static session facts before any network call so they are shown
+	// even if authentication later fails.
+	log.Info("azure-rd", "version", cmd.Root().Version)
+	if clientID != "" {
+		log.Info("Authentication", "method", "device-code sign-in (dedicated app registration)",
+			"client_id", clientID, "tenant_id", tenantID)
+	} else {
+		log.Info("Authentication", "method", "Azure CLI session (az login)")
+	}
+	if configFile := viper.ConfigFileUsed(); configFile != "" {
+		log.Info("Config file", "path", configFile)
+	} else {
+		log.Info("Config file", "path", "<none>")
+	}
+
+	// Authenticate exactly as download does (auto-detecting a subscription when
+	// none is given; a missing subscription is not fatal for Graph-only access).
+	log.Info("Authenticating with Azure...")
+	azureClient, err := azure.NewClient(ctx, sub, clientID, tenantID)
+	if err != nil {
+		log.Error("Failed to create Azure client", "error", err)
+		os.Exit(1)
+	}
+
+	// Resolve the signed-in principal from the access token claims (best-effort:
+	// no directory call, so a token that is opaque or lacks the claims warns
+	// rather than fails).
+	if id, err := azure.SignedInIdentity(ctx, azureClient.GetCredential()); err != nil {
+		log.Warn("Could not resolve the signed-in identity", "reason", azure.ErrorSummary(err))
+		log.Debug("Identity resolution failed", "error", err)
+	} else {
+		log.Info("Signed in", "user", id.Username, "tenant_id", id.TenantID, "object_id", id.ObjectID)
+	}
+
+	// Subscription: the value actually resolved (may have been auto-detected).
+	if sub = azureClient.GetSubscriptionID(); sub == "" {
+		log.Info("Subscription", "id", "<none> (Microsoft Graph resources only; ARM types are skipped)")
+	} else {
+		log.Info("Subscription", "id", sub)
+	}
+
+	// Tenant default domain (best-effort). When resolved, a download scopes its
+	// output under it, so report the same effective path here.
+	if domain, err := azureClient.GetTenantDomain(ctx); err != nil {
+		log.Warn("Could not resolve the tenant domain", "reason", azure.ErrorSummary(err))
+		log.Debug("Tenant domain resolution failed", "error", err)
+	} else {
+		log.Info("Tenant", "default_domain", domain)
+		output = filepath.Join(output, domain)
+	}
+	log.Info("Output directory", "path", output)
+
+	// How many resource types this session could download. Enumerating them is a
+	// local operation; secret resolution is a download-only concern, so off here.
+	registry := handlers.NewRegistry(azureClient.GetCredential(), sub, false)
+	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
+
+	return nil
 }
