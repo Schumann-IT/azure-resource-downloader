@@ -102,54 +102,6 @@ reference export) as a flat per-type tree with no way to narrow it and no contex
 - Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
   fallback reads.
 
-## 5. Settle how a settings block is represented in the Confluence export
-
-**Goal.** Make an imported space usable for the reader who came for one setting. The export ships the
-`<details>` blocks untouched, which is a probe rather than an answer: nobody has yet seen what the importer
-does with them.
-
-> **What the corpus contains** (two reference exports, 411 served documents, 6.4 MB of Markdown):
-> **7,208 `<details>`/`<summary>` blocks** — up to 317 in one document, nested up to 5 deep — 14,345 inline
-> `<code>`, 6,048 table rows and 182 fenced code blocks (which
-> [the importer flattens to plain text](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)).
-> A single page therefore has to carry up to 317 settings, five levels deep, with no collapse affordance if
-> the importer drops the block.
->
-> **Why it is open.** `<details>` is the dominant element and the architecture notes call it *the*
-> documentation, it is not on the importer's preserved list, and the FAQ does not say what it does with it.
-> No Confluence instance was available to settle it, and choosing between the transforms from the FAQ alone
-> would be guessing — so passthrough shipped, and the README calls the export provisional. The
-> alternatives, for whoever runs the first real import: **A, bold paragraph + blockquote** (lowest effort,
-> keeps nesting visually and the `path = value` summary verbatim, loses the collapse affordance — a
-> 317-setting document becomes one very long page); **B, headings by depth** (the only option giving each
-> setting its own anchor and search entry, but a 317-entry page outline, and depth 5 does not fit under
-> `h6`); **C, one table per settings section** (most information per screen and matches how these documents
-> are read, but flattens nesting, has no home for group-label blocks such as `Sub-options (1)`, and is the
-> only option that must **parse** the summary into key/value — so the only one that can be silently wrong
-> when a value itself contains ` = `). Passthrough is what makes that import cheap to run.
->
-> **The seam already exists.** `src/docs/export/details-strategy.ts` has one member and one decision
-> function; a transform is a second member plus a branch in the serialiser, which works on the rendered DOM,
-> so nothing about the single `markdown-it` instance or its cache is involved. `test/export.spec.ts` holds
-> the shared fixture the transforms have to answer for — a nested block, a group-label block with no value,
-> a link inside a block, and a value that itself contains ` = ` (the trap that makes C parse-dependent).
-> `?details=` already 404s for anything not implemented, so adding a second value is additive.
-
-**Plan.**
-
-- **Import one passthrough zip into a scratch space** and answer four questions: does the block survive at
-  all, is the 317-setting document usable, does each setting have an anchor, and does search find a setting
-  name. Also check the page size the importer accepts — the largest current page is 50 kB of HTML.
-- **Record the answer in this entry**, so the next attempt does not re-run the experiment.
-- **If passthrough survives**, drop the *provisional* wording from the README's Confluence section and note
-  in `CHANGELOG.md` what the import actually does with the block.
-- **Otherwise implement exactly one transform** as a second `DetailsStrategy`, against the fixture that is
-  already in `test/export.spec.ts`. Accept both values on `?details=` while the comparison is open, then
-  default to the winner and delete the loser — a query parameter is not a configuration mechanism and must
-  not outlive the comparison.
-- **Re-check the assignment and metadata tables** in whichever representation wins: `.prose table` does not
-  travel, so a table that relied on the browser's horizontal scroll may need different markup.
-
 ## Standing decisions
 
 Decisions that are not work items but constrain the work items below, recorded so the next iteration does
@@ -186,7 +138,7 @@ one place to look per tenant instead of a control repeated on every page.
 
 **What any new entry point has to keep.** A plain anchor with `download` and no client-side JavaScript; the
 route shape `/:tenant/_export/<format>` behind the `_export` representation prefix, declared before the
-document catch-all; the one-way/provisional caveat rendered next to the link rather than only in the README;
+document catch-all; the one-way caveat rendered next to the link rather than only in the README;
 no anchor nested inside another anchor (the picker card is a wrapper element for exactly this reason); and a
 dark-mode variant plus a visible `:focus-visible` outline.
 
@@ -292,6 +244,25 @@ a read-only browser that stores no state. **Revisit** once one-way HTML publishi
 re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
+
+### Idea: Tenant diff
+
+*As an administrator I would like to diff the configuration of two tenants, so I can detect and understand
+drift.* Two use cases: **a)** diff a staging tenant against production, so a reviewed change can be moved
+from stage to prod quickly and nothing else moves with it; **b)** compare configuration *and* documentation
+across several tenants and see what the differences actually mean, not just that bytes differ. The pairing
+key already exists — every export uses the same `<type>/<name>` layout under `docs/` and `resources/`, and
+`docs/index.yaml` gives per-tenant type, scope and counts without walking the tree — so a first version could
+be a three-way listing (only in A, only in B, in both but different) over the index, refined to a per-document
+comparison. **Parked** because it is a comparison *engine*, not a view: identity does not survive across
+tenants (GUIDs, assignment group ids and display names all differ, so equal configuration reads as different
+and the interesting drift hides in the noise), a readable diff of a 317-setting document needs interaction
+the no-client-side-JavaScript rule forbids, every route today is scoped to one `:tenant`, and it is not
+settled whether the comparison belongs here at all rather than in the CLI, which holds the facts
+(`resources/metadata.yaml`, the per-resource hashes) that make a semantic diff cheap. **Revisit** when a
+stage/prod tenant pair is actually exported side by side into one docs root, and once there is an answer for
+cross-tenant identity — a normalisation of tenant-local ids that can be stated and tested, not guessed per
+resource type.
 
 ### Idea: Further export formats and partial exports
 

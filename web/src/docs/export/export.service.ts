@@ -13,7 +13,6 @@ import {
   overviewPage,
   OVERVIEW_FILE,
 } from './confluence';
-import { DetailsStrategy } from './details-strategy';
 import { toConfluenceHtml } from './html-allowlist';
 import { stripDocExtension } from './page-name';
 
@@ -34,7 +33,6 @@ export class ExportService {
   async confluence(
     info: TenantInfo,
     index: TenantIndex,
-    details: DetailsStrategy,
     res: Response,
   ): Promise<void> {
     const plan = buildExportPlan(index, await this.titles(info, index));
@@ -51,7 +49,7 @@ export class ExportService {
 
     const skipped: ExportPage[] = [];
     for (const page of plan.pages) {
-      const html = await this.renderPage(info, page, plan.pageFileByDoc, details);
+      const html = await this.renderPage(info, page, plan.pageFileByDoc);
       if (html === null) {
         // A document the index lists but that cannot be read is normal, not
         // exceptional: it is reported on the overview page instead of failing
@@ -67,11 +65,7 @@ export class ExportService {
       await yieldToEventLoop();
     }
 
-    const summaryHtml = await this.renderSummary(
-      info,
-      plan.pageFileByDoc,
-      details,
-    );
+    const summaryHtml = await this.renderSummary(info, plan.pageFileByDoc);
     const overview = overviewPage({
       tenantName: info.name,
       index,
@@ -120,7 +114,6 @@ export class ExportService {
     info: TenantInfo,
     page: ExportPage,
     pageFileByDoc: Map<string, string>,
-    details: DetailsStrategy,
   ): Promise<string | null> {
     const resolved = resolveWithinTenant(info.dir, page.doc);
     if (!resolved) return null;
@@ -137,7 +130,6 @@ export class ExportService {
         bodyHtml: toConfluenceHtml(rendered.html, {
           tenant: info.id,
           pageFileByDoc,
-          details,
         }),
         meta: rendered.meta,
         docPath: page.docPath,
@@ -152,7 +144,6 @@ export class ExportService {
   private async renderSummary(
     info: TenantInfo,
     pageFileByDoc: Map<string, string>,
-    details: DetailsStrategy,
   ): Promise<string | null> {
     try {
       const rendered = await this.renderer.render(info.summaryPath, {
@@ -162,7 +153,6 @@ export class ExportService {
       return toConfluenceHtml(rendered.html, {
         tenant: info.id,
         pageFileByDoc,
-        details,
       });
     } catch {
       return null;

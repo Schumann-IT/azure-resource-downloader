@@ -36,7 +36,7 @@ mutates the export in any way.
   when it matches the document's own `source` and stands alone on its line).
 - **Confluence HTML export** — `GET /:tenant/_export/confluence` streams the whole tenant as a zip
   ready for Confluence's HTML import, offered as a download link per tenant on the picker.
-  **Provisional** — see [Confluence export](#confluence-export) for what it cannot do.
+  **One-way** — see [Confluence export](#confluence-export) for what it cannot do.
 - **No-restart refresh** — regenerated documents, re-downloaded resources *and* a regenerated
   `index.yaml` appear on the next request (per-request `stat()` against an mtime/size-keyed cache);
   newly generated tenants appear within the 30 s discovery TTL.
@@ -165,14 +165,13 @@ as every other route, and the archive is assembled in memory and streamed — no
 nothing written under `DOCS_ROOT`. A document the index lists but that cannot be read is reported
 under *Not exported* on the overview page instead of failing the export.
 
-**Provisional, and one-way.** Import *creates* a space rather than updating one, so re-importing
-yields a second space — and edits made in Confluence are lost the next time the export is imported.
-Beyond that:
+**One-way.** Import *creates* a space rather than updating one, so re-importing yields a second
+space — and edits made in Confluence are lost the next time the export is imported. Beyond that:
 
-- **`<details>` blocks are passed through untouched.** They are the bulk of the documentation, and
-  Confluence's import FAQ neither lists them as preserved nor says what happens to them. Passthrough
-  is what makes the first real import cheap to evaluate; alternatives are in
-  [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+- **`<details>` blocks are passed through untouched**, which is what the importer wants: verified
+  against a Confluence Cloud import, each block becomes a **native collapsible expand** with its
+  `path: value` summary, its nesting and its inline formatting intact. The summary is never parsed
+  into key/value, so a value that itself contains ` = ` cannot be mangled.
 - **No media.** Each served root hands out exactly one extension (`.md` under `docs/`), so the
   exporter cannot read an image; images travel as their `alt` text.
 - **In-document anchors do not survive**, because the flat space has no place for them. Heading
@@ -268,8 +267,7 @@ web/
 │           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
 │           ├── confluence.ts            # the format: space, page plan, overview, provenance
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
-│           ├── page-name.ts             # page titles = file names, sanitised and deduplicated
-│           └── details-strategy.ts      # the seam for the open <details> question
+│           └── page-name.ts             # page titles = file names, sanitised and deduplicated
 ├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}
 ├── public/                              # app.css (generated, gitignored)
 └── test/

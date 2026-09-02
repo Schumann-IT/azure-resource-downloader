@@ -7,7 +7,6 @@ import { YamlHighlighterService } from './yaml-highlighter.service';
 import { resolveResource, resolveWithinTenant } from './path-safety';
 import { buildNavigation, TenantIndex } from './tenant-index';
 import { ExportService } from './export/export.service';
-import { parseDetailsStrategy } from './export/details-strategy';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -99,7 +98,6 @@ export class DocsController {
   async export(
     @Param('tenant') tenant: string,
     @Param('format') format: string,
-    @Query('details') details: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
@@ -108,13 +106,10 @@ export class DocsController {
       return this.notFound(res, tenant, `${EXPORT_PREFIX}/${format}`);
     }
 
-    const strategy = parseDetailsStrategy(details);
-    if (!strategy) return this.notFound(res, tenant, `${EXPORT_PREFIX}/${format}`);
-
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, tenant, EXPORT_PREFIX);
 
-    await this.exporter.confluence(info, index, strategy, res);
+    await this.exporter.confluence(info, index, res);
   }
 
   // GET /:tenant/_resource/*path — the exported source YAML behind a document,

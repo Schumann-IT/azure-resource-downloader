@@ -46,12 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries carry the export's own `generatedAt` rather than the wall clock, so re-exporting an
   unchanged tenant produces the same bytes.
 
-  **Provisional and one-way**, as the README says: importing creates a space rather than updating one,
-  so re-importing yields a second space and edits made in Confluence are lost. The `<details>` blocks
-  that are the bulk of the documentation are passed through untouched, because Confluence's import FAQ
-  neither lists them as preserved nor says what it does with them and no instance was available to
-  settle it; the alternatives, and the media and per-format follow-ups, are in `NEXT-ITERATIONS.md`.
-  New dependencies: `htmlparser2` for the serialisation pass and `yazl` for the streamed zip.
+  **One-way**, as the README says: importing creates a space rather than updating one, so re-importing
+  yields a second space and edits made in Confluence are lost. The `<details>` settings blocks that are
+  the bulk of the documentation are passed through untouched, and a real Confluence Cloud import
+  confirms that this is the right representation: the importer turns each block into a **native
+  collapsible expand**, keeping its `path: value` summary, its nesting and its inline formatting — so
+  the block is now on the serialiser's allowlist as a settled decision rather than a probe, no summary
+  is ever parsed into key/value (a value containing ` = ` cannot be mangled), and the `?details=`
+  strategy switch that existed only to compare alternatives is gone with it. The media and per-format
+  follow-ups remain in `NEXT-ITERATIONS.md`. New dependencies: `htmlparser2` for the serialisation pass
+  and `yazl` for the streamed zip.
 
 - **The tenant summary's Findings table is styled as a findings list, with the severity as an icon.**
   A markdown-it core rule tags any table whose first header cell is `Severity` with `class="findings"`

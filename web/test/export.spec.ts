@@ -14,10 +14,6 @@ import {
   overviewPage,
   spaceName,
 } from '../src/docs/export/confluence';
-import {
-  DEFAULT_DETAILS_STRATEGY,
-  parseDetailsStrategy,
-} from '../src/docs/export/details-strategy';
 import { parseTenantIndex, TenantIndex } from '../src/docs/tenant-index';
 
 // The Confluence exporter's pure modules: page naming (which decides what every
@@ -55,7 +51,6 @@ function options(pages: Record<string, string> = {}) {
   return {
     tenant: 'mytenant',
     pageFileByDoc: new Map(Object.entries(pages)),
-    details: DEFAULT_DETAILS_STRATEGY,
   };
 }
 
@@ -273,9 +268,11 @@ describe('the allowlist serialiser', () => {
   });
 });
 
-// One shared fixture for the `<details>` question: a nested block, a group-label
-// block with no value, a body with a link, and a value that itself contains
-// ` = `. Passthrough must leave the structure alone; a transform lands here.
+// One shared fixture for the settings block: a nested block, a group-label block
+// with no value, a body with a link, and a value that itself contains ` = `.
+// Confluence's importer turns the block into a native collapsible expand, so the
+// serialiser must leave the structure alone — including the summary text, which
+// is never parsed into key/value and so cannot be mangled.
 const DETAILS_FIXTURE =
   '<details>\n' +
   '<summary><code>firewall/enabled = true</code></summary>\n' +
@@ -289,14 +286,8 @@ const DETAILS_FIXTURE =
   '</details>\n' +
   '</details>';
 
-describe('the details strategy', () => {
-  it('defaults to passthrough and rejects a strategy that does not exist', () => {
-    expect(parseDetailsStrategy(undefined)).toBe('passthrough');
-    expect(parseDetailsStrategy('')).toBe('passthrough');
-    expect(parseDetailsStrategy('headings')).toBeNull();
-  });
-
-  it('passes the block through, nesting and summaries verbatim', () => {
+describe('settings blocks', () => {
+  it('are exported verbatim, nesting and summaries included', () => {
     const html = toConfluenceHtml(
       DETAILS_FIXTURE,
       options({ 'Microsoft.Graph/groups/g1': 'groups — Admins.html' }),

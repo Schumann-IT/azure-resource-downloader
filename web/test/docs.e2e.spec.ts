@@ -749,12 +749,9 @@ describe('Docs browser (e2e)', () => {
     expect(await snapshot(root)).toEqual(tree);
   });
 
-  it('404s an unknown export format and an unimplemented details strategy', async () => {
+  it('404s an unknown export format and an unknown tenant', async () => {
     await request(app.getHttpServer())
       .get('/mytenant/_export/docx')
-      .expect(404);
-    await request(app.getHttpServer())
-      .get('/mytenant/_export/confluence?details=headings')
       .expect(404);
     await request(app.getHttpServer())
       .get('/nosuchtenant/_export/confluence')
