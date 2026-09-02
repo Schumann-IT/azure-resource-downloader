@@ -100,6 +100,15 @@ type ResourceDocumentation struct {
 	// available. When empty, the embedded default template is used; see
 	// DefaultDocumentationPromptTemplate for its text.
 	Template string
+	// OmitGroupAxes suppresses the doc-groups vocabulary marker (and therefore
+	// the platformGroup/functionGroup frontmatter contract) for this resource
+	// type. Inventory/registry record types (Autopilot device identities, device
+	// categories, connectors) set it: they are bulk registered entities, not
+	// configuration a reader browses by purpose, so leaving the marker off keeps
+	// their doc-prompt.md — and thus their promptSha256 — unchanged and their
+	// documents are not reissued for grouping alone. Every other type carries the
+	// marker automatically via the shared BuildDocumentationPrompt render path.
+	OmitGroupAxes bool
 }
 
 // BuildDocumentationPrompt returns a dedicated LLM prompt for the given resource
@@ -127,5 +136,16 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	if err := tmpl.Execute(&b, doc); err != nil {
 		panic(fmt.Sprintf("failed to execute documentation prompt template for %s: %v", doc.AzureType, err))
 	}
-	return strings.TrimSuffix(b.String(), "\n")
+	prompt := strings.TrimSuffix(b.String(), "\n")
+
+	// Append the closed grouping vocabularies as a doc-groups marker so every
+	// type's doc-prompt.md constrains the model's platformGroup/functionGroup
+	// frontmatter to the same set docs generate-index emits, and the generation
+	// checker can validate it. Rendered here on the shared path rather than in
+	// each template literal, so the models vocabulary constants stay canonical.
+	// Record types opt out (OmitGroupAxes) to keep their promptSha256 stable.
+	if !doc.OmitGroupAxes {
+		prompt += "\n\n" + DocumentationGroupsMarker()
+	}
+	return prompt
 }

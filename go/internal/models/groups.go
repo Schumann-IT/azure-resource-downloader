@@ -1,5 +1,10 @@
 package models
 
+import (
+	"fmt"
+	"strings"
+)
+
 // GroupAxisNotApplicable is the reserved value for a grouping axis that does
 // not apply to a resource type — a tenant-level singleton, for example, has no
 // meaningful platform. It is deliberately distinct from a blank/absent value,
@@ -40,4 +45,28 @@ var FunctionGroups = []string{
 	"Scripts",
 	"Governance",
 	GroupAxisNotApplicable,
+}
+
+// DocGroupsMarkerPrefix is the leading token of the doc-groups marker line, used
+// to locate it in an assembled doc-prompt.md the same way doc-headings is found.
+const DocGroupsMarkerPrefix = "<!-- doc-groups:"
+
+// DocumentationGroupsMarker renders the closed platform and function grouping
+// vocabularies as a single machine-readable marker line for a type's
+// doc-prompt.md, e.g.:
+//
+//	<!-- doc-groups: platform=Windows, macOS, … , n/a | function=Compliance, … , n/a -->
+//
+// The documentation pipeline reads it back to constrain each document's
+// model-authored platformGroup/functionGroup frontmatter to these values —
+// exactly as doc-headings constrains the H2 sections. Rendering it from the
+// PlatformGroups/FunctionGroups constants keeps those the single source of truth,
+// so the axis vocabularies live in one place and every doc-prompt.md derives
+// from it rather than carrying a literal that can drift. Values are joined with
+// ", " (no vocabulary value contains a comma) and the two axes with " | ".
+func DocumentationGroupsMarker() string {
+	return fmt.Sprintf("%s platform=%s | function=%s -->",
+		DocGroupsMarkerPrefix,
+		strings.Join(PlatformGroups, ", "),
+		strings.Join(FunctionGroups, ", "))
 }

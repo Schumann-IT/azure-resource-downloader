@@ -24,6 +24,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
+			OmitGroupAxes:       true,
 			Purpose:             "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
 			KeySettings:         []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},

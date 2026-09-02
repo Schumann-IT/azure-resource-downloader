@@ -27,6 +27,7 @@ func NewWindowsAutopilotDeviceIdentityHandler(credential azcore.TokenCredential)
 		azureType: "Microsoft.Graph/windowsAutopilotDeviceIdentities",
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
+			OmitGroupAxes:       true,
 			Purpose:             "A Windows Autopilot device identity (hardware hash registration) for zero-touch provisioning.",
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle:           []string{"Registered device data rather than configuration; remove identities when hardware is retired or resold - deleting de-registers the device from Autopilot."},

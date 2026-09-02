@@ -158,6 +158,8 @@ source: resources/Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os_va
 sourceSha256: 5d6b32f8…
 promptSha256: 95cb34be…
 assignmentsSha256: 7a41c0de…      # only for types that have assignments
+platformGroup: Windows            # one value from this type's doc-groups marker (see Grouping below)
+functionGroup: Compliance         # one value from the same marker; n/a when the axis does not apply
 generatedAt: 2026-08-13T08:31:00Z  # the export timestamp from above, verbatim — not the current time
 ---
 ```
@@ -177,6 +179,28 @@ noncompliance action carry `notificationsSha256`; see 5d.
 
 This frontmatter is how the next incremental run knows whether your document is still current. A document
 without it is treated as stale and regenerated from scratch every time.
+
+### Grouping (required)
+
+`platformGroup` and `functionGroup` classify the resource by *what it is for* — the platform it targets and
+the management function it performs — so the documentation frontend can offer navigation by purpose, not only
+by resource type. `docs generate-index` harvests both into `index.yaml`; you are the only step that can set
+them, because they are a judgement about intent, not a fact the YAML carries.
+
+Each is **one value, chosen from the closed set in this type's `doc-prompt.md`**, recorded there on its own
+line as a `<!-- doc-groups: platform=… | function=… -->` marker (the axis-vocabulary counterpart of
+`doc-headings`). Rules:
+
+- Pick exactly one value per axis, spelled **verbatim** from the marker — same wording and casing. Never
+  invent a value, never combine two, never leave either blank.
+- Use `n/a` — which is in both sets — when an axis genuinely does not apply to the type (a tenant-level
+  singleton has no platform, an inventory record has no function). `n/a` means "does not apply"; it is **not**
+  the same as leaving the field out, which means "not yet classified" and is treated as a gap.
+- Base the choice on the resource's own facts (its `@odata.type`, `platforms`, the scope token in its name,
+  what the settings do), not on guesswork. When two function values could fit, choose the resource's primary
+  purpose.
+- A type whose `doc-prompt.md` carries **no** `doc-groups` marker (an older record type, or a type not
+  refreshed this run) takes neither field — omit both.
 
 ### Assignment markers (required)
 
@@ -289,6 +313,7 @@ every assignments block still holds bare GUIDs by design. They are in section 6.
 | Frontmatter | Every written document has valid frontmatter whose `sourceSha256` and `promptSha256` equal the values from its chunk file. A mismatch means an agent documented the wrong file. |
 | Heading structure | Exactly one `#` heading per document. Count headings **outside fenced code blocks only** — shell scripts embedded in `deviceShellScripts` / `deviceManagementScripts` documents contain `##` comment lines that are not headings. |
 | Heading vocabulary | Every `##` **outside fenced code blocks and outside `<!-- …:start -->`/`<!-- …:end -->` marker pairs** is in the closed set declared for that document's type — the `doc-headings` list in its `doc-prompt.md` — spelled exactly, in order, without duplicates. The marker-pair exemption is what lets the tool-spliced `## Targeted by` block (section 5) live in group documents without being part of the authored contract. Same fenced-code caveat as *Heading structure*. |
+| Grouping vocabulary | For every type whose `doc-prompt.md` carries a `<!-- doc-groups: … -->` marker, each of its documents has both a `platformGroup` and a `functionGroup` in frontmatter, each a single value from that marker's respective closed set (`n/a` included) — missing or out-of-set fails. A type with no marker takes neither field; its documents are counted as axis *uncategorised* and reported, never failed. |
 | `<details>` balance | `<details>` count equals `</details>` count per file. Nesting is normal. |
 | Assignment markers | Every document that should have them has exactly one matched `<!-- assignments:start -->` / `<!-- assignments:end -->` pair — never unbalanced, never nested, never repeated. |
 | Stray artifacts | No leftover `DONE` receipts in document text, no truncated final block, every file ends cleanly. |
@@ -304,6 +329,7 @@ from collections import Counter
 
 FENCE = re.compile(r"^\s*(```|~~~)")
 problems, seen = Counter(), set()
+uncategorised = 0  # documents whose type has no doc-groups marker (axis-unclassified)
 
 def fail(doc, msg):
     problems[msg] += 1
@@ -312,7 +338,7 @@ def fail(doc, msg):
 MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
 HEADING = re.compile(r"^(#+)\s+\S")
 INLINE = re.compile(r"`[^`]*`")
-_contracts = {}
+_contracts, _groups = {}, {}
 
 def heading_contract(src):
     """Ordered closed H2 set for src's type, read from its doc-prompt.md."""
@@ -325,6 +351,21 @@ def heading_contract(src):
                 val = [h.strip() for h in m.group(1).split("|") if h.strip()]
         _contracts[spec] = val
     return _contracts[spec]
+
+def groups_contract(src):
+    """Closed {platform, function} value sets for src's type, from its doc-groups marker."""
+    spec = pathlib.Path(src).parent / "doc-prompt.md"
+    if spec not in _groups:
+        val = None
+        if spec.is_file():
+            m = re.search(r"<!--\s*doc-groups:\s*(.+?)\s*-->", spec.read_text(encoding="utf-8"))
+            if m:
+                val = {}
+                for axis in m.group(1).split("|"):
+                    name, _, values = axis.partition("=")
+                    val[name.strip()] = {v.strip() for v in values.split(",") if v.strip()}
+        _groups[spec] = val
+    return _groups[spec]
 
 # expected[source path] = (doc path, promptSha256, sourceSha256)
 expected = {}
@@ -362,6 +403,20 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                 fail(doc, f"{key} mismatch — wrong source documented")
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
+
+        groups = groups_contract(src)
+        if groups is None:
+            # Type predates the doc-groups marker (e.g. a record type, or a type
+            # not refreshed this run): its documents carry neither axis field.
+            # Not a failure — counted as axis-uncategorised for the section-8 report.
+            uncategorised += 1
+        else:
+            for field, axis in (("platformGroup", "platform"), ("functionGroup", "function")):
+                got = re.search(rf"^{field}:\s*(.+?)\s*$", fm, re.M)
+                if not got:
+                    fail(doc, f"frontmatter missing {field}")
+                elif got.group(1).strip().strip("\"'") not in groups.get(axis, set()):
+                    fail(doc, f"{field} '{got.group(1).strip()}' not in doc-groups {axis} set")
 
     in_fence, in_marker, h1, h2s, opens, closes = False, False, 0, [], 0, 0
     for line in text.splitlines():
@@ -454,6 +509,8 @@ if not snapshot.exists():
     snapshot.write_text(json.dumps(
         {str(p): p.stat().st_mtime for p in sorted(tree) if p.is_file()}, indent=0))
 print(f"\nchecked {len(expected)} documents at {time.strftime('%H:%M:%S')}")
+if uncategorised:
+    print(f"NOTE: {uncategorised} document(s) axis-uncategorised (type has no doc-groups marker)")
 for msg, n in problems.most_common():
     print(f"{n:5d}  {msg}")
 sys.exit(1 if problems else 0)
@@ -894,6 +951,9 @@ The report must contain:
 - every **dangling group reference** (an assigned GUID with no group in the export)
 - every **dangling notification template reference** (a template GUID a noncompliance action references with no template in the export)
 - how many documents were migrated to markers
+- the axis **uncategorised** count from the section-4 check (documents whose type has no `doc-groups` marker,
+  so they carry no `platformGroup`/`functionGroup`) — so a grouping axis the model stops filling, or a type
+  still awaiting the marker, is visible rather than manifesting as a silently thinning navigation tree
 - whether the export was marked incomplete, and why
 - substantive findings the analysis surfaced: baseline deviations, disabled controls, secrets present,
   policies with no assignments

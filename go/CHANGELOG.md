@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Documents now declare their platform and function group in frontmatter, filling the two grouping axes the
+  index already emits.** The programme taxonomy resolved at index time answered *which initiative* a resource
+  belongs to; this adds the complementary per-document judgement of *which platform* it targets and *what
+  management function* it performs — the one classification only the document generation can make. Every
+  type's assembled `doc-prompt.md` now carries a `<!-- doc-groups: platform=… | function=… -->` marker
+  rendered from the `PlatformGroups`/`FunctionGroups` constants in `internal/models` (the single source of
+  truth, so the vocabularies live in one place and no per-template literal can drift), appended on the shared
+  `BuildDocumentationPrompt` render path so it reaches the default template and every override at once. The
+  incremental generation prompt now requires a `platformGroup` and a `functionGroup` in each document's
+  frontmatter, each a single value from that marker's closed set (`n/a` when the axis genuinely does not
+  apply, which is distinct from a blank/absent value meaning "not yet classified"); its section-4 structural
+  check validates both against the marker and reports an axis **uncategorised** count in the section-8 run
+  report, so a grouping axis the model stops filling is visible. `docs generate-index` already harvests both
+  fields into `index.yaml`, so no index change was needed. **Inventory/registry record types (Autopilot
+  device identities, device categories, NDES and Mobile Threat Defense connectors) opt out via a new
+  `ResourceDocumentation.OmitGroupAxes` flag**, keeping their `doc-prompt.md` — and thus their `promptSha256`
+  — unchanged so their documents are not reissued for grouping alone.
+  **Adding the marker changes every non-record type's `promptSha256`, so those documents regenerate once on
+  the next run after a re-download, contributing to the full regeneration already required — and each is
+  re-authored with the two group fields.**
+  - **Tests** for the rendered `doc-groups` marker (present by default, suppressed under `OmitGroupAxes`, and
+    carrying both vocabularies in display order with `n/a` in each and no comma-bearing value), and for the
+    updated template-override path that still appends the marker.
+
 - **`docs generate-index` groups documentation by purpose, not just by endpoint, via a `taxonomy:` config
   section.** A new config-file section (see the commented **Taxonomy** block in `config.example.yaml`)
   classifies each exported resource into one or more **programmes** — real-world initiatives like CIS L1

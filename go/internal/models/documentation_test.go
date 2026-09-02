@@ -41,6 +41,7 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"Security:\n",
 		"Settings:\n",
 		"<!-- doc-headings: References | Lifecycle and operations | Security | Settings -->",
+		DocumentationGroupsMarker(),
 		"- document EVERY setting/property present in the YAML.",
 		"collapsible HTML `<details>` block, collapsed by default",
 		"externally decoded sidecar file",
@@ -134,6 +135,16 @@ func TestBuildDocumentationPromptOptionalFields(t *testing.T) {
 				"`<!-- notifications:start -->` / `<!-- notifications:end -->` markers",
 			},
 		},
+		{
+			name:    "doc-groups marker present by default",
+			mutate:  func(*ResourceDocumentation) {},
+			present: []string{DocumentationGroupsMarker()},
+		},
+		{
+			name:   "doc-groups marker suppressed when OmitGroupAxes",
+			mutate: func(d *ResourceDocumentation) { d.OmitGroupAxes = true },
+			absent: []string{DocGroupsMarkerPrefix},
+		},
 	}
 
 	for _, tt := range tests {
@@ -152,9 +163,23 @@ func TestBuildDocumentationPromptTemplateOverride(t *testing.T) {
 	doc.Template = "Custom prompt for {{ .AzureType }} ({{ join .KeySettings \" / \" }})"
 
 	got := BuildDocumentationPrompt(doc)
-	want := "Custom prompt for Microsoft.Graph/deviceConfigurations (omaSettings / encrypted values)"
+	// The custom template controls the body; the shared render path still appends
+	// the doc-groups marker (the type did not opt out via OmitGroupAxes).
+	want := "Custom prompt for Microsoft.Graph/deviceConfigurations (omaSettings / encrypted values)" +
+		"\n\n" + DocumentationGroupsMarker()
 	if got != want {
 		t.Errorf("prompt = %q, want %q", got, want)
+	}
+}
+
+func TestBuildDocumentationPromptOmitGroupAxes(t *testing.T) {
+	doc := fullDoc()
+	doc.Template = "Custom prompt for {{ .AzureType }}"
+	doc.OmitGroupAxes = true
+
+	got := BuildDocumentationPrompt(doc)
+	if strings.Contains(got, DocGroupsMarkerPrefix) {
+		t.Errorf("prompt unexpectedly contains doc-groups marker despite OmitGroupAxes: %q", got)
 	}
 }
 

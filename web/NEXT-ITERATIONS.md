@@ -111,9 +111,11 @@ administrator looking for "how are Macs hardened" has to know that the answer is
 start.
 
 > **The shape, in two dimensions.** A **spine of platform → function**, one path to each document,
-> replacing the per-type sections; a **programme facet over it** (`CIS L1 hardening`, `Defender / MDE`,
-> `VPN`, `Update rings`, `Autopilot`, `App delivery`) that is **many-to-many** — a resource belongs to a
-> programme *and* keeps its place in the spine, which is exactly what a single-parent tree cannot express —
+> replacing the per-type sections; a **programme facet over it** — the taxonomy in use names twelve
+> (`CIS hardening`, `Defender / MDE`, `VPN`, `Windows Update`, `Enrollment & Autopilot`,
+> `Identity & conditional access`, `App delivery`, `Encryption`, `Firewall`, `LAPS`, `Hybrid domain join`,
+> `Compliance`) — that is **many-to-many**, since a resource belongs to a programme *and* keeps its place in
+> the spine, which is exactly what a single-parent tree cannot express, and is therefore
 > rendered as a filter and alongside the existing `badgesFor()` badges, never as a second tree; and the
 > endpoint type kept as a *filter* rather than as the structure, since it is still the right lens when
 > someone is reasoning about the API rather than about the tenant.
@@ -127,25 +129,12 @@ start.
 > the CLI, so both consumers read the same fields — the producer-side entry is *Group documentation by
 > purpose, resolved at index time* in `go/NEXT-ITERATIONS.md`.
 >
-> **Which is why the source of a programme is not this entry's decision to make**, only its constraint.
-> Four candidates are on the table: **a) model-authored per document**, a third frontmatter field with a
-> closed vocabulary — captures intent, but costs a full regeneration and gives each document exactly one
-> programme, which CIS hardening does not fit; **b) derived from the resource name**, deterministic and
-> free (`GBL_AF_PRD_D_WIN_MGM_ModernWorkplace` → `MGM_ModernWorkplace`), but it assumes a naming convention
-> not every tenant follows; **c) a curated taxonomy resolved at index time**, rules over facts plus name
-> patterns, multi-valued and needing no regeneration, at the price of a file to maintain whose rules rot
-> silently; **d) no programme facet at all**, if platform × function answers the question. The Go entry
-> currently leans to model-authored axes as the spine with a curated index-time taxonomy as the programme
-> dimension; whatever is picked, **the browser reads the fields the index carries and adds none of its
-> own**. What the choice does decide here is cardinality —
-> single-valued is a tree level, multi-valued can only be a filter — so the facet UI waits until that is
-> settled rather than guessing.
->
-> **Nothing carries the data yet.** In the reference export `platformGroup` and `functionGroup` are
-> populated on **0** of 263 resources (against `platforms` 73, `odataType` 137, `scope` 93, `assignments`
-> 231), because the CLI's generation template does not ask the documents for them. Grouping by fields that
-> are empty everywhere yields one *Ungrouped* section, which is worse than grouping by type — so this entry
-> is only implementable behind a degradation rule, not a flag day.
+> **Where a programme comes from was the CLI's decision, and it is made.** `docs generate-index` resolves a
+> curated `taxonomy:` config section into the index: rules over facts the export already carries (`name`
+> regex, `type`, `odataType`, `platforms`, `scope`), no regeneration, multi-valued. The browser therefore
+> reads programme membership and adds none of its own. The alternatives that were on the table —
+> model-authored per document, derived from the resource naming convention, or no facet at all — are closed;
+> do not reopen them here.
 >
 > **What is cheap once the index carries it.** Hrefs come from the index `doc` field and are independent of
 > how `buildNavigation()` groups, so **regrouping the sidebar changes no URLs** — no redirects, and no
@@ -153,46 +142,62 @@ start.
 > data, so the spine is a data change plus one nesting level in the partial. A facet switch is a route or a
 > query parameter reflected in the URL, never a widget: no client-side JavaScript.
 
-**What the CLI must provide before the spine can be built.** Implementation starts when all three hold;
-none of them can be substituted here.
+**Prerequisite status, measured against the two exports in `../output` (2026-09-02).** The CLI has shipped
+the programme half of this and bumped `docs/index.yaml` to schema **version 2**.
 
-- **The two fields, actually populated** on in-scope resources in `docs/index.yaml`. The harvest is already
-  wired on the producer side — the values are empty because no prompt asks for them — so this costs a full
-  documentation regeneration.
-- **A declared vocabulary with a display order, carried in the data.** Ordering "by the declared vocabulary"
-  is only possible if the order is readable at runtime: either the index header carries the vocabulary per
-  axis in display order (self-describing, no shared constant to drift), or it is published as a constant
-  this project copies — which is then a contract in two repositories. The first is strongly preferred, and
-  it is the requirement most easily forgotten, because on the producer side the vocabulary looks like a
-  prompt-authoring concern.
-- **Defined semantics for "no group"**, distinguishing *the model did not classify this* from *this type has
-  no meaningful platform* (a tenant-level singleton is not an uncategorised Windows resource). Either an
-  explicit value, or a written statement that empty means uncategorised and which types are expected to be
-  empty. Without it the uncategorised bucket silently merges a real gap with a category error.
+- **BLOCKING NOW, and it is a regression, not a prerequisite.** `parseTenantIndex()` requires `version` to
+  be exactly `1`, and the index is also the *tenant marker* — so both real exports, now written as
+  `version: 2`, are invisible: `DOCS_ROOT=../output` yields `{"tenants":0,"documents":0,"pending":0}` and an
+  empty picker. Both sides already document the contract as if this were fixed (`generateindex.go` states
+  "the frontend accepts any version >= 1", the Go changelog calls the bump additive), so the fix is to make
+  that true: accept any integer `version >= 1` and keep ignoring unknown fields. **This is step zero and it
+  is worth doing whether or not the rest of this entry proceeds.**
+- **MET — the axis vocabularies travel in the data.** The header carries `vocabularies.platform`
+  (`Windows, macOS, iOS/iPadOS, Android, Linux, Cross-platform, n/a`) and `vocabularies.function`
+  (`Identity & access, Compliance, Configuration, Security, Apps, …`) in display order, always emitted, from
+  the single source of truth `models.PlatformGroups`/`FunctionGroups`. Nothing to copy into this project, so
+  the ordering has no way to drift.
+- **MET — "no group" has defined semantics.** The reserved **`n/a`** vocabulary value distinguishes *this
+  axis does not apply to this type* (a tenant-level singleton has no platform) from *unclassified*, so the
+  fallback bucket cannot merge a real gap with a category error.
+- **MET — the programme facet's data is complete.** Each resource carries many-to-many
+  `groups: [{id, label}]` — a stable id for the URL and a separate display label — and the header carries
+  the full `programmes: [{id, label, count}]` registry in display order, **zero-count programmes kept**, so
+  the chooser can be rendered from the index alone. Measured: **12 programmes; 263 resources / 56
+  uncategorised / 14 in more than one programme** (cb-gmbh.com) and **148 / 24 / 11** (staging). The
+  many-to-many is real, so the facet can only be a filter, never a tree level.
+- **NOT MET — the spine has no data.** `platformGroup`/`functionGroup` are populated on **0** of 263
+  resources: the model-authored half rides the next full documentation regeneration on the producer side.
+  Grouping by fields empty everywhere yields one *Ungrouped* section, which is worse than grouping by type.
 
-**Release ordering is a constraint today, and cheap to remove.** `parseTenantIndex()` rejects anything whose
-`version` is not exactly `1`, and the index is also the *tenant marker* — so if the CLI bumps the schema to
-carry these fields, every export disappears from the picker and every route 404s, rather than degrading to
-the current tree. Unknown *fields* are already ignored, so the fix is the version comparison alone.
+**Which inverts this entry's original sequencing.** It assumed the spine would arrive first and the facet's
+cardinality was unknown; the opposite happened. Three ways to proceed, to be chosen before implementation:
 
-**And, additionally, before the programme facet:** a multi-valued membership field carrying a **stable id**
-(it becomes the facet value in the URL, so renaming a programme must not break a bookmark) **and a display
-label**; plus, to render the chooser, the set of programmes that exist — from per-resource membership alone,
-a programme with no matches in this tenant is invisible, which is itself information.
+- **a) Gate fix, then facet-first.** Restore tenant visibility, parse `groups`/`programmes`/`vocabularies`,
+  and ship the programme facet as a server-rendered filter *over today's per-type tree*, keeping the 56/24
+  uncategorised resources reachable. Delivers the whole reason for this entry against real data; the spine
+  follows when the regeneration happens.
+- **b) Gate fix only.** Restore visibility, commit that alone, leave the rest of this entry as writeup.
+  Correct if the facet UI is not wanted yet — but note it leaves the taxonomy the CLI now computes unused.
+- **c) Everything, spine included.** Also build the platform → function grouping now against the published
+  vocabulary, so it lights up when the fields fill. It ships code whose only exercised path is its own
+  degradation, which is how untested behaviour reaches a release.
 
-**Plan.**
+**Plan** (assumes **a**; the first bullet holds regardless).
 
-- **Accept a later index schema first**, before the CLI ships anything: make `parseTenantIndex()` take any
-  integer `version >= 1` and carry the parsed value, with a case in `test/tenant-index.spec.ts` and one in
-  the e2e suite proving a newer index still *discovers* as a tenant. It is a few lines, it is worth having
-  whether or not the rest of this entry ever happens, and it means the two projects can release in either
-  order.
-- **Ship the spine first, the programme facet second**, and treat them as separate deliveries: the spine
-  needs one group per document, the facet needs multi-valued membership, and building the facet UI before
-  the CLI emits real membership is guessing at its cardinality.
-- **Group in a pure function** next to `buildNavigation()` in `src/docs/tenant-index.ts`, reading only what
-  the index carries and deriving nothing, taking the facet as an argument, ordering groups by the declared
-  vocabulary rather than alphabetically, and putting uncategorised documents in a named bucket that is
+- **Accept a later index schema, first and separately**: `parseTenantIndex()` takes any integer
+  `version >= 1` and carries the parsed value, with a case in `test/tenant-index.spec.ts` and one in the
+  e2e suite proving a newer index still *discovers* as a tenant. It is a bug fix — it needs its own
+  changelog entry, not this entry's.
+- **Parse the new index surface** in `src/docs/tenant-index.ts`: per-resource `groups` (id + label) and the
+  header `programmes` and `vocabularies`, all optional so a `version: 1` index still parses unchanged.
+- **Ship the programme filter before the spine**, since that is where the data is: the facet value in the
+  URL, narrowing the rendered tree server-side, with the programme labels coming from the index and the
+  uncategorised resources always reachable rather than filtered into nothing.
+- **Then the spine, once `platformGroup`/`functionGroup` are non-empty: group in a pure function** next to
+  `buildNavigation()` in `src/docs/tenant-index.ts`, reading only what the index carries and deriving
+  nothing, taking the facet as an argument, ordering groups by the declared vocabulary rather than
+  alphabetically, and putting uncategorised documents in a named bucket that is
   **always rendered** — a taxonomy that quietly stops matching must show up as a full bucket, never as a
   thinning tree. Cases in `test/tenant-index.spec.ts` for a fully grouped index, a partially grouped one,
   and an index with no grouping at all; the last must produce today's per-type tree unchanged.

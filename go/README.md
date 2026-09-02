@@ -855,7 +855,12 @@ so the newly written summaries and grouping are picked up.
 The header also carries the closed grouping **`vocabularies`** — the ordered
 `platform` and `function` group names, straight from the tool's built-in
 constants — so a consumer orders navigation from the data rather than from a
-copy that would drift.
+copy that would drift. Those same constants are rendered into every type's
+`doc-prompt.md` as a `<!-- doc-groups: platform=… | function=… -->` marker, and
+the documentation pass has the model choose one `platformGroup` and one
+`functionGroup` per document from that closed set (`n/a` where an axis does not
+apply). Inventory/registry record types (Autopilot device identities, device
+categories, connectors) carry no marker and are left ungrouped on these axes.
 
 ### Grouping resources into programmes (`taxonomy:`)
 
