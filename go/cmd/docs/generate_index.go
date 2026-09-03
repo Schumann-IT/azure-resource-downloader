@@ -133,10 +133,6 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 	if !res.Complete {
 		complete = "no"
 	}
-	totalUncat := 0
-	for _, n := range res.Uncategorised {
-		totalUncat += n
-	}
 	log.Info("Index summary",
 		"tenant", res.Tenant,
 		"generated_at", res.GeneratedAt,
@@ -144,11 +140,14 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 		"documented", res.Documented,
 		"pending", res.Pending,
 		"orphans", res.Orphans,
-		"uncategorised", totalUncat)
+		// Resources that matched no value on ANY axis — the honest headline.
+		// Per-axis gaps are reported separately below and are not summed here,
+		// since a resource missing two axes would otherwise be counted twice.
+		"uncategorised", res.FullyUncategorised)
 
 	for _, axis := range sortedCountKeys(res.Uncategorised) {
 		if res.Uncategorised[axis] > 0 {
-			log.Warn("Some resources matched no value on a taxonomy axis; listed as uncategorised",
+			log.Warn("Some resources matched no value on a taxonomy axis; absent from that facet only",
 				"axis", axis, "uncategorised", res.Uncategorised[axis])
 		}
 	}

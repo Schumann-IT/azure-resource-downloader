@@ -185,16 +185,24 @@ taxonomy:
           match:
             - platforms: 'windows'
             - name: '_win_'
+            # @odata.type carries the platform for configs & apps that lack a
+            # platforms fact: win32LobApp, winGetApp, windows*Configuration,
+            # officeSuiteApp (M365 Apps for Windows).
+            - odataType: 'graph\.(?:win|officesuiteapp)'
             - type: Microsoft.Graph/windowsFeatureUpdateProfiles
             - type: Microsoft.Graph/windowsDriverUpdateProfiles
             - type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
             - type: Microsoft.Graph/deviceManagementScripts
             - type: Microsoft.Graph/deviceHealthScripts
+            - type: Microsoft.Graph/groupPolicyConfigurations   # ADMX / administrative templates (Windows)
         - id: macos
           label: macOS
           match:
             - platforms: 'macos'
             - name: '(?:_mac_|_osx_)'
+            # macOS* device configs and apps (macOSCustomConfiguration,
+            # macOSExtensionsConfiguration, macOSLobApp, macOSOfficeSuiteApp, ...).
+            - odataType: 'graph\.macos'
             - type: Microsoft.Graph/deviceShellScripts
             - type: Microsoft.Graph/deviceCustomAttributeShellScripts
         - id: ios
@@ -202,11 +210,13 @@ taxonomy:
           match:
             - platforms: '(?:ios|ipados)'
             - name: '(?:_ios_|_ipad)'
+            - odataType: 'graph\.ios'
         - id: android
           label: Android
           match:
             - platforms: 'android'
             - name: '_android_'
+            - odataType: 'graph\.android'
         - id: linux
           label: Linux
           match:

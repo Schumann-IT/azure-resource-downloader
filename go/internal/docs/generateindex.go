@@ -184,9 +184,17 @@ type GenerateIndexResult struct {
 	Orphans     int
 	// Uncategorised counts, per axis id, the listed resources that matched no
 	// value on that axis. It is populated only when a taxonomy was supplied;
-	// without one it is empty.
+	// without one it is empty. These per-axis counts are independent, so they
+	// must NOT be summed into a single figure: a resource missing two axes would
+	// be counted twice, overstating the problem.
 	Uncategorised map[string]int
-	Excluded      map[string]int
+	// FullyUncategorised counts the listed resources that matched no value on
+	// ANY axis — the resources that genuinely fell through the whole taxonomy,
+	// as opposed to being merely absent from one facet. It is the honest headline
+	// figure; the per-axis Uncategorised map carries the partial detail. Only
+	// populated when a taxonomy was supplied.
+	FullyUncategorised int
+	Excluded           map[string]int
 }
 
 // GenerateIndex builds docs/index.yaml from resources/metadata.yaml, enriched
@@ -332,6 +340,11 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 						programmeCounts[v.id]++
 					}
 				}
+			}
+			// An empty facets map means the resource matched no value on any
+			// axis — it fell through the whole taxonomy, not just one facet.
+			if len(ir.Facets) == 0 {
+				res.FullyUncategorised++
 			}
 		}
 

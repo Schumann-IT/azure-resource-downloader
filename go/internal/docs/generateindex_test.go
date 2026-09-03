@@ -219,6 +219,11 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 	if res.Uncategorised[programmeAxisID] != 1 {
 		t.Errorf("uncategorised[programme] = %d, want 1", res.Uncategorised[programmeAxisID])
 	}
+	// With only the programme axis, "no value on that axis" is also "no value on
+	// any axis", so the pending policy is the single fully-uncategorised resource.
+	if res.FullyUncategorised != 1 {
+		t.Errorf("fullyUncategorised = %d, want 1", res.FullyUncategorised)
+	}
 
 	idx := loadIndex(t, res.OutPath)
 
@@ -357,6 +362,15 @@ func TestGenerateIndexMultiAxis(t *testing.T) {
 	// axis leaves resources uncategorised independently of the programme axis.
 	if res.Uncategorised["platform"] == 0 {
 		t.Error("expected some resources uncategorised on the platform axis")
+	}
+
+	// A fully-uncategorised resource is uncategorised on EVERY axis, so the
+	// count can never exceed any single axis's miss count — proving the headline
+	// is a distinct-resource figure, not the sum of the per-axis counts.
+	for _, ax := range []string{programmeAxisID, "platform"} {
+		if res.FullyUncategorised > res.Uncategorised[ax] {
+			t.Errorf("fullyUncategorised %d exceeds uncategorised[%s] %d", res.FullyUncategorised, ax, res.Uncategorised[ax])
+		}
 	}
 }
 

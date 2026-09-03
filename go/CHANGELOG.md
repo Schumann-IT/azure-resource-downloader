@@ -20,9 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only; labels resolve from the header). The transitional single-axis `programmes` registry and per-resource
   `groups` fields are still emitted as mirrors of the `programme` axis so an older consumer keeps working;
   a `programmes:`-only config produces the same programmes/groups output as before (the alias is a no-op).
-  Resources matching no value on an axis are reported as **uncategorised for that axis**, and `generate-index`
-  now warns per axis. It still records rules, never facts, so revising the taxonomy never requires
-  re-downloading a tenant. See the commented **Taxonomy** block in `config.example.yaml`.
+  Resources matching no value on an axis are reported as **uncategorised for that axis** (a per-axis warning),
+  while the summary's single `uncategorised` figure counts only resources that matched **no value on any axis**
+  — the per-axis counts are deliberately not summed, since a resource missing two axes would otherwise be
+  counted twice and overstate the gap. It still records rules, never facts, so revising the taxonomy never
+  requires re-downloading a tenant. See the commented **Taxonomy** block in `config.example.yaml`.
   - **Tests** for axis and value validation (invalid/duplicate ids, missing labels, empty axes/values, the
     `programmes:`+`programme`-axis collision), multi-axis classification and display order, the facets header
     with zero-count values, per-resource `facets`, per-axis uncategorised counts, and a byte-identity check
