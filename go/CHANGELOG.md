@@ -246,6 +246,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The incremental documentation prompt is now hash-complete and its own checks can fail.** A readiness
+  review of a first full generation found four defects in `docs/generate.md` — all in the *generation* prompt
+  and the work list, never a type's `doc-prompt.md`, so none changes any `promptSha256`. (1) The four
+  block-hashes (`assignmentsSha256`, `notificationsSha256`, `usedBySha256`, `targetedBySha256`) were asked of
+  the fan-out generation agent, which only ever sees its chunk file and never the work list, so freshly
+  generated documents landed without them and were re-spliced on every future run. The orchestrator is now the
+  single writer of all four, stamped during the section-5 splice for freshly generated documents as well as
+  re-spliced ones; the agent writes only what its chunk carries (`sourceSha256`/`promptSha256`, grouping
+  fields, bare-GUID blocks). (2) A freshly generated group or notification-template document had no source for
+  its reverse block or `targetedBySha256`/`usedBySha256` and no marker to splice into, so it re-listed for
+  reverse re-splice for ever; `WorkItem` now carries `TargetedBySha256` (computed for referenced groups and
+  surfaced as an orchestrator-facing worklist column, mirroring the used-by wiring), and section 5 builds the
+  reverse block and inserts its markers in the run that creates the document. (3) The section-4 coverage check
+  diffed the documents on disk against the orchestrator's own chunks, so a chunking mistake that dropped a
+  whole type — or an empty `chunks/` directory — passed; the tool now emits the authoritative source set into
+  an `expected` block that is written to `chunks/expected.txt` and the check fails when the chunks or documents
+  do not cover it (and when that file is missing). (4) The write-once mtime snapshot could be poisoned by
+  running section 4 against a partial tree; it is now written only when the checks pass, so an incomplete run
+  cannot record a false baseline for section 6.
+  - **Tests** for the `targetedBySha256` worklist column, a generated group document carrying its
+    `TargetedBySha256`, the `expected` block rendering (sorted paths; comment line when empty) and its presence
+    in the spliced prompt.
+
 - **Notification message templates no longer churn on every export.** The `lastModifiedDateTime` inside
   each `localizedNotificationMessages` entry was stamped by the Graph API with the response time rather
   than the tenant's actual modification time, giving every template a new `sourceSha256` on every run even

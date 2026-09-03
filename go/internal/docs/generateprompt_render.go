@@ -10,7 +10,7 @@ import (
 
 // requiredMarkers are the marked blocks GeneratePrompt fills. Every one must be
 // present, matched and non-nested in the template before anything is written.
-var requiredMarkers = []string{"export", "worklist", "refmap", "usedbymap", "resplice", "migrate", "summary-facts"}
+var requiredMarkers = []string{"export", "worklist", "refmap", "usedbymap", "resplice", "migrate", "expected", "summary-facts"}
 
 // validateMarkers checks that each named block appears exactly once as a
 // matched, correctly ordered start/end pair. It fails naming the offending
@@ -107,17 +107,35 @@ func renderWorklist(items []WorkItem) string {
 
 		spec := fmt.Sprintf("resources/%s/%s", t, docPromptFileName)
 		fmt.Fprintf(&b, "### %s — spec: `%s`\n\n", t, spec)
-		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |\n")
-		b.WriteString("|---|---|---|---|---|---|---|---|\n")
+		b.WriteString("| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 | targetedBySha256 |\n")
+		b.WriteString("|---|---|---|---|---|---|---|---|---|\n")
 		for _, r := range rows {
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s | %s | %s |\n",
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | `%s` | %s | %s | %s | %s |\n",
 				r.SourcePath, r.DocPath, r.Reason, r.SourceSha256, r.PromptSha256,
-				hashCell(r.AssignmentsSha256), hashCell(r.NotificationsSha256), hashCell(r.UsedBySha256))
+				hashCell(r.AssignmentsSha256), hashCell(r.NotificationsSha256), hashCell(r.UsedBySha256), hashCell(r.TargetedBySha256))
 		}
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "_%d document(s) to write across %d type(s)._", len(items), len(types))
 	return b.String()
+}
+
+// renderExpected lists every source path the work list names, one per line, so
+// the orchestrator can write it verbatim to chunks/expected.txt and the
+// section-4 coverage check can diff the chunks and the documents on disk against
+// the authoritative work list rather than against the chunks alone (which only
+// confirms the orchestrator against itself). Sorted for deterministic output; a
+// comment line, not an empty block, when the work list is empty.
+func renderExpected(items []WorkItem) string {
+	if len(items) == 0 {
+		return "# none — no documents to generate this run"
+	}
+	paths := make([]string, 0, len(items))
+	for _, it := range items {
+		paths = append(paths, it.SourcePath)
+	}
+	sort.Strings(paths)
+	return strings.Join(paths, "\n")
 }
 
 // renderRefmap lists every referenced assignment target group as GUID → name,

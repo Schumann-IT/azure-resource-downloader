@@ -733,6 +733,15 @@ func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
 			PromptSha256: "prompt-t1",
 			UsedBySha256: "usedby-hash",
 		},
+		{
+			ResourceType:     groupsType,
+			SourcePath:       "resources/" + groupsType + "/g1.yaml",
+			DocPath:          "docs/" + groupsType + "/g1.md",
+			Reason:           "no document",
+			SourceSha256:     "src-g1",
+			PromptSha256:     "prompt-g1",
+			TargetedBySha256: "targetedby-hash",
+		},
 	}
 	out := renderWorklist(items)
 
@@ -743,6 +752,9 @@ func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
 	if !strings.Contains(out, "| usedBySha256 |") {
 		t.Error("worklist table must have a usedBySha256 column")
 	}
+	if !strings.Contains(out, "| targetedBySha256 |") {
+		t.Error("worklist table must have a targetedBySha256 column")
+	}
 	// The compliance policy row must render the notifications hash.
 	if !strings.Contains(out, "`notif-hash`") {
 		t.Errorf("compliance policy row must render notificationsSha256, got:\n%s", out)
@@ -750,6 +762,10 @@ func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
 	// The template row must render the used-by hash.
 	if !strings.Contains(out, "`usedby-hash`") {
 		t.Errorf("template row must render usedBySha256, got:\n%s", out)
+	}
+	// The group row must render the targeted-by hash.
+	if !strings.Contains(out, "`targetedby-hash`") {
+		t.Errorf("group row must render targetedBySha256, got:\n%s", out)
 	}
 	// Empty hash columns must render as empty cells (not backticked).
 	// The template row has no notificationsSha256 or assignmentsSha256.
@@ -761,6 +777,87 @@ func TestRenderWorklistIncludesAllHashColumns(t *testing.T) {
 				t.Error("usedBySha256 and notificationsSha256 must not be on the same row")
 			}
 		}
+	}
+}
+
+func TestRenderExpected(t *testing.T) {
+	// Empty work list renders a comment line, not an empty block, so
+	// chunks/expected.txt is never ambiguous.
+	if got := renderExpected(nil); !strings.HasPrefix(got, "#") {
+		t.Errorf("empty work list must render a comment line, got %q", got)
+	}
+
+	items := []WorkItem{
+		{SourcePath: "resources/b/two.yaml"},
+		{SourcePath: "resources/a/one.yaml"},
+	}
+	got := renderExpected(items)
+	// Sorted, one path per line, nothing else.
+	if got != "resources/a/one.yaml\nresources/b/two.yaml" {
+		t.Errorf("renderExpected = %q", got)
+	}
+}
+
+func TestGeneratePromptGroupCarriesTargetedByHash(t *testing.T) {
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+
+	m := &Metadata{
+		GeneratedAt: "2026-01-02T03:04:05Z",
+		Tenant:      "example.com",
+		Run:         RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:   {PromptSha256: "p-comp", HasAssignments: true},
+			groupsType: {PromptSha256: "p-grp"},
+		},
+		Resources: map[string]ResourceMeta{
+			compType + "/policy.yaml": {
+				ResourceId:        "pol",
+				SourceSha256:      "s-pol",
+				PresentInTenant:   true,
+				AssignmentTargets: []interface{}{groupTarget("G1")},
+			},
+			groupsType + "/g1.yaml": {ResourceId: "G1", DisplayName: "Group One", SourceSha256: "s-g1", PresentInTenant: true},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	writePromptFile(t, resourcesDir, compType)
+	writePromptFile(t, resourcesDir, groupsType)
+	// policy has a current doc; referenced group G1 has none -> G1 is in list 1.
+	writeDoc(t, tenantDir, compType+"/policy.yaml", "s-pol", "p-comp")
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+
+	// The freshly generated group document must carry the reverse hash so its
+	// Targeted by block and hash land in the run that creates it.
+	var g1 *WorkItem
+	for i := range res.ToGenerate {
+		if res.ToGenerate[i].DocPath == "docs/"+groupsType+"/g1.md" {
+			g1 = &res.ToGenerate[i]
+		}
+	}
+	if g1 == nil {
+		t.Fatalf("group G1 must be in the work list, got %+v", res.ToGenerate)
+	}
+	if want := reverseHash(m, "G1"); g1.TargetedBySha256 != want || want == "" {
+		t.Errorf("group work item TargetedBySha256 = %q, want %q", g1.TargetedBySha256, want)
+	}
+
+	// The written prompt's expected block must list the group's source path so
+	// the section-4 coverage check can diff against it.
+	out, err := os.ReadFile(res.OutPath)
+	if err != nil {
+		t.Fatalf("read prompt: %v", err)
+	}
+	body := string(out)
+	if !strings.Contains(body, "<!-- expected:start -->") || !strings.Contains(body, "<!-- expected:end -->") {
+		t.Error("prompt must contain the expected marker pair")
+	}
+	if !strings.Contains(body, srcRel(groupsType+"/g1.yaml")) {
+		t.Errorf("expected block must list the group source path, got:\n%s", body)
 	}
 }
 

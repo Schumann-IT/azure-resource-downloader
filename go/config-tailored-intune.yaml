@@ -1,5 +1,3 @@
-output: "../output"
-
 dry-run: false
 
 resolve-secrets: true
