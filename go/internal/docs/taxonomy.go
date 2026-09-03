@@ -13,9 +13,10 @@ import (
 // uses (e.g. `_uncategorised`) reserved: a config id can never collide with one.
 var taxonomyIDPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
-// programmeAxisID is the id of the axis the legacy `programmes:` sugar compiles
-// into, and the axis whose membership is mirrored into the transitional
-// `programmes`/`groups` index fields.
+// programmeAxisID is the id of the axis the `programmes:` config sugar compiles
+// into. The sugar is the ergonomic way to write the common single axis; it
+// carries no special weight at emission time — the index treats the resulting
+// axis like any other facet.
 const programmeAxisID = "programme"
 
 // TaxonomyConfig is the `taxonomy:` section of the config file: a curated,
@@ -284,8 +285,8 @@ func (t *taxonomy) classifyAxes(f taxonomyFacts) []axisClassification {
 }
 
 // classify returns the values a resource matched on the "programme" axis, in
-// display order — the legacy single-axis view, retained for the transitional
-// programmes/groups emission and for direct testing of the alias.
+// display order — the single-axis view, retained for direct testing that the
+// `programmes:` sugar compiles into an equivalent programme axis.
 func (t *taxonomy) classify(f taxonomyFacts) []programmeRef {
 	a := t.programmeAxis()
 	if a == nil {
@@ -301,8 +302,9 @@ func (t *taxonomy) classify(f taxonomyFacts) []programmeRef {
 }
 
 // registry returns the full value registry of the "programme" axis in display
-// order, independent of any tenant's matches, so the index can list a programme
-// that matched nothing here. Nil when there is no programme axis.
+// order, independent of any tenant's matches. Retained for direct testing that
+// the `programmes:` sugar compiles into an equivalent programme axis; nil when
+// there is no programme axis.
 func (t *taxonomy) registry() []programmeRef {
 	a := t.programmeAxis()
 	if a == nil {

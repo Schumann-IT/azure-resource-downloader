@@ -24,11 +24,13 @@ const IndexFileName = "index.yaml"
 // incompatible change to the shape the frontend consumes. Version 2 added the
 // grouping contract: the header `vocabularies` and `programmes`, and the
 // per-resource `groups`. Version 3 added the multi-axis facet contract: the
-// header `facets` and the per-resource `facets` map (the transitional
-// `programmes`/`groups` fields are still emitted alongside them). The frontend
-// accepts any version >= 1 and ignores fields it does not know, so the bump is
-// additive.
-const indexVersion = 3
+// header `facets` and the per-resource `facets` map, emitted alongside the
+// transitional single-axis `programmes`/`groups` fields. Version 4 removes
+// those transitional fields, leaving `facets` as the sole grouping surface;
+// unlike the additive earlier bumps this one drops fields, so a consumer that
+// still reads the mirrors must migrate onto `facets` first. The frontend
+// accepts any version >= 1 and ignores fields it does not know.
+const indexVersion = 4
 
 // Built-in assignment targets carry no group id; they are recognised by their
 // @odata.type so the index can report "all users" / "all devices" as facts.
@@ -50,9 +52,9 @@ type GenerateIndexOptions struct {
 	// TenantDir/docs/index.yaml.
 	OutPath string
 	// Taxonomy, when non-nil, is the curated `taxonomy:` config section whose
-	// programme rules classify each resource into the per-resource `groups` and
-	// the header registry. Nil leaves both empty and the index falls back to
-	// per-type grouping.
+	// axis rules classify each resource into the per-resource `facets` map and
+	// the header `facets` registry. Nil leaves both empty and the index falls
+	// back to per-type grouping.
 	Taxonomy *TaxonomyConfig
 	// DryRun withholds the write: the index is still assembled and reported.
 	DryRun bool
@@ -70,7 +72,6 @@ type IndexFile struct {
 	Complete         bool              `yaml:"complete"`
 	IncompleteReason string            `yaml:"incompleteReason,omitempty"`
 	Vocabularies     IndexVocabularies `yaml:"vocabularies"`
-	Programmes       []IndexProgramme  `yaml:"programmes,omitempty"`
 	Facets           []IndexFacet      `yaml:"facets,omitempty"`
 	Counts           IndexCounts       `yaml:"counts"`
 	Resources        []IndexResource   `yaml:"resources"`
@@ -85,23 +86,12 @@ type IndexVocabularies struct {
 	Function []string `yaml:"function"`
 }
 
-// IndexProgramme is one entry in the header programme registry: a stable id, a
-// display label, and the number of resources matched in this tenant. The full
-// registry is emitted in display order including programmes with a zero count,
-// since "this programme is empty here" is itself information a consumer cannot
-// recover from per-resource membership alone.
-type IndexProgramme struct {
-	ID    string `yaml:"id"`
-	Label string `yaml:"label"`
-	Count int    `yaml:"count"`
-}
-
 // IndexFacet is one filter axis in the header: a stable id, a display label, and
 // its values in the taxonomy's display order, each with the number of resources
-// matched in this tenant. Like the programme registry, zero-count values are
-// kept — "this value matched nothing here" is information a consumer cannot
-// recover from per-resource membership alone. Per-resource membership carries
-// value ids only; the label is resolved from here.
+// matched in this tenant. Zero-count values are kept — "this value matched
+// nothing here" is information a consumer cannot recover from per-resource
+// membership alone. Per-resource membership carries value ids only; the label
+// is resolved from here.
 type IndexFacet struct {
 	ID     string            `yaml:"id"`
 	Label  string            `yaml:"label"`
@@ -116,14 +106,6 @@ type IndexFacetValue struct {
 	ID    string `yaml:"id"`
 	Label string `yaml:"label"`
 	Count int    `yaml:"count"`
-}
-
-// IndexGroup is one programme membership on a resource: a stable id (the value
-// a consumer puts in a URL, which must survive a label rename) paired with a
-// display label.
-type IndexGroup struct {
-	ID    string `yaml:"id"`
-	Label string `yaml:"label"`
 }
 
 // IndexCounts summarises the export for the picker and the "not documented"
@@ -152,7 +134,6 @@ type IndexResource struct {
 	FunctionGroup string              `yaml:"functionGroup,omitempty"`
 	ODataType     string              `yaml:"odataType,omitempty"`
 	Platforms     string              `yaml:"platforms,omitempty"`
-	Groups        []IndexGroup        `yaml:"groups,omitempty"`
 	Facets        map[string][]string `yaml:"facets,omitempty"`
 	Assignments   *IndexAssignments   `yaml:"assignments,omitempty"`
 }
@@ -250,11 +231,9 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		Counts: IndexCounts{Excluded: map[string]int{}},
 	}
 
-	// programmeCounts accumulates matches on the "programme" axis so the
-	// transitional programmes registry can report a per-programme count, zero
-	// included. facetCounts does the same for every axis (axis id -> value id ->
-	// count) for the multi-axis facets header.
-	programmeCounts := map[string]int{}
+	// facetCounts accumulates matches per axis (axis id -> value id -> count) so
+	// the facets header can report a tenant-wide count for every value, zero
+	// included.
 	facetCounts := map[string]map[string]int{}
 	res := &GenerateIndexResult{
 		Tenant:        m.Tenant,
@@ -310,9 +289,8 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 
 		// Classify on every axis when a taxonomy was supplied. classifyAxes
 		// returns axes and values in display order, so the per-resource facets
-		// and legacy groups are deterministic. A resource matching no value on
-		// an axis is counted as uncategorised for that axis; the "programme"
-		// axis is additionally mirrored into the transitional groups field.
+		// are deterministic. A resource matching no value on an axis is counted
+		// as uncategorised for that axis.
 		if tax != nil {
 			facts := taxonomyFacts{
 				name:      ir.DisplayName,
@@ -335,10 +313,6 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 					}
 					ir.Facets[ac.axisID] = append(ir.Facets[ac.axisID], v.id)
 					facetCounts[ac.axisID][v.id]++
-					if ac.axisID == programmeAxisID {
-						ir.Groups = append(ir.Groups, IndexGroup{ID: v.id, Label: v.label})
-						programmeCounts[v.id]++
-					}
 				}
 			}
 			// An empty facets map means the resource matched no value on any
@@ -356,10 +330,9 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		}
 	}
 
-	// Emit the header registries in display order, including values with a zero
+	// Emit the facets header in display order, including values with a zero
 	// count, so a consumer can render the facet chooser and see that a value
-	// matched nothing here. The facets registry covers every axis; the programmes
-	// registry is the transitional single-axis view of the "programme" axis.
+	// matched nothing here.
 	if tax != nil {
 		for _, a := range tax.axes {
 			facet := IndexFacet{ID: a.id, Label: a.label}
@@ -367,9 +340,6 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 				facet.Values = append(facet.Values, IndexFacetValue{ID: v.id, Label: v.label, Count: facetCounts[a.id][v.id]})
 			}
 			idx.Facets = append(idx.Facets, facet)
-		}
-		for _, p := range tax.registry() {
-			idx.Programmes = append(idx.Programmes, IndexProgramme{ID: p.id, Label: p.label, Count: programmeCounts[p.id]})
 		}
 	}
 

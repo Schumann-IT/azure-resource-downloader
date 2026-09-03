@@ -881,11 +881,11 @@ field must match. The result is emitted two ways:
   with its values and a per-tenant match `count` — zero-count values are kept,
   since "this value matched nothing here" is itself information.
 
-The legacy **`programmes:`** key is accepted as sugar for the axis with id
+The **`programmes:`** key is accepted as sugar for the axis with id
 `programme`; defining both `programmes:` and an explicit `programme` axis is a
-fatal error. During the transition the index also still emits the single-axis
-`programmes` registry and per-resource `groups` fields (mirrors of the
-`programme` axis) so an older consumer keeps working.
+fatal error. The sugar is purely an ergonomic way to write the common single
+axis — the resulting `programme` axis is emitted through `facets` like any
+other, with no special weight.
 
 Classification is resolved once, here in the CLI, so every consumer (the browser
 and the Confluence export) reads the same fields. It records rules, never facts,

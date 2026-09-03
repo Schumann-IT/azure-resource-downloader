@@ -51,48 +51,14 @@ the per-type prompt templates: a full one-shot regeneration across every tenant.
 - Confirm each reissued document carries `platformGroup`/`functionGroup` and that the §8 report's axis
   `uncategorised` count is only the `record` family (the types that legitimately have no `doc-groups` marker).
 
-## 2. Drop the transitional single-axis index fields
-
-**Goal.** Leave `docs/index.yaml` with exactly one way to express taxonomy membership. The multi-axis facet
-contract shipped, but the single-axis fields it replaced are still emitted beside it, so every resource states
-its programme membership twice and a consumer can read either — which is how two consumers of one index end up
-disagreeing.
-
-> **What is duplicated.** `GenerateIndex` emits the header `programmes` registry and a per-resource
-> `groups: [{id, label}]` as mirrors of the `programme` axis, alongside the header `facets` registry and the
-> per-resource `facets` map (`axis id → value ids`). The mirrors carry no information the facets do not, and
-> unlike the facets they are limited to one axis and repeat the label on every resource.
->
-> **The frontend gate is met.** The docs browser now builds its filters from `facets` whenever an index
-> carries them (`web/src/docs/tenant-index.ts`, `views/partials/sidebar.hbs`), reading `programmes`/`groups`
-> only to synthesise the single programme axis for the version-2 exports already on disk. So the removal no
-> longer risks emptying its sidebar; what it does break is any *other* consumer still reading the mirrors, and
-> older exports keep their own copy of whatever schema they were written with.
->
-> **It is a breaking schema change, unlike the addition.** Adding `facets` was additive (v2 → v3) because a
-> consumer ignores unknown fields. Removing fields is not: it bumps `indexVersion` to **4** and belongs in a
-> `### Breaking` changelog section, with the compensating note that an index is regenerated offline from an
-> existing export in seconds.
-
-**Plan.**
-
-- **Remove `IndexProgramme`/`IndexGroup` and their emission** from `internal/docs/generateindex.go`, including
-  the mirroring of the `programme` axis, and bump `indexVersion` to 4.
-- **Keep the `programmes:` config sugar.** It is the ergonomic way to write the common single axis; only the
-  *output* mirrors go.
-- **Tests**: update the index fixtures to assert the fields are absent, keep the facet assertions, and keep
-  the byte-identical re-run check.
-- **Document it**: the index-schema section of `README.md` and a `### Breaking` entry under
-  `## [Unreleased]` in `CHANGELOG.md`.
-
-## 3. Bootstrap the curated taxonomy from per-document LLM suggestions
+## 2. Bootstrap the curated taxonomy from per-document LLM suggestions
 
 **Goal.** Lower the cost of authoring and maintaining the curated `taxonomy:` without surrendering its
 determinism. The model has already read each resource and written its document, so it is well placed to
 suggest which programmes a resource belongs to; turning those suggestions into reviewed promotion candidates
 lets an operator grow the rule set from evidence instead of authoring every regex cold.
 
-> **Advisory only, never authoritative.** `groups`/`facets` stay rules-only and deterministic; the model's
+> **Advisory only, never authoritative.** `facets` stay rules-only and deterministic; the model's
 > output lives in a separate artifact and the *only* path from a suggestion to authoritative data is a human
 > writing a rule. There is therefore no runtime precedence between the model and the config — they are in
 > different lanes, and a guess can never be mistaken for, or override, a stated decision.
@@ -143,7 +109,7 @@ lets an operator grow the rule set from evidence instead of authoring every rege
   per normalised label, and emit `docs/taxonomy-suggestions.yaml` splitting each into coverage-gap (matches an
   existing programme by normalised label but no curated rule covers the resource) vs new-programme-candidate.
   Deterministic output; `--dry-run` writes nothing; `--prune` never touches it.
-- **Keep `groups`/`facets` rules-only** — suggestions never merge into the authoritative fields or the facets
+- **Keep `facets` rules-only** — suggestions never merge into the authoritative facets map or the facets
   header.
 - **Keep any hint vocabulary out of `doc-prompt.md`** — pass it through the non-hashed `generate.md` so
   `taxonomy:` edits stay decoupled from `promptSha256`.

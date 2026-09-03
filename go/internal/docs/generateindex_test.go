@@ -235,23 +235,8 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 		t.Errorf("function vocabulary length = %d, want %d", len(idx.Vocabularies.Function), len(models.FunctionGroups))
 	}
 
-	// The full registry is emitted in display order, zero-count programme kept.
-	wantReg := []IndexProgramme{
-		{ID: "windows-device", Label: "Windows device config", Count: 1},
-		{ID: "groups", Label: "Assignment groups", Count: 1},
-		{ID: "empty-prog", Label: "Never matches", Count: 0},
-	}
-	if len(idx.Programmes) != len(wantReg) {
-		t.Fatalf("programmes = %+v, want %+v", idx.Programmes, wantReg)
-	}
-	for i, w := range wantReg {
-		if idx.Programmes[i] != w {
-			t.Errorf("programmes[%d] = %+v, want %+v", i, idx.Programmes[i], w)
-		}
-	}
-
-	// The same axis is emitted in the multi-axis facets header: a single
-	// "programme" axis whose values mirror the registry, zero-count value kept.
+	// The programme axis is emitted in the facets header as a single axis whose
+	// values are the full registry in display order, zero-count value kept.
 	if len(idx.Facets) != 1 || idx.Facets[0].ID != programmeAxisID {
 		t.Fatalf("facets = %+v, want a single programme axis", idx.Facets)
 	}
@@ -269,35 +254,32 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 		}
 	}
 
-	// The documented Windows device policy carries the windows-device group.
+	// The documented Windows device policy's per-resource facets map carries the
+	// programme axis, value id only.
 	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
 	if doc == nil {
 		t.Fatal("documented policy missing from index")
 	}
-	if len(doc.Groups) != 1 || doc.Groups[0].ID != "windows-device" || doc.Groups[0].Label != "Windows device config" {
-		t.Errorf("policy groups = %+v, want [windows-device]", doc.Groups)
-	}
-	// The per-resource facets map carries the programme axis, value id only.
 	if got := doc.Facets[programmeAxisID]; len(got) != 1 || got[0] != "windows-device" {
 		t.Errorf("policy facets[programme] = %v, want [windows-device]", doc.Facets[programmeAxisID])
 	}
 
-	// The referenced group carries the groups programme.
+	// The referenced group is classified into the groups programme.
 	grp := resourceByDoc(idx, "Microsoft.Graph/groups/g1.md")
 	if grp == nil {
 		t.Fatal("referenced group missing from index")
 	}
-	if len(grp.Groups) != 1 || grp.Groups[0].ID != "groups" {
-		t.Errorf("group groups = %+v, want [groups]", grp.Groups)
+	if got := grp.Facets[programmeAxisID]; len(got) != 1 || got[0] != "groups" {
+		t.Errorf("group facets[programme] = %v, want [groups]", got)
 	}
 
-	// The pending policy matched nothing, so it carries no groups.
+	// The pending policy matched nothing, so it carries no facets at all.
 	pend := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_u_win_pending.md")
 	if pend == nil {
 		t.Fatal("pending policy missing from index")
 	}
-	if len(pend.Groups) != 0 {
-		t.Errorf("pending groups = %+v, want none", pend.Groups)
+	if len(pend.Facets) != 0 {
+		t.Errorf("pending facets = %+v, want none", pend.Facets)
 	}
 }
 
@@ -331,8 +313,7 @@ func TestGenerateIndexMultiAxis(t *testing.T) {
 		t.Fatalf("facet axes = %+v, want [programme platform]", idx.Facets)
 	}
 
-	// The documented Windows policy is classified on both axes; the programme
-	// axis is additionally mirrored into the legacy groups field.
+	// The documented Windows policy is classified on both axes.
 	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
 	if doc == nil {
 		t.Fatal("documented policy missing from index")
@@ -342,9 +323,6 @@ func TestGenerateIndexMultiAxis(t *testing.T) {
 	}
 	if got := doc.Facets["platform"]; len(got) != 1 || got[0] != "windows" {
 		t.Errorf("platform facet = %v, want [windows]", got)
-	}
-	if len(doc.Groups) != 1 || doc.Groups[0].ID != "windows-device" {
-		t.Errorf("legacy groups = %+v, want [windows-device]", doc.Groups)
 	}
 
 	// The macos value matched nothing; its count is still emitted as zero.

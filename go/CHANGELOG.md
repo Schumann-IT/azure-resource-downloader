@@ -15,11 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sliced by *Programme*, *Platform*, *Environment* and so on at once. The legacy `programmes:` key is kept as
   sugar for the axis with id `programme` (defining both `programmes:` and an explicit `programme` axis is a
   fatal error, not a silent merge), so no existing config breaks. `index.yaml` (schema bumped to **version
-  3**) gains a header `facets` registry (every axis, its values in display order, and per-tenant match counts
+  4**) gains a header `facets` registry (every axis, its values in display order, and per-tenant match counts
   with zero-count values kept) and a per-resource `facets` map (`axis id → matched value ids`, value ids
-  only; labels resolve from the header). The transitional single-axis `programmes` registry and per-resource
-  `groups` fields are still emitted as mirrors of the `programme` axis so an older consumer keeps working;
-  a `programmes:`-only config produces the same programmes/groups output as before (the alias is a no-op).
+  only; labels resolve from the header). `facets` is the sole grouping surface: the earlier single-axis
+  `programmes` registry and per-resource `groups` fields are **not** emitted — the `programmes:` sugar simply
+  compiles into the `programme` axis and is reported through `facets` like any other, and a `programmes:`-only
+  config produces the same index as an equivalent explicit `programme` axis (the alias is a no-op).
   Resources matching no value on an axis are reported as **uncategorised for that axis** (a per-axis warning),
   while the summary's single `uncategorised` figure counts only resources that matched **no value on any axis**
   — the per-axis counts are deliberately not summed, since a resource missing two axes would otherwise be
@@ -62,9 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `filters:` and `transformers:` (there is no CLI flag), read with `viper.UnmarshalKey` so it survives
   viper's lowercasing of config keys. The classification is resolved once, in the CLI, into `docs/index.yaml`,
   so the docs browser and the Confluence export read the same grouping. Each resource gains a many-to-many
-  `groups` list (stable `id` + display `label`), and the index header gains a `programmes` registry (every
-  programme in display order with a per-tenant match `count`, zero-count programmes kept) and the closed
-  grouping `vocabularies` (the ordered `platform`/`function` group names). Resources matching no programme
+  facet membership, and the index header gains the matching `facets` registry (every value in display order
+  with a per-tenant match `count`, zero-count values kept) and the closed grouping `vocabularies` (the ordered
+  `platform`/`function` group names). Resources matching no programme
   are reported as **uncategorised** so a taxonomy that quietly stops matching is visible. With no `taxonomy:`
   section the index is unchanged apart from the always-emitted `vocabularies`, and grouping falls back to
   per-type — the default `config.example.yaml` keeps the section commented out, preserving the "loading the
