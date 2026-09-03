@@ -10,27 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The sidebar can be filtered by programme, from the taxonomy the CLI resolves.**
-  `docs generate-index` with a `taxonomy:` section classifies each resource into programmes — CIS hardening,
-  Defender, VPN and so on, initiatives that span several resource types — and writes a header `programmes`
-  registry plus many-to-many `groups` per resource into `docs/index.yaml`. Every page that renders the
-  sidebar now offers those programmes and accepts **`?programme=<id>`**, narrowing the tree server-side, with
-  the choice carried in every document link so it survives navigation and a reload. **No client-side
-  JavaScript**: the filter is a query parameter and a set of links, not a widget. Membership is **read, never
-  derived** — deriving it here would have made the browser and the Confluence export, which is a second
-  consumer of the same index, group differently.
+- **The sidebar can be filtered along every taxonomy axis the CLI resolves, combining them, with counts that
+  react to the selection.** `docs generate-index` with a `taxonomy:` section classifies each resource on one
+  or more **axes** — *Programme* (CIS hardening, Defender, VPN…), *Platform*, *Assignment scope*, whatever the
+  operator declares — and writes a header `facets` registry (axes and values in display order, with per-tenant
+  counts) plus a per-resource `facets` map of value ids into `docs/index.yaml` (schema version 3). Every page
+  that renders the sidebar now offers one chip group per axis, headed by **the axis label from the index**, and
+  accepts **one repeatable query parameter per axis id** — `?programme=defender&programme=vpn&platform=macos` —
+  narrowing the tree server-side with **OR within an axis and AND across axes**. The whole selection rides
+  along in every document link and in every chip link, so a click toggles exactly one value and never drops
+  another axis, and a **Clear filters** reset plus a *showing N of M* line state what is currently applied.
+  **No client-side JavaScript**: the filter is a set of query parameters and links, not a widget. The
+  implementation is **axis-agnostic** — no axis is named anywhere in the code or the templates — so an axis
+  added to the CLI's config appears here with no change, and membership is **read, never derived**, because
+  deriving it here would let the browser and the Confluence export (a second consumer of the same index)
+  disagree.
 
-  What the design protects: **`?programme=_uncategorised`** is always offered and lists what the taxonomy
-  matched to nothing, so a taxonomy that stops matching appears as a full bucket instead of a quietly
-  thinning tree; **zero-count programmes stay listed** because "empty in this tenant" is information the
-  registry carries on purpose, and selecting one says so rather than rendering a blank sidebar; the
-  **document you are viewing is always kept in its own sidebar**, even when the active filter excludes it;
-  an **unknown `?programme=` is ignored** instead of rendering what would look like an empty tenant; and an
-  index with **no taxonomy is unfilterable** and renders exactly the per-type tree it did before. Resources
-  now also carry their programme labels as badges in the index listing, so membership is visible from a
-  resource and not only from the chooser. Grouping *by* platform and function — replacing the per-type tree —
-  is deliberately not part of this: it needs frontmatter the CLI does not yet request, see
-  [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+  What the design protects: each axis offers **`_uncategorised`**, listing what that axis matched to nothing,
+  so a taxonomy that stops matching appears as a full bucket instead of a quietly thinning tree; **counts are
+  computed against the current selection with the axis's own choice removed**, so picking one value does not
+  drive its siblings to zero; a value that **another** filter has emptied is **no longer offered** (it is a
+  dead end), while a **selected** value stays visible even at zero so the choice that emptied the tree can be
+  undone, and an **unfiltered zero-count value stays listed** because "empty in this tenant" is information the
+  registry carries on purpose; totals **count distinct resources** and never sum the value counts, which are
+  non-additive since a resource can hold several values on one axis; the **document you are viewing is always
+  kept in its own sidebar** even when the filter excludes it, is deliberately **not counted** into the
+  selection, and is **marked as being outside the filter** with the count line saying so, so the tree being one
+  row longer than the count is explained rather than left to be reconciled; **unknown values and unknown axes
+  are ignored** instead of rendering what would look like an empty tenant; an axis whose id would collide with
+  a route's own parameter (`?raw`) is not offered; and an
+  index with **no taxonomy is unfilterable**, rendering exactly the per-type tree it did before. A **version-2
+  index** (`programmes` + per-resource `groups`, no `facets`) keeps working: its single programme axis is
+  synthesised from those fields, so old exports on disk need no regeneration. Resources carry their membership
+  labels as badges in the index listing, resolved from the header, so membership is visible from a resource and
+  not only from the chooser. Grouping *by* an axis — replacing the per-type tree — is deliberately not part of
+  this, see [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
 
 - **A tenant's documentation can be exported as Confluence HTML.**
   `GET /:tenant/_export/confluence` streams one zip containing one folder, which is what Confluence's

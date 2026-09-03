@@ -20,9 +20,11 @@ mutates the export in any way.
   resource type, the section of the document being viewed opened and the document itself marked, plus
   the tenant counts, export timestamp, the incomplete-export banner and the excluded bulk types.
   Collapsing is pure HTML — there is still no client-side JavaScript.
-- **Programme filter** — when the index carries a taxonomy (`azure-rd docs generate-index` with a
-  `taxonomy:` config section), the sidebar offers the programmes it declares and `?programme=<id>`
-  narrows the tree to one of them, server-side. See [Programme filter](#programme-filter).
+- **Taxonomy filters** — when the index carries a taxonomy (`azure-rd docs generate-index` with a
+  `taxonomy:` config section), the sidebar offers one chip group per axis it declares — Programme,
+  Platform, Assignment scope, whatever the operator configured — and narrows the tree server-side from
+  one repeatable query parameter per axis, combining several at once, with counts that follow the
+  selection. See [Taxonomy filters](#taxonomy-filters).
 - **Source YAML view** — every document links to the exported resource it was written from
   (`GET /:tenant/_resource/<type>/<name>`), syntax highlighted with `shiki`, one addressable line per
   `#L42` anchor, and `?raw` for plain text. A **Documentation | YAML** switcher in the top bar flips
@@ -132,7 +134,7 @@ Discovery rules:
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
 | `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
-| `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes `?programme=<id>`. |
+| `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
 | `GET /:tenant/_export/confluence` | The whole tenant as a `application/zip` attachment for Confluence's HTML import. |
 | `GET /:tenant/_resource/*path` | The source YAML behind a document, syntax highlighted; the `.yaml` suffix is optional. |
@@ -147,35 +149,48 @@ Anything that does not resolve to a Markdown file inside the tenant — or to a 
 breadcrumb, and they cannot collide with a resource type because no Azure/Graph type segment starts
 with `_`.
 
-## Programme filter
+## Taxonomy filters
 
-`azure-rd docs generate-index` can classify each resource into **programmes** — real-world initiatives
-like CIS hardening, Defender or VPN that span several resource types — from a `taxonomy:` section in the
-CLI's config. When it does, `docs/index.yaml` carries a header `programmes` registry (`id`, `label`,
-per-tenant `count`) and many-to-many `groups` on each resource.
+`azure-rd docs generate-index` can classify each resource along one or more **axes** — *Programme* (CIS
+hardening, Defender, VPN…), *Platform*, *Assignment scope*, whatever the operator declares — from a
+`taxonomy:` section in the CLI's config. When it does, `docs/index.yaml` carries a header `facets`
+registry (each axis: `id`, `label`, and its `values` in display order with per-tenant `count`s) and a
+per-resource `facets` map of **value ids only**; labels are always resolved from the header.
 
-The browser **reads that membership and derives none of its own**: the same classification drives the
-sidebar here and the grouped overview page of the Confluence export, which is only true because the CLI
-resolves it once, at index time.
+The browser **reads that membership and derives none of its own**, and names no axis anywhere in its code
+or templates: an axis added to the CLI's config shows up here with no change. The same classification is
+available to every consumer of the index, which is only true because the CLI resolves it once, at index
+time.
 
-- Every page that shows the sidebar accepts **`?programme=<id>`**, which narrows the tree to that
-  programme's documents and rides along in every link, so the choice survives navigation and a reload
-  with no client-side state.
-- **`?programme=_uncategorised`** lists what the taxonomy matched to nothing. It is always offered, so a
-  taxonomy that stops matching shows up as a full bucket rather than as a quietly thinning tree.
-- Programmes with **no matches in this tenant are still listed** — "empty here" is information — and
-  selecting one says so instead of rendering a blank sidebar.
-- The **document you are viewing stays in its sidebar** even when the active filter excludes it, and an
-  unknown `?programme=` value is ignored rather than rendering what would look like an empty tenant.
-- An index written **without** a taxonomy (or by an older CLI) offers no filter and renders exactly the
-  per-type tree it always did.
+- Every page that shows the sidebar offers **one chip group per axis**, headed by the axis's label from
+  the index, and accepts **one repeatable query parameter per axis id**:
+  `?programme=defender&programme=vpn&platform=macos`. Values are **OR-ed within an axis** and **AND-ed
+  across axes**.
+- **Every chip toggles its own value** and keeps the rest of the selection, so a click never drops
+  another axis. The whole selection rides along in every document link too, and a **Clear filters** link
+  plus a *showing N of M* line state what is applied — all in the URL, with no client-side state.
+- **`?<axis>=_uncategorised`** lists what that axis matched to nothing, so a taxonomy that stops matching
+  shows up as a full bucket rather than as a quietly thinning tree.
+- **Counts follow the selection.** Each value is counted against the resources the *other* axes allow, so
+  picking one value does not zero its siblings. A value another filter has emptied is **no longer
+  offered**; a **selected** value stays visible even at 0 so the choice can be undone; and while nothing
+  is filtering, a **zero-count value stays listed** — "empty here" is information. Totals count **distinct
+  resources**: value counts are not additive, since a resource can hold several values on one axis.
+- The **document you are viewing stays in its sidebar** even when the filter excludes it. It is not counted
+  into the selection — the numbers describe the filter, not the page — so it is **marked *outside the
+  filter*** and the count line adds *plus the document you are viewing*, which is what accounts for the tree
+  holding one row more than the count says. Unknown values, unknown axes and an axis id that would collide
+  with a route's own parameter (`?raw`) are ignored rather than rendering what would look like an empty
+  tenant.
+- An index written **without** a taxonomy offers no filter and renders exactly the per-type tree it always
+  did. An index from an **older CLI** (`programmes` + per-resource `groups`, no `facets`) still filters:
+  its single programme axis is synthesised from those fields.
 
-The filter narrows *navigation*, not page bodies: a document and the tenant summary still say whatever
+The filters narrow *navigation*, not page bodies: a document and the tenant summary still say whatever
 they say. The Confluence export is unaffected — it always exports the whole tenant.
 
-Grouping documents by **platform and function** instead of by resource type is the other half of this
-and is not implemented: it needs `platformGroup`/`functionGroup` in the documents' frontmatter, which
-the CLI does not yet ask the generation agent for. See [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+Grouping documents **by an axis** instead of by resource type is the other half of this and is not
+implemented. See [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
 
 ## Confluence export
 
@@ -245,9 +260,12 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
 - `test/path-safety.spec.ts` — traversal, symlink escape, null bytes, absolute paths, and the
   one-extension-per-root rule for both roots.
 - `test/tenant-index.spec.ts` — `index.yaml` parsing (including rejection of a malformed file,
-  acceptance of a later schema version, and the programme registry/`groups`/vocabularies surface),
-  navigation building, and the programme filter (narrowing, the uncategorised bucket, filter hrefs,
-  the active document surviving a filter, and an index without a taxonomy staying unfiltered).
+  acceptance of a later schema version, and the `facets`/`programmes`/`groups`/vocabularies surface),
+  navigation building, and the taxonomy filters (OR within an axis, AND across axes, selection-aware
+  counts, dead-end values dropped while a selected one survives, chip toggling, the uncategorised
+  bucket, distinct-resource totals, the active document surviving a filter and being flagged as exempt from
+  it, a version-2 index filtering through the synthesised axis, and an index without a taxonomy staying
+  unfiltered).
 - `test/section-hooks.spec.ts` — heading slugs (the em dash, `&` → `and`, inline markup), the
   declared-vs-undeclared heading split, matched and unmatched marker pairs with the ranges they report,
   section wrapping (including that an H2 inside a spliced block never opens one), and locating the
@@ -293,7 +311,7 @@ web/
 │       ├── docs.module.ts
 │       ├── docs.controller.ts           # routes, breadcrumb, 404 mapping
 │       ├── tenant-discovery.service.ts  # DOCS_ROOT scan + 30 s TTL cache + index cache
-│       ├── tenant-index.ts              # docs/index.yaml parsing + navigation + programme filter
+│       ├── tenant-index.ts              # docs/index.yaml parsing + navigation + facet filters
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction

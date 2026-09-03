@@ -63,11 +63,11 @@ disagreeing.
 > per-resource `facets` map (`axis id → value ids`). The mirrors carry no information the facets do not, and
 > unlike the facets they are limited to one axis and repeat the label on every resource.
 >
-> **Gated on the frontend, not on this repo.** The shipped docs browser reads `index.programmes` and
-> per-resource `groups` and derives its uncategorised bucket from `groups.length === 0`
-> (`web/src/docs/tenant-index.ts`, `views/partials/sidebar.hbs`). Removing the mirrors before that filter is
-> migrated onto `facets` silently empties its sidebar filter. The web side has its own entry for the
-> migration; this one only lands afterwards.
+> **The frontend gate is met.** The docs browser now builds its filters from `facets` whenever an index
+> carries them (`web/src/docs/tenant-index.ts`, `views/partials/sidebar.hbs`), reading `programmes`/`groups`
+> only to synthesise the single programme axis for the version-2 exports already on disk. So the removal no
+> longer risks emptying its sidebar; what it does break is any *other* consumer still reading the mirrors, and
+> older exports keep their own copy of whatever schema they were written with.
 >
 > **It is a breaking schema change, unlike the addition.** Adding `facets` was additive (v2 → v3) because a
 > consumer ignores unknown fields. Removing fields is not: it bumps `indexVersion` to **4** and belongs in a
@@ -76,9 +76,6 @@ disagreeing.
 
 **Plan.**
 
-- **Confirm the frontend no longer *needs* the mirrors** — its filter builds from `facets` whenever an index
-  carries them — before touching anything here. It may keep reading `programmes`/`groups` as a fallback for
-  the v2 exports already on disk; what must not remain is a code path that only works when they are present.
 - **Remove `IndexProgramme`/`IndexGroup` and their emission** from `internal/docs/generateindex.go`, including
   the mirroring of the `programme` axis, and bump `indexVersion` to 4.
 - **Keep the `programmes:` config sugar.** It is the ergonomic way to write the common single axis; only the

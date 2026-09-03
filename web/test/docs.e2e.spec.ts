@@ -15,16 +15,93 @@ import { configureViews } from '../src/configure-app';
 // against self-contained fixture tenants so it does not depend on the real
 // output/ export.
 
-// A version-2 index, as `docs generate-index` writes it with a `taxonomy:`
-// section: the header programme registry (a zero-count programme kept) and
-// many-to-many per-resource membership.
-const INDEX_YAML = `version: 2
+// A version-3 index, as `docs generate-index` writes it with a multi-axis
+// `taxonomy:`: the header `facets` registry (two axes, a zero-count value kept)
+// and a per-resource `facets` map of value ids, with the transitional
+// `programmes`/`groups` mirrors the CLI still emits beside them.
+const INDEX_YAML = `version: 3
 tenant: My Tenant
 generatedAt: "2026-01-01T00:00:00Z"
 complete: true
 vocabularies:
     platform: [Windows, macOS, n/a]
     function: [Compliance, Security]
+programmes:
+    - id: firewall
+      label: Firewall
+      count: 1
+    - id: vpn
+      label: VPN
+      count: 0
+    - id: hardening
+      label: Hardening
+      count: 1
+facets:
+    - id: programme
+      label: Programme
+      values:
+        - id: firewall
+          label: Firewall
+          count: 1
+        - id: vpn
+          label: VPN
+          count: 0
+        - id: hardening
+          label: Hardening
+          count: 1
+    - id: platform
+      label: Platform
+      values:
+        - id: windows
+          label: Windows
+          count: 1
+        - id: macos
+          label: macOS
+          count: 1
+counts:
+    documented: 2
+    pending: 1
+    excluded:
+        Microsoft.Graph/windowsAutopilotDeviceIdentities: 4
+resources:
+    - type: Microsoft.Graph/deviceManagementConfigurationPolicies
+      doc: Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md
+      displayName: Policy One
+      summary: A firewall policy.
+      documented: true
+      groups:
+        - id: firewall
+          label: Firewall
+        - id: hardening
+          label: Hardening
+      facets:
+        platform:
+            - windows
+        programme:
+            - firewall
+            - hardening
+      assignments:
+        groups: 1
+    - type: Microsoft.Graph/groups
+      doc: Microsoft.Graph/groups/g1.md
+      displayName: Admins
+      documented: true
+    - type: Microsoft.Graph/deviceCompliancePolicies
+      doc: Microsoft.Graph/deviceCompliancePolicies/c1.md
+      displayName: Compliance One
+      documented: false
+      facets:
+        platform:
+            - macos
+`;
+
+// The same tenant as an older CLI wrote it: version 2, the single programme axis
+// expressed through `programmes` + per-resource `groups` and no `facets` at all.
+// The filter must still work, from the synthesised axis.
+const LEGACY_INDEX_YAML = `version: 2
+tenant: My Tenant
+generatedAt: "2026-01-01T00:00:00Z"
+complete: true
 programmes:
     - id: firewall
       label: Firewall
@@ -231,10 +308,11 @@ describe('Docs browser (e2e)', () => {
     await fsp.writeFile(path.join(trash, 'index.yaml'), INDEX_YAML);
 
     // A tenant whose export carries no summary.md: the landing page must fall
-    // back to the index listing rather than 404.
+    // back to the index listing rather than 404. Its index is also the version-2
+    // one, so the same tenant doubles as the degradation case.
     const bareDir = path.join(root, 'nosummary', 'docs');
     await fsp.mkdir(bareDir, { recursive: true });
-    await fsp.writeFile(path.join(bareDir, 'index.yaml'), INDEX_YAML);
+    await fsp.writeFile(path.join(bareDir, 'index.yaml'), LEGACY_INDEX_YAML);
 
     // An export whose docs/ folder has no index.yaml is not a tenant.
     const halfDir = path.join(root, 'half-baked', 'docs');
@@ -322,8 +400,10 @@ describe('Docs browser (e2e)', () => {
   // Handlebars escapes `=` inside an attribute as `&#x3D;`, which the HTML parser
   // decodes back to `=`, so the rendered links work; the assertions have to match
   // the source as escaped.
-  const q = (base: string, programme: string) =>
-    `href="${base}?programme&#x3D;${programme}"`;
+  const q = (base: string, query: string) =>
+    `href="${base}?${query.replace(/=/g, '&#x3D;').replace(/&(?!#x3D;)/g, '&amp;')}"`;
+
+  const programme = (base: string, id: string) => q(base, `programme=${id}`);
 
   // The filter narrows the navigation, not the page body: the tenant summary and
   // a document's own text still say whatever they say. Exclusion is therefore
@@ -338,16 +418,21 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).toContain('Firewall');
   });
 
-  it('offers the programme filter from the index registry, zero-count included', async () => {
+  it('offers every axis the index declares, zero-count values included', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant')
       .expect(200);
+    // Axis headings are the labels from the index, not names baked in here.
     expect(res.text).toContain('Programme');
-    expect(res.text).toContain(q('/mytenant', 'firewall'));
-    // A programme that matched nothing here is still offered: "empty in this
-    // tenant" is information the registry carries on purpose.
-    expect(res.text).toContain(q('/mytenant', 'vpn'));
-    expect(res.text).toContain(q('/mytenant', '_uncategorised'));
+    expect(res.text).toContain('Platform');
+    expect(res.text).toContain(programme('/mytenant', 'firewall'));
+    expect(res.text).toContain(q('/mytenant', 'platform=windows'));
+    // A value that matched nothing here is still offered while nothing is
+    // filtering: "empty in this tenant" is information the registry carries.
+    expect(res.text).toContain(programme('/mytenant', 'vpn'));
+    expect(res.text).toContain(programme('/mytenant', '_uncategorised'));
+    // Nothing selected, so no reset and no "showing" line.
+    expect(res.text).not.toContain('Clear filters');
   });
 
   it('GET /:tenant?programme= narrows the tree to that programme', async () => {
@@ -358,10 +443,69 @@ describe('Docs browser (e2e)', () => {
     expect(sidebarOf(res.text)).not.toContain('Admins');
     // The choice rides along in every document link, so it survives a click.
     expect(res.text).toContain(
-      q(
+      programme(
         '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
         'firewall',
       ),
+    );
+    // The selection is stated, and resettable, without any client-side state.
+    expect(sidebarOf(res.text)).toContain('Showing 1 of 3');
+    expect(sidebarOf(res.text)).toContain('Clear filters');
+    expect(sidebarOf(res.text)).toContain('href="/mytenant"');
+  });
+
+  it('combines two axes: OR within an axis, AND across axes', async () => {
+    const both = await request(app.getHttpServer())
+      .get('/mytenant?programme=firewall&platform=windows')
+      .expect(200);
+    expect(sidebarOf(both.text)).toContain('Policy One');
+    expect(sidebarOf(both.text)).toContain('Showing 1 of 3');
+
+    // The same programme with the other platform is a dead end, not a fallback
+    // to one of the two axes.
+    const dead = await request(app.getHttpServer())
+      .get('/mytenant?programme=firewall&platform=macos')
+      .expect(200);
+    expect(sidebarOf(dead.text)).not.toContain('Policy One');
+    expect(sidebarOf(dead.text)).toContain('No documents match these filters');
+
+    // Two values on one axis are OR-ed: the zero-count one adds nothing but
+    // does not remove the other's matches either.
+    const ored = await request(app.getHttpServer())
+      .get('/mytenant?programme=firewall&programme=vpn')
+      .expect(200);
+    expect(sidebarOf(ored.text)).toContain('Policy One');
+    expect(sidebarOf(ored.text)).not.toContain('Admins');
+  });
+
+  it('toggles one value per chip without losing the other axis', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/mytenant?programme=firewall&platform=windows')
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    // The active programme chip switches itself off and keeps the platform.
+    expect(sidebar).toContain(q('/mytenant', 'platform=windows'));
+    // An inactive chip adds itself to the selection instead of replacing it.
+    expect(sidebar).toContain(
+      q('/mytenant', 'programme=firewall&programme=hardening&platform=windows'),
+    );
+  });
+
+  it('stops offering a value another filter has emptied', async () => {
+    const unfiltered = await request(app.getHttpServer())
+      .get('/mytenant')
+      .expect(200);
+    expect(unfiltered.text).toContain(programme('/mytenant', 'vpn'));
+
+    // Under platform=windows, `vpn` leads nowhere, so it is not offered ...
+    const filtered = await request(app.getHttpServer())
+      .get('/mytenant?platform=windows')
+      .expect(200);
+    const sidebar = sidebarOf(filtered.text);
+    expect(sidebar).not.toContain('programme&#x3D;vpn');
+    // ... while a value that still leads somewhere is.
+    expect(sidebar).toContain(
+      q('/mytenant', 'programme=firewall&platform=windows'),
     );
   });
 
@@ -375,22 +519,43 @@ describe('Docs browser (e2e)', () => {
     expect(sidebar).not.toContain('Policy One');
   });
 
-  it('says so plainly when a programme matches nothing in this tenant', async () => {
+  it('says so plainly when a selection matches nothing in this tenant', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant?programme=vpn')
       .expect(200);
     const sidebar = sidebarOf(res.text);
-    expect(sidebar).toContain('No documents in this programme');
+    expect(sidebar).toContain('No documents match these filters');
+    expect(sidebar).toContain('Showing 0 of 3');
     expect(sidebar).not.toContain('Policy One');
+    // The selected value stays offered even at 0, or the choice that emptied
+    // the tree could not be undone.
+    expect(sidebar).toContain('programme&#x3D;vpn');
   });
 
-  it('ignores an unknown programme instead of rendering an empty tenant', async () => {
+  it('ignores an unknown value instead of rendering an empty tenant', async () => {
     const res = await request(app.getHttpServer())
-      .get('/mytenant?programme=nope')
+      .get('/mytenant?programme=nope&platform=nope&nosuchaxis=x')
       .expect(200);
     const sidebar = sidebarOf(res.text);
     expect(sidebar).toContain('Policy One');
     expect(sidebar).toContain('Admins');
+    expect(sidebar).not.toContain('Clear filters');
+  });
+
+  it('still filters a version-2 index, from the synthesised programme axis', async () => {
+    const offered = await request(app.getHttpServer())
+      .get('/nosummary')
+      .expect(200);
+    expect(offered.text).toContain('Programme');
+    expect(offered.text).toContain(programme('/nosummary', 'firewall'));
+    // That index declares no second axis, so none is invented for it.
+    expect(offered.text).not.toContain('platform&#x3D;');
+
+    const res = await request(app.getHttpServer())
+      .get('/nosummary?programme=firewall')
+      .expect(200);
+    expect(sidebarOf(res.text)).toContain('Policy One');
+    expect(sidebarOf(res.text)).not.toContain('Admins');
   });
 
   it('keeps the document you are on in its sidebar even when filtered out', async () => {
@@ -399,9 +564,30 @@ describe('Docs browser (e2e)', () => {
       .expect(200);
     const sidebar = sidebarOf(res.text);
     expect(sidebar).toContain('Admins');
-    expect(sidebar).toContain(q('/mytenant/Microsoft.Graph/groups/g1', 'firewall'));
+    expect(sidebar).toContain(
+      programme('/mytenant/Microsoft.Graph/groups/g1', 'firewall'),
+    );
+    // The exemption does not inflate the count: it describes the selection. The
+    // extra row is labelled and announced instead, so the tree being one longer
+    // than the count is explained rather than left to be reconciled.
+    expect(sidebar).toContain('Showing 1 of 3');
+    expect(sidebar).toContain('plus the document you are viewing');
+    expect(sidebar).toContain('outside the filter');
     // The filter is still the active one, not silently reset by the visit.
     expect(sidebar).toContain('aria-current="true"');
+  });
+
+  it('says nothing about an exemption when the document you are on matches', async () => {
+    const res = await request(app.getHttpServer())
+      .get(
+        '/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1' +
+          '?programme=firewall',
+      )
+      .expect(200);
+    const sidebar = sidebarOf(res.text);
+    expect(sidebar).toContain('Showing 1 of 3');
+    expect(sidebar).not.toContain('plus the document you are viewing');
+    expect(sidebar).not.toContain('outside the filter');
   });
 
   it('GET /:tenant/summary redirects to the landing page (the summary is its body)', async () => {

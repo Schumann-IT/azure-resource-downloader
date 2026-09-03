@@ -6,9 +6,11 @@ import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { resolveResource, resolveWithinTenant } from './path-safety';
 import {
+  buildFacetFilters,
   buildNavigation,
-  buildProgrammeFilters,
-  isKnownProgramme,
+  countMatching,
+  hasSelection,
+  parseFacetSelection,
   TenantIndex,
 } from './tenant-index';
 import { ExportService } from './export/export.service';
@@ -67,7 +69,7 @@ export class DocsController {
   @Get(':tenant')
   async tenantIndex(
     @Param('tenant') tenant: string,
-    @Query('programme') programme: string | undefined,
+    @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
@@ -92,7 +94,7 @@ export class DocsController {
       tenant,
       breadcrumb: [],
       summary,
-      nav: this.nav(info, index, '', `/${tenant}`, programme),
+      nav: this.nav(info, index, '', `/${tenant}`, query),
     });
   }
 
@@ -125,7 +127,7 @@ export class DocsController {
   async resource(
     @Param() params: any,
     @Query('raw') raw: string | undefined,
-    @Query('programme') programme: string | undefined,
+    @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
     const tenant: string = params.tenant;
@@ -169,7 +171,7 @@ export class DocsController {
               index,
               docPath,
               `/${tenant}/${RESOURCE_PREFIX}/${docPath}`,
-              programme,
+              query,
             )
           : null,
       });
@@ -182,7 +184,7 @@ export class DocsController {
   @Get(':tenant/*path')
   async doc(
     @Param() params: any,
-    @Query('programme') programme: string | undefined,
+    @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
     const tenant: string = params.tenant;
@@ -225,7 +227,7 @@ export class DocsController {
           : null,
         views: hasSource ? this.views(tenant, docPath, 'doc') : null,
         nav: index
-          ? this.nav(info, index, relPath, `/${tenant}/${docPath}`, programme)
+          ? this.nav(info, index, relPath, `/${tenant}/${docPath}`, query)
           : null,
       });
     } catch {
@@ -234,18 +236,24 @@ export class DocsController {
   }
 
   // View model for the sidebar partial: the tenant metadata that used to sit on
-  // the landing page, the programme filter and the navigation tree, so all three
-  // survive on every page. An unknown `?programme=` is ignored rather than
-  // rendering an empty tree that would look like a broken tenant.
+  // the landing page, the facet filters and the navigation tree, so all three
+  // survive on every page. The selection is read from the query parameters named
+  // after the index's own axis ids, and values this index cannot serve are
+  // dropped rather than rendering an empty tree that would look like a broken
+  // tenant.
+  //
+  // `matched`/`total` count distinct resources and deliberately ignore the
+  // active-document exemption in `buildNavigation`, so the numbers describe the
+  // selection rather than the page.
   private nav(
     info: TenantInfo,
     index: TenantIndex,
     activeDoc: string,
     basePath: string,
-    programme: string | undefined,
+    query: Record<string, unknown>,
   ): Record<string, unknown> {
-    const active =
-      programme && isKnownProgramme(index, programme) ? programme : '';
+    const selection = parseFacetSelection(index, query);
+    const sections = buildNavigation(index, info.id, activeDoc, selection);
     return {
       tenant: info.id,
       name: info.name,
@@ -253,8 +261,16 @@ export class DocsController {
       counts: index.counts,
       complete: index.complete,
       incompleteReason: index.incompleteReason,
-      programmes: buildProgrammeFilters(index, basePath, active),
-      sections: buildNavigation(index, info.id, activeDoc, active),
+      facets: buildFacetFilters(index, basePath, selection),
+      filtering: hasSelection(selection),
+      matched: countMatching(index, selection),
+      total: index.resources.length,
+      clearHref: basePath,
+      // Whether the tree is one longer than `matched` because the document being
+      // viewed is exempt from the filter, so the view can say so instead of
+      // leaving the reader to reconcile the two.
+      exempt: sections.some((s) => s.items.some((i) => i.exempt)),
+      sections,
     };
   }
 
