@@ -25,6 +25,13 @@ the per-type prompt templates: a full one-shot regeneration across every tenant.
 > `azure-rd docs generate-prompt` run every document of an affected type is flagged stale (prompt-hash
 > mismatch) and lands in the work list automatically — no manual list to maintain.
 >
+> **No re-download needed.** This is a prompt-only change: both the redaction rule and the group-axis marker
+> read no new fact — the plaintext secret is already in the exported source YAML, and grouping is a model
+> judgement over content already documented — so regenerating from the *existing* export suffices. (The
+> separate fact-dependent features that share the wider "full regeneration" wave — notification-template
+> cross-refs, group `groupTypes`/`securityEnabled` facts — do need a fresh download, but they are not part of
+> this entry.)
+>
 > **Scope.** Every type except the `record` family (`windowsAutopilotDeviceIdentities`, `deviceCategories`,
 > `ndesConnectors`, `mobileThreatDefenseConnectors`): its template was deliberately left unchanged, so those
 > documents are not reissued and keep their current `promptSha256`.
