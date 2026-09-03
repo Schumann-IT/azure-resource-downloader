@@ -51,6 +51,150 @@ the per-type prompt templates: a full one-shot regeneration across every tenant.
 - Confirm each reissued document carries `platformGroup`/`functionGroup` and that the §8 report's axis
   `uncategorised` count is only the `record` family (the types that legitimately have no `doc-groups` marker).
 
+## 2. Multi-axis facets in the index taxonomy
+
+**Goal.** Let a consumer of `docs/index.yaml` offer more than one filter axis — a platform filter beside the
+programme filter — without inventing a classification of its own. The index-time taxonomy already resolves a
+curated grouping deterministically from exported facts, but it is hard-coded to exactly one axis called
+*programmes*, so any second axis has to be derived in the consumer, which puts the taxonomy in the wrong
+project and lets two consumers of the same index disagree.
+
+> **What exists.** `internal/docs/taxonomy.go` compiles `taxonomy.programmes[]` from the config into rules
+> over a resource's exported facts (`name`, `odataType`, `platforms` as regexes; `type`, `scope` exact; rules
+> OR-ed, fields within a rule AND-ed) and `docs generate-index` emits the header registry (`programmes`, in
+> config order, zero counts kept) plus per-resource `groups`. It is deterministic, offline and config-only:
+> revising it re-runs `generate-index` and touches neither `resources/` nor a single document.
+>
+> **Why not the model-authored axes.** `platformGroup`/`functionGroup` are single-valued, label-only (no
+> stable id to put in a URL), and only become non-empty after the regeneration in entry 1. They stay what
+> they are — per-resource enrichment and a badge. A curated platform axis classifies tenants that are
+> *already* exported, with one `generate-index` run and no documentation pass, so the two mechanisms are
+> complementary rather than competing.
+>
+> **Shape.** Config gains `taxonomy.axes[]`, each `{id, label, values: [{id, label, match: [rule…]}]}`, with
+> the rule grammar unchanged. The taxonomy `version` field stays `1` — the alias must load every existing
+> config untouched, so no version gate may be added that would reject today's `programmes:`-only files.
+> Today's `taxonomy.programmes[]` keeps working as sugar for an axis with id `programme`, so no existing
+> config breaks and the current output is reproducible; supplying **both** `programmes:` and an `axes:` entry
+> whose id is `programme` is a fatal config error, not a silent merge. Axis and value ids are validated by the
+> existing URL-safe `programmeIDPattern` (which already forbids a leading `_`), unique within their scope;
+> `_`-prefixed tokens stay reserved for consumer-side representation values (`_uncategorised`), so a config
+> can never collide with one.
+>
+> **Emission.** A header `facets: [{id, label, values: [{id, label, count}]}]` in config order, zero counts
+> kept for the same reason the programme registry keeps them, and a per-resource `facets: {<axisId>:
+> [valueId…]}` — **value ids only**: unlike today's self-describing per-resource `groups` (`{id, label}`), a
+> facet membership carries no label, so a consumer joins to the header `facets[].values[].label`. Serialise
+> the per-resource map deterministically (rely on `yaml.v3`'s sorted map keys, or emit an ordered slice) so
+> an unchanged export stays byte-identical.
+>
+> **Versioning.** Introducing `facets` is an additive schema change, exactly like the v1→v2 grouping addition
+> (see the `indexVersion` comment in `generateindex.go`), and the frontend already ignores unknown fields —
+> so bump `indexVersion` to **3** when `facets` first ships. Emit `programmes`/`groups` unchanged alongside it
+> during the transition so the shipped web programme filter keeps working, and drop them — bumping to **4** —
+> only once no consumer reads them.
+>
+> **Per-value counts only.** A consumer needs counts that react to the current selection; those are
+> combinatorial and belong in the consumer, computed from `resources[]`. The file carries one count per value
+> and nothing more.
+>
+> **`config.example.yaml` stays inert.** The taxonomy section remains commented out, so loading the example
+> unmodified still produces byte-identical output including every hash in `resources/metadata.yaml`.
+>
+> **Web migration is a companion, not part of this entry.** The shipped web programme filter reads
+> `index.programmes` + per-resource `groups` (`web/src/docs/tenant-index.ts`, `sidebar.hbs`) and computes its
+> uncategorised bucket from `groups.length === 0`. The v4 removal above cannot land until the frontend
+> migrates that filter onto `facets`; schedule it as its own `web/NEXT-ITERATIONS.md` entry and gate the
+> removal on it rather than restating web work here.
+
+**Plan.**
+
+- **Generalise `TaxonomyConfig`/`compileTaxonomy` to axes**, keeping `programmes` as an accepted alias for the
+  `programme` axis (config `version` unchanged at `1`), and extend the fatal validation to: axis ids and
+  per-axis value ids (URL-safe via `programmeIDPattern`, unique within scope), the reserved `_` prefix, and
+  the `programmes:` + `axes[programme]` collision — a typo or conflict must stay fatal rather than silently
+  grouping nothing.
+- **Classify per axis** in `GenerateIndex`, emit the `facets` header (config order, zero counts kept) and the
+  per-resource value-id-only `facets` block (deterministic serialisation), and keep `programmes`/`groups` in
+  step with the `programme` axis for the transition. Bump `indexVersion` to 3.
+- **Report per-axis uncategorised counts** in `GenerateIndexResult` and the command output (replacing today's
+  single `Uncategorised`), so an axis whose rules stop matching is visible instead of quietly emptying.
+- **Tests**: a `programmes:`-only config produces byte-identical output to today (the alias is a no-op), a
+  two-axis config classifies and counts per axis, registry order and zero counts hold, the new validation
+  failures (bad axis/value id, duplicate value id, `programmes:` + `axes[programme]` collision) are each
+  covered, the per-resource `facets` map is deterministic, and re-running over an unchanged export is
+  byte-identical.
+- **Document it**: the `taxonomy:` section in `config.example.yaml` (commented, with a platform axis as the
+  illustration), the taxonomy and index-schema sections of `README.md`, and an entry under
+  `## [Unreleased]` in `CHANGELOG.md`.
+
+## 3. Bootstrap the curated taxonomy from per-document LLM suggestions
+
+**Goal.** Lower the cost of authoring and maintaining the curated `taxonomy:` without surrendering its
+determinism. The model has already read each resource and written its document, so it is well placed to
+suggest which programmes a resource belongs to; turning those suggestions into reviewed promotion candidates
+lets an operator grow the rule set from evidence instead of authoring every regex cold.
+
+> **Advisory only, never authoritative.** `groups`/`facets` stay rules-only and deterministic; the model's
+> output lives in a separate artifact and the *only* path from a suggestion to authoritative data is a human
+> writing a rule. There is therefore no runtime precedence between the model and the config — they are in
+> different lanes, and a guess can never be mistaken for, or override, a stated decision.
+>
+> **Labels, not ids.** The model emits programme *labels* (with a short rationale), never url-safe ids. The
+> operator mints the stable id (`programmeIDPattern`) at promotion time, so the stable-id-in-a-URL and
+> cross-tenant-consistency contracts stay entirely on the curated side and the model can never spawn
+> `cis`/`cis-l1`/`cis-hardening` as three programmes.
+>
+> **The report is a diff against the rules.** `docs generate-index` (offline, deterministic — it already reads
+> frontmatter) aggregates the suggestions tenant-wide and emits two signals: **coverage gaps** (resources the
+> model assigns to a programme that already exists but no rule matches) and **new-programme candidates** (a
+> label that is not a programme yet). It writes `docs/taxonomy-suggestions.yaml`, a sibling of `index.yaml` at
+> the docs tree root — the third and last file `azure-rd` writes under `docs/`, alongside `generate.md` and
+> `index.yaml`, all at the root where no document can be. `--prune` must never touch it.
+>
+> **Determinism preserved.** Because the suggestion is harvested from written frontmatter bytes, both
+> `index.yaml` and the suggestions artifact stay byte-identical over an unchanged export; the non-determinism
+> is confined to doc-authoring time, exactly as `platformGroup`/`functionGroup` already are.
+>
+> **The hint vocabulary must not touch `promptSha256`.** If the model is hinted with the operator's current
+> programme labels (so it reuses `defender` rather than inventing a synonym), that hint must ride the
+> non-hashed generation prompt (`docs/generate.md`), never the per-type `doc-prompt.md`. Baking the config's
+> vocabulary into a hashed prompt would couple a cheap, offline `taxonomy:` edit to an expensive documentation
+> regeneration — the precise coupling this whole design exists to avoid. Suggesting with no hint at all (pure
+> bootstrap, no `taxonomy:` yet) must also work; the report's label normalisation clusters the free output.
+>
+> **Sequencing.** Adding the suggestion instruction to the per-type templates moves `promptSha256` for every
+> affected type, forcing a documentation regeneration. Any prompt-template change already reissues every
+> non-`record` document, so whenever a full regeneration is scheduled, land this template change **before it
+> runs** and it rides along at zero marginal cost — otherwise it forces its own full regeneration later.
+> Schedule it with the next regeneration rather than on its own.
+>
+> **Promotion stays manual.** The tool reports; the operator writes rules. Auto-writing rules from model
+> output would re-inject non-determinism into the rules source and defeat the purpose.
+>
+> **`config.example.yaml` stays inert.** The feature needs no new config key (it reuses `taxonomy:` labels as
+> an optional hint), so loading the example unmodified still produces byte-identical output including every
+> hash in `resources/metadata.yaml`.
+
+**Plan.**
+
+- **Add a taxonomy-suggestion instruction** to the non-`record` per-type templates (the default plus the
+  `singleton`/`group`/`credential`/`referenced`/`arm` overrides — confirm the set against the templates at
+  implementation time), producing a frontmatter `suggestedGroups: [{label, why}]` (labels only, no ids). Gate
+  the work to ride the next documentation regeneration (see Sequencing).
+- **Harvest and diff in `GenerateIndex`**: read `suggestedGroups` from each document's frontmatter, aggregate
+  per normalised label, and emit `docs/taxonomy-suggestions.yaml` splitting each into coverage-gap (matches an
+  existing programme by normalised label but no curated rule covers the resource) vs new-programme-candidate.
+  Deterministic output; `--dry-run` writes nothing; `--prune` never touches it.
+- **Keep `groups`/`facets` rules-only** — suggestions never merge into the authoritative fields or the facets
+  header.
+- **Keep any hint vocabulary out of `doc-prompt.md`** — pass it through the non-hashed `generate.md` so
+  `taxonomy:` edits stay decoupled from `promptSha256`.
+- **Tests**: frontmatter harvest, gap-vs-candidate classification, byte-identical re-run over an unchanged
+  export, the no-suggestions case, and the no-`taxonomy:` bootstrap case (free labels, still clustered).
+- **Document it**: the new artifact and the review→promote workflow in the taxonomy section of `README.md`,
+  and an entry under `## [Unreleased]` in `CHANGELOG.md`.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them

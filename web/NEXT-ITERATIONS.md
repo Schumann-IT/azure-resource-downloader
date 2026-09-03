@@ -113,12 +113,13 @@ start. The programme filter already narrows the tree by initiative; this replace
 which the filter deliberately left alone.
 
 > **Blocked on data, not on design.** `platformGroup`/`functionGroup` are populated on **0** of 263 resources
-> in both exports in `../output`, and 0 documents on disk carry them in frontmatter: nothing asks the
-> generation agent for them. The producer-side work is *Group documentation by purpose, resolved at index
-> time* in `go/NEXT-ITERATIONS.md` — its model-authored half (a `doc-groups` marker in each `doc-prompt.md`,
-> the template requiring the fields, a closed-vocabulary check) moves every type's `promptSha256` and
-> therefore **rides a full documentation regeneration**. Do not start here before those fields are non-empty:
-> grouping by fields empty everywhere yields one *Ungrouped* section, which is worse than grouping by type.
+> in both exports in `../output`, and 0 documents on disk carry them in frontmatter. The producer side has
+> shipped — every non-`record` type's `doc-prompt.md` now carries a `<!-- doc-groups: … -->` marker, the
+> generation template requires and validates both fields, and `docs generate-index` already harvests them —
+> but the exports in `../output` predate the marker, and it moves every affected type's `promptSha256`, so
+> the fields only appear after a **full documentation regeneration** (`azure-rd docs generate-prompt`, the doc
+> pass, then `generate-index`). Do not start here before those fields are non-empty: grouping by fields empty
+> everywhere yields one *Ungrouped* section, which is worse than grouping by type.
 >
 > **What is already in place.** The axis vocabularies travel in the index header — `vocabularies.platform`
 > (`Windows, macOS, iOS/iPadOS, Android, Linux, Cross-platform, n/a`) and `vocabularies.function`
@@ -160,6 +161,92 @@ which the filter deliberately left alone.
 - **Verify both consumers agree** before calling it done: the Confluence export groups its overview page
   from the same fields, so a grouped browser and an endpoint-grouped export means the grouping leaked into
   `buildNavigation()` after all.
+
+## 6. Multi-axis sidebar filtering with selection-aware counts
+
+**Goal.** Let a reader narrow the sidebar by *platform* (Windows, macOS, …) as well as by programme, combine
+several filters at once — including several values on one axis — and trust the number next to each filter:
+counts reflect what is currently selected, and a filter that would lead nowhere is not offered at all. Today
+there is exactly one axis (`?programme=`), it holds exactly one value, and its counts are the tenant-wide
+registry counts from the index header, so they never move and a reader can pick a combination that yields an
+empty tree.
+
+> **The filter axes come from the CLI, generically.** The browser must not classify: the index-time taxonomy
+> is curated, deterministic and resolved from exported facts, and this project only *reads* membership.
+> Deriving a platform axis here from `odataType`/`platforms`/naming conventions would move the taxonomy into
+> the wrong project. `platforms` is a raw endpoint fact (`windows10`, `macOS`; populated on 73 of 263 and 44
+> of 148 resources in `../output`) and stays a badge; `platformGroup` is model-authored, single-valued and
+> label-only, so it has no id to put in a URL and stays a badge too.
+>
+> **This is one mechanism for N axes, not a second hard-coded filter.** The producer-side work is a
+> generalisation of the taxonomy from its single hard-coded *programme* axis to named axes, emitting a header
+> `facets: [{id, label, values: [{id, label, count}]}]` (in the CLI's display order) and a per-resource
+> `facets: {<axisId>: [valueId…]}`. So the implementation here is axis-agnostic: nothing in this project may
+> name *platform* or *programme* in a type, a selector or a template branch. It also means the feature needs
+> **no documentation regeneration** — a curated axis is resolved by one `docs generate-index` run over an
+> export that already exists.
+>
+> **Degradation is not optional.** An index with no `facets` (every export written so far) must render the
+> shipped programme filter from `programmes`/`groups` and today's tree, unchanged; an axis whose values are
+> all empty renders as nothing at all, never as a lone *Unclassified* chip.
+>
+> **Settled URL grammar.** One query parameter per axis, named by the axis id, repeated for multiple values,
+> carrying value **ids** and emitted in a canonical order (axes in index order, values sorted), so one
+> selection has exactly one URL: `?programme=cis-hardening&programme=defender&platform=windows`. Each axis
+> also offers the reserved `_uncategorised` value, prefixed like the `_resource`/`_export` route segments
+> because it is a representation rather than data, so no CLI id can collide with it. Unknown values are
+> dropped per axis — as `?programme=` already does — rather than 404ing or rendering an empty tenant.
+>
+> **Selection-aware counts, with the standard facet semantics.** OR within an axis, AND across axes, and each
+> facet counted with *its own axis's* selection removed. Without that last part, selecting one value drives
+> its siblings to 0 and the hide-empty rule below would erase the axis the reader is using.
+>
+> **Hiding empty facets narrows a shipped decision, so state it rather than drift.**
+> `buildProgrammeFilters()` deliberately keeps zero-count programmes ("this programme matched nothing in this
+> tenant" is information the registry carries), asserted by *offers the programme filter from the index
+> registry, zero-count included* in `test/docs.e2e.spec.ts`. That stays true for the **unfiltered** view; the
+> new rule applies only to facets that reach 0 *because of another active filter*, and a **selected** facet
+> stays visible even at 0, or the reader cannot undo the choice that emptied the tree.
+>
+> **The active document is exempt from filtering and must stay exempt from counting.** `buildNavigation()`
+> always keeps the document being viewed so a filter cannot make the current page vanish from its own
+> sidebar. That item is not part of the facet population: counting it would make the numbers disagree with
+> the list on exactly the page where the discrepancy is visible.
+>
+> **Scope boundaries.** The sidebar header's `counts.documented`/`counts.pending` describe the *export* and
+> stay tenant-wide; the filtered total belongs next to the tree as a *showing N of M* line, so the two numbers
+> cannot be mistaken for each other. The Confluence export is whole-tenant and unfiltered — a browsing
+> selection never changes what an export contains. And no client-side JavaScript: multi-select is plain
+> anchors whose `href` is the current selection with one value toggled.
+
+**Plan.**
+
+- **Read the axes** in `parseTenantIndex()`: the header `facets` registry and each resource's per-axis value
+  ids, ignoring an axis with no id and tolerating their complete absence. When `facets` is missing, synthesise
+  the single `programme` axis from `programmes`/`groups` so old and new exports take one code path.
+- **Replace the single `programme` parameter** of `buildNavigation()`/`docHref()` in
+  `src/docs/tenant-index.ts` with an axis-keyed selection (`Record<string, string[]>`), applying OR within an
+  axis and AND across axes, plus the `_uncategorised` bucket per axis. An index with no axes must produce
+  today's tree byte for byte.
+- **Build the chooser from one axis-agnostic helper** replacing `buildProgrammeFilters()`: counts computed
+  from the resources under the current selection with the axis's own selection removed, facets that reach 0
+  under a selection dropped, selected facets and unfiltered zero-count facets kept, axes and values in index
+  order. Cases in `test/tenant-index.spec.ts` for: a legacy index (identical output to today), one axis, two
+  axes combined, two values on one axis, a dead-end combination, and the unfiltered zero-count facet.
+- **One toggle-href helper** used by the chips *and* by every document href, plus a **Clear filters** reset,
+  so no view builds a URL by hand and no click silently loses another axis.
+- **Accept the selection on every route that renders the sidebar** — `tenantIndex`, `doc` and `resource` in
+  `docs.controller.ts` — reading arbitrary axis-named parameters rather than a fixed `?programme=`, and
+  normalising repeated values (de-duplicate, drop unknowns, canonical order). E2e cases for a two-axis URL, a
+  toggle-off link, the reset, an unknown value, and the empty-result message.
+- **Render the axes as a loop in `sidebar.hbs`**, one labelled `<nav>` per axis with today's chip treatment,
+  dark variant and `:focus-visible` outline, the *showing N of M* line above the tree, and the empty-tree
+  message generalised from *No documents in this programme* to one that names the selection.
+- **Extend the fixtures**: `test/docs.e2e.spec.ts`'s `INDEX_YAML` carries no `facets`, so add a two-axis
+  fixture and keep the existing one as the legacy-degradation case. Real-data verification waits on a
+  `generate-index` run with a multi-axis taxonomy.
+- **Keep the filters independent of the tree's structure**: whatever the sidebar groups by, the filters narrow
+  whichever structure is active, and no grouping or classification logic moves into the filter code.
 
 ## Standing decisions
 
