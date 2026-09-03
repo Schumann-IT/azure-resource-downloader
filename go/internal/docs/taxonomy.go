@@ -210,7 +210,7 @@ func compileTaxonomy(cfg TaxonomyConfig) (*taxonomy, error) {
 func programmesToValues(ps []TaxonomyProgramme) []TaxonomyValue {
 	values := make([]TaxonomyValue, 0, len(ps))
 	for _, p := range ps {
-		values = append(values, TaxonomyValue{ID: p.ID, Label: p.Label, Match: p.Match})
+		values = append(values, TaxonomyValue(p))
 	}
 	return values
 }
