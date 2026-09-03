@@ -51,81 +51,41 @@ the per-type prompt templates: a full one-shot regeneration across every tenant.
 - Confirm each reissued document carries `platformGroup`/`functionGroup` and that the §8 report's axis
   `uncategorised` count is only the `record` family (the types that legitimately have no `doc-groups` marker).
 
-## 2. Multi-axis facets in the index taxonomy
+## 2. Drop the transitional single-axis index fields
 
-**Goal.** Let a consumer of `docs/index.yaml` offer more than one filter axis — a platform filter beside the
-programme filter — without inventing a classification of its own. The index-time taxonomy already resolves a
-curated grouping deterministically from exported facts, but it is hard-coded to exactly one axis called
-*programmes*, so any second axis has to be derived in the consumer, which puts the taxonomy in the wrong
-project and lets two consumers of the same index disagree.
+**Goal.** Leave `docs/index.yaml` with exactly one way to express taxonomy membership. The multi-axis facet
+contract shipped, but the single-axis fields it replaced are still emitted beside it, so every resource states
+its programme membership twice and a consumer can read either — which is how two consumers of one index end up
+disagreeing.
 
-> **What exists.** `internal/docs/taxonomy.go` compiles `taxonomy.programmes[]` from the config into rules
-> over a resource's exported facts (`name`, `odataType`, `platforms` as regexes; `type`, `scope` exact; rules
-> OR-ed, fields within a rule AND-ed) and `docs generate-index` emits the header registry (`programmes`, in
-> config order, zero counts kept) plus per-resource `groups`. It is deterministic, offline and config-only:
-> revising it re-runs `generate-index` and touches neither `resources/` nor a single document.
+> **What is duplicated.** `GenerateIndex` emits the header `programmes` registry and a per-resource
+> `groups: [{id, label}]` as mirrors of the `programme` axis, alongside the header `facets` registry and the
+> per-resource `facets` map (`axis id → value ids`). The mirrors carry no information the facets do not, and
+> unlike the facets they are limited to one axis and repeat the label on every resource.
 >
-> **Why not the model-authored axes.** `platformGroup`/`functionGroup` are single-valued, label-only (no
-> stable id to put in a URL), and only become non-empty after the regeneration in entry 1. They stay what
-> they are — per-resource enrichment and a badge. A curated platform axis classifies tenants that are
-> *already* exported, with one `generate-index` run and no documentation pass, so the two mechanisms are
-> complementary rather than competing.
+> **Gated on the frontend, not on this repo.** The shipped docs browser reads `index.programmes` and
+> per-resource `groups` and derives its uncategorised bucket from `groups.length === 0`
+> (`web/src/docs/tenant-index.ts`, `views/partials/sidebar.hbs`). Removing the mirrors before that filter is
+> migrated onto `facets` silently empties its sidebar filter. The web side has its own entry for the
+> migration; this one only lands afterwards.
 >
-> **Shape.** Config gains `taxonomy.axes[]`, each `{id, label, values: [{id, label, match: [rule…]}]}`, with
-> the rule grammar unchanged. The taxonomy `version` field stays `1` — the alias must load every existing
-> config untouched, so no version gate may be added that would reject today's `programmes:`-only files.
-> Today's `taxonomy.programmes[]` keeps working as sugar for an axis with id `programme`, so no existing
-> config breaks and the current output is reproducible; supplying **both** `programmes:` and an `axes:` entry
-> whose id is `programme` is a fatal config error, not a silent merge. Axis and value ids are validated by the
-> existing URL-safe `programmeIDPattern` (which already forbids a leading `_`), unique within their scope;
-> `_`-prefixed tokens stay reserved for consumer-side representation values (`_uncategorised`), so a config
-> can never collide with one.
->
-> **Emission.** A header `facets: [{id, label, values: [{id, label, count}]}]` in config order, zero counts
-> kept for the same reason the programme registry keeps them, and a per-resource `facets: {<axisId>:
-> [valueId…]}` — **value ids only**: unlike today's self-describing per-resource `groups` (`{id, label}`), a
-> facet membership carries no label, so a consumer joins to the header `facets[].values[].label`. Serialise
-> the per-resource map deterministically (rely on `yaml.v3`'s sorted map keys, or emit an ordered slice) so
-> an unchanged export stays byte-identical.
->
-> **Versioning.** Introducing `facets` is an additive schema change, exactly like the v1→v2 grouping addition
-> (see the `indexVersion` comment in `generateindex.go`), and the frontend already ignores unknown fields —
-> so bump `indexVersion` to **3** when `facets` first ships. Emit `programmes`/`groups` unchanged alongside it
-> during the transition so the shipped web programme filter keeps working, and drop them — bumping to **4** —
-> only once no consumer reads them.
->
-> **Per-value counts only.** A consumer needs counts that react to the current selection; those are
-> combinatorial and belong in the consumer, computed from `resources[]`. The file carries one count per value
-> and nothing more.
->
-> **`config.example.yaml` stays inert.** The taxonomy section remains commented out, so loading the example
-> unmodified still produces byte-identical output including every hash in `resources/metadata.yaml`.
->
-> **Web migration is a companion, not part of this entry.** The shipped web programme filter reads
-> `index.programmes` + per-resource `groups` (`web/src/docs/tenant-index.ts`, `sidebar.hbs`) and computes its
-> uncategorised bucket from `groups.length === 0`. The v4 removal above cannot land until the frontend
-> migrates that filter onto `facets`; schedule it as its own `web/NEXT-ITERATIONS.md` entry and gate the
-> removal on it rather than restating web work here.
+> **It is a breaking schema change, unlike the addition.** Adding `facets` was additive (v2 → v3) because a
+> consumer ignores unknown fields. Removing fields is not: it bumps `indexVersion` to **4** and belongs in a
+> `### Breaking` changelog section, with the compensating note that an index is regenerated offline from an
+> existing export in seconds.
 
 **Plan.**
 
-- **Generalise `TaxonomyConfig`/`compileTaxonomy` to axes**, keeping `programmes` as an accepted alias for the
-  `programme` axis (config `version` unchanged at `1`), and extend the fatal validation to: axis ids and
-  per-axis value ids (URL-safe via `programmeIDPattern`, unique within scope), the reserved `_` prefix, and
-  the `programmes:` + `axes[programme]` collision — a typo or conflict must stay fatal rather than silently
-  grouping nothing.
-- **Classify per axis** in `GenerateIndex`, emit the `facets` header (config order, zero counts kept) and the
-  per-resource value-id-only `facets` block (deterministic serialisation), and keep `programmes`/`groups` in
-  step with the `programme` axis for the transition. Bump `indexVersion` to 3.
-- **Report per-axis uncategorised counts** in `GenerateIndexResult` and the command output (replacing today's
-  single `Uncategorised`), so an axis whose rules stop matching is visible instead of quietly emptying.
-- **Tests**: a `programmes:`-only config produces byte-identical output to today (the alias is a no-op), a
-  two-axis config classifies and counts per axis, registry order and zero counts hold, the new validation
-  failures (bad axis/value id, duplicate value id, `programmes:` + `axes[programme]` collision) are each
-  covered, the per-resource `facets` map is deterministic, and re-running over an unchanged export is
-  byte-identical.
-- **Document it**: the `taxonomy:` section in `config.example.yaml` (commented, with a platform axis as the
-  illustration), the taxonomy and index-schema sections of `README.md`, and an entry under
+- **Confirm the frontend no longer *needs* the mirrors** — its filter builds from `facets` whenever an index
+  carries them — before touching anything here. It may keep reading `programmes`/`groups` as a fallback for
+  the v2 exports already on disk; what must not remain is a code path that only works when they are present.
+- **Remove `IndexProgramme`/`IndexGroup` and their emission** from `internal/docs/generateindex.go`, including
+  the mirroring of the `programme` axis, and bump `indexVersion` to 4.
+- **Keep the `programmes:` config sugar.** It is the ergonomic way to write the common single axis; only the
+  *output* mirrors go.
+- **Tests**: update the index fixtures to assert the fields are absent, keep the facet assertions, and keep
+  the byte-identical re-run check.
+- **Document it**: the index-schema section of `README.md` and a `### Breaking` entry under
   `## [Unreleased]` in `CHANGELOG.md`.
 
 ## 3. Bootstrap the curated taxonomy from per-document LLM suggestions

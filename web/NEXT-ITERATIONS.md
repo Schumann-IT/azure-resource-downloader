@@ -103,32 +103,34 @@ reference export) as a flat per-type tree with no way to narrow it and no contex
 - Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
   fallback reads.
 
-## 5. Structure the sidebar by platform and function instead of by resource type
+## 5. Structure the sidebar by a taxonomy axis instead of by resource type
 
-**Goal.** Let a reader reach a document by what it *is* — a Windows security policy, a macOS configuration —
+**Goal.** Let a reader reach a document by what it *is* — a Windows policy, a device-scoped configuration —
 rather than by the Azure/Graph type that happens to implement it. The type tree is the vendor's taxonomy: an
 administrator looking for "how are Macs hardened" has to know the answer is spread over
 `deviceConfigurations`, `deviceManagementConfigurationPolicies` and `deviceShellScripts` before they can
-start. The programme filter already narrows the tree by initiative; this replaces the tree's *structure*,
-which the filter deliberately left alone.
+start. Filtering narrows the tree; this replaces its *structure*, which filtering deliberately leaves alone.
 
-> **Blocked on data, not on design.** `platformGroup`/`functionGroup` are populated on **0** of 263 resources
-> in both exports in `../output`, and 0 documents on disk carry them in frontmatter. The producer side has
-> shipped — every non-`record` type's `doc-prompt.md` now carries a `<!-- doc-groups: … -->` marker, the
-> generation template requires and validates both fields, and `docs generate-index` already harvests them —
-> but the exports in `../output` predate the marker, and it moves every affected type's `promptSha256`, so
-> the fields only appear after a **full documentation regeneration** (`azure-rd docs generate-prompt`, the doc
-> pass, then `generate-index`). Do not start here before those fields are non-empty: grouping by fields empty
-> everywhere yields one *Ungrouped* section, which is worse than grouping by type.
+> **The structure source is a facet axis, not the model's grouping fields.** `index.yaml` (v3) carries a
+> header `facets` registry and per-resource `facets` (`axis id → value ids`), and both exports in `../output`
+> already declare three axes — `programme`, `platform` (`windows, macos, ios, android, linux`) and `scope`
+> (`device, user`). Those values are curated, deterministic, id-bearing and ordered by the header, which is
+> everything a tree spine needs. Grouping by one of them therefore works on exports that exist today, with no
+> documentation regeneration and nothing derived here. This supersedes the earlier plan of grouping by the
+> model-authored `platformGroup`/`functionGroup`.
 >
-> **What is already in place.** The axis vocabularies travel in the index header — `vocabularies.platform`
-> (`Windows, macOS, iOS/iPadOS, Android, Linux, Cross-platform, n/a`) and `vocabularies.function`
-> (`Identity & access, Compliance, Configuration, Security, Apps, …`), always emitted, in display order — so
-> the group ordering is read from the data and cannot drift from a copy kept here. The reserved **`n/a`**
-> value distinguishes *this axis does not apply to this type* (a tenant-level singleton has no platform) from
-> *unclassified*, so the fallback bucket cannot merge a real gap with a category error. `parseTenantIndex()`
-> already reads both, and the filter machinery (`buildNavigation`'s pure filtering, the URL-carried choice)
-> is there to build on.
+> **The model-authored fields stay badges.** `platformGroup`/`functionGroup` are single-valued, label-only
+> (no id to put in a URL), still empty in both exports, and only appear after a full documentation
+> regeneration. They remain per-resource enrichment. There is also **no `function` axis** in the shipped
+> taxonomy, so a function-shaped spine means either an operator-authored axis in the CLI config — the same
+> place the platform axis lives — or waiting for `functionGroup`. Do not fill that gap by classifying here.
+>
+> **An axis is not a partition, and the tree has to admit it.** A resource can hold several values on one axis
+> (55 of 263 in `cb-gmbh` on the `programme` axis), so grouping by an axis lists some resources under more
+> than one group. Show them in every matching group and say so; picking one "primary" value would be a
+> judgement this project is not allowed to make. Axes are also sparse — 63 of 263 carry no `platform`, 170 no
+> `scope` — so the uncategorised group is **always rendered**: a taxonomy that quietly stops matching must
+> show up as a full bucket, never as a thinning tree.
 >
 > **The web side must not compute the grouping.** It is tempting to derive it here from
 > `odataType`/`platforms`/naming conventions — 93 of 225 named resources match
@@ -139,28 +141,27 @@ which the filter deliberately left alone.
 > **What is cheap.** Hrefs come from the index `doc` field and are independent of how `buildNavigation()`
 > groups, so **restructuring the sidebar changes no URLs** — no redirects, and no broken links into an
 > already-imported Confluence space. `sidebar.hbs` renders `nav.sections` purely from data, so the spine is a
-> data change plus one nesting level in the partial. Any switch between structures is a route or a query
-> parameter reflected in the URL, never a widget: no client-side JavaScript.
+> data change plus one nesting level in the partial. Any switch between structures is a query parameter
+> reflected in the URL, never a widget: no client-side JavaScript.
 
 **Plan.**
 
-- **Group in a pure function** next to `buildNavigation()` in `src/docs/tenant-index.ts`, reading only what
-  the index carries and deriving nothing, ordering groups by the header vocabularies rather than
-  alphabetically, and putting resources with no group in a named bucket that is **always rendered** — a
-  taxonomy that quietly stops matching must show up as a full bucket, never as a thinning tree. Cases in
-  `test/tenant-index.spec.ts` for a fully grouped index, a partially grouped one, and an index with no
-  grouping at all; the last must produce today's per-type tree unchanged.
-- **Nest the spine in `sidebar.hbs`** as one more `<details>` level, and keep the active structure in the URL
-  so the choice survives a reload without state. It must compose with the existing `?programme=` filter:
-  the filter narrows whichever structure is active, and the two choices coexist in one URL.
+- **Group in a pure function** next to `buildNavigation()` in `src/docs/tenant-index.ts`, taking the axis id
+  to group by, reading only the index's `facets` and deriving nothing: groups ordered by the header's value
+  order, a resource listed under every value it matches, and an always-rendered uncategorised group. Cases in
+  `test/tenant-index.spec.ts` for a well-populated axis, a sparse one, a multi-membership resource appearing
+  twice, and an unknown or absent axis falling back to today's per-type tree unchanged.
+- **Put the choice in the URL** as one parameter (default: today's type structure), so it survives a reload
+  with no state and composes with the filter selection — the filter narrows whichever structure is active,
+  and both choices coexist in one URL.
 - **Keep the endpoint type reachable** as an alternate structure once it is no longer the default, so an
   API-shaped question is still answerable.
-- **Drop the `platformGroup`/`functionGroup` badges** from the listing once the same values drive the tree,
-  so a resource does not state its group twice on one screen. The programme badges stay — they are the other
-  dimension.
-- **Verify both consumers agree** before calling it done: the Confluence export groups its overview page
-  from the same fields, so a grouped browser and an endpoint-grouped export means the grouping leaked into
-  `buildNavigation()` after all.
+- **Nest the spine in `sidebar.hbs`** as one more `<details>` level, and **drop the badge for the axis that is
+  currently structuring the tree**, so a resource does not state the same membership twice on one screen.
+  Badges for the other axes stay — they are the other dimensions.
+- **Decide the export explicitly**: `confluence.ts` groups its overview by resource type. Either it follows
+  the same axis or it stays type-grouped and says so in the README — what it must not be is accidentally
+  different from the browser because the grouping leaked into `buildNavigation()`.
 
 ## 6. Multi-axis sidebar filtering with selection-aware counts
 
@@ -178,24 +179,45 @@ empty tree.
 > of 148 resources in `../output`) and stays a badge; `platformGroup` is model-authored, single-valued and
 > label-only, so it has no id to put in a URL and stays a badge too.
 >
-> **This is one mechanism for N axes, not a second hard-coded filter.** The producer-side work is a
-> generalisation of the taxonomy from its single hard-coded *programme* axis to named axes, emitting a header
-> `facets: [{id, label, values: [{id, label, count}]}]` (in the CLI's display order) and a per-resource
-> `facets: {<axisId>: [valueId…]}`. So the implementation here is axis-agnostic: nothing in this project may
-> name *platform* or *programme* in a type, a selector or a template branch. It also means the feature needs
-> **no documentation regeneration** — a curated axis is resolved by one `docs generate-index` run over an
-> export that already exists.
+> **This is one mechanism for N axes, not a second hard-coded filter — and the data is already here.** The
+> CLI side shipped: `index.yaml` is schema **version 3** and carries a header
+> `facets: [{id, label, values: [{id, label, count}]}]` plus a per-resource `facets: {<axisId>: [valueId…]}`.
+> Both exports in `../output` were re-indexed and carry **three** axes — `programme` (*Programme*),
+> `platform` (*Platform*: `windows, macos, ios, android, linux`) and `scope` (*Assignment scope*: `device,
+> user`). So the implementation here is axis-agnostic and must stay so: nothing in this project may name
+> *platform*, *programme* or *scope* in a type, a selector or a template branch, and a fourth axis added to
+> the config must appear with no code change here. It also needs **no documentation regeneration** — a
+> curated axis is resolved by one `docs generate-index` run over an export that already exists.
 >
-> **Degradation is not optional.** An index with no `facets` (every export written so far) must render the
-> shipped programme filter from `programmes`/`groups` and today's tree, unchanged; an axis whose values are
-> all empty renders as nothing at all, never as a lone *Unclassified* chip.
+> **Order and labels come from the header, never from the resource.** The header lists axes in the config's
+> display order (`programme, platform, scope`) and each axis's values in display order; the per-resource map
+> is a Go map serialised with **sorted keys** (`platform, programme, scope`) and carries **value ids only**.
+> So display order is read from `facets[]` and every chip label is a join into it — using the per-resource
+> map's key order, or expecting a label on a membership, is a bug the reference export will not reveal in the
+> programme axis alone.
+>
+> **Sparse axes are the norm, so the uncategorised bucket is a first-class chip.** In `cb-gmbh` (263
+> resources) `platform` is absent on 63 and `scope` on 170; two platform values (`ios`, `linux`) match nothing
+> at all, and the staging tenant has zero-count programmes too. The hide-empty rule below must never hide a
+> large uncategorised bucket, and an axis is rendered as long as the header declares it — an axis all of whose
+> values are empty renders as nothing, never as a lone *Unclassified* chip.
+>
+> **Degradation is still required.** The CLI keeps emitting the transitional `programmes` registry and
+> per-resource `groups` as mirrors of the `programme` axis, and older v2 exports carry only those. An index
+> with no `facets` must therefore synthesise the single `programme` axis from them and render exactly today's
+> filter and tree. Completing this entry is also what unblocks the CLI dropping those mirrors, so the fallback
+> is a transition, not a permanent second path.
 >
 > **Settled URL grammar.** One query parameter per axis, named by the axis id, repeated for multiple values,
 > carrying value **ids** and emitted in a canonical order (axes in index order, values sorted), so one
 > selection has exactly one URL: `?programme=cis-hardening&programme=defender&platform=windows`. Each axis
 > also offers the reserved `_uncategorised` value, prefixed like the `_resource`/`_export` route segments
-> because it is a representation rather than data, so no CLI id can collide with it. Unknown values are
-> dropped per axis — as `?programme=` already does — rather than 404ing or rendering an empty tenant.
+> because it is a representation rather than data, so no CLI id can collide with it (the CLI's id pattern
+> forbids a leading underscore). Unknown values are dropped per axis — as `?programme=` already does — rather
+> than 404ing or rendering an empty tenant. Two consequences of naming parameters after axis ids: today's
+> `?programme=…` links keep working unchanged, because `programme` *is* the first axis's id; and an axis id
+> that collides with a route's own parameter (`?raw` on the YAML view) must be ignored rather than allowed to
+> shadow it.
 >
 > **Selection-aware counts, with the standard facet semantics.** OR within an axis, AND across axes, and each
 > facet counted with *its own axis's* selection removed. Without that last part, selecting one value drives
@@ -229,30 +251,34 @@ empty tree.
 
 **Plan.**
 
-- **Read the axes** in `parseTenantIndex()`: the header `facets` registry and each resource's per-axis value
-  ids, ignoring an axis with no id and tolerating their complete absence. When `facets` is missing, synthesise
-  the single `programme` axis from `programmes`/`groups` so old and new exports take one code path.
+- **Read the axes** in `parseTenantIndex()`: the header `facets` registry (axis id/label, values in order with
+  their tenant counts) and each resource's per-axis value ids, ignoring an axis with no id and tolerating
+  their complete absence. When `facets` is missing, synthesise the single `programme` axis from
+  `programmes`/`groups` so v2 and v3 exports take one code path.
 - **Replace the single `programme` parameter** of `buildNavigation()`/`docHref()` in
   `src/docs/tenant-index.ts` with an axis-keyed selection (`Record<string, string[]>`), applying OR within an
   axis and AND across axes, plus the `_uncategorised` bucket per axis. An index with no axes must produce
   today's tree byte for byte.
 - **Build the chooser from one axis-agnostic helper** replacing `buildProgrammeFilters()`: counts computed
   from the resources under the current selection with the axis's own selection removed, facets that reach 0
-  under a selection dropped, selected facets and unfiltered zero-count facets kept, axes and values in index
-  order. Cases in `test/tenant-index.spec.ts` for: a legacy index (identical output to today), one axis, two
-  axes combined, two values on one axis, a dead-end combination, and the unfiltered zero-count facet.
+  under a selection dropped, selected facets and unfiltered zero-count facets kept, axes and values ordered
+  by the header and labels joined from it. Cases in `test/tenant-index.spec.ts` for: a v2 index (identical
+  output to today), one axis, two axes combined, two values on one axis, a dead-end combination, the
+  unfiltered zero-count facet, and a resource absent from an axis landing in that axis's uncategorised bucket.
 - **One toggle-href helper** used by the chips *and* by every document href, plus a **Clear filters** reset,
   so no view builds a URL by hand and no click silently loses another axis.
 - **Accept the selection on every route that renders the sidebar** — `tenantIndex`, `doc` and `resource` in
   `docs.controller.ts` — reading arbitrary axis-named parameters rather than a fixed `?programme=`, and
   normalising repeated values (de-duplicate, drop unknowns, canonical order). E2e cases for a two-axis URL, a
   toggle-off link, the reset, an unknown value, and the empty-result message.
-- **Render the axes as a loop in `sidebar.hbs`**, one labelled `<nav>` per axis with today's chip treatment,
-  dark variant and `:focus-visible` outline, the *showing N of M* line above the tree, and the empty-tree
-  message generalised from *No documents in this programme* to one that names the selection.
-- **Extend the fixtures**: `test/docs.e2e.spec.ts`'s `INDEX_YAML` carries no `facets`, so add a two-axis
-  fixture and keep the existing one as the legacy-degradation case. Real-data verification waits on a
-  `generate-index` run with a multi-axis taxonomy.
+- **Render the axes as a loop in `sidebar.hbs`**, one `<nav>` per axis whose heading is the axis's **label
+  from the index** (the hard-coded *Programme* heading goes), with today's chip treatment, dark variant and
+  `:focus-visible` outline, the *showing N of M* line above the tree, and the empty-tree message generalised
+  from *No documents in this programme* to one that names the selection.
+- **Extend the fixtures**: `test/docs.e2e.spec.ts`'s `INDEX_YAML` carries no `facets`, so add a
+  three-axis fixture — including an axis a resource is absent from and a zero-count value — and keep the
+  existing one as the v2-degradation case. Then eyeball the reference exports, whose sparse `scope` axis (93
+  of 263 classified) is the realistic worst case.
 - **Keep the filters independent of the tree's structure**: whatever the sidebar groups by, the filters narrow
   whichever structure is active, and no grouping or classification logic moves into the filter code.
 
