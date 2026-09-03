@@ -201,6 +201,14 @@ empty tree.
 > facet counted with *its own axis's* selection removed. Without that last part, selecting one value drives
 > its siblings to 0 and the hide-empty rule below would erase the axis the reader is using.
 >
+> **Header counts are non-additive — never sum them.** A resource can carry several value ids on one axis
+> (real today on the *programme* axis: 55 of 263 resources in `cb-gmbh`, e.g. a Defender validation policy is
+> both `compliance` and `defender`), so the header `facets[].values[].count` sum *exceeds* the number of
+> distinct resources (316 across 261 on that axis in that export). The *showing N of M* line and any axis
+> total must therefore count **distinct resources**, computed from `resources[]`, and never add value counts
+> together. This is the same OR-within-axis membership the filter already applies; it is called out here
+> because the counting code is the place the additive assumption sneaks in.
+>
 > **Hiding empty facets narrows a shipped decision, so state it rather than drift.**
 > `buildProgrammeFilters()` deliberately keeps zero-count programmes ("this programme matched nothing in this
 > tenant" is information the registry carries), asserted by *offers the programme filter from the index
