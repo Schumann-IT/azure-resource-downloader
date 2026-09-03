@@ -215,9 +215,9 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
-	// The pending policy (no platforms) matches nothing.
-	if res.Uncategorised != 1 {
-		t.Errorf("uncategorised = %d, want 1", res.Uncategorised)
+	// The pending policy (no platforms) matches nothing on the programme axis.
+	if res.Uncategorised[programmeAxisID] != 1 {
+		t.Errorf("uncategorised[programme] = %d, want 1", res.Uncategorised[programmeAxisID])
 	}
 
 	idx := loadIndex(t, res.OutPath)
@@ -245,6 +245,25 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 		}
 	}
 
+	// The same axis is emitted in the multi-axis facets header: a single
+	// "programme" axis whose values mirror the registry, zero-count value kept.
+	if len(idx.Facets) != 1 || idx.Facets[0].ID != programmeAxisID {
+		t.Fatalf("facets = %+v, want a single programme axis", idx.Facets)
+	}
+	wantVals := []IndexFacetValue{
+		{ID: "windows-device", Label: "Windows device config", Count: 1},
+		{ID: "groups", Label: "Assignment groups", Count: 1},
+		{ID: "empty-prog", Label: "Never matches", Count: 0},
+	}
+	if len(idx.Facets[0].Values) != len(wantVals) {
+		t.Fatalf("facet values = %+v, want %+v", idx.Facets[0].Values, wantVals)
+	}
+	for i, w := range wantVals {
+		if idx.Facets[0].Values[i] != w {
+			t.Errorf("facet value[%d] = %+v, want %+v", i, idx.Facets[0].Values[i], w)
+		}
+	}
+
 	// The documented Windows device policy carries the windows-device group.
 	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
 	if doc == nil {
@@ -252,6 +271,10 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 	}
 	if len(doc.Groups) != 1 || doc.Groups[0].ID != "windows-device" || doc.Groups[0].Label != "Windows device config" {
 		t.Errorf("policy groups = %+v, want [windows-device]", doc.Groups)
+	}
+	// The per-resource facets map carries the programme axis, value id only.
+	if got := doc.Facets[programmeAxisID]; len(got) != 1 || got[0] != "windows-device" {
+		t.Errorf("policy facets[programme] = %v, want [windows-device]", doc.Facets[programmeAxisID])
 	}
 
 	// The referenced group carries the groups programme.
@@ -270,6 +293,109 @@ func TestGenerateIndexWithTaxonomy(t *testing.T) {
 	}
 	if len(pend.Groups) != 0 {
 		t.Errorf("pending groups = %+v, want none", pend.Groups)
+	}
+}
+
+func TestGenerateIndexMultiAxis(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	tax := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+		},
+		Axes: []TaxonomyAxis{
+			{
+				ID: "platform", Label: "Platform",
+				Values: []TaxonomyValue{
+					{ID: "windows", Label: "Windows", Match: []TaxonomyRule{{Platforms: "windows"}}},
+					{ID: "macos", Label: "macOS", Match: []TaxonomyRule{{Platforms: "macos"}}},
+				},
+			},
+		},
+	}
+
+	res, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: tax})
+	if err != nil {
+		t.Fatalf("GenerateIndex: %v", err)
+	}
+	idx := loadIndex(t, res.OutPath)
+
+	// Two axes in config order: the programmes sugar first, then platform.
+	if len(idx.Facets) != 2 || idx.Facets[0].ID != programmeAxisID || idx.Facets[1].ID != "platform" {
+		t.Fatalf("facet axes = %+v, want [programme platform]", idx.Facets)
+	}
+
+	// The documented Windows policy is classified on both axes; the programme
+	// axis is additionally mirrored into the legacy groups field.
+	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
+	if doc == nil {
+		t.Fatal("documented policy missing from index")
+	}
+	if got := doc.Facets[programmeAxisID]; len(got) != 1 || got[0] != "windows-device" {
+		t.Errorf("programme facet = %v, want [windows-device]", got)
+	}
+	if got := doc.Facets["platform"]; len(got) != 1 || got[0] != "windows" {
+		t.Errorf("platform facet = %v, want [windows]", got)
+	}
+	if len(doc.Groups) != 1 || doc.Groups[0].ID != "windows-device" {
+		t.Errorf("legacy groups = %+v, want [windows-device]", doc.Groups)
+	}
+
+	// The macos value matched nothing; its count is still emitted as zero.
+	var macos *IndexFacetValue
+	for i := range idx.Facets[1].Values {
+		if idx.Facets[1].Values[i].ID == "macos" {
+			macos = &idx.Facets[1].Values[i]
+		}
+	}
+	if macos == nil || macos.Count != 0 {
+		t.Errorf("macos facet value = %+v, want count 0", macos)
+	}
+
+	// Per-axis uncategorised: the two groups carry no platform, so the platform
+	// axis leaves resources uncategorised independently of the programme axis.
+	if res.Uncategorised["platform"] == 0 {
+		t.Error("expected some resources uncategorised on the platform axis")
+	}
+}
+
+// TestGenerateIndexProgrammeAliasIsNoOp asserts the alias is a no-op: a
+// programmes-only config produces the exact same index bytes as the equivalent
+// config expressed as a single explicit "programme" axis.
+func TestGenerateIndexProgrammeAliasIsNoOp(t *testing.T) {
+	progCfg := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+			{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+		},
+	}
+	axisCfg := &TaxonomyConfig{
+		Version: 1,
+		Axes: []TaxonomyAxis{
+			{ID: programmeAxisID, Label: "Programme", Values: []TaxonomyValue{
+				{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+				{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+			}},
+		},
+	}
+
+	render := func(tax *TaxonomyConfig) string {
+		dir := indexScenario(t)
+		res, err := GenerateIndex(GenerateIndexOptions{TenantDir: dir, Taxonomy: tax})
+		if err != nil {
+			t.Fatalf("GenerateIndex: %v", err)
+		}
+		b, err := os.ReadFile(res.OutPath)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		return string(b)
+	}
+
+	if render(progCfg) != render(axisCfg) {
+		t.Error("programmes sugar must produce the same index as an equivalent explicit programme axis")
 	}
 }
 

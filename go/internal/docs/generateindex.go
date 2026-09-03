@@ -23,9 +23,12 @@ const IndexFileName = "index.yaml"
 // indexVersion is the schema version of index.yaml. Bump it only on an
 // incompatible change to the shape the frontend consumes. Version 2 added the
 // grouping contract: the header `vocabularies` and `programmes`, and the
-// per-resource `groups`. The frontend accepts any version >= 1 and ignores
-// fields it does not know, so the bump is additive.
-const indexVersion = 2
+// per-resource `groups`. Version 3 added the multi-axis facet contract: the
+// header `facets` and the per-resource `facets` map (the transitional
+// `programmes`/`groups` fields are still emitted alongside them). The frontend
+// accepts any version >= 1 and ignores fields it does not know, so the bump is
+// additive.
+const indexVersion = 3
 
 // Built-in assignment targets carry no group id; they are recognised by their
 // @odata.type so the index can report "all users" / "all devices" as facts.
@@ -68,6 +71,7 @@ type IndexFile struct {
 	IncompleteReason string            `yaml:"incompleteReason,omitempty"`
 	Vocabularies     IndexVocabularies `yaml:"vocabularies"`
 	Programmes       []IndexProgramme  `yaml:"programmes,omitempty"`
+	Facets           []IndexFacet      `yaml:"facets,omitempty"`
 	Counts           IndexCounts       `yaml:"counts"`
 	Resources        []IndexResource   `yaml:"resources"`
 }
@@ -87,6 +91,28 @@ type IndexVocabularies struct {
 // since "this programme is empty here" is itself information a consumer cannot
 // recover from per-resource membership alone.
 type IndexProgramme struct {
+	ID    string `yaml:"id"`
+	Label string `yaml:"label"`
+	Count int    `yaml:"count"`
+}
+
+// IndexFacet is one filter axis in the header: a stable id, a display label, and
+// its values in the taxonomy's display order, each with the number of resources
+// matched in this tenant. Like the programme registry, zero-count values are
+// kept — "this value matched nothing here" is information a consumer cannot
+// recover from per-resource membership alone. Per-resource membership carries
+// value ids only; the label is resolved from here.
+type IndexFacet struct {
+	ID     string            `yaml:"id"`
+	Label  string            `yaml:"label"`
+	Values []IndexFacetValue `yaml:"values"`
+}
+
+// IndexFacetValue is one value of a facet axis: its stable id, display label and
+// tenant-wide match count. The count is used to enumerate values (a zero-count
+// value is still a selectable chip); a consumer that shows selection-aware
+// counts recomputes them from the resource list.
+type IndexFacetValue struct {
 	ID    string `yaml:"id"`
 	Label string `yaml:"label"`
 	Count int    `yaml:"count"`
@@ -116,18 +142,19 @@ type IndexCounts struct {
 // with documented:false and a blank summary/grouping so the count stays honest
 // and the frontend can show it as pending.
 type IndexResource struct {
-	Type          string            `yaml:"type"`
-	Doc           string            `yaml:"doc"`
-	DisplayName   string            `yaml:"displayName"`
-	Summary       string            `yaml:"summary,omitempty"`
-	Documented    bool              `yaml:"documented"`
-	Scope         string            `yaml:"scope,omitempty"`
-	PlatformGroup string            `yaml:"platformGroup,omitempty"`
-	FunctionGroup string            `yaml:"functionGroup,omitempty"`
-	ODataType     string            `yaml:"odataType,omitempty"`
-	Platforms     string            `yaml:"platforms,omitempty"`
-	Groups        []IndexGroup      `yaml:"groups,omitempty"`
-	Assignments   *IndexAssignments `yaml:"assignments,omitempty"`
+	Type          string              `yaml:"type"`
+	Doc           string              `yaml:"doc"`
+	DisplayName   string              `yaml:"displayName"`
+	Summary       string              `yaml:"summary,omitempty"`
+	Documented    bool                `yaml:"documented"`
+	Scope         string              `yaml:"scope,omitempty"`
+	PlatformGroup string              `yaml:"platformGroup,omitempty"`
+	FunctionGroup string              `yaml:"functionGroup,omitempty"`
+	ODataType     string              `yaml:"odataType,omitempty"`
+	Platforms     string              `yaml:"platforms,omitempty"`
+	Groups        []IndexGroup        `yaml:"groups,omitempty"`
+	Facets        map[string][]string `yaml:"facets,omitempty"`
+	Assignments   *IndexAssignments   `yaml:"assignments,omitempty"`
 }
 
 // IndexAssignments is the count-only assignment summary; resolved target names
@@ -155,9 +182,10 @@ type GenerateIndexResult struct {
 	Documented  int
 	Pending     int
 	Orphans     int
-	// Uncategorised counts listed resources that matched no programme. It is
-	// meaningful only when a taxonomy was supplied; without one it is zero.
-	Uncategorised int
+	// Uncategorised counts, per axis id, the listed resources that matched no
+	// value on that axis. It is populated only when a taxonomy was supplied;
+	// without one it is empty.
+	Uncategorised map[string]int
 	Excluded      map[string]int
 }
 
@@ -214,14 +242,18 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		Counts: IndexCounts{Excluded: map[string]int{}},
 	}
 
-	// programmeCounts accumulates per-programme matches across listed resources
-	// so the header registry can report a count per programme, zero included.
+	// programmeCounts accumulates matches on the "programme" axis so the
+	// transitional programmes registry can report a per-programme count, zero
+	// included. facetCounts does the same for every axis (axis id -> value id ->
+	// count) for the multi-axis facets header.
 	programmeCounts := map[string]int{}
+	facetCounts := map[string]map[string]int{}
 	res := &GenerateIndexResult{
-		Tenant:      m.Tenant,
-		GeneratedAt: m.GeneratedAt,
-		Complete:    m.Run.Complete,
-		Excluded:    idx.Counts.Excluded,
+		Tenant:        m.Tenant,
+		GeneratedAt:   m.GeneratedAt,
+		Complete:      m.Run.Complete,
+		Excluded:      idx.Counts.Excluded,
+		Uncategorised: map[string]int{},
 	}
 
 	// Keys are already sorted (type then name), so appended resources are
@@ -268,23 +300,38 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 			}
 		}
 
-		// Classify into programmes when a taxonomy was supplied. classify
-		// returns registry (display) order, so groups are deterministic; a
-		// resource matching nothing is counted as uncategorised.
+		// Classify on every axis when a taxonomy was supplied. classifyAxes
+		// returns axes and values in display order, so the per-resource facets
+		// and legacy groups are deterministic. A resource matching no value on
+		// an axis is counted as uncategorised for that axis; the "programme"
+		// axis is additionally mirrored into the transitional groups field.
 		if tax != nil {
-			matched := tax.classify(taxonomyFacts{
+			facts := taxonomyFacts{
 				name:      ir.DisplayName,
 				rtype:     rtype,
 				odataType: entry.ODataType,
 				platforms: entry.Platforms,
 				scope:     ir.Scope,
-			})
-			for _, p := range matched {
-				ir.Groups = append(ir.Groups, IndexGroup{ID: p.id, Label: p.label})
-				programmeCounts[p.id]++
 			}
-			if len(matched) == 0 {
-				res.Uncategorised++
+			for _, ac := range tax.classifyAxes(facts) {
+				if len(ac.values) == 0 {
+					res.Uncategorised[ac.axisID]++
+					continue
+				}
+				if facetCounts[ac.axisID] == nil {
+					facetCounts[ac.axisID] = map[string]int{}
+				}
+				for _, v := range ac.values {
+					if ir.Facets == nil {
+						ir.Facets = map[string][]string{}
+					}
+					ir.Facets[ac.axisID] = append(ir.Facets[ac.axisID], v.id)
+					facetCounts[ac.axisID][v.id]++
+					if ac.axisID == programmeAxisID {
+						ir.Groups = append(ir.Groups, IndexGroup{ID: v.id, Label: v.label})
+						programmeCounts[v.id]++
+					}
+				}
 			}
 		}
 
@@ -296,11 +343,21 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		}
 	}
 
-	// Emit the full programme registry in display order, including programmes
-	// with a zero count, so a consumer can render the facet chooser and see that
-	// a programme matched nothing here.
-	for _, p := range tax.registry() {
-		idx.Programmes = append(idx.Programmes, IndexProgramme{ID: p.id, Label: p.label, Count: programmeCounts[p.id]})
+	// Emit the header registries in display order, including values with a zero
+	// count, so a consumer can render the facet chooser and see that a value
+	// matched nothing here. The facets registry covers every axis; the programmes
+	// registry is the transitional single-axis view of the "programme" axis.
+	if tax != nil {
+		for _, a := range tax.axes {
+			facet := IndexFacet{ID: a.id, Label: a.label}
+			for _, v := range a.values {
+				facet.Values = append(facet.Values, IndexFacetValue{ID: v.id, Label: v.label, Count: facetCounts[a.id][v.id]})
+			}
+			idx.Facets = append(idx.Facets, facet)
+		}
+		for _, p := range tax.registry() {
+			idx.Programmes = append(idx.Programmes, IndexProgramme{ID: p.id, Label: p.label, Count: programmeCounts[p.id]})
+		}
 	}
 
 	res.Documented = idx.Counts.Documented

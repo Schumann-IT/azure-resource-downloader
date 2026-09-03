@@ -97,6 +97,47 @@ func TestCompileTaxonomyErrors(t *testing.T) {
 			name: "bad scope",
 			tf:   TaxonomyConfig{Version: 1, Programmes: []TaxonomyProgramme{{ID: "a", Label: "A", Match: []TaxonomyRule{{Scope: "group"}}}}},
 		},
+		{
+			name: "programmes and programme axis collision",
+			tf: TaxonomyConfig{Version: 1,
+				Programmes: []TaxonomyProgramme{{ID: "a", Label: "A", Match: []TaxonomyRule{{Name: "x"}}}},
+				Axes:       []TaxonomyAxis{{ID: "programme", Label: "P", Values: []TaxonomyValue{{ID: "b", Label: "B", Match: []TaxonomyRule{{Name: "y"}}}}}},
+			},
+		},
+		{
+			name: "invalid axis id",
+			tf:   TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "Not Safe", Label: "P", Values: []TaxonomyValue{{ID: "b", Label: "B", Match: []TaxonomyRule{{Name: "y"}}}}}}},
+		},
+		{
+			name: "duplicate axis id",
+			tf: TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{
+				{ID: "p", Label: "P", Values: []TaxonomyValue{{ID: "b", Label: "B", Match: []TaxonomyRule{{Name: "y"}}}}},
+				{ID: "p", Label: "Q", Values: []TaxonomyValue{{ID: "c", Label: "C", Match: []TaxonomyRule{{Name: "z"}}}}},
+			}},
+		},
+		{
+			name: "axis without label",
+			tf:   TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "p", Values: []TaxonomyValue{{ID: "b", Label: "B", Match: []TaxonomyRule{{Name: "y"}}}}}}},
+		},
+		{
+			name: "axis without values",
+			tf:   TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "p", Label: "P"}}},
+		},
+		{
+			name: "invalid value id",
+			tf:   TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "p", Label: "P", Values: []TaxonomyValue{{ID: "Bad ID", Label: "B", Match: []TaxonomyRule{{Name: "y"}}}}}}},
+		},
+		{
+			name: "duplicate value id within axis",
+			tf: TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "p", Label: "P", Values: []TaxonomyValue{
+				{ID: "b", Label: "B", Match: []TaxonomyRule{{Name: "y"}}},
+				{ID: "b", Label: "C", Match: []TaxonomyRule{{Name: "z"}}},
+			}}}},
+		},
+		{
+			name: "value without rules",
+			tf:   TaxonomyConfig{Version: 1, Axes: []TaxonomyAxis{{ID: "p", Label: "P", Values: []TaxonomyValue{{ID: "b", Label: "B"}}}}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -209,6 +250,47 @@ taxonomy:
 	got = tax.classify(taxonomyFacts{rtype: "Microsoft.Graph/mobileApps"})
 	if len(got) != 1 || got[0].id != "apps" {
 		t.Errorf("type classify = %v, want [apps]", ids(got))
+	}
+}
+
+// TestClassifyAxesTwoAxes exercises the generalised, multi-axis classification:
+// the programmes sugar is prepended as the "programme" axis, explicit axes
+// follow in config order, and every axis is represented in the result (an empty
+// value slice means uncategorised on that axis).
+func TestClassifyAxesTwoAxes(t *testing.T) {
+	cfg := TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "vpn", Label: "VPN", Match: []TaxonomyRule{{ODataType: "vpn"}}},
+		},
+		Axes: []TaxonomyAxis{
+			{ID: "platform", Label: "Platform", Values: []TaxonomyValue{
+				{ID: "windows", Label: "Windows", Match: []TaxonomyRule{{Platforms: "windows"}}},
+				{ID: "macos", Label: "macOS", Match: []TaxonomyRule{{Platforms: "macos"}}},
+			}},
+		},
+	}
+	tax, err := compileTaxonomy(cfg)
+	if err != nil {
+		t.Fatalf("compileTaxonomy: %v", err)
+	}
+
+	got := tax.classifyAxes(taxonomyFacts{odataType: "#microsoft.graph.windows81VpnConfiguration", platforms: "windows"})
+	if len(got) != 2 || got[0].axisID != "programme" || got[1].axisID != "platform" {
+		t.Fatalf("axes = %+v, want [programme platform]", got)
+	}
+	if len(got[0].values) != 1 || got[0].values[0].id != "vpn" {
+		t.Errorf("programme values = %v, want [vpn]", ids(got[0].values))
+	}
+	if len(got[1].values) != 1 || got[1].values[0].id != "windows" {
+		t.Errorf("platform values = %v, want [windows]", ids(got[1].values))
+	}
+
+	// A resource matching neither axis is represented by empty value slices, so
+	// the caller can count it uncategorised on each axis.
+	none := tax.classifyAxes(taxonomyFacts{name: "nothing", platforms: "android"})
+	if len(none) != 2 || len(none[0].values) != 0 || len(none[1].values) != 0 {
+		t.Errorf("no-match classification = %+v, want two empty axes", none)
 	}
 }
 

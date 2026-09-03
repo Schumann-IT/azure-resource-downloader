@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-index` now classifies resources along multiple independent facet axes, not just a single
+  programme list.** The `taxonomy:` config section gains an `axes:` form — each axis has an id, a label and an
+  ordered list of values, and each value carries the same `match` rules a programme did — so a tenant can be
+  sliced by *Programme*, *Platform*, *Environment* and so on at once. The legacy `programmes:` key is kept as
+  sugar for the axis with id `programme` (defining both `programmes:` and an explicit `programme` axis is a
+  fatal error, not a silent merge), so no existing config breaks. `index.yaml` (schema bumped to **version
+  3**) gains a header `facets` registry (every axis, its values in display order, and per-tenant match counts
+  with zero-count values kept) and a per-resource `facets` map (`axis id → matched value ids`, value ids
+  only; labels resolve from the header). The transitional single-axis `programmes` registry and per-resource
+  `groups` fields are still emitted as mirrors of the `programme` axis so an older consumer keeps working;
+  a `programmes:`-only config produces the same programmes/groups output as before (the alias is a no-op).
+  Resources matching no value on an axis are reported as **uncategorised for that axis**, and `generate-index`
+  now warns per axis. It still records rules, never facts, so revising the taxonomy never requires
+  re-downloading a tenant. See the commented **Taxonomy** block in `config.example.yaml`.
+  - **Tests** for axis and value validation (invalid/duplicate ids, missing labels, empty axes/values, the
+    `programmes:`+`programme`-axis collision), multi-axis classification and display order, the facets header
+    with zero-count values, per-resource `facets`, per-axis uncategorised counts, and a byte-identity check
+    that the `programmes:` sugar equals an equivalent explicit `programme` axis.
+
 - **Documents now declare their platform and function group in frontmatter, filling the two grouping axes the
   index already emits.** The programme taxonomy resolved at index time answered *which initiative* a resource
   belongs to; this adds the complementary per-document judgement of *which platform* it targets and *what

@@ -133,6 +133,10 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 	if !res.Complete {
 		complete = "no"
 	}
+	totalUncat := 0
+	for _, n := range res.Uncategorised {
+		totalUncat += n
+	}
 	log.Info("Index summary",
 		"tenant", res.Tenant,
 		"generated_at", res.GeneratedAt,
@@ -140,14 +144,16 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 		"documented", res.Documented,
 		"pending", res.Pending,
 		"orphans", res.Orphans,
-		"uncategorised", res.Uncategorised)
+		"uncategorised", totalUncat)
 
-	if res.Uncategorised > 0 {
-		log.Warn("Some resources matched no programme in the taxonomy; listed as uncategorised",
-			"uncategorised", res.Uncategorised)
+	for _, axis := range sortedCountKeys(res.Uncategorised) {
+		if res.Uncategorised[axis] > 0 {
+			log.Warn("Some resources matched no value on a taxonomy axis; listed as uncategorised",
+				"axis", axis, "uncategorised", res.Uncategorised[axis])
+		}
 	}
 
-	for _, t := range sortedExcludedTypes(res.Excluded) {
+	for _, t := range sortedCountKeys(res.Excluded) {
 		log.Info("  excluded (not documented)", "type", t, "count", res.Excluded[t])
 	}
 	if res.Pending > 0 {
@@ -162,13 +168,13 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 	log.Info("Documentation index written", "path", res.OutPath, "resources", res.Documented+res.Pending)
 }
 
-// sortedExcludedTypes returns the excluded-type keys in a stable order so the
-// report does not depend on map iteration order.
-func sortedExcludedTypes(excluded map[string]int) []string {
-	types := make([]string, 0, len(excluded))
-	for t := range excluded {
-		types = append(types, t)
+// sortedCountKeys returns the keys of a string-keyed count map in a stable
+// order so report output does not depend on map iteration order.
+func sortedCountKeys(counts map[string]int) []string {
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
 	}
-	sort.Strings(types)
-	return types
+	sort.Strings(keys)
+	return keys
 }

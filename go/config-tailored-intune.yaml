@@ -28,6 +28,9 @@ transformers:
 
 taxonomy:
   version: 1
+  # 'programmes:' is the 'programme' axis (which initiative a resource serves).
+  # 'axes:' below adds independent facets (platform, scope) resolved from the
+  # same exported facts, so the index can be sliced on several dimensions at once.
   programmes:
     # CIS hardening baselines — names carry a _CIS_ token (and usually an _L1 / -L1 level).
     - id: cis-hardening
@@ -167,3 +170,60 @@ taxonomy:
       label: Endpoint baseline config
       match:
         - name: '(?:logging|health ?monitoring|datensammlung|telemetr|diagnostic|taskbar|widget|location ?service|energie|mdm wins)'
+
+  axes:
+    # Target platform, from the exported 'platforms' fact, the WIN/MAC/... naming
+    # tokens this tenant uses, and platform-specific resource types (e.g. shell
+    # scripts are macOS, PowerShell/health scripts are Windows). Resources with
+    # no platform (groups, conditional access, tenant config) stay uncategorised
+    # here — that is expected, not a gap.
+    - id: platform
+      label: Platform
+      values:
+        - id: windows
+          label: Windows
+          match:
+            - platforms: 'windows'
+            - name: '_win_'
+            - type: Microsoft.Graph/windowsFeatureUpdateProfiles
+            - type: Microsoft.Graph/windowsDriverUpdateProfiles
+            - type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
+            - type: Microsoft.Graph/deviceManagementScripts
+            - type: Microsoft.Graph/deviceHealthScripts
+        - id: macos
+          label: macOS
+          match:
+            - platforms: 'macos'
+            - name: '(?:_mac_|_osx_)'
+            - type: Microsoft.Graph/deviceShellScripts
+            - type: Microsoft.Graph/deviceCustomAttributeShellScripts
+        - id: ios
+          label: iOS/iPadOS
+          match:
+            - platforms: '(?:ios|ipados)'
+            - name: '(?:_ios_|_ipad)'
+        - id: android
+          label: Android
+          match:
+            - platforms: 'android'
+            - name: '_android_'
+        - id: linux
+          label: Linux
+          match:
+            - platforms: 'linux'
+            - name: '_linux_'
+
+    # Assignment scope, from the device/user fact (derived from the _D_ / _U_
+    # naming token). Resources with no scope (groups, filters, singletons) stay
+    # uncategorised here.
+    - id: scope
+      label: Assignment scope
+      values:
+        - id: device
+          label: Device
+          match:
+            - scope: device
+        - id: user
+          label: User
+          match:
+            - scope: user
