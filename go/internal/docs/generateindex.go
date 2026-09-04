@@ -21,8 +21,16 @@ import (
 const IndexFileName = "index.yaml"
 
 // indexVersion is the schema version of index.yaml. Bump it only on an
-// incompatible change to the shape the frontend consumes.
-const indexVersion = 1
+// incompatible change to the shape the frontend consumes. Version 2 added the
+// grouping contract: the header `vocabularies` and `programmes`, and the
+// per-resource `groups`. Version 3 added the multi-axis facet contract: the
+// header `facets` and the per-resource `facets` map, emitted alongside the
+// transitional single-axis `programmes`/`groups` fields. Version 4 removes
+// those transitional fields, leaving `facets` as the sole grouping surface;
+// unlike the additive earlier bumps this one drops fields, so a consumer that
+// still reads the mirrors must migrate onto `facets` first. The frontend
+// accepts any version >= 1 and ignores fields it does not know.
+const indexVersion = 4
 
 // Built-in assignment targets carry no group id; they are recognised by their
 // @odata.type so the index can report "all users" / "all devices" as facts.
@@ -43,6 +51,11 @@ type GenerateIndexOptions struct {
 	// OutPath is where index.yaml is written. Empty defaults to
 	// TenantDir/docs/index.yaml.
 	OutPath string
+	// Taxonomy, when non-nil, is the curated `taxonomy:` config section whose
+	// axis rules classify each resource into the per-resource `facets` map and
+	// the header `facets` registry. Nil leaves both empty and the index falls
+	// back to per-type grouping.
+	Taxonomy *TaxonomyConfig
 	// DryRun withholds the write: the index is still assembled and reported.
 	DryRun bool
 }
@@ -53,13 +66,46 @@ type GenerateIndexOptions struct {
 // any time. It carries no wall-clock time — generatedAt mirrors the export — so
 // re-running over an unchanged export produces byte-identical output.
 type IndexFile struct {
-	Version          int             `yaml:"version"`
-	Tenant           string          `yaml:"tenant"`
-	GeneratedAt      string          `yaml:"generatedAt"`
-	Complete         bool            `yaml:"complete"`
-	IncompleteReason string          `yaml:"incompleteReason,omitempty"`
-	Counts           IndexCounts     `yaml:"counts"`
-	Resources        []IndexResource `yaml:"resources"`
+	Version          int               `yaml:"version"`
+	Tenant           string            `yaml:"tenant"`
+	GeneratedAt      string            `yaml:"generatedAt"`
+	Complete         bool              `yaml:"complete"`
+	IncompleteReason string            `yaml:"incompleteReason,omitempty"`
+	Vocabularies     IndexVocabularies `yaml:"vocabularies"`
+	Facets           []IndexFacet      `yaml:"facets,omitempty"`
+	Counts           IndexCounts       `yaml:"counts"`
+	Resources        []IndexResource   `yaml:"resources"`
+}
+
+// IndexVocabularies carries the closed grouping vocabularies in display order,
+// one list per axis, so a consumer orders navigation from the data rather than
+// from a copy of the vocabulary that would drift. Both mirror the source-of-
+// truth constants in internal/models.
+type IndexVocabularies struct {
+	Platform []string `yaml:"platform"`
+	Function []string `yaml:"function"`
+}
+
+// IndexFacet is one filter axis in the header: a stable id, a display label, and
+// its values in the taxonomy's display order, each with the number of resources
+// matched in this tenant. Zero-count values are kept — "this value matched
+// nothing here" is information a consumer cannot recover from per-resource
+// membership alone. Per-resource membership carries value ids only; the label
+// is resolved from here.
+type IndexFacet struct {
+	ID     string            `yaml:"id"`
+	Label  string            `yaml:"label"`
+	Values []IndexFacetValue `yaml:"values"`
+}
+
+// IndexFacetValue is one value of a facet axis: its stable id, display label and
+// tenant-wide match count. The count is used to enumerate values (a zero-count
+// value is still a selectable chip); a consumer that shows selection-aware
+// counts recomputes them from the resource list.
+type IndexFacetValue struct {
+	ID    string `yaml:"id"`
+	Label string `yaml:"label"`
+	Count int    `yaml:"count"`
 }
 
 // IndexCounts summarises the export for the picker and the "not documented"
@@ -78,17 +124,18 @@ type IndexCounts struct {
 // with documented:false and a blank summary/grouping so the count stays honest
 // and the frontend can show it as pending.
 type IndexResource struct {
-	Type          string            `yaml:"type"`
-	Doc           string            `yaml:"doc"`
-	DisplayName   string            `yaml:"displayName"`
-	Summary       string            `yaml:"summary,omitempty"`
-	Documented    bool              `yaml:"documented"`
-	Scope         string            `yaml:"scope,omitempty"`
-	PlatformGroup string            `yaml:"platformGroup,omitempty"`
-	FunctionGroup string            `yaml:"functionGroup,omitempty"`
-	ODataType     string            `yaml:"odataType,omitempty"`
-	Platforms     string            `yaml:"platforms,omitempty"`
-	Assignments   *IndexAssignments `yaml:"assignments,omitempty"`
+	Type          string              `yaml:"type"`
+	Doc           string              `yaml:"doc"`
+	DisplayName   string              `yaml:"displayName"`
+	Summary       string              `yaml:"summary,omitempty"`
+	Documented    bool                `yaml:"documented"`
+	Scope         string              `yaml:"scope,omitempty"`
+	PlatformGroup string              `yaml:"platformGroup,omitempty"`
+	FunctionGroup string              `yaml:"functionGroup,omitempty"`
+	ODataType     string              `yaml:"odataType,omitempty"`
+	Platforms     string              `yaml:"platforms,omitempty"`
+	Facets        map[string][]string `yaml:"facets,omitempty"`
+	Assignments   *IndexAssignments   `yaml:"assignments,omitempty"`
 }
 
 // IndexAssignments is the count-only assignment summary; resolved target names
@@ -116,7 +163,19 @@ type GenerateIndexResult struct {
 	Documented  int
 	Pending     int
 	Orphans     int
-	Excluded    map[string]int
+	// Uncategorised counts, per axis id, the listed resources that matched no
+	// value on that axis. It is populated only when a taxonomy was supplied;
+	// without one it is empty. These per-axis counts are independent, so they
+	// must NOT be summed into a single figure: a resource missing two axes would
+	// be counted twice, overstating the problem.
+	Uncategorised map[string]int
+	// FullyUncategorised counts the listed resources that matched no value on
+	// ANY axis — the resources that genuinely fell through the whole taxonomy,
+	// as opposed to being merely absent from one facet. It is the honest headline
+	// figure; the per-axis Uncategorised map carries the partial detail. Only
+	// populated when a taxonomy was supplied.
+	FullyUncategorised int
+	Excluded           map[string]int
 }
 
 // GenerateIndex builds docs/index.yaml from resources/metadata.yaml, enriched
@@ -148,6 +207,14 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		return nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", ErrTenantMismatch, m.Tenant, opts.ExpectDomain)
 	}
 
+	var tax *taxonomy
+	if opts.Taxonomy != nil {
+		tax, err = compileTaxonomy(*opts.Taxonomy)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	referenced, _ := referencedGroups(&m)
 	targetedBy := buildTargetedBy(&m)
 
@@ -157,13 +224,23 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 		GeneratedAt:      m.GeneratedAt,
 		Complete:         m.Run.Complete,
 		IncompleteReason: m.Run.IncompleteReason,
-		Counts:           IndexCounts{Excluded: map[string]int{}},
+		Vocabularies: IndexVocabularies{
+			Platform: models.PlatformGroups,
+			Function: models.FunctionGroups,
+		},
+		Counts: IndexCounts{Excluded: map[string]int{}},
 	}
+
+	// facetCounts accumulates matches per axis (axis id -> value id -> count) so
+	// the facets header can report a tenant-wide count for every value, zero
+	// included.
+	facetCounts := map[string]map[string]int{}
 	res := &GenerateIndexResult{
-		Tenant:      m.Tenant,
-		GeneratedAt: m.GeneratedAt,
-		Complete:    m.Run.Complete,
-		Excluded:    idx.Counts.Excluded,
+		Tenant:        m.Tenant,
+		GeneratedAt:   m.GeneratedAt,
+		Complete:      m.Run.Complete,
+		Excluded:      idx.Counts.Excluded,
+		Uncategorised: map[string]int{},
 	}
 
 	// Keys are already sorted (type then name), so appended resources are
@@ -210,11 +287,59 @@ func GenerateIndex(opts GenerateIndexOptions) (*GenerateIndexResult, error) {
 			}
 		}
 
+		// Classify on every axis when a taxonomy was supplied. classifyAxes
+		// returns axes and values in display order, so the per-resource facets
+		// are deterministic. A resource matching no value on an axis is counted
+		// as uncategorised for that axis.
+		if tax != nil {
+			facts := taxonomyFacts{
+				name:      ir.DisplayName,
+				rtype:     rtype,
+				odataType: entry.ODataType,
+				platforms: entry.Platforms,
+				scope:     ir.Scope,
+			}
+			for _, ac := range tax.classifyAxes(facts) {
+				if len(ac.values) == 0 {
+					res.Uncategorised[ac.axisID]++
+					continue
+				}
+				if facetCounts[ac.axisID] == nil {
+					facetCounts[ac.axisID] = map[string]int{}
+				}
+				for _, v := range ac.values {
+					if ir.Facets == nil {
+						ir.Facets = map[string][]string{}
+					}
+					ir.Facets[ac.axisID] = append(ir.Facets[ac.axisID], v.id)
+					facetCounts[ac.axisID][v.id]++
+				}
+			}
+			// An empty facets map means the resource matched no value on any
+			// axis — it fell through the whole taxonomy, not just one facet.
+			if len(ir.Facets) == 0 {
+				res.FullyUncategorised++
+			}
+		}
+
 		idx.Resources = append(idx.Resources, ir)
 		if ir.Documented {
 			idx.Counts.Documented++
 		} else {
 			idx.Counts.Pending++
+		}
+	}
+
+	// Emit the facets header in display order, including values with a zero
+	// count, so a consumer can render the facet chooser and see that a value
+	// matched nothing here.
+	if tax != nil {
+		for _, a := range tax.axes {
+			facet := IndexFacet{ID: a.id, Label: a.label}
+			for _, v := range a.values {
+				facet.Values = append(facet.Values, IndexFacetValue{ID: v.id, Label: v.label, Count: facetCounts[a.id][v.id]})
+			}
+			idx.Facets = append(idx.Facets, facet)
 		}
 	}
 

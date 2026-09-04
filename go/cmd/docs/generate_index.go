@@ -48,7 +48,11 @@ Examples:
   azure-rd docs generate-index --domain contoso.onmicrosoft.com
 
   # Preview what the index would contain without writing it
-  azure-rd docs generate-index --domain contoso.onmicrosoft.com --dry-run`,
+  azure-rd docs generate-index --domain contoso.onmicrosoft.com --dry-run
+
+  # Group resources into programmes: define a 'taxonomy:' section in a config
+  # file (see config.example.yaml) and load it
+  azure-rd docs generate-index --config azure-rd.yaml`,
 		RunE: runGenerateIndex,
 	}
 
@@ -75,6 +79,19 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	domain := viper.GetString("domain")
 	outPath := viper.GetString("out")
 
+	// Grouping is driven entirely by the config file's `taxonomy:` section; read
+	// it with UnmarshalKey so mapstructure's case-insensitive matching survives
+	// viper's lowercasing of config keys (e.g. odataType -> odatatype).
+	var taxonomy *docsengine.TaxonomyConfig
+	if viper.IsSet("taxonomy") {
+		var cfg docsengine.TaxonomyConfig
+		if err := viper.UnmarshalKey("taxonomy", &cfg); err != nil {
+			log.Error("Invalid 'taxonomy' config section", "error", err)
+			os.Exit(exitCannotAnswer)
+		}
+		taxonomy = &cfg
+	}
+
 	// Resolve the export directory and the domain to cross-check metadata against.
 	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
 		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
@@ -88,6 +105,7 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 		TenantDir:    tenantDir,
 		ExpectDomain: expectDomain,
 		OutPath:      outPath,
+		Taxonomy:     taxonomy,
 		DryRun:       dryRun,
 	})
 	if err != nil {
@@ -121,9 +139,20 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 		"complete", complete,
 		"documented", res.Documented,
 		"pending", res.Pending,
-		"orphans", res.Orphans)
+		"orphans", res.Orphans,
+		// Resources that matched no value on ANY axis — the honest headline.
+		// Per-axis gaps are reported separately below and are not summed here,
+		// since a resource missing two axes would otherwise be counted twice.
+		"uncategorised", res.FullyUncategorised)
 
-	for _, t := range sortedExcludedTypes(res.Excluded) {
+	for _, axis := range sortedCountKeys(res.Uncategorised) {
+		if res.Uncategorised[axis] > 0 {
+			log.Warn("Some resources matched no value on a taxonomy axis; absent from that facet only",
+				"axis", axis, "uncategorised", res.Uncategorised[axis])
+		}
+	}
+
+	for _, t := range sortedCountKeys(res.Excluded) {
 		log.Info("  excluded (not documented)", "type", t, "count", res.Excluded[t])
 	}
 	if res.Pending > 0 {
@@ -138,13 +167,13 @@ func reportGenerateIndex(res *docsengine.GenerateIndexResult, dryRun bool) {
 	log.Info("Documentation index written", "path", res.OutPath, "resources", res.Documented+res.Pending)
 }
 
-// sortedExcludedTypes returns the excluded-type keys in a stable order so the
-// report does not depend on map iteration order.
-func sortedExcludedTypes(excluded map[string]int) []string {
-	types := make([]string, 0, len(excluded))
-	for t := range excluded {
-		types = append(types, t)
+// sortedCountKeys returns the keys of a string-keyed count map in a stable
+// order so report output does not depend on map iteration order.
+func sortedCountKeys(counts map[string]int) []string {
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
 	}
-	sort.Strings(types)
-	return types
+	sort.Strings(keys)
+	return keys
 }

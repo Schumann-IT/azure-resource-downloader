@@ -20,6 +20,7 @@ Marked blocks the tool replaces (start/end markers stay, content between them is
              "Used by" blocks whose referencing resources moved, and noncompliance-notification blocks
              whose referenced template was renamed
   migrate    documents predating the assignment markers; rendered as "none" when there are none
+  expected   every source path the work list names, one per line, for the section-4 coverage check
   summary-facts  tenant-wide counts, platforms, assignment posture and coverage for the summary (section 7)
 
 Everything outside the markers is prose you can edit freely. Keep the markers matched and never nested.
@@ -99,8 +100,11 @@ every resource, so the export itself may lag the tenant. It does not stop you do
 - **Prefer the reference links in each `doc-prompt.md`** over recalled knowledge.
 - **Never modify anything under `resources/`.** It is the source of truth and is read-only for this task.
   That includes `metadata.yaml` — it belongs to `azure-rd`, not to you.
-- **Never compute a hash.** Every hash you write comes verbatim from the work-list row that names the
-  document. This is the only place that rule is stated; it holds everywhere below.
+- **Never compute a hash.** A generation agent writes only `sourceSha256` and `promptSha256`, copied verbatim
+  from its chunk file. The four block-hashes (`assignmentsSha256`, `notificationsSha256`, `targetedBySha256`,
+  `usedBySha256`) are written by the orchestrator during the section-5 splice, straight from the work-list
+  row that names the document — never computed, and never written by a generation agent. This is the only
+  place that rule is stated; it holds everywhere below.
 - **Write only the files named below**, plus `docs/summary.md` (section 7) and the working files in
   `chunks/` that section 3 calls for. No index, no other scratch files left behind.
 
@@ -115,17 +119,19 @@ _Replaced by the tool. Shape:_
 
 ### Microsoft.Graph/deviceCompliancePolicies — spec: `resources/Microsoft.Graph/deviceCompliancePolicies/doc-prompt.md`
 
-| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 |
-|---|---|---|---|---|---|---|---|
-| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` | `a3f8b91e…` | |
+| Source | Document | Reason | sourceSha256 | promptSha256 | assignmentsSha256 | notificationsSha256 | usedBySha256 | targetedBySha256 |
+|---|---|---|---|---|---|---|---|---|
+| `resources/…/gbl_c_prd_d_win_os_validation.yaml` | `docs/…/gbl_c_prd_d_win_os_validation.md` | resource changed | `5d6b32f8…` | `95cb34be…` | `7a41c0de…` | `a3f8b91e…` | | |
 
 _…one section per resource type, then a tally: N documents to write across M types._
 <!-- worklist:end -->
 
-The hashes on each row are the values to write into that document's frontmatter (section 2), given to you
-precisely so you never have to compute one. `assignmentsSha256` is blank for types that have no assignments.
+The hash columns on each row are the values the **orchestrator** writes into that document's frontmatter
+during the section-5 splice — they are not for the generation agent, which only ever copies `sourceSha256`
+and `promptSha256` from its chunk file. `assignmentsSha256` is blank for types that have no assignments.
 `notificationsSha256` is blank unless the resource references a notification template in a noncompliance
-action. `usedBySha256` is blank unless the resource is a notification message template.
+action. `usedBySha256` is blank unless the resource is a notification message template. `targetedBySha256`
+is blank unless the resource is a group targeted by an assignment.
 
 Note that `promptSha256` is a property of the *type*, not of the file: every row under one `###` heading
 carries the same value. Read it once per type and reuse it — never copy it once per row.
@@ -157,7 +163,8 @@ Every document starts with YAML frontmatter, before the `#` title:
 source: resources/Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os_validation.yaml
 sourceSha256: 5d6b32f8…
 promptSha256: 95cb34be…
-assignmentsSha256: 7a41c0de…      # only for types that have assignments
+platformGroup: Windows            # one value from this type's doc-groups marker (see Grouping below)
+functionGroup: Compliance         # one value from the same marker; n/a when the axis does not apply
 generatedAt: 2026-08-13T08:31:00Z  # the export timestamp from above, verbatim — not the current time
 ---
 ```
@@ -169,14 +176,37 @@ different trees.
 time instead would make every regeneration rewrite every file, turning a no-op run into a full-tree diff and
 destroying the mtime evidence section 6 depends on.
 
-`assignmentsSha256` covers the resolved contents of the assignments block — the target groups' names and
-kinds, the filters' names — which is how the next run notices that a group was renamed even though this
-resource never changed. Group documents additionally carry `targetedBySha256`, notification message
-template documents carry `usedBySha256`, and documents that reference a notification template in a
-noncompliance action carry `notificationsSha256`; see 5d.
+The four block-hashes — `assignmentsSha256` for the resolved assignments block, `targetedBySha256` for a
+group's `Targeted by` block, `usedBySha256` for a template's `Used by` block, and `notificationsSha256` for a
+policy's noncompliance-notification block — are **not written by you**. The orchestrator adds and maintains
+them during the section-5 splice, in the same pass that resolves the blocks they cover, because each is
+computed from information outside the document's own resource (a group renamed elsewhere, a policy re-pointed
+at a different group; see 5d). Leave them out of the frontmatter you write; section 5 fills them in.
 
 This frontmatter is how the next incremental run knows whether your document is still current. A document
 without it is treated as stale and regenerated from scratch every time.
+
+### Grouping (required)
+
+`platformGroup` and `functionGroup` classify the resource by *what it is for* — the platform it targets and
+the management function it performs — so the documentation frontend can offer navigation by purpose, not only
+by resource type. `docs generate-index` harvests both into `index.yaml`; you are the only step that can set
+them, because they are a judgement about intent, not a fact the YAML carries.
+
+Each is **one value, chosen from the closed set in this type's `doc-prompt.md`**, recorded there on its own
+line as a `<!-- doc-groups: platform=… | function=… -->` marker (the axis-vocabulary counterpart of
+`doc-headings`). Rules:
+
+- Pick exactly one value per axis, spelled **verbatim** from the marker — same wording and casing. Never
+  invent a value, never combine two, never leave either blank.
+- Use `n/a` — which is in both sets — when an axis genuinely does not apply to the type (a tenant-level
+  singleton has no platform, an inventory record has no function). `n/a` means "does not apply"; it is **not**
+  the same as leaving the field out, which means "not yet classified" and is treated as a gap.
+- Base the choice on the resource's own facts (its `@odata.type`, `platforms`, the scope token in its name,
+  what the settings do), not on guesswork. When two function values could fit, choose the resource's primary
+  purpose.
+- A type whose `doc-prompt.md` carries **no** `doc-groups` marker (an older record type, or a type not
+  refreshed this run) takes neither field — omit both.
 
 ### Assignment markers (required)
 
@@ -198,11 +228,16 @@ no assignments; put the sentence saying so between them. Omit them only for type
 assignments. Never nest markers, never emit a start without its end, never put anything that is not about
 assignments between them. Section 5 depends on this being a deterministic splice.
 
-The same contract applies to two more marked blocks, wherever the spec calls for them: `<!-- targeted-by -->`
-around a group document's list of the resources that assign it, and `<!-- notifications:start -->` /
-`<!-- notifications:end -->` around a policy's reference to the notification message template its noncompliance
-actions send through. Unlike assignments, the notifications block is emitted **only** when the resource
-actually references a template — omit it entirely otherwise, since there is nothing to re-splice.
+The `<!-- notifications:start -->` / `<!-- notifications:end -->` block follows the same contract, wherever the
+spec calls for it: wrap a policy's reference to the notification message template its noncompliance actions
+send through, with the bare template GUID inside for section 5 to resolve. Unlike assignments, emit it **only**
+when the resource actually references a template — omit it entirely otherwise, since there is nothing to
+re-splice.
+
+The two **reverse** blocks — `<!-- targeted-by -->` in a group document (the resources that assign it) and
+`<!-- used-by -->` in a notification message template document (the resources that reference it) — are **not
+yours to emit**. They are rendered entirely from other resources, so the orchestrator inserts and maintains
+them, with their markers, during the section-5 splice (5c, 5d). Do not add them to the documents you write.
 
 ---
 
@@ -283,12 +318,21 @@ These checks test each document **in isolation**, so run them now, before assign
 that compare documents *to each other* — GUID resolution and link symmetry — cannot pass yet: at this point
 every assignments block still holds bare GUIDs by design. They are in section 6.
 
+Coverage is checked against the **authoritative work list**, not against your own chunking. Before running the
+script, write the block below verbatim to `chunks/expected.txt` — one source path per line — so the check can
+diff it against the chunks and the documents on disk. The script fails if that file is missing.
+
+<!-- expected:start -->
+_Replaced by the tool: every source path the work list names, one per line._
+<!-- expected:end -->
+
 | Check | Expectation |
 |---|---|
-| Coverage | Every work-list entry produced a document at its derived path. Zero missing. Diff the source paths in `chunks/*.md` against what exists on disk. |
+| Coverage | Every work-list entry in `chunks/expected.txt` was packed into a chunk **and** produced a document at its derived path. Zero missing, zero dropped from chunking. An empty `chunks/` directory, or a whole type left out of chunking, fails here — the check diffs the authoritative list against both the chunks and the documents on disk, never the chunks against themselves. |
 | Frontmatter | Every written document has valid frontmatter whose `sourceSha256` and `promptSha256` equal the values from its chunk file. A mismatch means an agent documented the wrong file. |
 | Heading structure | Exactly one `#` heading per document. Count headings **outside fenced code blocks only** — shell scripts embedded in `deviceShellScripts` / `deviceManagementScripts` documents contain `##` comment lines that are not headings. |
 | Heading vocabulary | Every `##` **outside fenced code blocks and outside `<!-- …:start -->`/`<!-- …:end -->` marker pairs** is in the closed set declared for that document's type — the `doc-headings` list in its `doc-prompt.md` — spelled exactly, in order, without duplicates. The marker-pair exemption is what lets the tool-spliced `## Targeted by` block (section 5) live in group documents without being part of the authored contract. Same fenced-code caveat as *Heading structure*. |
+| Grouping vocabulary | For every type whose `doc-prompt.md` carries a `<!-- doc-groups: … -->` marker, each of its documents has both a `platformGroup` and a `functionGroup` in frontmatter, each a single value from that marker's respective closed set (`n/a` included) — missing or out-of-set fails. A type with no marker takes neither field; its documents are counted as axis *uncategorised* and reported, never failed. |
 | `<details>` balance | `<details>` count equals `</details>` count per file. Nesting is normal. |
 | Assignment markers | Every document that should have them has exactly one matched `<!-- assignments:start -->` / `<!-- assignments:end -->` pair — never unbalanced, never nested, never repeated. |
 | Stray artifacts | No leftover `DONE` receipts in document text, no truncated final block, every file ends cleanly. |
@@ -304,6 +348,7 @@ from collections import Counter
 
 FENCE = re.compile(r"^\s*(```|~~~)")
 problems, seen = Counter(), set()
+uncategorised = 0  # documents whose type has no doc-groups marker (axis-unclassified)
 
 def fail(doc, msg):
     problems[msg] += 1
@@ -312,7 +357,7 @@ def fail(doc, msg):
 MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
 HEADING = re.compile(r"^(#+)\s+\S")
 INLINE = re.compile(r"`[^`]*`")
-_contracts = {}
+_contracts, _groups = {}, {}
 
 def heading_contract(src):
     """Ordered closed H2 set for src's type, read from its doc-prompt.md."""
@@ -325,6 +370,21 @@ def heading_contract(src):
                 val = [h.strip() for h in m.group(1).split("|") if h.strip()]
         _contracts[spec] = val
     return _contracts[spec]
+
+def groups_contract(src):
+    """Closed {platform, function} value sets for src's type, from its doc-groups marker."""
+    spec = pathlib.Path(src).parent / "doc-prompt.md"
+    if spec not in _groups:
+        val = None
+        if spec.is_file():
+            m = re.search(r"<!--\s*doc-groups:\s*(.+?)\s*-->", spec.read_text(encoding="utf-8"))
+            if m:
+                val = {}
+                for axis in m.group(1).split("|"):
+                    name, _, values = axis.partition("=")
+                    val[name.strip()] = {v.strip() for v in values.split(",") if v.strip()}
+        _groups[spec] = val
+    return _groups[spec]
 
 # expected[source path] = (doc path, promptSha256, sourceSha256)
 expected = {}
@@ -341,6 +401,20 @@ for chunk in sorted(pathlib.Path("chunks").glob("[0-9]*.md")):
         src, _, sha = line.strip().partition(" ")
         doc = re.sub(r"^resources/", "docs/", src.strip()).removesuffix(".yaml") + ".md"
         expected[src.strip()] = (doc, meta.get("promptSha256", ""), sha.strip())
+
+# The authoritative work list: every source the tool told us to document. Coverage
+# is checked against this, not against the chunks, so a whole type dropped during
+# chunking (or an empty chunks/ directory) is caught here rather than the check
+# confirming the chunks against themselves.
+worklist_path = pathlib.Path("chunks/expected.txt")
+if not worklist_path.is_file():
+    print("FAIL: chunks/expected.txt is missing — cannot verify coverage against the work list")
+    sys.exit(1)
+worklist = {ln.strip() for ln in worklist_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.startswith("#")}
+for src in sorted(worklist - set(expected)):
+    doc = re.sub(r"^resources/", "docs/", src).removesuffix(".yaml") + ".md"
+    fail(doc, "work-list source dropped from chunking — not documented")
 
 for src, (docpath, prompt_sha, source_sha) in expected.items():
     doc = pathlib.Path(docpath)
@@ -362,6 +436,20 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                 fail(doc, f"{key} mismatch — wrong source documented")
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
+
+        groups = groups_contract(src)
+        if groups is None:
+            # Type predates the doc-groups marker (e.g. a record type, or a type
+            # not refreshed this run): its documents carry neither axis field.
+            # Not a failure — counted as axis-uncategorised for the section-8 report.
+            uncategorised += 1
+        else:
+            for field, axis in (("platformGroup", "platform"), ("functionGroup", "function")):
+                got = re.search(rf"^{field}:\s*(.+?)\s*$", fm, re.M)
+                if not got:
+                    fail(doc, f"frontmatter missing {field}")
+                elif got.group(1).strip().strip("\"'") not in groups.get(axis, set()):
+                    fail(doc, f"{field} '{got.group(1).strip()}' not in doc-groups {axis} set")
 
     in_fence, in_marker, h1, h2s, opens, closes = False, False, 0, [], 0, 0
     for line in text.splitlines():
@@ -446,14 +534,19 @@ for doc in pathlib.Path("docs").rglob("*.md"):
 
 # Baseline mtimes for section 6, covering the whole document tree (not just the
 # work list) so a retained document is present and shows unchanged rather than
-# as an extra. Write it once: re-running section 4 after the section-5 splice
-# must not overwrite the pre-splice baseline it compares against.
+# as an extra. Write it once, and only when these checks pass: re-running section
+# 4 after the section-5 splice must not overwrite the pre-splice baseline it
+# compares against, and a run made against a partial tree (agents still writing,
+# coverage failing) must not record that incomplete state as the baseline — it
+# would make section 6 report every later-written document as an untracked extra.
 snapshot = pathlib.Path("chunks/mtimes.json")
-if not snapshot.exists():
+if not snapshot.exists() and not problems:
     tree = [p for p in pathlib.Path("docs").rglob("*.md") if p.parent != pathlib.Path("docs")]
     snapshot.write_text(json.dumps(
         {str(p): p.stat().st_mtime for p in sorted(tree) if p.is_file()}, indent=0))
 print(f"\nchecked {len(expected)} documents at {time.strftime('%H:%M:%S')}")
+if uncategorised:
+    print(f"NOTE: {uncategorised} document(s) axis-uncategorised (type has no doc-groups marker)")
 for msg, n in problems.most_common():
     print(f"{n:5d}  {msg}")
 sys.exit(1 if problems else 0)
@@ -526,6 +619,13 @@ section 5; it runs over the whole tree in one pass.
 - No assignments at all → one sentence between the markers: *"This resource has no assignments — it is
   configured but not targeted at anything."* That is a finding worth stating plainly.
 
+For every **group** document and every **notification message template** document you generated this run, the
+reverse block does not exist yet — the agent does not emit it. Build it now from the maps in 5a (a group's
+`Targeted by`) and 5f (a template's `Used by`), insert it with its markers exactly as 5d shows, and write the
+document's `targetedBySha256` / `usedBySha256` from its work-list row. This is the same insertion 5e performs
+for a migrated document, applied to a freshly generated one, so a new group or template page carries its
+reverse block and hash in the run that created it instead of waiting for a later re-splice.
+
 ### 5d. Re-splice documents whose blocks went stale on their own
 
 A marked block can go stale while the document around it is perfectly current, because it is rendered from
@@ -546,6 +646,10 @@ After splicing, update that document's frontmatter with the hash the tool gave y
 a forward re-splice, `targetedBySha256` for a reverse one, `usedBySha256` for a used-by one,
 `notificationsSha256` for a notifications one. A document whose block you re-rendered but whose hash you did
 not update will be re-spliced again on every future run.
+
+If a re-spliced document has no markers for that block yet — an older `Targeted by` / `Used by` page that
+predates them — insert the markers first exactly as 5e describes, then splice. A reverse re-splice never has a
+block to "replace" the first time; it inserts one.
 
 The `Targeted by` block is wrapped in its own markers:
 
@@ -611,7 +715,10 @@ marker. The row's reason names which. Rendered as "none" when there are none._
 <!-- migrate:end -->
 
 For each, insert the markers around the existing block without altering anything else, then apply 5c
-normally. This is a one-off per document; once migrated the markers persist.
+normally. The same one-off insertion applies to any block whose markers are absent, including the reverse
+`<!-- targeted-by -->` / `<!-- used-by -->` blocks that a freshly generated or older group/template document
+has never carried (5c, 5d): create the markers, then splice. This is a one-off per document; once inserted the
+markers persist.
 
 ### 5f. Notification template reference map (given)
 
@@ -641,7 +748,7 @@ reference map, so they only become meaningful once section 5 has run. Script the
 | Link symmetry | Every group linked from a policy's assignment table has a document, and that document's **Targeted by** list contains that policy. Every template a compliance policy references — both from that policy's **noncompliance-notification** block and from the template's **Used by** list — agrees in both directions. Each direction comes from one lookup, so a mismatch means the splice went wrong. |
 | Link targets exist | Every relative link inside a marked block resolves to a file that exists under `docs/`. |
 | Marker pairs survived | The splice left every `assignments`, `targeted-by`, `used-by` and `notifications` pair matched and unnested. Re-run that check from section 4 — a bad splice is exactly how a pair gets broken. |
-| Hashes updated | Every document whose block was re-spliced carries the new `assignmentsSha256` / `targetedBySha256` / `usedBySha256` / `notificationsSha256`. Any it kept from before will be re-spliced on every future run. |
+| Hashes updated | Every document whose block was written or re-spliced this run — every freshly generated document and every re-spliced one — carries the matching `assignmentsSha256` / `targetedBySha256` / `usedBySha256` / `notificationsSha256` the tool gave it. A generated group or template document in particular must now carry its `targetedBySha256` / `usedBySha256`; any hash left unwritten will be re-spliced on every future run. |
 | Nothing else touched | Compare mtimes against the snapshot taken at the end of section 4. Only work-list documents, re-spliced documents and migrated documents may have changed. A document outside the work list — e.g. one retained under a type that could not be listed — is in the snapshot and must be unchanged. |
 
 ---
@@ -894,6 +1001,9 @@ The report must contain:
 - every **dangling group reference** (an assigned GUID with no group in the export)
 - every **dangling notification template reference** (a template GUID a noncompliance action references with no template in the export)
 - how many documents were migrated to markers
+- the axis **uncategorised** count from the section-4 check (documents whose type has no `doc-groups` marker,
+  so they carry no `platformGroup`/`functionGroup`) — so a grouping axis the model stops filling, or a type
+  still awaiting the marker, is visible rather than manifesting as a silently thinning navigation tree
 - whether the export was marked incomplete, and why
 - substantive findings the analysis surfaced: baseline deviations, disabled controls, secrets present,
   policies with no assignments

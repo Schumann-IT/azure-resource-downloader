@@ -9,6 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs generate-index` now classifies resources along multiple independent facet axes, not just a single
+  programme list.** The `taxonomy:` config section gains an `axes:` form — each axis has an id, a label and an
+  ordered list of values, and each value carries the same `match` rules a programme did — so a tenant can be
+  sliced by *Programme*, *Platform*, *Environment* and so on at once. The legacy `programmes:` key is kept as
+  sugar for the axis with id `programme` (defining both `programmes:` and an explicit `programme` axis is a
+  fatal error, not a silent merge), so no existing config breaks. `index.yaml` (schema bumped to **version
+  4**) gains a header `facets` registry (every axis, its values in display order, and per-tenant match counts
+  with zero-count values kept) and a per-resource `facets` map (`axis id → matched value ids`, value ids
+  only; labels resolve from the header). `facets` is the sole grouping surface: the earlier single-axis
+  `programmes` registry and per-resource `groups` fields are **not** emitted — the `programmes:` sugar simply
+  compiles into the `programme` axis and is reported through `facets` like any other, and a `programmes:`-only
+  config produces the same index as an equivalent explicit `programme` axis (the alias is a no-op).
+  Resources matching no value on an axis are reported as **uncategorised for that axis** (a per-axis warning),
+  while the summary's single `uncategorised` figure counts only resources that matched **no value on any axis**
+  — the per-axis counts are deliberately not summed, since a resource missing two axes would otherwise be
+  counted twice and overstate the gap. It still records rules, never facts, so revising the taxonomy never
+  requires re-downloading a tenant. See the commented **Taxonomy** block in `config.example.yaml`.
+  - **Tests** for axis and value validation (invalid/duplicate ids, missing labels, empty axes/values, the
+    `programmes:`+`programme`-axis collision), multi-axis classification and display order, the facets header
+    with zero-count values, per-resource `facets`, per-axis uncategorised counts, and a byte-identity check
+    that the `programmes:` sugar equals an equivalent explicit `programme` axis.
+
+- **Documents now declare their platform and function group in frontmatter, filling the two grouping axes the
+  index already emits.** The programme taxonomy resolved at index time answered *which initiative* a resource
+  belongs to; this adds the complementary per-document judgement of *which platform* it targets and *what
+  management function* it performs — the one classification only the document generation can make. Every
+  type's assembled `doc-prompt.md` now carries a `<!-- doc-groups: platform=… | function=… -->` marker
+  rendered from the `PlatformGroups`/`FunctionGroups` constants in `internal/models` (the single source of
+  truth, so the vocabularies live in one place and no per-template literal can drift), appended on the shared
+  `BuildDocumentationPrompt` render path so it reaches the default template and every override at once. The
+  incremental generation prompt now requires a `platformGroup` and a `functionGroup` in each document's
+  frontmatter, each a single value from that marker's closed set (`n/a` when the axis genuinely does not
+  apply, which is distinct from a blank/absent value meaning "not yet classified"); its section-4 structural
+  check validates both against the marker and reports an axis **uncategorised** count in the section-8 run
+  report, so a grouping axis the model stops filling is visible. `docs generate-index` already harvests both
+  fields into `index.yaml`, so no index change was needed. **Inventory/registry record types (Autopilot
+  device identities, device categories, NDES and Mobile Threat Defense connectors) opt out via a new
+  `ResourceDocumentation.OmitGroupAxes` flag**, keeping their `doc-prompt.md` — and thus their `promptSha256`
+  — unchanged so their documents are not reissued for grouping alone.
+  **Adding the marker changes every non-record type's `promptSha256`, so those documents regenerate once on
+  the next run after a re-download, contributing to the full regeneration already required — and each is
+  re-authored with the two group fields.**
+  - **Tests** for the rendered `doc-groups` marker (present by default, suppressed under `OmitGroupAxes`, and
+    carrying both vocabularies in display order with `n/a` in each and no comma-bearing value), and for the
+    updated template-override path that still appends the marker.
+
+- **`docs generate-index` groups documentation by purpose, not just by endpoint, via a `taxonomy:` config
+  section.** A new config-file section (see the commented **Taxonomy** block in `config.example.yaml`)
+  classifies each exported resource into one or more **programmes** — real-world initiatives like CIS L1
+  hardening, Defender or VPN that span several resource types — using rules over facts the export already
+  carries (`name` regex, `type`, `odataType`, `platforms`, `scope`). It is a config-only section like
+  `filters:` and `transformers:` (there is no CLI flag), read with `viper.UnmarshalKey` so it survives
+  viper's lowercasing of config keys. The classification is resolved once, in the CLI, into `docs/index.yaml`,
+  so the docs browser and the Confluence export read the same grouping. Each resource gains a many-to-many
+  facet membership, and the index header gains the matching `facets` registry (every value in display order
+  with a per-tenant match `count`, zero-count values kept) and the closed grouping `vocabularies` (the ordered
+  `platform`/`function` group names). Resources matching no programme
+  are reported as **uncategorised** so a taxonomy that quietly stops matching is visible. With no `taxonomy:`
+  section the index is unchanged apart from the always-emitted `vocabularies`, and grouping falls back to
+  per-type — the default `config.example.yaml` keeps the section commented out, preserving the "loading the
+  example == no config" guarantee. The `index.yaml` schema version is bumped to 2; the change is additive, so
+  existing consumers that ignore unknown fields are unaffected.
+  - **Tests** for the taxonomy rule engine (validation, OR-of-rules / AND-within-a-rule, registry order,
+    case-insensitive regexes, and a viper round-trip guarding the `odataType` key-lowercasing gotcha), for
+    `generate-index` end-to-end with a taxonomy (per-resource groups, the zero-count registry entry, the
+    emitted vocabularies and the uncategorised count), and a `config.example.yaml` no-op assertion that the
+    taxonomy stays inert.
+
 - **`azure-rd --debug` prints a diagnostic report of the current Azure session.** Run with no subcommand, it
   authenticates exactly as `download` would and reports how the tool is authenticated (Azure CLI session vs.
   device-code app registration), the signed-in identity, the resolved tenant, subscription and output
@@ -177,6 +245,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back to `debug.ReadBuildInfo()`; the `Makefile` injects the version on `build`/`install`.
 
 ### Fixed
+
+- **The incremental documentation prompt is now hash-complete and its own checks can fail.** A readiness
+  review of a first full generation found four defects in `docs/generate.md` — all in the *generation* prompt
+  and the work list, never a type's `doc-prompt.md`, so none changes any `promptSha256`. (1) The four
+  block-hashes (`assignmentsSha256`, `notificationsSha256`, `usedBySha256`, `targetedBySha256`) were asked of
+  the fan-out generation agent, which only ever sees its chunk file and never the work list, so freshly
+  generated documents landed without them and were re-spliced on every future run. The orchestrator is now the
+  single writer of all four, stamped during the section-5 splice for freshly generated documents as well as
+  re-spliced ones; the agent writes only what its chunk carries (`sourceSha256`/`promptSha256`, grouping
+  fields, bare-GUID blocks). (2) A freshly generated group or notification-template document had no source for
+  its reverse block or `targetedBySha256`/`usedBySha256` and no marker to splice into, so it re-listed for
+  reverse re-splice for ever; `WorkItem` now carries `TargetedBySha256` (computed for referenced groups and
+  surfaced as an orchestrator-facing worklist column, mirroring the used-by wiring), and section 5 builds the
+  reverse block and inserts its markers in the run that creates the document. (3) The section-4 coverage check
+  diffed the documents on disk against the orchestrator's own chunks, so a chunking mistake that dropped a
+  whole type — or an empty `chunks/` directory — passed; the tool now emits the authoritative source set into
+  an `expected` block that is written to `chunks/expected.txt` and the check fails when the chunks or documents
+  do not cover it (and when that file is missing). (4) The write-once mtime snapshot could be poisoned by
+  running section 4 against a partial tree; it is now written only when the checks pass, so an incomplete run
+  cannot record a false baseline for section 6.
+  - **Tests** for the `targetedBySha256` worklist column, a generated group document carrying its
+    `TargetedBySha256`, the `expected` block rendering (sorted paths; comment line when empty) and its presence
+    in the spliced prompt.
 
 - **Notification message templates no longer churn on every export.** The `lastModifiedDateTime` inside
   each `localizedNotificationMessages` entry was stamped by the Graph API with the response time rather

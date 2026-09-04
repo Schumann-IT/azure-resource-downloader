@@ -1,159 +1,16 @@
 # Next iterations
 
-Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it
-does today and `CHANGELOG.md` records what shipped; neither is repeated here.
+Standing decisions and parked ideas for the docs browser. `README.md` describes what it does today and
+`CHANGELOG.md` records what shipped; neither is repeated here.
 
-## 1. Per-document identity on the article
-
-**Goal.** Let a reader tell what *kind* of resource a page describes before reading it, and let the
-stylesheet treat a group, a credential and a settings-catalog policy differently. `<article>` currently
-carries no per-document hook, so all six document families render identically.
-
-> **`data-family` cannot come from `docs/index.yaml`.** `IndexResource` carries
-> `type/doc/displayName/summary/documented/scope/platformGroup/functionGroup/odataType/platforms/assignments`
-> and no family or prompt-template field; the frontmatter carries none either. The document's **own H2 set**
-> is the carrier, and in the reference exports it partitions cleanly — 340 documents with
-> *References | Lifecycle and operations | Security | Settings* (the `default`/`singleton` contract, which
-> share one heading list and so cannot be told apart), 36 `group`, 25 `referenced`, 6 `record`, 4
-> `credential`, 0 `arm`. Match the set, ignoring the spliced `Targeted by` / `Used by` headings, and emit
-> nothing when it matches no contract. Do not infer the family from the resource type, and do not add a
-> seventh vocabulary here — if a family needs to be distinguishable beyond its headings, ask the CLI for the
-> field.
->
-> **`data-type` is free**: it is the document's own directory (`Microsoft.Graph/groups`), already known to the
-> controller.
->
-> **What it buys**, and the reason it is worth doing at all rather than being merely available: a credential
-> document can lead with its expiry, a `record` document can drop the assignment vocabulary it never uses,
-> and `[data-family="group"] [data-section="properties"]` can differ from the same section on a policy — none
-> of which is expressible today.
-
-**Plan.**
-
-- **Derive the family from the observed H2 slugs** in a pure helper next to `section-hooks.ts`, with a case
-  per contract in a unit spec, including a document whose set matches none.
-- **Expose `family` and `type` from the render** and put `data-family` / `data-type` on `<article>` in
-  `page.hbs`, with a case in `test/docs.e2e.spec.ts`.
-- **Only then** add per-family CSS, so the attribute does not ship as decoration.
-
-## 2. Findings block beyond the severity icon
-
-**Goal.** Let a reader of the tenant landing page act on the findings table — narrow it to what matters and
-get from a finding to the documents it affects.
-
-> The hooks are in place — `src/docs/findings-table.ts` tags the table `.findings` and puts `data-severity`
-> on each body row and severity cell — but nothing consumes `data-severity` beyond the severity icon, the
-> `Affected` count is inert, and `#findings` is an unstyled H3 above a styled table.
->
-> **Caveat.** `.prose table` sets `white-space: nowrap` so wide assignment tables scroll instead of wrapping
-> mid-GUID. Any prose-bearing table needs an opt-out from it.
->
-> **The filter mechanism is expressible without JavaScript**, which is what makes this entry worth doing:
-> renderer-emitted sibling anchors plus `:target`, e.g.
-> `#sev-critical:target ~ .findings tbody tr:not([data-severity="critical"]) { display: none }`. It needs the
-> anchors to be siblings of the table, so the wrapper below is a prerequisite, and it spends the URL fragment
-> — which already belongs to `#findings` — so a **Show all** reset link is part of the feature, not a
-> refinement.
-
-**Plan.**
-
-- Put `data-severity` on a wrapper emitted next to the table, with one anchor per severity and a **Show all**
-  reset, so the `:target` filtering above and a per-severity count line become expressible.
-- Link the `Affected` count to the documents the row names, reusing the same relative-link rewriting as
-  document bodies — or drop the count, since the `Documents` column already links.
-- Style `#findings` itself, with the risk-role icon and colour the Security section uses.
-
-## 3. Summary table of contents
-
-**Goal.** Give the tenant landing page a jump list so a reader can go straight to the part of the summary
-they came for instead of scrolling.
-
-> The four summary H2s are a declared contract on the CLI side with stable, clean slugs —
-> `#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats` — so they are safe to
-> hard-code, and `markdown-it-anchor` emits the ids without further work.
->
-> The landing page's structure is tight (a heading followed by one list or a short run of paragraphs), so
-> positional selectors that would be fragile in a resource document hold up here (`#recommendations + ol`,
-> `[id="at-a-glance"] ~ p`) and no renderer change is needed.
-
-**Plan.**
-
-- Render the jump list in `tenant.hbs` from the known heading set, as a labelled `<nav>`, skipping entries
-  whose heading is absent so an older summary degrades to a shorter list, and omitting it entirely in the
-  index-listing branch where there is no summary at all.
-- Nest `#findings` and `#recommendations` under *Management summary* — they are the entries a reader actually
-  jumps to — reusing the same closed H3 vocabulary the CLI declares.
-- Assert in `test/docs.e2e.spec.ts` that the list links to the ids the rendered summary actually contains.
-
-## 4. Sidebar refinements
-
-**Goal.** Make the sidebar usable at export scale, where it lists every in-scope document (263 in the
-reference export) as a flat per-type tree with no way to narrow it and no context per item.
-
-> The item summaries and badges the index carries are rendered only by the listing fallback, not by the tree.
->
-> **Excluded on purpose:** remembering which sections were open across navigations. That needs client-side
-> state, and no client-side JavaScript is a non-negotiable.
-
-**Plan.**
-
-- A filter over the tree that works without JavaScript (server-side query parameter narrowing the rendered
-  items, with the current filter reflected in the URL).
-- Per-item summary/badge rendering in `sidebar.hbs`, from the same `docs/index.yaml` fields the listing
-  fallback reads.
-
-## 5. Settle how a settings block is represented in the Confluence export
-
-**Goal.** Make an imported space usable for the reader who came for one setting. The export ships the
-`<details>` blocks untouched, which is a probe rather than an answer: nobody has yet seen what the importer
-does with them.
-
-> **What the corpus contains** (two reference exports, 411 served documents, 6.4 MB of Markdown):
-> **7,208 `<details>`/`<summary>` blocks** — up to 317 in one document, nested up to 5 deep — 14,345 inline
-> `<code>`, 6,048 table rows and 182 fenced code blocks (which
-> [the importer flattens to plain text](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)).
-> A single page therefore has to carry up to 317 settings, five levels deep, with no collapse affordance if
-> the importer drops the block.
->
-> **Why it is open.** `<details>` is the dominant element and the architecture notes call it *the*
-> documentation, it is not on the importer's preserved list, and the FAQ does not say what it does with it.
-> No Confluence instance was available to settle it, and choosing between the transforms from the FAQ alone
-> would be guessing — so passthrough shipped, and the README calls the export provisional. The
-> alternatives, for whoever runs the first real import: **A, bold paragraph + blockquote** (lowest effort,
-> keeps nesting visually and the `path = value` summary verbatim, loses the collapse affordance — a
-> 317-setting document becomes one very long page); **B, headings by depth** (the only option giving each
-> setting its own anchor and search entry, but a 317-entry page outline, and depth 5 does not fit under
-> `h6`); **C, one table per settings section** (most information per screen and matches how these documents
-> are read, but flattens nesting, has no home for group-label blocks such as `Sub-options (1)`, and is the
-> only option that must **parse** the summary into key/value — so the only one that can be silently wrong
-> when a value itself contains ` = `). Passthrough is what makes that import cheap to run.
->
-> **The seam already exists.** `src/docs/export/details-strategy.ts` has one member and one decision
-> function; a transform is a second member plus a branch in the serialiser, which works on the rendered DOM,
-> so nothing about the single `markdown-it` instance or its cache is involved. `test/export.spec.ts` holds
-> the shared fixture the transforms have to answer for — a nested block, a group-label block with no value,
-> a link inside a block, and a value that itself contains ` = ` (the trap that makes C parse-dependent).
-> `?details=` already 404s for anything not implemented, so adding a second value is additive.
-
-**Plan.**
-
-- **Import one passthrough zip into a scratch space** and answer four questions: does the block survive at
-  all, is the 317-setting document usable, does each setting have an anchor, and does search find a setting
-  name. Also check the page size the importer accepts — the largest current page is 50 kB of HTML.
-- **Record the answer in this entry**, so the next attempt does not re-run the experiment.
-- **If passthrough survives**, drop the *provisional* wording from the README's Confluence section and note
-  in `CHANGELOG.md` what the import actually does with the block.
-- **Otherwise implement exactly one transform** as a second `DetailsStrategy`, against the fixture that is
-  already in `test/export.spec.ts`. Accept both values on `?details=` while the comparison is open, then
-  default to the winner and delete the loser — a query parameter is not a configuration mechanism and must
-  not outlive the comparison.
-- **Re-check the assignment and metadata tables** in whichever representation wins: `.prose table` does not
-  travel, so a table that relied on the browser's horizontal scroll may need different markup.
+**Nothing is currently scheduled.** Every idea below is deliberately unscheduled: picking one up means
+promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling its rationale
+against what is true at that point rather than copying it across.
 
 ## Standing decisions
 
-Decisions that are not work items but constrain the work items below, recorded so the next iteration does
-not relitigate them.
+Decisions that are not work items but constrain the ideas below, recorded so the next iteration does not
+relitigate them.
 
 ### Export entry points live on the tenant picker
 
@@ -186,11 +43,106 @@ one place to look per tenant instead of a control repeated on every page.
 
 **What any new entry point has to keep.** A plain anchor with `download` and no client-side JavaScript; the
 route shape `/:tenant/_export/<format>` behind the `_export` representation prefix, declared before the
-document catch-all; the one-way/provisional caveat rendered next to the link rather than only in the README;
+document catch-all; the one-way caveat rendered next to the link rather than only in the README;
 no anchor nested inside another anchor (the picker card is a wrapper element for exactly this reason); and a
 dark-mode variant plus a visible `:focus-visible` outline.
 
 ## Parked ideas
+
+### Idea: Per-document identity on the article
+
+Put `data-family` and `data-type` on `<article>` so the stylesheet can treat a group, a credential and a
+settings-catalog policy differently — a credential document leading with its expiry, a `record` document
+dropping the assignment vocabulary it never uses, `[data-family="group"] [data-section="properties"]`
+differing from the same section on a policy. **Parked** because no reader has asked to tell the families
+apart, and the attribute is worthless until per-family CSS exists, so it would ship as decoration.
+**Revisit** when a concrete per-family styling need appears; then add the attribute and the CSS together.
+
+What is settled if it is picked up: `data-type` is free (the document's own directory), while `data-family`
+cannot come from the index or the frontmatter — `IndexResource` has no family or prompt-template field and the
+frontmatter carries only `source` and `generatedAt`. The carrier is the document's **own H2 set**, which
+partitions the 414 reference documents cleanly: 333 *References | Lifecycle and operations | Security |
+Settings* (the `default`/`singleton` contract, indistinguishable from each other by headings alone), 36
+`group`, 25 `referenced`, 6 `record`, 4 `credential`, 0 `arm`. Ignore the spliced `Targeted by` / `Used by`
+headings, emit nothing when the set matches no contract, never infer the family from the resource type, and
+take the headings from `markdown-it`'s tokens the way `section-hooks.ts` does — at least one document has a
+`##` line inside a fenced code block, which a line-based regex would miscount.
+
+### Idea: An actionable findings block
+
+Let a reader of the tenant landing page narrow the findings table to a severity and get from a finding to the
+documents it affects. **Parked** because the table is 15 rows in the largest reference export — short enough
+to read whole — so filtering it buys little, and the `Documents` column already links to every document a row
+names, which leaves the inert `Affected` count as the only real gap. **Revisit** when a summary carries enough
+findings that the table stops being readable in one pass.
+
+What is settled if it is picked up: the hooks exist (`src/docs/findings-table.ts` tags the table `.findings`
+and puts `data-severity` on each body row and severity cell, with lowercase severity ids), and the filter is
+expressible **without JavaScript** — renderer-emitted sibling anchors plus `:target`, e.g.
+`#sev-critical:target ~ .findings tbody tr:not([data-severity="critical"]) { display: none }`. That requires
+the anchors to be siblings of the table, so a wrapper is a prerequisite, and it spends the URL fragment that
+already belongs to `#findings`, so a **Show all** reset is part of the feature rather than a refinement. One
+caveat: `.prose table` sets `white-space: nowrap` so wide assignment tables scroll instead of wrapping
+mid-GUID, and any prose-bearing table needs an opt-out from it.
+
+### Idea: Summary table of contents
+
+A jump list on the tenant landing page so a reader can go straight to the part of the summary they came for.
+**Parked** because the summary is four H2s and two H3s long — a table of contents for six anchors competes
+with the document it indexes for the top of the page. **Revisit** if the summary contract grows, or if readers
+report scrolling past the management summary to reach the caveats.
+
+What is settled if it is picked up: the four H2s are a declared CLI-side contract with stable slugs
+(`#management-summary`, `#at-a-glance`, `#assignment-posture`, `#coverage-caveats`) plus the `#findings` and
+`#recommendations` H3s, all verified present in both reference exports and all emitted as ids by
+`markdown-it-anchor`, so the list is hard-codeable with no renderer change. Skip entries whose heading is
+absent so an older summary degrades to a shorter list, and omit it entirely in the index-listing branch where
+there is no summary at all.
+
+### Idea: A name filter and per-item context in the sidebar
+
+Narrow the sidebar by part of a name (a server-side query parameter, composing with the shipped taxonomy
+filters rather than replacing them), and give each tree item the context the listing fallback already shows.
+**Parked** because the taxonomy filters cut the 263-item tree to a workable size along the axes that matter,
+which was the pressing half of the problem, and because a name filter without a text input is an awkward thing
+to offer — no client-side JavaScript means no type-ahead. **Revisit** if narrowing by axis proves
+insufficient, or alongside the search idea below, which subsumes it.
+
+What is settled if it is picked up: **badges are available today** — `assignments` (231 of 263), `scope` (93),
+`platforms` (73), `odataType` (137), plus the facet memberships the filter already renders. The per-item
+**summary is not**: it is present on **0 of 263** and **0 of 148** resources, because `GenerateIndex` reads it
+from each document's frontmatter and generated documents write only `source` and `generatedAt`. The index
+schema and the CLI plumbing are both correct, so that half is gated on a documentation **regeneration** whose
+template emits `summary:`, not on a change here — build it to render no second line when the field is absent
+and it lights up on its own. Remembering which sections were open across navigations stays **excluded on
+purpose**: that needs client-side state.
+
+### Idea: Structure the sidebar by a taxonomy axis instead of by resource type
+
+Let a reader reach a document by what it *is* — a Windows policy, a device-scoped configuration — rather than
+by the Azure/Graph type that happens to implement it, so "how are Macs hardened" does not require knowing the
+answer is spread over `deviceConfigurations`, `deviceManagementConfigurationPolicies` and
+`deviceShellScripts`. Filtering narrows the tree; this would replace its *structure*, which filtering
+deliberately leaves alone. **Parked** because the shipped axis filters already answer the same question from
+the other direction — selecting *Platform: macOS* yields exactly that reading list — so a second structure
+would be a large change to the navigation for a smaller marginal gain. **Revisit** if readers keep reaching
+for the filter as a substitute for structure, or once an axis exists dense enough to carry a spine on its own.
+
+What is settled if it is picked up. **The spine is a facet axis, not the model's grouping fields**: v3
+`index.yaml` carries the header `facets` registry and per-resource `facets` (`axis id → value ids`), and both
+exports declare `programme`, `platform` and `scope` — curated, deterministic, id-bearing and ordered by the
+header, which is everything a tree spine needs, on exports that exist today. `platformGroup`/`functionGroup`
+stay badges: single-valued, label-only, and empty in both exports. There is no `function` axis, so a
+function-shaped spine needs an operator-authored axis in the CLI config or `functionGroup` — not
+classification here. **An axis is not a partition**: 55 of 263 resources hold several `programme` values, so
+some appear under more than one group (show them in each and say so; picking a "primary" value is a judgement
+this project may not make), and axes are sparse — 63 of 263 carry no `platform`, 170 no `scope` — so the
+uncategorised group is **always rendered**. **The grouping must not be derived here**: `confluence.ts` is a
+second consumer of the same index, and anything computed inside `buildNavigation()` is invisible to it, so an
+exported space would silently group differently from the browser — which also means the export's own grouping
+has to be decided explicitly rather than left to drift. What is cheap: hrefs come from the index `doc` field,
+so **restructuring changes no URLs**, and `sidebar.hbs` renders sections purely from data, making the spine a
+data change plus one nesting level; the choice belongs in the URL as a query parameter, never a widget.
 
 ### Idea: Search across a tenant's documents
 
@@ -198,7 +150,8 @@ Full-text search, or filtering by resource type and name, over everything a tena
 resource tree). **Parked** because it is the largest single feature on this list and cannot be done well
 without an index and, realistically, client-side interaction — and no client-side JavaScript is a
 non-negotiable. **Revisit** when the corpus is large enough that the sidebar tree stops being navigable even
-with the planned filter, or if a server-rendered query page turns out to be enough.
+with the shipped taxonomy filters, or if a server-rendered query page turns out to be enough. It subsumes the
+name filter in the sidebar idea above.
 
 ### Idea: Syntax highlighting inside documents
 
@@ -214,14 +167,6 @@ Discovery walks up to 3 levels, but routing uses a single `:tenant` segment, so 
 folders are addressable. **Parked** because nested tenants would need a different route shape, which
 interacts with every `_`-prefixed representation prefix. **Revisit** the first time a real export tree nests
 tenants under a grouping folder.
-
-### Idea: Group-driven navigation
-
-`docs/index.yaml` can carry `platformGroup`/`functionGroup` per resource, so the landing page and sidebar
-tree could become platform → function instead of grouping by resource type. **Parked** because the documents
-do not write those fields — the CLI generation template's required frontmatter does not ask for them — so
-there is nothing to group by. **Revisit** when the template requires both fields and a regenerated export
-carries them.
 
 ### Idea: Explicit dark-mode toggle
 
@@ -292,6 +237,25 @@ a read-only browser that stores no state. **Revisit** once one-way HTML publishi
 re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
+
+### Idea: Tenant diff
+
+*As an administrator I would like to diff the configuration of two tenants, so I can detect and understand
+drift.* Two use cases: **a)** diff a staging tenant against production, so a reviewed change can be moved
+from stage to prod quickly and nothing else moves with it; **b)** compare configuration *and* documentation
+across several tenants and see what the differences actually mean, not just that bytes differ. The pairing
+key already exists — every export uses the same `<type>/<name>` layout under `docs/` and `resources/`, and
+`docs/index.yaml` gives per-tenant type, scope and counts without walking the tree — so a first version could
+be a three-way listing (only in A, only in B, in both but different) over the index, refined to a per-document
+comparison. **Parked** because it is a comparison *engine*, not a view: identity does not survive across
+tenants (GUIDs, assignment group ids and display names all differ, so equal configuration reads as different
+and the interesting drift hides in the noise), a readable diff of a 317-setting document needs interaction
+the no-client-side-JavaScript rule forbids, every route today is scoped to one `:tenant`, and it is not
+settled whether the comparison belongs here at all rather than in the CLI, which holds the facts
+(`resources/metadata.yaml`, the per-resource hashes) that make a semantic diff cheap. **Revisit** when a
+stage/prod tenant pair is actually exported side by side into one docs root, and once there is an answer for
+cross-tenant identity — a normalisation of tenant-local ids that can be stated and tested, not guessed per
+resource type.
 
 ### Idea: Further export formats and partial exports
 

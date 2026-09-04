@@ -10,6 +10,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The sidebar can be filtered along every taxonomy axis the CLI resolves, combining them, with counts that
+  react to the selection.** `docs generate-index` with a `taxonomy:` section classifies each resource on one
+  or more **axes** — *Programme* (CIS hardening, Defender, VPN…), *Platform*, *Assignment scope*, whatever the
+  operator declares — and writes a header `facets` registry (axes and values in display order, with per-tenant
+  counts) plus a per-resource `facets` map of value ids into `docs/index.yaml` (schema version 3). Every page
+  that renders the sidebar now offers one chip group per axis, headed by **the axis label from the index**, and
+  accepts **one repeatable query parameter per axis id** — `?programme=defender&programme=vpn&platform=macos` —
+  narrowing the tree server-side with **OR within an axis and AND across axes**. The whole selection rides
+  along in every document link and in every chip link, so a click toggles exactly one value and never drops
+  another axis, and a **Clear filters** reset plus a *showing N of M* line state what is currently applied.
+  **No client-side JavaScript**: the filter is a set of query parameters and links, not a widget. The
+  implementation is **axis-agnostic** — no axis is named anywhere in the code or the templates — so an axis
+  added to the CLI's config appears here with no change, and membership is **read, never derived**, because
+  deriving it here would let the browser and the Confluence export (a second consumer of the same index)
+  disagree.
+
+  What the design protects: each axis offers **`_uncategorised`**, listing what that axis matched to nothing,
+  so a taxonomy that stops matching appears as a full bucket instead of a quietly thinning tree; **counts are
+  computed against the current selection with the axis's own choice removed**, so picking one value does not
+  drive its siblings to zero; a value that **another** filter has emptied is **no longer offered** (it is a
+  dead end), while a **selected** value stays visible even at zero so the choice that emptied the tree can be
+  undone, and an **unfiltered zero-count value stays listed** because "empty in this tenant" is information the
+  registry carries on purpose; totals **count distinct resources** and never sum the value counts, which are
+  non-additive since a resource can hold several values on one axis; the **document you are viewing is always
+  kept in its own sidebar** even when the filter excludes it, is deliberately **not counted** into the
+  selection, and is **marked as being outside the filter** with the count line saying so, so the tree being one
+  row longer than the count is explained rather than left to be reconciled; **unknown values and unknown axes
+  are ignored** instead of rendering what would look like an empty tenant; an axis whose id would collide with
+  a route's own parameter (`?raw`) is not offered; and an
+  index with **no taxonomy is unfilterable**, rendering exactly the per-type tree it did before. A **version-2
+  index** (`programmes` + per-resource `groups`, no `facets`) keeps working: its single programme axis is
+  synthesised from those fields, so old exports on disk need no regeneration. Resources carry their membership
+  labels as badges in the index listing, resolved from the header, so membership is visible from a resource and
+  not only from the chooser. Grouping *by* an axis — replacing the per-type tree — is deliberately not part of
+  this, see [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+
 - **A tenant's documentation can be exported as Confluence HTML.**
   `GET /:tenant/_export/confluence` streams one zip containing one folder, which is what Confluence's
   HTML import expects: the folder name (`<tenant domain> documentation`) becomes the space name, and
@@ -46,12 +82,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries carry the export's own `generatedAt` rather than the wall clock, so re-exporting an
   unchanged tenant produces the same bytes.
 
-  **Provisional and one-way**, as the README says: importing creates a space rather than updating one,
-  so re-importing yields a second space and edits made in Confluence are lost. The `<details>` blocks
-  that are the bulk of the documentation are passed through untouched, because Confluence's import FAQ
-  neither lists them as preserved nor says what it does with them and no instance was available to
-  settle it; the alternatives, and the media and per-format follow-ups, are in `NEXT-ITERATIONS.md`.
-  New dependencies: `htmlparser2` for the serialisation pass and `yazl` for the streamed zip.
+  **One-way**, as the README says: importing creates a space rather than updating one, so re-importing
+  yields a second space and edits made in Confluence are lost. The `<details>` settings blocks that are
+  the bulk of the documentation are passed through untouched, and a real Confluence Cloud import
+  confirms that this is the right representation: the importer turns each block into a **native
+  collapsible expand**, keeping its `path: value` summary, its nesting and its inline formatting — so
+  the block is now on the serialiser's allowlist as a settled decision rather than a probe, no summary
+  is ever parsed into key/value (a value containing ` = ` cannot be mangled), and the `?details=`
+  strategy switch that existed only to compare alternatives is gone with it. The media and per-format
+  follow-ups remain in `NEXT-ITERATIONS.md`. New dependencies: `htmlparser2` for the serialisation pass
+  and `yazl` for the streamed zip.
 
 - **The tenant summary's Findings table is styled as a findings list, with the severity as an icon.**
   A markdown-it core rule tags any table whose first header cell is `Severity` with `class="findings"`
@@ -235,7 +275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs generate-index` run for it is not discovered. The tenant-discovery invariants are preserved:
   a matched tenant still owns its whole subtree, `_`/`.`-prefixed directories are still skipped, depth
   is still bounded, and counts are still derived from the index rather than by walking the tree. A
-  malformed or non-`version: 1` index makes the folder *not a tenant* instead of crashing discovery.
+  malformed or unreadable index makes the folder *not a tenant* instead of crashing discovery.
 
 - **Heading anchors are no longer percent-encoded.** `markdown-it-anchor`'s default slug encodes
   anything outside its allowed set, which produced ids only selectable as
@@ -292,6 +332,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would make it worth doing. Entries are self-contained and get deleted once delivered, so numbering
   shifts — nothing outside the file references a section number. No behaviour, route or dependency
   changed.
+
+### Fixed
+
+- **Tenants written by a current CLI are discovered again: the index schema gate accepts `version >= 1`.**
+  `docs generate-index` bumped `docs/index.yaml` to `version: 2` when it added per-resource `groups` and the
+  header `programmes`/`vocabularies`. `parseTenantIndex()` required exactly `1`, and the index is *also* the
+  tenant marker — so every real export vanished from the picker and every document route 404ed, an outright
+  disappearance rather than a degradation (`DOCS_ROOT=../output` reported `{"tenants":0}`). Any integer
+  version `>= 1` now parses, the value is carried on `TenantIndex` instead of being hard-coded, and unknown
+  fields are ignored as they always were — which is what makes the CLI's additive bump additive in practice.
+  A non-integer version, a version below 1 and a malformed file are still rejected, so such a folder is still
+  *not a tenant* and discovery still cannot crash on one.
 
 ## [RC1]
 

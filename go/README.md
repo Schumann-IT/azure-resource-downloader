@@ -852,6 +852,51 @@ pending. Excluded bulk types (unreferenced groups, autopilot device identities)
 are reported as counts only, never listed. Run it **after** a documentation pass
 so the newly written summaries and grouping are picked up.
 
+The header also carries the closed grouping **`vocabularies`** — the ordered
+`platform` and `function` group names, straight from the tool's built-in
+constants — so a consumer orders navigation from the data rather than from a
+copy that would drift. Those same constants are rendered into every type's
+`doc-prompt.md` as a `<!-- doc-groups: platform=… | function=… -->` marker, and
+the documentation pass has the model choose one `platformGroup` and one
+`functionGroup` per document from that closed set (`n/a` where an axis does not
+apply). Inventory/registry record types (Autopilot device identities, device
+categories, connectors) carry no marker and are left ungrouped on these axes.
+
+### Classifying resources into facet axes (`taxonomy:`)
+
+Define a **`taxonomy:`** section in a config file (loaded with `--config`) to
+classify each resource along one or more **axes** — independent facets like
+*Programme* (real-world initiatives such as *CIS L1 hardening* or *Defender*) or
+*Platform* (*Windows*, *macOS*, *iOS*) that span several resource types. It is a
+config section like `filters:` and `transformers:` (there is no CLI flag): each
+axis has an id, a label and an ordered list of **values**, and each value is a
+curated set of rules over facts the export already carries (`name` as a regex
+over the display name, `type`, `odataType`, `platforms`, `scope`). A value
+matches a resource if **any** of its rules matches, and within a rule every
+field must match. The result is emitted two ways:
+
+- Each resource gains a **`facets`** map (`axis id → matched value ids`,
+  many-to-many). Value ids only; labels are resolved from the header.
+- The header gains a **`facets`** registry: every axis in display order, each
+  with its values and a per-tenant match `count` — zero-count values are kept,
+  since "this value matched nothing here" is itself information.
+
+The **`programmes:`** key is accepted as sugar for the axis with id
+`programme`; defining both `programmes:` and an explicit `programme` axis is a
+fatal error. The sugar is purely an ergonomic way to write the common single
+axis — the resulting `programme` axis is emitted through `facets` like any
+other, with no special weight.
+
+Classification is resolved once, here in the CLI, so every consumer (the browser
+and the Confluence export) reads the same fields. It records rules, never facts,
+so editing it never requires re-downloading a tenant — change it and re-run
+`generate-index`. With no `taxonomy:` section, no facets are emitted and the
+index falls back to per-type grouping. Resources matching no value on an axis
+are reported as **uncategorised** for that axis, so a taxonomy that quietly
+stops matching is visible. See the commented **Taxonomy** section in
+[`config.example.yaml`](config.example.yaml) for the full schema and a worked
+example.
+
 ```bash
 # Resolve the tenant via az login, then write docs/index.yaml
 azure-rd docs generate-index
@@ -861,6 +906,9 @@ azure-rd docs generate-index --domain contoso.onmicrosoft.com
 
 # Preview what the index would contain without writing it
 azure-rd docs generate-index --domain contoso.onmicrosoft.com --dry-run
+
+# Classify resources into facet axes: load a config with a taxonomy: section
+azure-rd docs generate-index --config azure-rd.yaml
 ```
 
 ## 🎯 Supported Resource Types

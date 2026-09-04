@@ -126,6 +126,12 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 		t.Errorf("buildResourceFilters() from config.example.yaml = %+v, want none (filters must stay commented out)", got)
 	}
 
+	// The taxonomy section changes docs/index.yaml when active, so it must stay
+	// commented out in the example to preserve the no-op guarantee.
+	if viper.IsSet("taxonomy") {
+		t.Errorf("config.example.yaml sets 'taxonomy' = %v, want unset (taxonomy must stay commented out)", viper.Get("taxonomy"))
+	}
+
 	// The transform-config hash written to resources/metadata.yaml must be
 	// byte-for-byte identical, or a run loading the example would report every
 	// resource as changed even though the output bytes are unchanged.

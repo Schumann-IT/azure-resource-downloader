@@ -1,5 +1,4 @@
 import { Parser } from 'htmlparser2';
-import { DetailsStrategy, detailsTagAction } from './details-strategy';
 
 // Re-serialises rendered document HTML into what Confluence's HTML import
 // preserves. One pass over the HTML the browser already renders — the exporter
@@ -23,7 +22,6 @@ export interface ExportHtmlOptions {
   tenant: string;
   // Extensionless document path -> page file name within the space folder.
   pageFileByDoc: Map<string, string>;
-  details: DetailsStrategy;
 }
 
 // Elements the importer preserves, with the attributes worth carrying. Anything
@@ -65,6 +63,12 @@ const KEEP: Record<string, string[]> = {
   th: ['colspan', 'rowspan'],
   td: ['colspan', 'rowspan'],
   a: ['href', 'title'],
+  // Verified against a Confluence Cloud import: the importer turns each block
+  // into a native collapsible expand, nesting and summary text intact. Passing
+  // it through is therefore the representation, not a probe — do not unwrap or
+  // flatten these, they are the documentation.
+  details: [],
+  summary: [],
 };
 
 // HTML the importer does not preserve but whose text content is documentation:
@@ -210,13 +214,9 @@ export function toConfluenceHtml(
 ): string {
   const out: string[] = [];
   const stack: Frame[] = [];
-  const detailsAction = detailsTagAction(options.details);
   let dropDepth = 0;
 
   const verdictFor = (name: string): Verdict => {
-    if (name === 'details' || name === 'summary') {
-      return detailsAction === 'keep' ? 'keep' : 'unwrap';
-    }
     if (name in KEEP) return 'keep';
     if (UNWRAP.has(name)) return 'unwrap';
     if (DROP.has(name)) return 'drop';

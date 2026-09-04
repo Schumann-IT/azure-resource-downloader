@@ -199,6 +199,215 @@ func TestGenerateIndexBucketsAndEnrichment(t *testing.T) {
 	}
 }
 
+func TestGenerateIndexWithTaxonomy(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	tax := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+			{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+			{ID: "empty-prog", Label: "Never matches", Match: []TaxonomyRule{{Name: "zzzznomatch"}}},
+		},
+	}
+
+	res, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: tax})
+	if err != nil {
+		t.Fatalf("GenerateIndex: %v", err)
+	}
+	// The pending policy (no platforms) matches nothing on the programme axis.
+	if res.Uncategorised[programmeAxisID] != 1 {
+		t.Errorf("uncategorised[programme] = %d, want 1", res.Uncategorised[programmeAxisID])
+	}
+	// With only the programme axis, "no value on that axis" is also "no value on
+	// any axis", so the pending policy is the single fully-uncategorised resource.
+	if res.FullyUncategorised != 1 {
+		t.Errorf("fullyUncategorised = %d, want 1", res.FullyUncategorised)
+	}
+
+	idx := loadIndex(t, res.OutPath)
+
+	// Vocabularies are always emitted from the model constants, in order.
+	if len(idx.Vocabularies.Platform) != len(models.PlatformGroups) || idx.Vocabularies.Platform[0] != models.PlatformGroups[0] {
+		t.Errorf("platform vocabulary = %v, want %v", idx.Vocabularies.Platform, models.PlatformGroups)
+	}
+	if len(idx.Vocabularies.Function) != len(models.FunctionGroups) {
+		t.Errorf("function vocabulary length = %d, want %d", len(idx.Vocabularies.Function), len(models.FunctionGroups))
+	}
+
+	// The programme axis is emitted in the facets header as a single axis whose
+	// values are the full registry in display order, zero-count value kept.
+	if len(idx.Facets) != 1 || idx.Facets[0].ID != programmeAxisID {
+		t.Fatalf("facets = %+v, want a single programme axis", idx.Facets)
+	}
+	wantVals := []IndexFacetValue{
+		{ID: "windows-device", Label: "Windows device config", Count: 1},
+		{ID: "groups", Label: "Assignment groups", Count: 1},
+		{ID: "empty-prog", Label: "Never matches", Count: 0},
+	}
+	if len(idx.Facets[0].Values) != len(wantVals) {
+		t.Fatalf("facet values = %+v, want %+v", idx.Facets[0].Values, wantVals)
+	}
+	for i, w := range wantVals {
+		if idx.Facets[0].Values[i] != w {
+			t.Errorf("facet value[%d] = %+v, want %+v", i, idx.Facets[0].Values[i], w)
+		}
+	}
+
+	// The documented Windows device policy's per-resource facets map carries the
+	// programme axis, value id only.
+	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
+	if doc == nil {
+		t.Fatal("documented policy missing from index")
+	}
+	if got := doc.Facets[programmeAxisID]; len(got) != 1 || got[0] != "windows-device" {
+		t.Errorf("policy facets[programme] = %v, want [windows-device]", doc.Facets[programmeAxisID])
+	}
+
+	// The referenced group is classified into the groups programme.
+	grp := resourceByDoc(idx, "Microsoft.Graph/groups/g1.md")
+	if grp == nil {
+		t.Fatal("referenced group missing from index")
+	}
+	if got := grp.Facets[programmeAxisID]; len(got) != 1 || got[0] != "groups" {
+		t.Errorf("group facets[programme] = %v, want [groups]", got)
+	}
+
+	// The pending policy matched nothing, so it carries no facets at all.
+	pend := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_u_win_pending.md")
+	if pend == nil {
+		t.Fatal("pending policy missing from index")
+	}
+	if len(pend.Facets) != 0 {
+		t.Errorf("pending facets = %+v, want none", pend.Facets)
+	}
+}
+
+func TestGenerateIndexMultiAxis(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	tax := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+		},
+		Axes: []TaxonomyAxis{
+			{
+				ID: "platform", Label: "Platform",
+				Values: []TaxonomyValue{
+					{ID: "windows", Label: "Windows", Match: []TaxonomyRule{{Platforms: "windows"}}},
+					{ID: "macos", Label: "macOS", Match: []TaxonomyRule{{Platforms: "macos"}}},
+				},
+			},
+		},
+	}
+
+	res, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: tax})
+	if err != nil {
+		t.Fatalf("GenerateIndex: %v", err)
+	}
+	idx := loadIndex(t, res.OutPath)
+
+	// Two axes in config order: the programmes sugar first, then platform.
+	if len(idx.Facets) != 2 || idx.Facets[0].ID != programmeAxisID || idx.Facets[1].ID != "platform" {
+		t.Fatalf("facet axes = %+v, want [programme platform]", idx.Facets)
+	}
+
+	// The documented Windows policy is classified on both axes.
+	doc := resourceByDoc(idx, "Microsoft.Graph/deviceCompliancePolicies/gbl_c_prd_d_win_os.md")
+	if doc == nil {
+		t.Fatal("documented policy missing from index")
+	}
+	if got := doc.Facets[programmeAxisID]; len(got) != 1 || got[0] != "windows-device" {
+		t.Errorf("programme facet = %v, want [windows-device]", got)
+	}
+	if got := doc.Facets["platform"]; len(got) != 1 || got[0] != "windows" {
+		t.Errorf("platform facet = %v, want [windows]", got)
+	}
+
+	// The macos value matched nothing; its count is still emitted as zero.
+	var macos *IndexFacetValue
+	for i := range idx.Facets[1].Values {
+		if idx.Facets[1].Values[i].ID == "macos" {
+			macos = &idx.Facets[1].Values[i]
+		}
+	}
+	if macos == nil || macos.Count != 0 {
+		t.Errorf("macos facet value = %+v, want count 0", macos)
+	}
+
+	// Per-axis uncategorised: the two groups carry no platform, so the platform
+	// axis leaves resources uncategorised independently of the programme axis.
+	if res.Uncategorised["platform"] == 0 {
+		t.Error("expected some resources uncategorised on the platform axis")
+	}
+
+	// A fully-uncategorised resource is uncategorised on EVERY axis, so the
+	// count can never exceed any single axis's miss count — proving the headline
+	// is a distinct-resource figure, not the sum of the per-axis counts.
+	for _, ax := range []string{programmeAxisID, "platform"} {
+		if res.FullyUncategorised > res.Uncategorised[ax] {
+			t.Errorf("fullyUncategorised %d exceeds uncategorised[%s] %d", res.FullyUncategorised, ax, res.Uncategorised[ax])
+		}
+	}
+}
+
+// TestGenerateIndexProgrammeAliasIsNoOp asserts the alias is a no-op: a
+// programmes-only config produces the exact same index bytes as the equivalent
+// config expressed as a single explicit "programme" axis.
+func TestGenerateIndexProgrammeAliasIsNoOp(t *testing.T) {
+	progCfg := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+			{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+		},
+	}
+	axisCfg := &TaxonomyConfig{
+		Version: 1,
+		Axes: []TaxonomyAxis{
+			{ID: programmeAxisID, Label: "Programme", Values: []TaxonomyValue{
+				{ID: "windows-device", Label: "Windows device config", Match: []TaxonomyRule{{Platforms: "windows", Scope: "device"}}},
+				{ID: "groups", Label: "Assignment groups", Match: []TaxonomyRule{{Type: groupsType}}},
+			}},
+		},
+	}
+
+	render := func(tax *TaxonomyConfig) string {
+		dir := indexScenario(t)
+		res, err := GenerateIndex(GenerateIndexOptions{TenantDir: dir, Taxonomy: tax})
+		if err != nil {
+			t.Fatalf("GenerateIndex: %v", err)
+		}
+		b, err := os.ReadFile(res.OutPath)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		return string(b)
+	}
+
+	if render(progCfg) != render(axisCfg) {
+		t.Error("programmes sugar must produce the same index as an equivalent explicit programme axis")
+	}
+}
+
+func TestGenerateIndexInvalidTaxonomy(t *testing.T) {
+	tenantDir := indexScenario(t)
+
+	// Duplicate id is rejected by the compiler.
+	bad := &TaxonomyConfig{
+		Version: 1,
+		Programmes: []TaxonomyProgramme{
+			{ID: "a", Label: "A", Match: []TaxonomyRule{{Name: "x"}}},
+			{ID: "a", Label: "B", Match: []TaxonomyRule{{Name: "y"}}},
+		},
+	}
+
+	if _, err := GenerateIndex(GenerateIndexOptions{TenantDir: tenantDir, Taxonomy: bad}); err == nil {
+		t.Fatal("expected GenerateIndex to fail on an invalid taxonomy")
+	}
+}
+
 func TestGenerateIndexDeterministicAndDryRun(t *testing.T) {
 	tenantDir := indexScenario(t)
 

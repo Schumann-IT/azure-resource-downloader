@@ -96,6 +96,11 @@ type WorkItem struct {
 	// UsedBySha256 is the reverse hash for a notification template's "Used by"
 	// block. It is set only for notificationMessageTemplates; blank otherwise.
 	UsedBySha256 string
+	// TargetedBySha256 is the reverse hash for a group's "Targeted by" block.
+	// It is set only for referenced groups; blank otherwise. The orchestrator
+	// (not the generation agent) builds the block and writes this hash during
+	// the section-5 splice, so it is carried on the work-list row, not the chunk.
+	TargetedBySha256 string
 }
 
 // RespliceItem is one document whose marked block must be re-rendered even
@@ -298,6 +303,14 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 			if rtype == notificationMessageTemplatesType {
 				item.UsedBySha256 = usedBySha256(usedBy[entry.ResourceId])
 			}
+			// Groups carry the reverse hash for their "Targeted by" block, which
+			// the orchestrator builds during the section-5 splice (the generation
+			// agent never sees it). Carrying it on the work-list row is what lets a
+			// freshly generated group document get its reverse block and hash in
+			// the same run, instead of re-splicing for ever.
+			if rtype == groupsType {
+				item.TargetedBySha256 = targetedBySha256(targetedBy[entry.ResourceId], filters)
+			}
 			res.ToGenerate = append(res.ToGenerate, item)
 			continue
 		}
@@ -404,6 +417,7 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		{"usedbymap", renderUsedByMap(&m, usedBy)},
 		{"resplice", renderResplice(res.ForwardResplice, res.ReverseResplice, res.UsedByResplice, res.NotificationsResplice)},
 		{"migrate", renderMigrate(res.Migrate)},
+		{"expected", renderExpected(res.ToGenerate)},
 		{"summary-facts", renderSummaryFacts(&m, groups)},
 	}
 	for _, b := range blocks {

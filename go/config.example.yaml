@@ -258,3 +258,107 @@ transformers:
 #   # anchor a regex for an exact prefix on storage accounts
 #   Microsoft.Storage/storageAccounts:
 #     name: "^prod"
+
+# ---------------------------------------------------------------------------
+# Taxonomy — grouping for 'docs generate-index' (config-only; there is no CLI flag)
+# ---------------------------------------------------------------------------
+# Classifies each exported resource along one or more AXES — independent facets
+# such as PROGRAMME (real-world initiatives: CIS hardening, Defender, VPN, update
+# rings) or PLATFORM (Windows, macOS, iOS) that span several resource types and
+# are otherwise invisible in the per-endpoint layout. It is read ONLY by
+# 'docs generate-index', which writes the classification into docs/index.yaml:
+# the header gains a 'facets' registry (every axis, its values and per-tenant
+# counts) and each resource gains a 'facets' map (axis id -> matched value ids).
+# The download pipeline ignores it entirely, so it never affects a resource's
+# YAML or any recorded fact.
+#
+# It records RULES, never facts, so editing it never requires re-downloading a
+# tenant: change it and re-run 'docs generate-index' — the classification
+# updates in place. Resources matching no value on an axis are reported as
+# "uncategorised" for that axis.
+#
+# The default is NO taxonomy: with this key absent, generate-index emits no
+# facets and falls back to per-type grouping. Leave it commented out — an active
+# taxonomy changes docs/index.yaml, so spelling it out here would break the
+# "loading this file == no config" guarantee.
+#
+# Structure (an axis has an id, a label and a list of values; each value has the
+# same id/label/match shape a programme has):
+#   taxonomy:
+#     version: 1                     # schema version, must be >= 1
+#     axes:                          # listed in DISPLAY ORDER
+#       - id: <url-safe-token>       # stable axis id (lowercase, digits, hyphens)
+#         label: <display name>      # human-readable axis name; safe to change
+#         values:                    # listed in DISPLAY ORDER
+#           - id: <url-safe-token>   # stable value id; NEVER reuse or rename it
+#                                    # — it is a facet value in a URL
+#             label: <display name>  # human-readable; safe to change any time
+#             match:                 # a resource joins if ANY rule matches (OR);
+#                                    # within a rule every set field matches (AND);
+#                                    # each rule needs at least one field
+#               - name: <regex>      # regex over displayName (case-insensitive)
+#                 type: <exact type> # exact type, e.g. Microsoft.Graph/mobileApps
+#                 odataType: <regex> # regex over @odata.type (case-insensitive)
+#                 platforms: <regex> # regex over the platforms fact (case-insensitive)
+#                 scope: device|user # exact device/user scope
+#
+# 'programmes:' is accepted as sugar for the axis with id 'programme' (its items
+# become that axis's values). Defining BOTH 'programmes:' and an 'axes:' entry
+# whose id is 'programme' is a fatal error, not a silent merge.
+#
+# Worked example (regexes single-quoted so \b, \d stay literal for the regex
+# engine rather than being interpreted by YAML). The 'programme' axis is written
+# with the programmes: sugar; a second 'platform' axis is spelled out under
+# axes: to show multi-axis classification:
+#
+# taxonomy:
+#   version: 1
+#   programmes:                # -> the axis with id 'programme'
+#     - id: cis-hardening
+#       label: CIS hardening
+#       match:
+#         - name: '_cis_'
+#         - name: '[_-]l1$'
+#     - id: compliance
+#       label: Compliance
+#       match:
+#         - name: 'validation'
+#         - type: Microsoft.Graph/deviceCompliancePolicies
+#     - id: defender
+#       label: Defender / MDE
+#       match:
+#         - name: '(?:mde|defender|\bngp\b|\basr\b)'
+#     - id: vpn
+#       label: VPN
+#       match:
+#         - name: 'vpn'
+#     - id: windows-update
+#       label: Windows Update
+#       match:
+#         - name: '(?:updatering|windows-update)'
+#         - type: Microsoft.Graph/windowsFeatureUpdateProfiles
+#     - id: identity-access
+#       label: Identity & conditional access
+#       match:
+#         - type: Microsoft.Graph/conditionalAccessPolicies
+#         - name: '(?:\bca\d{2}|\bmfa\b|2fa|passwordless|whfb)'
+#     - id: app-delivery
+#       label: App delivery
+#       match:
+#         - type: Microsoft.Graph/mobileApps
+#   axes:
+#     - id: platform
+#       label: Platform
+#       values:
+#         - id: windows
+#           label: Windows
+#           match:
+#             - platforms: 'windows'
+#         - id: macos
+#           label: macOS
+#           match:
+#             - platforms: 'macOS'
+#         - id: ios
+#           label: iOS/iPadOS
+#           match:
+#             - platforms: '(?:ios|ipados)'

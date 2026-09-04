@@ -5,9 +5,15 @@ import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { resolveResource, resolveWithinTenant } from './path-safety';
-import { buildNavigation, TenantIndex } from './tenant-index';
+import {
+  buildFacetFilters,
+  buildNavigation,
+  countMatching,
+  hasSelection,
+  parseFacetSelection,
+  TenantIndex,
+} from './tenant-index';
 import { ExportService } from './export/export.service';
-import { parseDetailsStrategy } from './export/details-strategy';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -63,6 +69,7 @@ export class DocsController {
   @Get(':tenant')
   async tenantIndex(
     @Param('tenant') tenant: string,
+    @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
@@ -87,7 +94,7 @@ export class DocsController {
       tenant,
       breadcrumb: [],
       summary,
-      nav: this.nav(info, index, ''),
+      nav: this.nav(info, index, '', `/${tenant}`, query),
     });
   }
 
@@ -99,7 +106,6 @@ export class DocsController {
   async export(
     @Param('tenant') tenant: string,
     @Param('format') format: string,
-    @Query('details') details: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
@@ -108,13 +114,10 @@ export class DocsController {
       return this.notFound(res, tenant, `${EXPORT_PREFIX}/${format}`);
     }
 
-    const strategy = parseDetailsStrategy(details);
-    if (!strategy) return this.notFound(res, tenant, `${EXPORT_PREFIX}/${format}`);
-
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, tenant, EXPORT_PREFIX);
 
-    await this.exporter.confluence(info, index, strategy, res);
+    await this.exporter.confluence(info, index, res);
   }
 
   // GET /:tenant/_resource/*path — the exported source YAML behind a document,
@@ -124,6 +127,7 @@ export class DocsController {
   async resource(
     @Param() params: any,
     @Query('raw') raw: string | undefined,
+    @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
     const tenant: string = params.tenant;
@@ -161,7 +165,15 @@ export class DocsController {
         lines: rendered.lines,
         size: rendered.size,
         views: this.views(tenant, docPath, 'resource'),
-        nav: index ? this.nav(info, index, docPath) : null,
+        nav: index
+          ? this.nav(
+              info,
+              index,
+              docPath,
+              `/${tenant}/${RESOURCE_PREFIX}/${docPath}`,
+              query,
+            )
+          : null,
       });
     } catch {
       this.notFound(res, tenant, relPath);
@@ -170,7 +182,11 @@ export class DocsController {
 
   // GET /:tenant/*path — a document within the tenant.
   @Get(':tenant/*path')
-  async doc(@Param() params: any, @Res() res: Response): Promise<void> {
+  async doc(
+    @Param() params: any,
+    @Query() query: Record<string, unknown>,
+    @Res() res: Response,
+  ): Promise<void> {
     const tenant: string = params.tenant;
     const relPath = joinPath(params.path ?? params['0'] ?? '');
 
@@ -210,7 +226,9 @@ export class DocsController {
           ? `/${tenant}/${RESOURCE_PREFIX}/${docPath}`
           : null,
         views: hasSource ? this.views(tenant, docPath, 'doc') : null,
-        nav: index ? this.nav(info, index, relPath) : null,
+        nav: index
+          ? this.nav(info, index, relPath, `/${tenant}/${docPath}`, query)
+          : null,
       });
     } catch {
       this.notFound(res, tenant, relPath);
@@ -218,12 +236,24 @@ export class DocsController {
   }
 
   // View model for the sidebar partial: the tenant metadata that used to sit on
-  // the landing page plus the navigation tree, so both survive on every page.
+  // the landing page, the facet filters and the navigation tree, so all three
+  // survive on every page. The selection is read from the query parameters named
+  // after the index's own axis ids, and values this index cannot serve are
+  // dropped rather than rendering an empty tree that would look like a broken
+  // tenant.
+  //
+  // `matched`/`total` count distinct resources and deliberately ignore the
+  // active-document exemption in `buildNavigation`, so the numbers describe the
+  // selection rather than the page.
   private nav(
     info: TenantInfo,
     index: TenantIndex,
     activeDoc: string,
+    basePath: string,
+    query: Record<string, unknown>,
   ): Record<string, unknown> {
+    const selection = parseFacetSelection(index, query);
+    const sections = buildNavigation(index, info.id, activeDoc, selection);
     return {
       tenant: info.id,
       name: info.name,
@@ -231,7 +261,16 @@ export class DocsController {
       counts: index.counts,
       complete: index.complete,
       incompleteReason: index.incompleteReason,
-      sections: buildNavigation(index, info.id, activeDoc),
+      facets: buildFacetFilters(index, basePath, selection),
+      filtering: hasSelection(selection),
+      matched: countMatching(index, selection),
+      total: index.resources.length,
+      clearHref: basePath,
+      // Whether the tree is one longer than `matched` because the document being
+      // viewed is exempt from the filter, so the view can say so instead of
+      // leaving the reader to reconcile the two.
+      exempt: sections.some((s) => s.items.some((i) => i.exempt)),
+      sections,
     };
   }
 
