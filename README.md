@@ -1,124 +1,141 @@
 # Azure Resource Downloader
 
-Export a Microsoft Azure / Entra tenant's configuration to clean YAML, turn it
-into readable AI-generated documentation, and browse it locally.
+Reproducible, AI-generated documentation of an **Entra ID / Intune tenant** — built from an export of the
+tenant's configuration, not from a live session.
 
-This is a monorepo with two projects:
+The problem it solves: an Intune tenant is hundreds of policies, profiles, apps, scripts and groups whose
+relationships (who is assigned what, which group a filter narrows, which template a compliance policy notifies
+through) exist only as GUIDs spread across dozens of Graph endpoints. This monorepo turns that into a browsable,
+Confluence-exportable set of documents that stays current as the tenant changes, without regenerating
+everything on every run.
 
-- **`go/`** — the `azure-rd` CLI. Downloads tenant resources, writes them as YAML
-  under `output/<tenant>/resources/`, and produces the prompts used to generate
-  the documentation.
-- **`web/`** — a read-only NestJS browser that renders the generated documentation.
+It is two independent projects plus one shared contract — the export tree on disk:
 
-The shared export tree lives at **`output/`** in the repo root: `go/` writes it,
-`web/` reads it.
+| Folder | Project | Purpose |
+|---|---|---|
+| [`go/`](go/README.md) | **`azure-rd`** — Go CLI | Exports the tenant's configuration as clean YAML, records facts about the export in `metadata.yaml`, and drives the AI documentation run: it decides *what* to (re)generate and emits the prompt an agent executes. Also builds the navigation index the browser reads. |
+| [`web/`](web/README.md) | **azure-rd-docs-web** — NestJS | Read-only browser for the generated documentation: tenant picker, per-document pages with the source YAML alongside, facet navigation, tenant summary, and a Confluence-importable export. Never calls Azure and never writes. |
+
+The two share nothing but the export tree. Each folder has its own README (the single source of truth for that
+project), `CHANGELOG.md`, `NEXT-ITERATIONS.md`, version line and git tags.
+
+## How the pieces fit
+
+```
+                azure-rd download                 azure-rd docs generate-prompt      AI agent
+ Entra / Intune ───────────────────▶ resources/ ────────────────────────────▶ docs/generate.md ──▶ docs/**/*.md
+ (delegated                          ├─ metadata.yaml   (facts)                (work list: what is           docs/summary.md
+  Graph + ARM)                       ├─ <type>/*.yaml                           missing or stale)            docs/report-*.md
+                                     └─ <type>/doc-prompt.md (per-type spec)
+                                                  │
+                                                  │  azure-rd docs generate-index
+                                                  ▼
+                                            docs/index.yaml  ─────────────▶  web/  (browser + Confluence export)
+```
+
+1. **Export.** `azure-rd download` signs in as *you* (delegated permissions only — no service principal), lists
+   every supported resource type, and writes one YAML per resource under `output/<tenant>/resources/`. The
+   output is deterministic (sorted keys, stable list order, collision-free file names), so an unchanged
+   resource produces identical bytes and an identical hash across runs. Alongside the YAML it writes
+   `metadata.yaml` — facts only: hashes, display names, `@odata.type`, assignment targets — and one
+   `doc-prompt.md` per type, the specification an AI must follow when documenting that type.
+2. **Decide what to document.** `azure-rd docs generate-prompt` compares `metadata.yaml` against the documents
+   already under `docs/` (each document records the hashes it was generated from in its frontmatter) and writes
+   `docs/generate.md`: a closed work list of exactly the documents that are missing or stale, plus the blocks
+   that must be re-rendered because something *they reference* changed (a group renamed, a policy re-targeted).
+   It runs offline and never touches `resources/`.
+3. **Generate.** Paste `docs/generate.md` into an AI agent session. The agent writes the documents, resolves
+   assignment GUIDs to group names in both directions, writes the tenant landing page `docs/summary.md` and a
+   run report `docs/report-<timestamp>.md`. Nothing else in the tree is written by the agent.
+4. **Index and browse.** `azure-rd docs generate-index` writes `docs/index.yaml` — the navigation index the
+   browser keys everything off, optionally classified along operator-defined facets (a `taxonomy:` in the
+   config file). Point `web/` at the output tree and open it; export to Confluence from the tenant picker.
+
+Re-running the whole loop after a tenant change regenerates only what actually moved.
 
 ## Prerequisites
 
-- Go 1.24+ and Node.js 20+
-- The Azure CLI (`az`)
-- An Entra app registration (client ID + tenant ID) for the Microsoft Graph
-  scopes the tool reads (delegated user auth only — no service principals)
+- **Go 1.24+** to build the CLI, **Node.js 20+** to run the browser.
+- **Azure CLI**, signed in with `az login` as a user who can read the tenant's Intune / Entra configuration.
+- **An Entra app registration** for device-code sign-in. Every Microsoft Graph resource type needs delegated
+  scopes the Azure CLI's first-party app cannot obtain (`DeviceManagementConfiguration.Read.All`,
+  `Policy.Read.All`, …), so a full export always requires one — `az login` alone covers only the three ARM
+  types. The Go README walks through creating it:
+  [Authentication → Create the app registration](go/README.md#create-the-app-registration).
+- An AI agent capable of running a multi-step, multi-file task (the prompt fans generation out to parallel
+  subagents and runs scripted verification passes).
 
-## Workflow
+## Quick start
 
-### 1. Sign in
+The output tree lives at the repo root by default (`output/`, gitignored). The CLI is run from `go/`, so point
+it one level up; the browser's default `DOCS_ROOT` already resolves to `../output`.
 
-```bash
-az login
-
-export AZURE_RD_CLIENT_ID="<app-registration-client-id>"
-export AZURE_RD_TENANT_ID="<tenant-id>"
-export AZURE_RD_OUTPUT="../output"   # shared export tree at the repo root
-```
-
-`az login` establishes the delegated user session. `AZURE_RD_CLIENT_ID` /
-`AZURE_RD_TENANT_ID` point the tool at the app registration used to obtain the
-Microsoft Graph scopes (device-code sign-in).
-
-### 2. Download the tenant
+**1. Export the tenant** (Graph types prompt for the app registration's client and tenant id on first use —
+pass `--client-id`/`--tenant-id` to skip the prompt):
 
 ```bash
+export AZURE_RD_OUTPUT="../output"
 cd go
 make build
 ./azure-rd download
 ```
 
-Writes clean YAML to `output/<tenant>/resources/`, plus a per-resource-type
-documentation prompt.
-
-### 3. Generate the documentation
+**2. Emit the documentation prompt** — offline, `--domain` is the export folder name (the tenant's Entra
+default domain):
 
 ```bash
-./azure-rd docs generate-prompt   # writes output/<tenant>/docs/generate.md
+./azure-rd docs generate-prompt --domain contoso.onmicrosoft.com
 ```
 
-Hand `docs/generate.md` to an AI coding agent: it writes one Markdown document
-per resource under `output/<tenant>/docs/`. Then build the navigation index the
-browser reads:
+**3. Run the agent.** Paste `output/<tenant>/docs/generate.md` into a fresh agent session and let it run to
+completion. It produces the documents, `docs/summary.md` and a `docs/report-*.md`. Re-running
+`generate-prompt --dry-run` afterwards should report nothing pending.
+
+**4. Build the index and browse:**
 
 ```bash
-./azure-rd docs generate-index    # writes output/<tenant>/docs/index.yaml
-```
-
-### 4. View the documentation
-
-```bash
+./azure-rd docs generate-index --domain contoso.onmicrosoft.com
 cd ../web
 npm install
-npm run start:dev
+npm run start:prod        # http://localhost:3000
 ```
 
-Open <http://localhost:3000>. The browser reads `../output` by default
-(override with `DOCS_ROOT`, port with `PORT`).
+Repeat from step 1 whenever the tenant changes; steps 2–4 only touch what moved.
 
-### 5. Sign out
+## Repository layout
 
-```bash
-az logout
 ```
+azure-resource-downloader/
+├── go/          azure-rd CLI (Go 1.24) — see go/README.md
+├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
+├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
+└── README.md    this file
+```
+
+Per-project rules for editors and AI assistants live in `go/.windsurf/rules/` and `web/.windsurf/rules/`;
+they apply only to their own folder.
 
 ## Releasing
 
-The two projects are **released independently**. There is no repository-wide version: a release names one
-project, and the tag prefix says which.
+Each project has its own SemVer line, tagged with a folder prefix so the two never collide and each
+project's `git describe` finds only its own tags:
 
-| Project | Tag | Version source of truth | Release notes |
-| --- | --- | --- | --- |
-| `go/` | `go/vX.Y.Z` | the tag (stamped into the binary via `-ldflags`) | that version's section of [`go/CHANGELOG.md`](go/CHANGELOG.md) |
-| `web/` | `web/vX.Y.Z` | the tag, mirrored into `web/package.json` | that version's section of [`web/CHANGELOG.md`](web/CHANGELOG.md) |
+| Project | Tag pattern | Version source |
+|---|---|---|
+| `go/` | `go/vX.Y.Z` | `git describe --match 'go/v*'` at build time — `make build` stamps it into `--version` and into every `resources/metadata.yaml` (`toolVersion`) |
+| `web/` | `web/vX.Y.Z` | `version` in `web/package.json` |
 
-Each project's version line moves on its own: `go/` can reach `v0.5.0` while `web/` stays at `v0.1.0`. **If
-only one project changed, only that project is tagged** — no empty release and no version bump for the other.
-A tag points at a commit of the shared history, so it records *which repository state produced this artifact*,
-not which files changed.
+To cut a release of either project:
 
-Because the tags of both projects live in one repository, `go/Makefile` restricts its version lookup to
-`git describe --match 'go/v*'`. Without that filter a `web/` release would be stamped into `azure-rd
---version` and into `toolVersion` in every `resources/metadata.yaml`.
-
-**Compatibility between the two is stated by the artifact, not by the version numbers.** They meet at
-`output/<tenant>/docs/index.yaml`, which carries its own `version:` schema field: a `go/` release says which
-schema version it *writes*, a `web/` release which versions it *reads*. Comparing `go/` and `web/` version
-numbers means nothing.
-
-To cut a release of `<project>` (`go` or `web`):
-
-1. Make sure the working tree is clean and `main` is up to date, and that the project's checks pass
-   (`make check` in `go/`, `npm test && npm run build` in `web/`).
-2. In that project's `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - <date>` and add a fresh, empty
-   `## [Unreleased]` above it. For `web/`, also set `version` in `package.json`.
-3. Commit (`chore(<project>): release vX.Y.Z`), then tag and push:
+1. In its `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and start a fresh, empty
+   `## [Unreleased]` above it. For `web/`, also bump `version` in `package.json` to match.
+2. Commit, then tag with the folder prefix and push the tag:
 
    ```bash
-   git tag -a <project>/vX.Y.Z -m "<project> vX.Y.Z"
-   git push origin main --follow-tags
+   git tag -a go/vX.Y.Z -m "go vX.Y.Z"     # or: web/vX.Y.Z
+   git push origin go/vX.Y.Z
    ```
 
-4. Publish a GitHub release for the tag, pasting that changelog section as the notes. For `go/`, attach
-   binaries built with `make build VERSION=vX.Y.Z` (the tag also produces this version automatically).
-
-## More
-
-- CLI reference, flags, config and supported resource types: [`go/README.md`](go/README.md)
-- Documentation browser details: [`web/README.md`](web/README.md)
+3. For `go/`, `make build` on the tagged commit now reports `vX.Y.Z`; a later commit reports
+   `vX.Y.Z-N-g<sha>` and an uncommitted tree adds `-dirty`, so a metadata file always names the build that
+   produced it.

@@ -1,7 +1,7 @@
 {
   "name": "azure-rd-docs-web",
   "version": "0.1.0",
-  "description": "Iteration 1 documentation browser for azure-resource-downloader exports.",
+  "description": "Read-only documentation browser and Confluence exporter for azure-resource-downloader tenant exports.",
   "private": true,
   "engines": {
     "node": ">=20"
