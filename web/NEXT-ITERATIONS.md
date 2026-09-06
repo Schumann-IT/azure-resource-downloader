@@ -12,13 +12,16 @@ against what is true at that point rather than copying it across.
 **Goal.** An operator can publish a Confluence space whose index lets a reader get from *macOS*, or from a
 programme, to the pages it covers — the way the sidebar filter does in the browser — instead of only from a
 resource type. The export keeps its by-type **Pages** list as the spine and gains axis sections beside it when
-asked for them, classifying identically to the browser because both read the same axis rule and the same index
+asked for them, classifying identically to the browser because both call the same axis rule over the same index
 data.
 
 > **Why now.** The export has an index today, but it is a *second, independent* grouping: `groupByType()` in
 > `src/docs/export/confluence.ts` knows nothing about the axes, so everything `buildFacetFilters()` can slice is
-> dropped at the export boundary. The shared primitive is cheapest to extract while there is still exactly one
-> consumer to migrate — a second whole-tenant format would have to be written against whichever rule it found.
+> dropped at the export boundary. There is no duplicated rule to reconcile — `matchesAxis()` and
+> `filterableAxes()` are already the single implementation behind `buildNavigation()`, `buildFacetFilters()`,
+> `parseFacetSelection()` and `countMatching()`; they are merely private, so the export cannot reach them. The
+> work is to expose that rule and add one grouping primitive on top of it, which is cheapest while there is
+> still exactly one consumer — a second whole-tenant format would otherwise be written against a fresh copy.
 >
 > **Membership is read, never derived.** Axis ids, labels and display order come from the index header
 > (`index.facets`), membership from each resource's `facets` map. The export must not compute, re-label or
@@ -28,7 +31,15 @@ data.
 > **An axis is not a partition.** In the reference export 55 of 263 resources hold several `programme` values,
 > so a page appears under more than one value and the index says so rather than picking a primary; 63 carry no
 > `platform` and 170 no `scope`, so the uncategorised bucket is always rendered. Counts are counted over
-> distinct resources, never summed per value, so they match the sidebar's.
+> distinct resources, never summed per value, which is the sidebar's rule too.
+>
+> **A count is the number of links under it.** The sidebar counts `index.resources`; the export can only link
+> resources that became pages, and `buildExportPlan()` drops any it cannot key by document path. So an axis
+> count is taken over the *rendered rows*, never over `index.resources`, so a collapsed section never promises
+> more links than it holds. On a tenant where every resource has a page the two are equal, and that equality
+> with `countMatching()` is what the test asserts. Pages the export could not read stay linked and are listed
+> under *Not exported* as they are today — the axis sections follow the by-type list here rather than inventing
+> a second rule for the same page.
 >
 > **Layout is settled.** Axis sections go on `Overview.html`, *after* the by-type Pages list: the tenant summary
 > keeps the top of the page and there is still one page to import. Each axis is an H2 and each axis value a
@@ -47,13 +58,15 @@ data.
 > `.env.example` documents all three.
 >
 > `EXPORT_INDEX` takes `type` (default: the by-type Pages list alone — today's export, byte for byte), `both`
-> (that list, then the axis sections) or `axis` (axis sections only). **`type` is the default, so the feature is
-> opt-in**: an operator who upgrades and changes nothing gets the same space they got before, and an export that
-> grew axis sections unasked would be a surprise in a document set people re-import. `axis` is offered rather
-> than ruled out because a multi-valued axis plus the always-rendered uncategorised bucket still reaches every
-> page, so it loses nothing but the spine. Unset, empty or unrecognised means `type` — an operator typo must not
-> fail an export, the same leniency `parseFacetSelection()` applies to a bad selection, and the fallback lands on
-> the mode that changes nothing.
+> (that list, then the axis sections) or `axis` (axis sections only). **An index with no usable axis renders the
+> by-type list whatever the mode asked for**, so an export can never come out with no index at all; that is
+> already what `.env.example` promises, and it is the same leniency as the unrecognised-value fallback below.
+> **`type` is the default, so the feature is opt-in**: an operator who upgrades and changes nothing gets the
+> same space they got before, and an export that grew axis sections unasked would be a surprise in a document
+> set people re-import. `axis` is offered rather than ruled out because a multi-valued axis plus the
+> always-rendered uncategorised bucket still reaches every page, so it loses nothing but the spine. Unset, empty
+> or unrecognised means `type` — an operator typo must not fail an export, the same leniency
+> `parseFacetSelection()` applies to a bad selection, and the fallback lands on the mode that changes nothing.
 >
 > **It stays forward-compatible with that page.** If `GET /:tenant/_export` is ever built, the same three ids
 > become the values of a query parameter on `GET /:tenant/_export/confluence`, with `EXPORT_INDEX` as its
@@ -64,39 +77,65 @@ data.
 
 **Plan.**
 
-- Extract the grouping seam as a pure, href-free primitive: `groupByAxis(index, axisId)` ⇒ ordered
-  `{ id, label, resources }` with the uncategorised bucket last and always present, plus an exported
-  `filterableAxes(index)` (today private in `src/docs/tenant-index.ts`), both reusing `matchesAxis` so an axis
-  nothing matched is omitted in an export exactly as in the sidebar. No routes, no active item, no chip state;
-  synchronous and Nest-free so it unit-tests without a module.
-- Rewire `buildFacetFilters`, `parseFacetSelection` and `countMatching` onto the same exported rule, so there is
-  one axis rule in the codebase rather than a sidebar copy and an export copy.
+- Expose the axis rule the sidebar already uses: export `filterableAxes(index)` from
+  `src/docs/tenant-index.ts` (today private) and add the grouping primitive beside it,
+  `groupByAxis(index, axisId)` ⇒ `AxisGroup[]`, one entry per *value* of that one axis
+  (`{ id, label, resources: IndexResource[] }`), in header order, including the values this tenant matched to
+  nothing (the registry keeps them on purpose), with the uncategorised bucket — `id: UNCATEGORISED`, label
+  `Uncategorised` — last and always present. Promote that label to an exported constant beside `UNCATEGORISED`
+  and use it from `buildFacetFilters` too, so the chip and the export section cannot come to read differently.
+  An axis the header does not declare yields `[]`: choosing *which* axes exist stays with `filterableAxes`, so
+  an axis nothing matched is omitted in an export exactly as in the sidebar. Membership is the existing
+  `matchesAxis`, and `buildFacetFilters`, `parseFacetSelection` and `countMatching` need no change — they
+  already share that rule. A bucket's label comes from the header, else from the first resource in index order
+  that names the value (which is how a version-2 index labels a value its registry omits), else the id itself.
+  No routes, no active item, no chip state; href-free, synchronous and Nest-free so it unit-tests without a
+  module. Note in the comment that `filterableAxes` also skips an axis whose id collides with a route query
+  parameter (`raw`): the export has no query parameters, but identical classification is the point, so it keeps
+  the same exclusion rather than a second definition of *usable axis*.
 - Render the axis sections in `overviewPage()` (`src/docs/export/confluence.ts`) after the `Pages` list: one H2
-  per axis, one collapsed `<details>` per value with `<label> (<count>)`, its `<ul>` reusing the existing page
-  titles and file hrefs (`plan.pageFileByDoc`), and a one-line note that a page can appear under several values.
-  `groupByType()` and the by-type list stay as they are.
+  per axis carrying the axis's own header `label`, immediately followed by one sentence — once per axis, not
+  once per page — saying a page can appear under more than one value, then one collapsed `<details>` per value
+  whose `<summary>` is `<label> (<count>)` and whose `<ul>` holds the same link rows the by-type list uses.
+  `overviewPage()` already receives `pages: ExportPage[]`, which carries the document path, title and file
+  name, so it maps each `IndexResource` to its page through a local `docPath → ExportPage` map built from that
+  option — no new option and no `pageFileByDoc`, which would supply hrefs but not titles. A resource with no
+  page (one `buildExportPlan()` could not key) is not linked and not counted. `groupByType()` and the by-type
+  list stay as they are.
 - Add the operator switch: an `ExportIndexMode = 'type' | 'both' | 'axis'` with a pure
-  `parseExportIndexMode(value)` in `src/docs/export/` that maps anything unrecognised to `type`, read from
-  `process.env.EXPORT_INDEX` **once, at its point of use** in `ExportService.confluence()` and passed into
-  `overviewPage()` as a plain option — `confluence.ts` stays pure and env-free so the mode is a test parameter,
-  not a global. `overviewPage()` omits the by-type list under `axis` and the axis sections under `type`, and
-  renders neither heading when the mode leaves it out.
-- Document the variable in the README `Configuration` table (`EXPORT_INDEX`, default `type`, the three ids and
-  the fallback) and in `.env.example`, which now exists and lists `DOCS_ROOT`, `PORT` and `EXPORT_INDEX`; drop
-  its *not implemented yet* section in the same edit. Note in both places that the app does not *load*
-  `.env` — it is a reference to source into a shell, so the environment-variables-only rule is untouched.
-- Confirm `details`/`summary` survive the serialiser (`src/docs/export/html-allowlist.ts` keeps both today) and
-  that `Overview.html` needs no allowlist change.
-- Tests in `test/export.spec.ts`: axes and values in header order; uncategorised last and rendered even when
-  empty; a multi-valued resource listed under each value; an axis no resource matches omitted; per-value counts
-  and the section totals equal to `countMatching` for the same selection; an index with no `facets` producing
-  exactly today's overview. Keep a case asserting that the **default mode emits no axis section at all**, even
-  for an index rich in facets, so the opt-in cannot regress. Plus `groupByAxis`/`filterableAxes` cases in
-  `test/tenant-index.spec.ts`, and `parseExportIndexMode` cases covering each id, unset, empty and garbage. One
-  e2e case in `test/docs.e2e.spec.ts` sets `EXPORT_INDEX` before building the app and asserts the served
-  `Overview.html` follows it, since the variable is only observable through the route.
-- Update the README export section (what `Overview.html` contains, and that its index is operator-configurable)
-  and add a `CHANGELOG.md` `[Unreleased]` entry stating that the export and the sidebar now classify through one
+  `parseExportIndexMode(value)` in its own module `src/docs/export/export-index-mode.ts`, mapping anything
+  unrecognised to `type`, read from `process.env.EXPORT_INDEX` **once, at its point of use** in
+  `ExportService.confluence()` and passed into `overviewPage()` as a plain option — `confluence.ts` stays pure
+  and env-free so the mode is a test parameter, not a global. `overviewPage()` omits the axis sections under
+  `type` and the by-type list under `axis`, rendering neither heading when the mode leaves it out — except that
+  it falls back to the by-type list when the index has no usable axis, and the *this tenant's index lists no
+  resources* line is emitted in every mode, so neither an untaxonomised nor an empty tenant can produce an
+  overview with no index. The controller and the route shape are untouched.
+- Document the variable in the README `Configuration` table (a third row: `EXPORT_INDEX`, default `type`, the
+  three ids and the fallback) and in the README export section (what `Overview.html` contains, and that its
+  index is operator-configurable); in `.env.example`, which already lists it, drop the *not implemented yet*
+  section in the same edit. Note in both files that the app does not *load* `.env`: it is a reference to source
+  into a shell, so the environment-variables-only rule is untouched.
+- Confirm `details`/`summary` survive the serialiser (`src/docs/export/html-allowlist.ts` keeps both today, with
+  no attributes) and that `Overview.html` needs no allowlist change.
+- Tests in `test/export.spec.ts`: axes and values in header order; a declared value this tenant matched to
+  nothing rendered as `(0)`; uncategorised last and rendered even when empty; a multi-valued resource listed
+  under each value; an axis no resource matches omitted; per-value counts equal to the number of links rendered
+  beneath them, and — on a fixture where every resource has a page — equal to `countMatching` for the same
+  single-value selection; an index with no `facets` producing exactly today's overview under all three modes.
+  Keep a case asserting that the **default mode emits no axis section at all**, even for an index rich in
+  facets, so the opt-in cannot regress. Plus `groupByAxis`/`filterableAxes` cases in `test/tenant-index.spec.ts`
+  (including the header-then-resource-then-id label fallback), and `parseExportIndexMode` cases covering each
+  id, unset, empty and garbage.
+- One e2e case in `test/docs.e2e.spec.ts` sets `EXPORT_INDEX` around the request (the value is read per request,
+  not at bootstrap) restoring it afterwards, and asserts the served `Overview.html` follows it — the variable is
+  only observable through the route. The existing tenant fixture already declares `platform` and `programme`, so
+  it needs no new export tree. That needs the zip *contents*, not just its entry names: the mode changes no file
+  name and `yazl` deflates each entry, so add **`yauzl` + `@types/yauzl` as devDependencies** (one `npm install`)
+  and a small read-one-entry helper in the spec. Test-only, and the next whole-tenant format gets it for free;
+  the alternative, hand-parsing local file headers and `zlib.inflateRawSync`, puts zip internals in the test
+  suite for no gain.
+- Add a `CHANGELOG.md` `[Unreleased]` entry stating that the export and the sidebar now classify through one
   shared rule, that `EXPORT_INDEX` selects the index without adding a configuration mechanism or a mutating
   route, that the default leaves the exported bytes unchanged, and that the export stays read-only,
   index-derived and script-free.
