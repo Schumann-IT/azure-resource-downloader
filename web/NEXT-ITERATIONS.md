@@ -27,9 +27,11 @@ one place to look per tenant instead of a control repeated on every page.
 
 - **Further whole-tenant formats** (single-file HTML, DOCX, PDF, Markdown bundle — see the parked idea):
   additional sibling links on the same card, under one `Export:` label once there is more than one. **No
-  dropdown, no picker widget** — that needs client-side JavaScript, which is a non-negotiable. If the row of
+  dropdown, no picker widget** — that needs client-side JavaScript, which is a non-negotiable (dropping that
+  rule is its own parked idea; until it is actually dropped, this decision stands as written). If the row of
   formats ever stops fitting, the answer is a per-tenant export *page* (`GET /:tenant/_export`) listing the
-  formats, not a control that needs scripting.
+  formats, not a control that needs scripting. A format that grows **options** is a second, earlier reason to
+  reach for that page — see the parked idea on a single export button per tenant.
 - **Partial exports** (one resource type, one document, summary only): these are the one case that must
   *not* be on the picker, because the picker cannot express the scope. Their entry point belongs next to the
   thing being exported — the document top bar next to the **Documentation | YAML** switcher for a single
@@ -74,7 +76,9 @@ Let a reader of the tenant landing page narrow the findings table to a severity 
 documents it affects. **Parked** because the table is 15 rows in the largest reference export — short enough
 to read whole — so filtering it buys little, and the `Documents` column already links to every document a row
 names, which leaves the inert `Affected` count as the only real gap. **Revisit** when a summary carries enough
-findings that the table stops being readable in one pass.
+findings that the table stops being readable in one pass, or if the no-client-side-JavaScript rule is relaxed
+(its own idea below), which would replace the `:target` construction described next with an ordinary filter and
+give the `#findings` fragment back.
 
 What is settled if it is picked up: the hooks exist (`src/docs/findings-table.ts` tags the table `.findings`
 and puts `data-severity` on each body row and severity cell, with lowercase severity ids), and the filter is
@@ -106,7 +110,9 @@ filters rather than replacing them), and give each tree item the context the lis
 **Parked** because the taxonomy filters cut the 263-item tree to a workable size along the axes that matter,
 which was the pressing half of the problem, and because a name filter without a text input is an awkward thing
 to offer — no client-side JavaScript means no type-ahead. **Revisit** if narrowing by axis proves
-insufficient, or alongside the search idea below, which subsumes it.
+insufficient, alongside the search idea below, which subsumes it, or if the no-client-side-JavaScript rule is
+relaxed (its own idea below): a text input with type-ahead, and remembering which sections were open, are the
+two halves that rule is holding back.
 
 What is settled if it is picked up: **badges are available today** — `assignments` (231 of 263), `scope` (93),
 `platforms` (73), `odataType` (137), plus the facet memberships the filter already renders. The per-item
@@ -115,7 +121,7 @@ from each document's frontmatter and generated documents write only `source` and
 schema and the CLI plumbing are both correct, so that half is gated on a documentation **regeneration** whose
 template emits `summary:`, not on a change here — build it to render no second line when the field is absent
 and it lights up on its own. Remembering which sections were open across navigations stays **excluded on
-purpose**: that needs client-side state.
+purpose** for as long as the no-client-side-JavaScript rule stands: that needs client-side state.
 
 ### Idea: Structure the sidebar by a taxonomy axis instead of by resource type
 
@@ -142,7 +148,9 @@ second consumer of the same index, and anything computed inside `buildNavigation
 exported space would silently group differently from the browser — which also means the export's own grouping
 has to be decided explicitly rather than left to drift. What is cheap: hrefs come from the index `doc` field,
 so **restructuring changes no URLs**, and `sidebar.hbs` renders sections purely from data, making the spine a
-data change plus one nesting level; the choice belongs in the URL as a query parameter, never a widget.
+data change plus one nesting level; the choice belongs in the URL as a query parameter, and stays there even if
+the no-client-side-JavaScript rule is relaxed (its own idea below) — a spine chosen by a widget would not be
+addressable, which is a property worth keeping on its own merits.
 
 ### Idea: Search across a tenant's documents
 
@@ -151,7 +159,9 @@ resource tree). **Parked** because it is the largest single feature on this list
 without an index and, realistically, client-side interaction — and no client-side JavaScript is a
 non-negotiable. **Revisit** when the corpus is large enough that the sidebar tree stops being navigable even
 with the shipped taxonomy filters, or if a server-rendered query page turns out to be enough. It subsumes the
-name filter in the sidebar idea above.
+name filter in the sidebar idea above. This is the **first feature that would justify relaxing the rule** (its
+own idea below): a server-rendered `GET /:tenant/_search?q=` page is worth trying first, because it needs no
+script at all and would show whether the interactive version is wanted.
 
 ### Idea: Syntax highlighting inside documents
 
@@ -173,7 +183,9 @@ tenants under a grouping folder.
 Theme selection follows `prefers-color-scheme`, with no way to override it. **Parked** because remembering a
 choice needs either client-side state or a cookie plus a mutating route, both of which cut against the
 no-JavaScript and read-only rules. **Revisit** if a reader needs one theme in a browser set to the other,
-e.g. for a presentation or a screenshot.
+e.g. for a presentation or a screenshot, or if the no-client-side-JavaScript rule is relaxed (its own idea
+below) — a toggle that stores the choice client-side is the cheapest thing that relaxation would buy, and it
+needs no route and no state on the server.
 
 ### Idea: Watch-based cache invalidation
 
@@ -202,7 +214,9 @@ turns out to be too hard to find and a resource landing page does not fix it.
 Turn `Microsoft.Graph / depOnboardingSettings` in the breadcrumb into links to a per-type listing page.
 **Parked** because it needs a new route and view: CSS alone cannot open a collapsed `<details>` section from
 an anchor, so linking into the existing sidebar tree is impossible without client-side state. **Revisit**
-after a per-type listing page exists for another reason, when this becomes additive and nearly free.
+after a per-type listing page exists for another reason, when this becomes additive and nearly free, or if the
+no-client-side-JavaScript rule is relaxed (its own idea below), which removes the reason for the new route
+entirely: the segment could then open and scroll to its own sidebar section.
 
 ### Idea: Browsable excluded bulk types
 
@@ -216,6 +230,43 @@ for the raw bulk YAML; the shape is settled — for each type named in `counts.e
 TTL, unreadable ⇒ empty), producing file names only, with counts still taken from the index. It reopens two
 UX questions: whether a `readdir`-vs-`counts.excluded` mismatch should be flagged as a stale index, and
 whether resources without documentation should be visually de-emphasised.
+
+### Idea: Build an export's index from the same axis logic as the sidebar filter
+
+Give the Confluence export — and every later whole-tenant format — an index derived from the taxonomy axes, so a
+reader of an imported space can get from *macOS* or a programme to the pages it covers, the way the sidebar
+filter does. The export has an index today, the by-type **Pages** list on `Overview.html`, but it is a
+*second, independent* grouping: `groupByType()` in `src/docs/export/confluence.ts` knows nothing about the
+axes, so everything `buildFacetFilters()` can slice is dropped at the export boundary. **Parked** because the
+export is young and no one has yet imported a space and asked for the axis view, and because the by-type list
+is a working index for the one thing an imported page title carries. **Revisit** when an imported space is in
+real use, or as soon as a second whole-tenant format is built — the shared primitive below is cheapest to
+extract while there is only one consumer to migrate.
+
+What is settled if it is picked up. **The shared thing is a pure, href-free primitive, not `buildNavigation()`
+or `buildFacetFilters()`** — those bake in app routes, an active item and chip state. The seam is a grouping
+function (`index`, axis id ⇒ ordered `{ id, label, resources }`, uncategorised bucket last) plus the
+*filterable axis* rule that `filterableAxes()` holds privately today, so an axis nothing matched is omitted in
+an export exactly as it is in the sidebar, and each format keeps its own link shape — the same division that
+makes `buildExportPlan()` right to be its own index pass. Sharing it is not a refactor for its own sake: it is
+what guarantees an exported space classifies identically to the browser, rather than an export silently
+grouping by one rule and the sidebar by another. **Membership is read, never derived**: axis values come from
+the index header in its display order and per-resource `facets`, so the export must not compute or re-label
+anything. **An axis is not a partition** — 55 of 263 resources hold several `programme` values, so a page
+appears under more than one value and the index says so rather than picking a primary; 63 carry no `platform`
+and 170 no `scope`, so the uncategorised bucket is always rendered. **Counts are counted over resources**,
+never summed per value, so they match the sidebar's.
+
+Two layout decisions are made. The axis sections go **on `Overview.html`, after the by-type Pages list**, which
+stays as the spine: the tenant summary keeps the top of the page, and there is still one page to import and one
+place to look. Each axis is an H2 and **each axis value is a collapsed `<details>`** whose summary is
+`<label> (<count>)` — the importer turns that into a native expand (settled by a real import), so three axes
+over 263 resources read as ~10 scannable lines each instead of the ~840 extra link rows a flat rendering would
+add. Ruled out: separate per-axis index pages (more pages, and reserved page names competing with the
+`<type leaf> — <name>` scheme that makes document titles collision-proof), and replacing the by-type grouping,
+which would lose the spine the sidebar uses and force a primary-axis judgement. If the export ever grows a
+per-format option page, that layout becomes a *choice* rather than a fixed both-on-one-page — settle the two
+together rather than shipping one and retrofitting the other.
 
 ### Idea: Media and source YAML as page attachments
 
@@ -250,12 +301,12 @@ be a three-way listing (only in A, only in B, in both but different) over the in
 comparison. **Parked** because it is a comparison *engine*, not a view: identity does not survive across
 tenants (GUIDs, assignment group ids and display names all differ, so equal configuration reads as different
 and the interesting drift hides in the noise), a readable diff of a 317-setting document needs interaction
-the no-client-side-JavaScript rule forbids, every route today is scoped to one `:tenant`, and it is not
-settled whether the comparison belongs here at all rather than in the CLI, which holds the facts
-(`resources/metadata.yaml`, the per-resource hashes) that make a semantic diff cheap. **Revisit** when a
-stage/prod tenant pair is actually exported side by side into one docs root, and once there is an answer for
-cross-tenant identity — a normalisation of tenant-local ids that can be stated and tested, not guessed per
-resource type.
+the no-client-side-JavaScript rule forbids (relaxing it has its own idea below, and would remove only this one of
+the four obstacles), every route today is scoped to one `:tenant`, and it is not settled whether the comparison
+belongs here at all rather than in the CLI, which holds the facts (`resources/metadata.yaml`, the per-resource
+hashes) that make a semantic diff cheap. **Revisit** when a stage/prod tenant pair is actually exported side by
+side into one docs root, and once there is an answer for cross-tenant identity — a normalisation of tenant-local
+ids that can be stated and tested, not guessed per resource type.
 
 ### Idea: Further export formats and partial exports
 
@@ -267,3 +318,104 @@ it. Preserving the document tree in an export is not expressible through Conflue
 re-parenting by hand or the REST API are the only routes. Where each of these would be offered is already
 settled, including why the partial exports are the exception: see *Export entry points live on the tenant
 picker*.
+
+### Idea: One export button per tenant, leading to an export page with per-format options
+
+Replace the per-format download links on the tenant picker with a **single** *Export* link per tenant card,
+pointing at a new HTML page (`GET /:tenant/_export`) that lists the available formats and lets the operator set
+that format's own options before downloading. First concrete option: the **Confluence index format** — group the
+overview's page list by resource type, or by a taxonomy axis. **Parked** because there is exactly one format
+today and it takes no options, so the page would be a route, a view and a control for a single button that
+already works. **Revisit** the moment either half stops being true: a second whole-tenant format, or the first
+real per-format option (the index-format choice being the likely trigger).
+
+What is settled if it is picked up. **The download route keeps its shape**: `GET /:tenant/_export/:format`
+streams the archive, options ride as query parameters on it, and every option has a default so a bookmarked
+option-less URL keeps producing today's export. The new page is the *only* addition, at the bare `_export`
+prefix, declared before the document catch-all like its sibling. Options are **validated the way
+`parseFacetSelection()` validates a selection** — an unknown or malformed value falls back to the default rather
+than 404ing — and each is a named choice with a stable id, so a chosen variant has exactly one URL. The page is
+also the honest place for the things currently crammed onto a picker card: the one-way-publish caveat stated once
+per format, and, cheaply, what the export will contain (page count, pending documents, an incomplete index),
+all index-derived.
+
+Two open questions. **How the controls are expressed** is undecided, with three candidates. **(a)** A plain
+`<form method="get" action="/:tenant/_export/confluence">` with radio buttons and a submit button — pure HTML,
+no script, still read-only, and it scales to several options; it costs the app's first form and first non-anchor
+control, and a form cannot carry `download`, so attachment behaviour rests on the `Content-Disposition` header
+`ExportService` already sets. **(b)** One `<a download>` per option combination ("Confluence, index by type",
+"Confluence, index by axis") — keeps the anchor-only shape the standing decision names, but is combinatorial as
+soon as a format has two options. **(c)** Anchors first, with the GET form named as the sanctioned escape hatch
+once a format carries more than one option, and the query-parameter shape fixed up front so swapping the control
+changes no URL. Note that **(a) does not conflict with the no-client-side-JavaScript rule** — that rule bans
+shipped script and client-side state, not HTML controls; the objection to it is precedent, not compliance.
+Second, whether the axis-grouped index is an **option here or an addition to the overview** has to be settled
+together with the axis-index idea above, which currently assumes both groupings coexist on one page.
+
+This amends *Export entry points live on the tenant picker*: the standing decision already names
+`GET /:tenant/_export` as the answer when a row of format links stops fitting, and this makes per-format
+options a second, earlier trigger for the same page. What the decision requires is unchanged — the picker stays
+the entry point for whole-tenant scope, the link is a plain anchor with no nesting, the caveat travels with it,
+and dark mode plus a visible `:focus-visible` outline apply to whatever control the page ends up using.
+
+### Idea: Drop the no-client-side-JavaScript rule
+
+Lift the non-negotiable that this app ships no script, so the features currently blocked by it become possible.
+It is stated in `.windsurf/rules/01-architecture.md` (*"No client-side JavaScript. Everything is
+server-rendered"*), repeated in `02-style-and-quality.md` (*"Do not introduce client-side JavaScript or a
+frontend framework"*) and claimed in `README.md`'s Frontend section. **Parked** because it is a rule change, not
+a feature: nothing is unblocked until a specific blocked feature is actually wanted, and every one of them is
+itself parked. **Revisit** when a feature someone has asked for cannot be built server-side at acceptable cost —
+tenant-wide search is the honest candidate — or when the alternative has become visibly worse than the script
+would be (a `:target` hack, a route invented only to compensate, a workaround nobody can explain).
+
+**Note what the rule does and does not forbid.** It bans *shipped script* — no `<script>`, no bundler, no
+framework, no client-side state. It does not ban HTML interactivity: `<details>`/`<summary>`, `:target`,
+`:focus-visible`, `prefers-color-scheme` and a `<form method="get">` are all in bounds today. Several things that
+feel scripted are already legal without it.
+
+**Where the rule earns its keep.** Server-only rendering is a real benefit in its own right and not merely the
+absence of a client — a document arrives complete in the first response, so there is no loading state, no
+hydration, nothing to re-render and nothing that can fail after the HTML has landed — but it is a *separate*
+claim from banning script, and only the reasons below argue for the ban rather than for server rendering.
+*The corpus is documents.* A configuration document has to survive printing, archiving, a text browser and a
+saved copy; server-rendered HTML is that durable form, and anything only a runtime can assemble is not.
+*It has no client toolchain.* The only build step is Tailwind's CSS pass — no bundler, no framework dependency
+tree, no client supply chain to audit or keep current in a tool that renders tenant configuration. *It is
+trivially auditable.* "This app ships no script" is a claim an operator can verify at a glance, and it composes
+with the read-only rule to make the browser obviously inert; note that it is **not** an XSS boundary, because
+`markdown-it` runs with `html: true` and there is no CSP header, so the real boundary is the trust placed in the
+docs root either way. *It forces state into the URL.* Every view — including a filtered sidebar — is addressable,
+bookmarkable, shareable and reproducible, and the whole test suite can therefore be `supertest` against server
+HTML rather than a browser harness. *It caps complexity*: one rendering path, and no logic duplicated across
+server and client.
+
+**What it has already cost.** Working machinery exists purely to route around it: `toggled()` and
+`selectionHref()` rebuild the entire facet selection into every chip and every document link, so a 263-item tree
+re-renders server-side on each click; the `exempt` flag plus the `matched`/`total` reconciliation exist so a
+filter cannot hide the page you are on; `NavSection.active` exists to render one `<details open>`; `lineAnchors()`
+plus `.line:target` deliver `#L42`; `shiki` emits dual-theme output so dark mode can stay
+`prefers-color-scheme`; and `findings-table.ts` already tags rows with `data-severity` for a filter that cannot
+be built yet. Six parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
+item on this list, parked squarely on it), **a name filter and per-item context in the sidebar** (no type-ahead
+without script, and remembering which sections were open is excluded on purpose), **an actionable findings
+block** (expressible only as sibling anchors plus `:target`, which spends the URL fragment `#findings` already
+owns and needs a *Show all* reset as part of the feature), **clickable breadcrumb segments** (CSS cannot open a
+collapsed `<details>` from an anchor, so it needs a whole new route and view), **an explicit dark-mode toggle**,
+and **tenant diff** (a readable diff of a 317-setting document needs interaction). The export standing decision
+inherits it too: *no dropdown, no picker widget*.
+
+**Not a binary decision, if it is picked up.** Three tiers, all open. **(a) Keep it** and pay the workaround
+cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a small dependency-free script
+served from `public/`, no bundler and no framework, allowed only to improve something that already works without
+it — remembering open sections, toggling a chip without a round trip — with every page still fully functional
+with script disabled, and the rule rewritten as *"the server renders everything; script may only enhance"*
+rather than deleted. **(c) Full lift**: a real client bundle for search and diff, which brings a build step, a
+dependency tree and a second rendering path, and turns the testing story into a browser harness.
+
+**What has to change with it, whichever tier wins.** Both rule files and the README Frontend section, in the
+same edit — the rule is quoted in enough places that a half-removed version would be worse than either state —
+plus a `CHANGELOG.md` entry, because a page that needs script to work is operator-visible. The many released
+changelog entries that boast *"still no client-side JavaScript"* are history and stay as written. Two invariants
+must be restated rather than dropped by accident: state belongs in the URL (so views stay addressable), and no
+route may mutate anything under the docs root, however the client is built.

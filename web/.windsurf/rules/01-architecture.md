@@ -1,6 +1,7 @@
 ---
 trigger: always_on
 description: Architecture of the documentation browser (NestJS)
+globs: 
 ---
 
 # Docs Browser — Architecture
