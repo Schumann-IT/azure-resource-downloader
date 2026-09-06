@@ -380,6 +380,7 @@ web/
 ├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}
 ├── public/                              # app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
+├── scripts/release-ready.js             # npm run release-ready: report whether a release can be cut (changes nothing)
 ├── .env.example                         # every variable at its default
 ├── CHANGELOG.md                         # Keep a Changelog; released sections match web/vX.Y.Z tags
 └── NEXT-ITERATIONS.md                   # outstanding work and parked ideas
@@ -399,8 +400,11 @@ web/
   without a restart; environment variables are the only configuration and `DOCS_ROOT` the only link to the CLI.
 - Every user- or operator-visible change gets an entry in [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`
   in the same edit. Released sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `web/vX.Y.Z` tag, with `version`
-  in `package.json` kept in step; the release procedure is in the [monorepo README](../README.md#releasing).
-  Changes to the Go CLI go in [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
+  in `package.json` kept in step — both edited by hand. `npm run release-ready` only reports whether a release
+  can be cut (changelog closed into an undated `## [X.Y.Z]` heading, `package.json` matching, nothing struck out
+  in `NEXT-ITERATIONS.md`); branch/working-tree checks, date stamping, tagging and the GitHub release happen from
+  the repository root — see the [monorepo README](../README.md#releasing). Changes to the Go CLI go in
+  [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 - This README is the single source of truth for what the browser does today; deliberate scope cuts go in
   [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md). No other Markdown files live here.
 

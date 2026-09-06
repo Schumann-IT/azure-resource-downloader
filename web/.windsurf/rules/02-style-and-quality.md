@@ -111,10 +111,14 @@ Rules for entries:
   the single source of truth for them. Say that an option exists and what it is for, and point there.
 - **Released sections are SemVer versions with a date** (`## [0.1.0] - 2026-09-06`), newest first, each one
   matching a `web/vX.Y.Z` git tag. This project's version line is its own and is unrelated to `go/`'s.
-  Cutting a release means renaming `[Unreleased]` to the new version, starting a fresh empty
-  `[Unreleased]`, and bumping `version` in `package.json` to match — only do that when asked. The
-  procedure lives in the **Releasing** section of `../README.md`; the earlier `RC1`/`RC2` naming is
-  retired, so do not reintroduce it.
+  Cutting a release means renaming `[Unreleased]` to a bare, **undated** `## [X.Y.Z]`, starting a fresh
+  empty `[Unreleased]`, and bumping `version` in `package.json` to match — by hand, and only when asked; the
+  date is stamped by the root release script when it publishes, never by hand. `npm run release-ready`
+  never edits these files: it only reports whether a release can be cut (empty `[Unreleased]`,
+  `package.json` matching, no struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no
+  git command. Branch and working-tree checks, date stamping, tagging and the GitHub release happen from
+  the repository root; the procedure lives in the **Releasing** section of `../README.md`. The earlier
+  `RC1`/`RC2` naming is retired, so do not reintroduce it.
 - **Explain *why* and which invariant now holds**, not just what moved. If a change touches a
   non-negotiable (path safety, read-only, one `markdown-it` instance, no client-side JS, no-restart
   freshness), say explicitly how it is preserved.

@@ -109,6 +109,8 @@ azure-resource-downloader/
 ├── go/          azure-rd CLI (Go 1.24) — see go/README.md
 ├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
 ├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
+├── Makefile     release entry points for both projects (see Releasing)
+├── scripts/     release.sh — tags and publishes prepared releases
 └── README.md    this file
 ```
 
@@ -125,17 +127,47 @@ project's `git describe` finds only its own tags:
 | `go/` | `go/vX.Y.Z` | `git describe --match 'go/v*'` at build time — `make build` stamps it into `--version` and into every `resources/metadata.yaml` (`toolVersion`) |
 | `web/` | `web/vX.Y.Z` | `version` in `web/package.json` |
 
-To cut a release of either project:
+Releasing is three steps, run from the repository root on `main`. A project that did not change is simply
+never closed, so it gets no tag and no release.
 
-1. In its `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and start a fresh, empty
-   `## [Unreleased]` above it. For `web/`, also bump `version` in `package.json` to match.
-2. Commit, then tag with the folder prefix and push the tag:
+**1. Close the changelog by hand** for each project that changed: in its `CHANGELOG.md`, rename
+`## [Unreleased]` to a bare `## [X.Y.Z]` — **no date**; the publish step stamps it — and start a fresh, empty
+`## [Unreleased]` above it. For `web/`, also set `version` in `package.json` and `package-lock.json`
+(`npm version X.Y.Z --no-git-tag-version` in `web/`). Delete any struck-out entries from the project's
+`NEXT-ITERATIONS.md` — a strikeout marks work that shipped but was not yet recorded in the changelog. Commit and
+merge to `main`.
 
-   ```bash
-   git tag -a go/vX.Y.Z -m "go vX.Y.Z"     # or: web/vX.Y.Z
-   git push origin go/vX.Y.Z
-   ```
+**2. Report whether a release can be cut** — each project's `release-ready` goal only reports; it changes
+nothing and runs no git command:
 
-3. For `go/`, `make build` on the tagged commit now reports `vX.Y.Z`; a later commit reports
-   `vX.Y.Z-N-g<sha>` and an uncommitted tree adds `-dirty`, so a metadata file always names the build that
-   produced it.
+```bash
+make release-ready-go    # → make -C go release-ready
+make release-ready-web   # → npm --prefix web run release-ready
+```
+
+Both first run the project's own pipeline (`go/`: `make ci`; `web/`: `npm test` and `npm run build`), then look
+at `CHANGELOG.md`. If its newest version heading is not an undated `## [X.Y.Z]` — there is none, or it already
+carries a date — nothing has been closed and the goal reports **no release needed** and succeeds. Otherwise it
+checks that `NEXT-ITERATIONS.md` has no struck-out entries and that `## [Unreleased]` is empty; `web/`
+additionally checks that `package.json` carries that version. Every check is run and reported — passing ones
+with ✅, failing ones with ❌ and what to do about it — and the goal exits non-zero only when *all* checks
+fail, so it is a report to read, not a gate that stops on the first problem.
+
+**3. Publish** — `make release` (and `make release-status`) run both `release-ready` goals first as make
+prerequisites, so a project whose pipeline fails stops the release before anything happens. Then the publisher
+verifies the repository state: the current branch must be `main` (override with `RELEASE_BRANCH=<name>`) and
+the working tree clean, since it tags and pushes `HEAD`. These two checks live only here. Then, for every
+project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto that heading
+(`## [X.Y.Z] - YYYY-MM-DD`) and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog edit any
+tooling makes — then tags that commit `<project>/vX.Y.Z`, pushes the branch and the tags, and creates a GitHub
+release titled `<project> vX.Y.Z` whose notes are that changelog section. Projects whose newest heading is
+already dated are skipped; an undated heading whose tag already exists is refused.
+
+```bash
+make release-status  # readiness of both projects, then: which have an undated version heading
+make release         # readiness, branch + tree, then stamp + commit + tag + push + release; needs gh (gh auth login)
+```
+
+Afterwards, `make build` in `go/` on the tagged commit reports `vX.Y.Z`; a later commit reports
+`vX.Y.Z-N-g<sha>` and an uncommitted tree adds `-dirty`, so a metadata file always names the build that
+produced it.

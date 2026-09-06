@@ -11,14 +11,21 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-09-06
-
-First tagged release, covering the CLI's whole development history including the two release candidates that
-preceded it: `azure-rd` downloads a tenant's ARM and Microsoft Graph/Intune configuration as clean YAML,
-records a facts-only description of the export, and generates the per-type and incremental prompts an AI
-agent turns into documentation.
+## [0.1.0]
 
 ### Added
+
+#### Release Workflow
+
+- **`make release-ready` reports whether a release can be cut.** It runs the full `make ci` pipeline first, then
+  looks at this changelog: when `[Unreleased]` has not been closed into a new, still undated version section it
+  reports that no release is needed and succeeds; otherwise it checks that `NEXT-ITERATIONS.md` has no
+  struck-out entries (work that shipped but was never recorded here) and that `[Unreleased]` is empty. Every
+  check is run and reported with what to do about it; the goal only fails when all of them fail. It edits
+  nothing and runs no git command: closing the changelog is done by hand, and branch and working-tree checks,
+  stamping the release date, tagging and the GitHub release are a separate step at the repository root that runs
+  this report first and acts on every project whose newest heading is undated, so the CLI and the browser stay
+  independently versioned. Procedure in the monorepo README.
 
 #### Downloading a tenant's configuration
 

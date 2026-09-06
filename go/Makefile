@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-race test-coverage run help lint fmt deps check all ci loc
+.PHONY: build install clean test test-race test-coverage run help lint fmt deps check all ci loc release-ready
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -99,6 +99,15 @@ loc:
 	@cloc .
 	@echo "✅ LOC analysis complete"
 
+# Release readiness: report whether a release can be cut (no struck-out
+# NEXT-ITERATIONS entries, CHANGELOG.md closed with an empty [Unreleased] and an
+# undated `## [X.Y.Z]` heading). Every check is reported; fails only if all
+# fail. Changes nothing and runs no git — branch/working-tree checks, date
+# stamping, tagging and publishing happen at the repository root
+# (`make release`), which runs this first.
+release-ready: ci
+	@scripts/release-ready.sh
+
 # Check code quality (fmt + lint + test)
 check: fmt lint test
 	@echo "✅ All checks passed"
@@ -123,6 +132,7 @@ help:
 	@echo "  make fmt            - Format code"
 	@echo "  make lint           - Lint code (requires golangci-lint)"
 	@echo "  make loc            - Count lines of code (requires cloc)"
+	@echo "  make release-ready  - Report whether a release can be cut (tag/publish from the repo root)"
 	@echo ""
 	@echo "Composite targets:"
 	@echo "  make check          - Run fmt + lint + test"
