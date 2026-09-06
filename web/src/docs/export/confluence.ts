@@ -1,4 +1,13 @@
-import { IndexResource, TenantIndex } from '../tenant-index';
+import {
+  filterableAxes,
+  groupByAxis,
+  IndexResource,
+  TenantIndex,
+} from '../tenant-index';
+import {
+  DEFAULT_EXPORT_INDEX_MODE,
+  ExportIndexMode,
+} from './export-index-mode';
 import { escapeHtml } from './html-allowlist';
 import {
   buildPageNames,
@@ -119,18 +128,31 @@ export function documentPage(options: {
   );
 }
 
-// The overview page: the tenant summary (already serialised) plus the grouped
-// link list that stands in for the sidebar, and an honest list of anything the
-// export could not read.
+// The overview page: the tenant summary (already serialised) plus the link list
+// that stands in for the sidebar, and an honest list of anything the export could
+// not read.
+//
+// `indexMode` selects that list: the by-type grouping (the default and the spine
+// the sidebar uses), one collapsible section per taxonomy axis, or both. It is
+// passed in rather than read from the environment here so this module stays pure
+// and env-free.
 export function overviewPage(options: {
   tenantName: string;
   index: TenantIndex;
   pages: ExportPage[];
   summaryHtml: string | null;
   skipped: ExportPage[];
+  indexMode?: ExportIndexMode;
 }): string {
   const { tenantName, index, pages, summaryHtml, skipped } = options;
   const parts: string[] = [];
+  const axes = filterableAxes(index);
+  // An index with no usable axis renders the by-type list whatever the mode asked
+  // for, so an export can never come out with no index at all.
+  const mode: ExportIndexMode =
+    axes.length > 0
+      ? (options.indexMode ?? DEFAULT_EXPORT_INDEX_MODE)
+      : 'type';
 
   parts.push(`<h1>${escapeHtml(tenantName)} documentation</h1>`);
   parts.push(
@@ -157,23 +179,51 @@ export function overviewPage(options: {
 
   if (summaryHtml) parts.push(summaryHtml);
 
-  parts.push('<h2>Pages</h2>');
   const grouped = groupByType(pages);
+  if (mode !== 'axis') {
+    parts.push('<h2>Pages</h2>');
+    for (const group of grouped) {
+      parts.push(`<h3>${escapeHtml(group.label)}</h3>`);
+      parts.push('<ul>');
+      for (const page of group.pages) {
+        parts.push(pageLink(page));
+      }
+      parts.push('</ul>');
+    }
+  }
+  // Emitted in every mode: neither an untaxonomised nor an empty tenant may
+  // produce an overview that says nothing about its own contents.
   if (grouped.length === 0) {
     parts.push("<p>This tenant's index lists no resources.</p>");
   }
-  for (const group of grouped) {
-    parts.push(`<h3>${escapeHtml(group.label)}</h3>`);
-    parts.push('<ul>');
-    for (const page of group.pages) {
-      const summary = page.summary ? ` — ${page.summary}` : '';
-      const pending = page.documented ? '' : ' (pending)';
+
+  if (mode !== 'type') {
+    // Only resources that became pages can be linked, and `buildExportPlan()`
+    // drops any it cannot key by document path, so a section's count is taken
+    // over the rows it actually renders — never over `index.resources`.
+    const pageByDoc = new Map<string, ExportPage>();
+    for (const page of pages) pageByDoc.set(page.docPath, page);
+
+    for (const axis of axes) {
+      parts.push(`<h2>${escapeHtml(axis.label)}</h2>`);
       parts.push(
-        `<li><a href="${escapeHtml(page.file)}">${escapeHtml(page.title)}</a>` +
-          `${escapeHtml(summary)}${pending}</li>`,
+        '<p><em>A page can appear under more than one value of this axis.</em></p>',
       );
+      for (const group of groupByAxis(index, axis.id)) {
+        const rows = group.resources
+          .map((r) => pageByDoc.get(stripDocExtension(r.doc)))
+          .filter((p): p is ExportPage => !!p)
+          .sort((a, b) => a.title.localeCompare(b.title));
+        parts.push('<details>');
+        parts.push(
+          `<summary>${escapeHtml(`${group.label} (${rows.length})`)}</summary>`,
+        );
+        parts.push('<ul>');
+        for (const page of rows) parts.push(pageLink(page));
+        parts.push('</ul>');
+        parts.push('</details>');
+      }
     }
-    parts.push('</ul>');
   }
 
   if (index.counts.excluded.length > 0) {
@@ -201,6 +251,17 @@ export function overviewPage(options: {
   }
 
   return htmlDocument(`${tenantName} documentation`, parts.join('\n'));
+}
+
+// One link row, shared by the by-type list and the axis sections so a page reads
+// the same wherever it is listed.
+function pageLink(page: ExportPage): string {
+  const summary = page.summary ? ` — ${page.summary}` : '';
+  const pending = page.documented ? '' : ' (pending)';
+  return (
+    `<li><a href="${escapeHtml(page.file)}">${escapeHtml(page.title)}</a>` +
+    `${escapeHtml(summary)}${pending}</li>`
+  );
 }
 
 interface TypeGroup {

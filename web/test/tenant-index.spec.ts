@@ -2,6 +2,8 @@ import {
   buildFacetFilters,
   buildNavigation,
   countMatching,
+  filterableAxes,
+  groupByAxis,
   hasSelection,
   parseFacetSelection,
   parseTenantIndex,
@@ -539,6 +541,94 @@ describe('facet filtering', () => {
     expect(hasSelection({})).toBe(false);
     expect(hasSelection({ programme: [] })).toBe(false);
     expect(hasSelection({ programme: ['vpn'] })).toBe(true);
+  });
+});
+
+// The grouping primitive the Confluence export's axis index is built from. It
+// shares `matchesAxis`/`filterableAxes` with the sidebar filter, which is the
+// point: the two must classify identically.
+describe('groupByAxis', () => {
+  const index = parseTenantIndex(FACETS_YAML)!;
+  const legacy = parseTenantIndex(PROGRAMME_YAML)!;
+
+  it('offers exactly the axes the sidebar filter offers', () => {
+    expect(filterableAxes(index).map((a) => a.id)).toEqual([
+      'programme',
+      'platform',
+    ]);
+    expect(filterableAxes(legacy).map((a) => a.id)).toEqual(['programme']);
+    expect(filterableAxes(parseTenantIndex(INDEX_YAML)!)).toEqual([]);
+  });
+
+  it('buckets the values in header order, with uncategorised last', () => {
+    expect(groupByAxis(index, 'programme').map((g) => [g.id, g.label])).toEqual([
+      ['cis-hardening', 'CIS hardening'],
+      ['defender', 'Defender / MDE'],
+      ['vpn', 'VPN'],
+      [UNCATEGORISED, 'Uncategorised'],
+    ]);
+  });
+
+  it('keeps a declared value this tenant matched to nothing', () => {
+    const vpn = groupByAxis(index, 'programme').find((g) => g.id === 'vpn')!;
+    expect(vpn.resources).toEqual([]);
+  });
+
+  it('renders the uncategorised bucket even when it is empty', () => {
+    const platform = groupByAxis(index, 'platform');
+    const uncategorised = platform[platform.length - 1];
+    expect(uncategorised.id).toBe(UNCATEGORISED);
+    // One resource carries no platform here, so this bucket is not empty ...
+    expect(uncategorised.resources.map((r) => r.displayName)).toEqual([
+      'Intel Macs',
+    ]);
+    // ... and on an axis every resource is a member of, it is still present.
+    const dense = parseTenantIndex(
+      FACETS_YAML.replace(
+        '      doc: Microsoft.Graph/assignmentFilters/mac_intel.md',
+        '      doc: Microsoft.Graph/assignmentFilters/mac_intel.md\n' +
+          '      facets:\n        platform:\n            - macos',
+      ),
+    )!;
+    const last = groupByAxis(dense, 'platform').slice(-1)[0];
+    expect(last.id).toBe(UNCATEGORISED);
+    expect(last.resources).toEqual([]);
+  });
+
+  it('lists a multi-valued resource under each of its values', () => {
+    const groups = groupByAxis(index, 'programme');
+    const named = (id: string): string[] =>
+      groups.find((g) => g.id === id)!.resources.map((r) => r.displayName);
+    expect(named('cis-hardening')).toEqual([
+      'Windows OS validation',
+      'macOS CIS script',
+    ]);
+    expect(named('defender')).toEqual(['Windows OS validation']);
+  });
+
+  it('yields nothing for an axis no resource matches', () => {
+    expect(groupByAxis(index, 'nosuchaxis')).toEqual([]);
+    expect(groupByAxis(parseTenantIndex(INDEX_YAML)!, 'programme')).toEqual([]);
+  });
+
+  it('labels a value the header omits from the resource, then from its id', () => {
+    // A version-2 index labels its programme values through per-resource
+    // `groups`, so `defender` is undeclared but nameable ...
+    const groups = groupByAxis(legacy, 'programme');
+    expect(groups.map((g) => [g.id, g.label])).toEqual([
+      ['cis-hardening', 'CIS hardening'],
+      ['vpn', 'VPN'],
+      ['defender', 'Defender / MDE'],
+      [UNCATEGORISED, 'Uncategorised'],
+    ]);
+
+    // ... and a membership nothing names at all renders as its own id.
+    const bare = parseTenantIndex(
+      FACETS_YAML.replace('            - defender', '            - mystery'),
+    )!;
+    expect(
+      groupByAxis(bare, 'programme').map((g) => g.label),
+    ).toContain('mystery');
   });
 });
 

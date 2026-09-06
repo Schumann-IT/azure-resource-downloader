@@ -14,7 +14,15 @@ import {
   overviewPage,
   spaceName,
 } from '../src/docs/export/confluence';
-import { parseTenantIndex, TenantIndex } from '../src/docs/tenant-index';
+import {
+  countMatching,
+  parseTenantIndex,
+  TenantIndex,
+} from '../src/docs/tenant-index';
+import {
+  ExportIndexMode,
+  parseExportIndexMode,
+} from '../src/docs/export/export-index-mode';
 
 // The Confluence exporter's pure modules: page naming (which decides what every
 // link in the export points at), the allowlist serialiser (the only thing
@@ -45,6 +53,74 @@ function index(): TenantIndex {
   const parsed = parseTenantIndex(INDEX_YAML);
   if (!parsed) throw new Error('fixture index must parse');
   return parsed;
+}
+
+// The same two resources with a taxonomy: two axes in header order, a declared
+// value this tenant matched to nothing (`vpn`), a multi-valued resource and a
+// resource carrying no `platform` at all, so the uncategorised bucket is real.
+const FACETED_INDEX_YAML = `version: 3
+tenant: contoso.onmicrosoft.com
+generatedAt: "2026-01-01T00:00:00Z"
+complete: true
+counts:
+    documented: 2
+    pending: 0
+facets:
+    - id: programme
+      label: Programme
+      values:
+        - id: firewall
+          label: Firewall
+          count: 1
+        - id: hardening
+          label: Hardening
+          count: 2
+        - id: vpn
+          label: VPN
+          count: 0
+    - id: platform
+      label: Platform
+      values:
+        - id: windows
+          label: Windows
+          count: 1
+resources:
+    - type: Microsoft.Graph/deviceManagementConfigurationPolicies
+      doc: Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md
+      displayName: Policy One
+      documented: true
+      facets:
+        platform:
+            - windows
+        programme:
+            - firewall
+            - hardening
+    - type: Microsoft.Graph/groups
+      doc: Microsoft.Graph/groups/g1.md
+      displayName: Admins
+      documented: true
+      facets:
+        programme:
+            - hardening
+`;
+
+function facetedIndex(): TenantIndex {
+  const parsed = parseTenantIndex(FACETED_INDEX_YAML);
+  if (!parsed) throw new Error('fixture index must parse');
+  return parsed;
+}
+
+// The overview page of a whole tenant, under one index mode.
+function overview(src: TenantIndex, indexMode?: ExportIndexMode): string {
+  const plan = buildExportPlan(src);
+  return overviewPage({
+    tenantName: src.tenant,
+    index: src,
+    pages: plan.pages,
+    summaryHtml: null,
+    skipped: [],
+    indexMode,
+  });
 }
 
 function options(pages: Record<string, string> = {}) {
@@ -372,3 +448,132 @@ describe('the Confluence format', () => {
     );
   });
 });
+
+describe('the export index mode', () => {
+  it('maps each id, and anything else, to a mode', () => {
+    expect(parseExportIndexMode('type')).toBe('type');
+    expect(parseExportIndexMode('both')).toBe('both');
+    expect(parseExportIndexMode('axis')).toBe('axis');
+    expect(parseExportIndexMode(' AXIS ')).toBe('axis');
+    // Unset, empty or a typo lands on the mode that changes nothing rather than
+    // failing the export.
+    expect(parseExportIndexMode(undefined)).toBe('type');
+    expect(parseExportIndexMode('')).toBe('type');
+    expect(parseExportIndexMode('by-axis')).toBe('type');
+    expect(parseExportIndexMode(3)).toBe('type');
+  });
+});
+
+describe('the axis index on the overview page', () => {
+  it('emits no axis section by default, however rich the taxonomy', () => {
+    const html = overview(facetedIndex());
+    expect(html).toContain('<h2>Pages</h2>');
+    expect(html).not.toContain('<h2>Programme</h2>');
+    expect(html).not.toContain('<details>');
+    // The default is today's export, so the mode passed explicitly agrees.
+    expect(html).toBe(overview(facetedIndex(), 'type'));
+  });
+
+  it('adds axis sections after the by-type list under `both`', () => {
+    const html = overview(facetedIndex(), 'both');
+    expect(html.indexOf('<h2>Pages</h2>')).toBeLessThan(
+      html.indexOf('<h2>Programme</h2>'),
+    );
+    // Axes and values in header order, labels read from the header.
+    expect(html.indexOf('<h2>Programme</h2>')).toBeLessThan(
+      html.indexOf('<h2>Platform</h2>'),
+    );
+    expect(
+      [...html.matchAll(/<summary>([^<]+)<\/summary>/g)].map((m) => m[1]),
+    ).toEqual([
+      'Firewall (1)',
+      'Hardening (2)',
+      'VPN (0)',
+      'Uncategorised (0)',
+      'Windows (1)',
+      'Uncategorised (1)',
+    ]);
+    // Said once per axis, not once per page.
+    expect(
+      html.split('A page can appear under more than one value').length - 1,
+    ).toBe(2);
+  });
+
+  it('drops the by-type list under `axis`', () => {
+    const html = overview(facetedIndex(), 'axis');
+    expect(html).not.toContain('<h2>Pages</h2>');
+    expect(html).not.toContain('<h3>groups</h3>');
+    expect(html).toContain('<h2>Programme</h2>');
+  });
+
+  it('lists a multi-valued resource under each of its values', () => {
+    const html = overview(facetedIndex(), 'axis');
+    const firewall = section(html, 'Firewall (1)');
+    const hardening = section(html, 'Hardening (2)');
+    expect(firewall).toContain('deviceManagementConfigurationPolicies — Policy One');
+    expect(hardening).toContain('deviceManagementConfigurationPolicies — Policy One');
+    expect(hardening).toContain('groups — Admins');
+  });
+
+  it('counts the links it renders, which is what the sidebar counts too', () => {
+    const src = facetedIndex();
+    const html = overview(src, 'axis');
+    for (const [summary, axis, value] of [
+      ['Firewall (1)', 'programme', 'firewall'],
+      ['Hardening (2)', 'programme', 'hardening'],
+      ['VPN (0)', 'programme', 'vpn'],
+      ['Windows (1)', 'platform', 'windows'],
+    ] as const) {
+      const links = section(html, summary).split('<li>').length - 1;
+      // The number in the summary is the number of links beneath it, so a
+      // collapsed section never promises more than it holds ...
+      expect(links).toBe(Number(summary.match(/\((\d+)\)/)![1]));
+      // ... and every resource in this fixture became a page, so it also equals
+      // the sidebar's own count of the same single-value selection.
+      expect(links).toBe(countMatching(src, { [axis]: [value] }));
+    }
+  });
+
+  it('omits an axis nothing matches, in every mode', () => {
+    const src = facetedIndex();
+    // A declared axis no resource is a member of is not offered in the sidebar,
+    // so it is not a section here either.
+    src.facets.push({
+      id: 'lifecycle',
+      label: 'Lifecycle',
+      values: [{ id: 'pilot', label: 'Pilot', count: 0 }],
+    });
+    expect(overview(src, 'both')).not.toContain('<h2>Lifecycle</h2>');
+    expect(overview(src, 'axis')).not.toContain('<h2>Lifecycle</h2>');
+  });
+
+  it('falls back to the by-type list when the index has no usable axis', () => {
+    for (const mode of ['type', 'both', 'axis'] as const) {
+      const html = overview(index(), mode);
+      // Byte for byte today's overview, whatever the mode asked for: an export
+      // can never come out with no index at all.
+      expect(html).toBe(overview(index(), 'type'));
+      expect(html).toContain('<h2>Pages</h2>');
+      expect(html).not.toContain('<details>');
+    }
+  });
+
+  it('says so when the index lists no resources, in every mode', () => {
+    const empty = parseTenantIndex(
+      FACETED_INDEX_YAML.slice(0, FACETED_INDEX_YAML.indexOf('resources:')),
+    )!;
+    for (const mode of ['type', 'both', 'axis'] as const) {
+      expect(overview(empty, mode)).toContain(
+        "This tenant's index lists no resources.",
+      );
+    }
+  });
+});
+
+// The `<li>` rows one collapsed axis section holds.
+function section(html: string, summary: string): string {
+  const at = html.indexOf(`<summary>${summary}</summary>`);
+  if (at < 0) throw new Error(`no section ${summary}`);
+  const end = html.indexOf('</details>', at);
+  return html.slice(at, end);
+}

@@ -4,8 +4,10 @@ import * as path from 'path';
 import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import * as yauzl from 'yauzl';
 import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
+import { OVERVIEW_FILE } from '../src/docs/export/confluence';
 
 // Reproduces, as automated tests, the manual endpoint checks: discovery via
 // docs/index.yaml, picker, the summary-driven tenant landing page and its
@@ -1048,6 +1050,42 @@ describe('Docs browser (e2e)', () => {
     expect(await snapshot(root)).toEqual(tree);
   });
 
+  it('follows EXPORT_INDEX, which is read per request', async () => {
+    const previous = process.env.EXPORT_INDEX;
+    try {
+      // Unset: the by-type list alone, however rich this tenant's taxonomy is.
+      delete process.env.EXPORT_INDEX;
+      const byType = await overviewOf('/mytenant/_export/confluence');
+      expect(byType).toContain('<h2>Pages</h2>');
+      expect(byType).not.toContain('<h2>Platform</h2>');
+
+      // `both` adds one collapsible section per axis the index declares, after
+      // that list — no restart, because the variable is read at its point of use.
+      process.env.EXPORT_INDEX = 'both';
+      const both = await overviewOf('/mytenant/_export/confluence');
+      expect(both.indexOf('<h2>Pages</h2>')).toBeLessThan(
+        both.indexOf('<h2>Programme</h2>'),
+      );
+      expect(both).toContain('<summary>Windows (1)</summary>');
+      // The export classifies through the sidebar's own rule, so a page with no
+      // value on an axis lands in the bucket the filter would put it in.
+      expect(both).toContain('<summary>Uncategorised (1)</summary>');
+
+      // `axis` drops the spine; a typo falls back to the default.
+      process.env.EXPORT_INDEX = 'axis';
+      expect(await overviewOf('/mytenant/_export/confluence')).not.toContain(
+        '<h2>Pages</h2>',
+      );
+      process.env.EXPORT_INDEX = 'nonsense';
+      expect(await overviewOf('/mytenant/_export/confluence')).toContain(
+        '<h2>Pages</h2>',
+      );
+    } finally {
+      if (previous === undefined) delete process.env.EXPORT_INDEX;
+      else process.env.EXPORT_INDEX = previous;
+    }
+  });
+
   it('404s an unknown export format and an unknown tenant', async () => {
     await request(app.getHttpServer())
       .get('/mytenant/_export/docx')
@@ -1056,7 +1094,44 @@ describe('Docs browser (e2e)', () => {
       .get('/nosuchtenant/_export/confluence')
       .expect(404);
   });
+
+  // The overview page out of the streamed archive. The index mode changes no
+  // file name, so the assertion needs the entry's *contents*, which `yazl`
+  // deflates.
+  async function overviewOf(route: string): Promise<string> {
+    const res = await request(app.getHttpServer())
+      .get(route)
+      .buffer()
+      .parse(binaryParser)
+      .expect(200);
+    return readZipEntry(res.body as Buffer, OVERVIEW_FILE);
+  }
 });
+
+// Reads one entry, matched by the tail of its name, out of a zip in memory.
+function readZipEntry(zip: Buffer, suffix: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(zip, { lazyEntries: true }, (err, file) => {
+      if (err || !file) return reject(err ?? new Error('unreadable zip'));
+      file.on('entry', (entry) => {
+        if (!entry.fileName.endsWith(suffix)) return file.readEntry();
+        file.openReadStream(entry, (streamErr, stream) => {
+          if (streamErr || !stream) {
+            return reject(streamErr ?? new Error('unreadable entry'));
+          }
+          const chunks: Buffer[] = [];
+          stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          stream.on('end', () =>
+            resolve(Buffer.concat(chunks).toString('utf8')),
+          );
+          stream.on('error', reject);
+        });
+      });
+      file.on('end', () => reject(new Error(`no ${suffix} in the archive`)));
+      file.readEntry();
+    });
+  });
+}
 
 // superagent has no parser for application/zip, so collect the raw bytes.
 function binaryParser(res: any, cb: any): void {

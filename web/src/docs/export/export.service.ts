@@ -13,6 +13,7 @@ import {
   overviewPage,
   OVERVIEW_FILE,
 } from './confluence';
+import { parseExportIndexMode } from './export-index-mode';
 import { toConfluenceHtml } from './html-allowlist';
 import { stripDocExtension } from './page-name';
 
@@ -72,6 +73,9 @@ export class ExportService {
       pages: plan.pages,
       summaryHtml,
       skipped,
+      // Read at its point of use, per export, so the operator's choice needs no
+      // restart and `confluence.ts` stays env-free.
+      indexMode: parseExportIndexMode(process.env.EXPORT_INDEX),
     });
     zip.addBuffer(
       Buffer.from(overview, 'utf8'),
