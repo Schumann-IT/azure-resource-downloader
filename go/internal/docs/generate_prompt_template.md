@@ -24,7 +24,6 @@ Marked blocks the tool replaces (start/end markers stay, content between them is
   summary-facts  tenant-wide counts, platforms, assignment posture and coverage for the summary (section 7)
 
 Everything outside the markers is prose you can edit freely. Keep the markers matched and never nested.
-The existing `DOC-GENERATION-PROMPT.md` is the full-export procedure and is not used by this command.
 
 Editing convention: the numbered sections are the procedure and stay short. Background — why a step exists,
 what failure it prevents — goes in the appendix at the bottom. Put explanation there, never instructions.

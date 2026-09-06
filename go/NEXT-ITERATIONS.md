@@ -31,6 +31,31 @@ with no drift observed in practice; and (2) the web side needs per-item severity
 cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
 seven templates and regenerate every document — and accept that it cannot be automatically validated.
 
+### Idea: resolve Graph object ids to names inside the exported YAML
+
+Add a transformer that resolves Microsoft Graph object ids that appear in a resource — assignment `groupId`s,
+filter ids, `notificationTemplateId`s — to their display names at export time, as the `id-resolution`
+transformer already does offline for ARM resource ids (which carry their name in the id itself). The YAML
+would then read `groupId: 8964516b-… (GBL_D_WIN_...)` instead of a bare GUID. **Not planned — parked
+deliberately**, for three reasons:
+
+- **The documentation already resolves them, and does so incrementally.** `docs generate-prompt` builds the
+  group, filter and template reference maps from `metadata.yaml`, renders every assignments / "Targeted by" /
+  "Used by" block from them, and re-splices exactly those blocks when a referenced object is renamed — without
+  touching the resource's own document or its YAML. Resolving in the YAML would duplicate that with a worse
+  failure mode.
+- **It would put a decision into a fact.** A resource's YAML and its `sourceSha256` are meant to move only when
+  the resource itself changes. Embedding another object's *current* name makes every policy's hash move when a
+  group is renamed, which forces regenerating every document that assigns it — the exact cascade the marked
+  splice blocks exist to avoid.
+- **It costs one extra Graph read per referenced id**, on every run, for information the export already holds
+  once (in the group's own YAML).
+
+**Revisit only if** a consumer other than the documentation pipeline needs names inside the YAML itself — e.g.
+a diff/review workflow on `resources/` that cannot read `metadata.yaml`. If promoted, resolve from the export
+(the already-downloaded groups/filters/templates), never from a live lookup, and write the name into a sidecar
+`_name` key the way `id-resolution` does — never in place of the id.
+
 ### Idea: bootstrap the curated taxonomy from per-document LLM suggestions
 
 Have the doc-generation model suggest, per resource, which programmes it belongs to (as *labels* with a short
