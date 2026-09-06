@@ -83,6 +83,7 @@ Configuration is environment variables only; there is no config file.
 | --- | --- | --- |
 | `DOCS_ROOT` | `../output` (relative to `process.cwd()`) | Root that is scanned for tenant folders. |
 | `PORT` | `3000` | HTTP listen port. |
+| `EXPORT_INDEX` | `type` | Which index the Confluence export writes onto `Overview.html`: `type` (the by-type **Pages** list only), `both` (that list, then one collapsible section per taxonomy axis) or `axis` (the axis sections only). Unset, empty or unrecognised means `type`, so a typo can neither fail an export nor change what it contains. |
 
 ```bash
 DOCS_ROOT=/path/to/output PORT=4000 npm run start:prod
@@ -196,10 +197,11 @@ time.
   its single programme axis is synthesised from those fields.
 
 The filters narrow *navigation*, not page bodies: a document and the tenant summary still say whatever
-they say. The Confluence export is unaffected — it always exports the whole tenant.
+they say. The Confluence export is unaffected by a selection — it always exports the whole tenant —
+but it *indexes* by the same axes through the same rule, see [`EXPORT_INDEX`](#configuration).
 
-Grouping documents **by an axis** instead of by resource type is the other half of this and is not
-implemented. See [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+Structuring the **sidebar** by an axis instead of by resource type is the other half of this and is
+not implemented. See [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
 
 ## Confluence export
 
@@ -212,8 +214,14 @@ HTML import expects: the folder name becomes the space name, each `.html` file b
   then the document's H1, then the file's base name. Characters that are illegal in a file name or a
   Confluence title are replaced, and a residual collision gets a `(2)` suffix and a line on the
   overview page — never an overwrite.
-- **Overview page** — `Overview.html`, built from `docs/summary.md` plus a grouped link list that
-  stands in for the sidebar, since an imported space is a **flat** set of pages with no hierarchy.
+- **Overview page** — `Overview.html`, built from `docs/summary.md` plus a link list that stands in
+  for the sidebar, since an imported space is a **flat** set of pages with no hierarchy. Its index is
+  operator-configurable through [`EXPORT_INDEX`](#configuration): by resource type (the default), by
+  taxonomy axis — one `<h2>` per axis and one collapsible `<details>` per value, which a real import
+  turns into a native expand — or both. The axis sections classify through the *same* rule as the
+  sidebar filter, so a page appears under every value it holds, the uncategorised bucket is always
+  rendered, and each count is the number of links beneath it. An index that declares no usable axis
+  renders the by-type list whatever the variable asks for.
 - **Provenance** — each page opens with the source, export timestamp and generation hashes from the
   document's frontmatter, and a note that the page is generated.
 - **Determinism** — zip entries carry the export's own `generatedAt`, not the wall clock, so
@@ -274,7 +282,9 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
   counts, dead-end values dropped while a selected one survives, chip toggling, the uncategorised
   bucket, distinct-resource totals, the active document surviving a filter and being flagged as exempt from
   it, a version-2 index filtering through the synthesised axis, and an index without a taxonomy staying
-  unfiltered).
+  unfiltered), plus `filterableAxes`/`groupByAxis` — the rule the export shares — with header value
+  order, the always-present uncategorised bucket, a multi-valued resource in several buckets, an axis
+  nothing matches yielding nothing, and the header-then-resource-then-id label fallback.
 - `test/section-hooks.spec.ts` — heading slugs (the em dash, `&` → `and`, inline markup), the
   declared-vs-undeclared heading split, matched and unmatched marker pairs with the ranges they report,
   section wrapping (including that an H2 inside a spliced block never opens one), and locating the
@@ -290,14 +300,19 @@ Jest (`ts-jest`, `testRegex: .*\.spec\.ts$`), run with `--experimental-vm-module
   plus the YAML view with its `#L` anchors, `?raw`, the top-bar switcher (and its absence
   for a document without a `source`), and no-restart refresh of a re-downloaded resource. For the
   Confluence export: the content type, `Content-Disposition`, the space folder and page entries in the
-  zip, the download link being on the picker and not on the landing page, the 404s for an unknown format or an unimplemented `<details>` strategy, and — as the
-  read-only and cache invariants — that an export changes neither the browser's rendered HTML nor a
-  single byte under the docs root.
+  zip, the download link being on the picker and not on the landing page, the 404s for an unknown
+  format or tenant, `EXPORT_INDEX` being honoured per request (read out of the archived
+  `Overview.html` with `yauzl`, a test-only dependency), and — as the read-only and cache invariants —
+  that an export changes neither the browser's rendered HTML nor a single byte under the docs root.
 - `test/export.spec.ts` — the Confluence exporter's pure modules: page-title derivation (illegal
   characters, the display-name/H1/base-name fallbacks, deterministic deduplication), the allowlist
   serialiser (a bare `<key>` escaped, unsupported HTML unwrapped, scripts dropped, heading permalinks
   unwrapped, images reduced to `alt` text), href rewriting, and the format (space name, page plan,
-  provenance, the overview's grouped link list). The `<details>` fixture — nested blocks, a
+  provenance, the overview's link list, and the axis index: no axis section under the default,
+  sections after the by-type list under `both`, the spine dropped under `axis`, per-value counts equal
+  to the links rendered and to `countMatching` for the same selection, and the by-type fallback for an
+  index with no usable axis). `parseExportIndexMode` covers each id, unset, empty and garbage. The
+  `<details>` fixture — nested blocks, a
   group-label block with no value, a link inside a block, a value containing ` = ` — is where a
   future transform gets its assertions.
 - `test/styles-build.spec.ts` — compiles `src/styles.css` with the local Tailwind CLI and asserts the
@@ -330,6 +345,7 @@ web/
 │       └── export/
 │           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
 │           ├── confluence.ts            # the format: space, page plan, overview, provenance
+│           ├── export-index-mode.ts     # EXPORT_INDEX → by-type / axis / both overview index
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
 ├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}

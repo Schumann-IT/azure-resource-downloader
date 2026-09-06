@@ -132,6 +132,10 @@ export type FacetSelection = Record<string, string[]>;
 // id can collide with it.
 export const UNCATEGORISED = '_uncategorised';
 
+// The label of that bucket. Shared by the sidebar chip and the export's axis
+// section so the two cannot come to read differently.
+export const UNCATEGORISED_LABEL = 'Uncategorised';
+
 // Query parameters that belong to a route rather than to a facet axis. An axis
 // whose id collides with one is not offered as a filter, so it can never shadow
 // the route's own parameter.
@@ -332,7 +336,7 @@ export function buildFacetFilters(
     ];
     const candidates = [
       ...axis.values.map((v) => ({ id: v.id, label: v.label })),
-      { id: UNCATEGORISED, label: 'Uncategorised' },
+      { id: UNCATEGORISED, label: UNCATEGORISED_LABEL },
     ];
     for (const value of candidates) {
       const active = chosen.includes(value.id);
@@ -378,12 +382,84 @@ export function hasSelection(selection: FacetSelection): boolean {
 // actually a member of (an axis nothing matched renders as nothing rather than as
 // a lone "Uncategorised" chip), and whose id does not collide with a route's own
 // query parameter.
-function filterableAxes(index: TenantIndex): IndexFacet[] {
+//
+// Exported because the Confluence export groups by the same axes: the browser and
+// the export must classify identically, which they can only do by calling one
+// rule. The reserved-parameter exclusion is kept even though an export has no
+// query parameters — a second definition of *usable axis* is exactly the drift
+// this avoids.
+export function filterableAxes(index: TenantIndex): IndexFacet[] {
   return index.facets.filter(
     (axis) =>
       !RESERVED_QUERY_PARAMS.has(axis.id) &&
       index.resources.some((r) => (r.facets[axis.id] ?? []).length > 0),
   );
+}
+
+// One bucket of an axis: its value id, its display label and the resources that
+// hold that value. Href-free on purpose — a consumer decides what a resource
+// links to (an app route in the browser, a page file name in an export).
+export interface AxisGroup {
+  id: string;
+  label: string;
+  resources: IndexResource[];
+}
+
+// Groups the index by one axis: one entry per value the axis declares, in the
+// header's display order, plus the uncategorised bucket last and always present.
+//
+// The grouping primitive the Confluence export builds its axis index from, kept
+// here rather than in the export so both sides classify through the same
+// `matchesAxis`/`filterableAxes` rule. Membership, labels and order are *read*
+// from the index — nothing is derived, re-labelled or re-ordered.
+//
+// Values this tenant matched to nothing are kept ("empty in this tenant" is
+// information the registry carries), and an axis `filterableAxes` does not offer
+// yields [], so an axis nothing matched is omitted in an export exactly as in the
+// sidebar. An axis is not a partition: a resource holding several values of one
+// axis appears in each of their buckets.
+export function groupByAxis(index: TenantIndex, axisId: string): AxisGroup[] {
+  const axis = filterableAxes(index).find((a) => a.id === axisId);
+  if (!axis) return [];
+
+  const declared = axis.values.map((v) => v.id);
+  const extra: string[] = [];
+  for (const resource of index.resources) {
+    for (const id of resource.facets[axis.id] ?? []) {
+      if (!declared.includes(id) && !extra.includes(id)) extra.push(id);
+    }
+  }
+
+  const groups: AxisGroup[] = [...declared, ...extra].map((id) => ({
+    id,
+    label: axisValueLabel(index, axis, id),
+    resources: index.resources.filter((r) => matchesAxis(r, axis.id, [id])),
+  }));
+  groups.push({
+    id: UNCATEGORISED,
+    label: UNCATEGORISED_LABEL,
+    resources: index.resources.filter((r) =>
+      matchesAxis(r, axis.id, [UNCATEGORISED]),
+    ),
+  });
+  return groups;
+}
+
+// A bucket's label: the header first, then the first resource in index order that
+// names the value (which is how a version-2 index labels a value its `programmes`
+// registry omits), then the id itself.
+function axisValueLabel(
+  index: TenantIndex,
+  axis: IndexFacet,
+  valueId: string,
+): string {
+  const declared = axis.values.find((v) => v.id === valueId);
+  if (declared) return declared.label;
+  for (const resource of index.resources) {
+    const group = resource.groups.find((g) => g.id === valueId);
+    if (group) return group.label;
+  }
+  return valueId;
 }
 
 // The selection with every axis this index cannot serve dropped, so a stale or

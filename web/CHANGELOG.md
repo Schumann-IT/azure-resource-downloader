@@ -10,15 +10,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Confluence export can index a space by taxonomy axis, through the same rule as the sidebar
+  filter.** `Overview.html` used to offer only a by-resource-type **Pages** list, built by the export's
+  own `groupByType()`, so everything the sidebar chips can slice was dropped at the export boundary: a
+  reader of an imported space could get to a page from its Azure/Graph type but not from *macOS* or from
+  a programme. The axis rule is now **one implementation with two consumers** — `filterableAxes()` is
+  exported from `src/docs/tenant-index.ts` and joined by a `groupByAxis(index, axisId)` primitive beside
+  it, both built on the `matchesAxis()` the filter already used — so the browser and the export cannot
+  come to classify differently, and the *Uncategorised* label is a shared constant rather than a string
+  in each renderer. Membership, labels and display order stay **read from `docs/index.yaml`** (header
+  `facets` for the registry, per-resource `facets` for membership): nothing is computed, re-labelled or
+  re-ordered in the export. Each axis is an `<h2>` followed by one collapsed `<details>` per value, which
+  a real Confluence import turns into a native expand, so three axes over 263 resources read as ~10
+  scannable lines each instead of ~840 extra link rows. An axis is **not a partition**: a page appears
+  under every value it holds and the index says so once per axis, the uncategorised bucket is always
+  rendered, and a value the registry declares but this tenant matched to nothing stays visible at `(0)`.
+  Every count is **the number of links beneath it** — taken over the rows the export actually rendered,
+  never over `index.resources` — so a collapsed section can never promise more links than it holds;
+  documents the export could not read stay under *Not exported* as before.
+
+- **`EXPORT_INDEX` selects that index, as an operator default rather than a per-request option.** It
+  takes `type` (the by-type list alone), `both` (that list, then the axis sections) or `axis` (the axis
+  sections only), and is read **at its point of use** in `ExportService.confluence()`, so a change needs
+  no restart and `confluence.ts` stays pure and environment-free. This adds **no configuration
+  mechanism**: environment variables remain the only one, `EXPORT_INDEX` simply joins `DOCS_ROOT` and
+  `PORT`, with no config file, no query parameter and no route change — the export is still the plain
+  `<a download>` the tenant picker produces, and no route mutates anything. **`type` is the default, so
+  the feature is opt-in**: an operator who upgrades and changes nothing gets the same bytes as before,
+  which the test suite asserts. Unset, empty or unrecognised means `type` — the same leniency
+  `parseFacetSelection()` applies to a bad selection, landing on the mode that changes nothing, because
+  a typo must not fail an export. An index with **no usable axis** renders the by-type list whatever the
+  mode asked for, and the *this tenant's index lists no resources* line is emitted in every mode, so an
+  export can never come out with no index at all.
+
 - **`.env.example` documents every environment variable the browser reads.** `DOCS_ROOT` and `PORT` were
   described only in the README table; the example file now lists them with their built-in defaults, so
   sourcing it unchanged behaves exactly like starting the server with an empty environment. It is a
   **reference, not a mechanism**: nothing loads it, there is no `dotenv` dependency and no config file, so
   configuration remains environment variables read at their point of use — the README shows the
   `cp .env.example .env && set -a; source .env; set +a` shell idiom. `.env` itself is now gitignored so a
-  copy holding an operator's paths cannot be committed. The file also names the one *planned* variable,
-  `EXPORT_INDEX` (which index the Confluence export writes), commented out and marked as not implemented;
-  the work is scheduled in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+  copy holding an operator's paths cannot be committed. It also documents `EXPORT_INDEX`, added below.
 
 - **The sidebar can be filtered along every taxonomy axis the CLI resolves, combining them, with counts that
   react to the selection.** `docs generate-index` with a `taxonomy:` section classifies each resource on one
