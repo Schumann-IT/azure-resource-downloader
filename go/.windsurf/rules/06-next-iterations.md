@@ -52,6 +52,26 @@ Ideas do **not** live inside an entry — see Parked ideas.
   reconciling its rationale and revisit conditions against what is true now, and delete the `### Idea` block.
   A promotion is a review, not a mechanical copy.
 
+## Batching regeneration-gated work
+
+A full documentation regeneration is expensive, so **regeneration-gated work must be batched**. Whenever a plan
+or promotion involves a change that forces re-generating the documentation, **proactively remind the user to
+also plan and implement any other pending regeneration-gated ideas in the same batch**, so they share a single
+regeneration attempt instead of each forcing its own.
+
+- **What counts as regeneration-gated.** A change is regeneration-gated when it edits
+  `internal/models/documentation_prompt.tmpl` or any per-type override template
+  (`internal/handlers/{graph,arm}/*_prompt.tmpl`), or otherwise changes what an LLM must write into
+  per-resource documents and therefore moves a type's `promptSha256`. Cheap, offline changes that ride the
+  non-hashed `docs/generate.md` (e.g. taxonomy hint vocabulary) are **not** regeneration-gated and carry no
+  reminder.
+- **When to remind.** At planning time and at promotion time — before committing to a regeneration-gated entry,
+  survey the other entries and Parked ideas for ones that are also regeneration-gated and surface them so the
+  user can decide whether to fold them into the same regeneration.
+- **State the coupling in the entry.** A regeneration-gated entry's Notes should say so, and a parked idea that
+  is regeneration-gated should record that it is only worth doing while riding a regeneration already scheduled
+  for another reason.
+
 ## On any edit
 
 - Reflect any user-visible effect in `CHANGELOG.md` per the Changelog Policy — adding, refining, or removing
