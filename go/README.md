@@ -101,7 +101,10 @@ make install          # into $(go env GOPATH)/bin
 
 Releases are tagged `go/vX.Y.Z`; `make build` derives the version from the nearest such tag (`vX.Y.Z`,
 `vX.Y.Z-N-g<sha>`, `-dirty` for an uncommitted tree, `dev` outside a checkout) and stamps it into `--version`
-and into every `resources/metadata.yaml` it writes. See the monorepo README for the release procedure.
+and into every `resources/metadata.yaml` it writes. `make release-ready` only reports whether a release can be
+cut (changelog closed into an undated `## [X.Y.Z]` heading, nothing struck out in `NEXT-ITERATIONS.md`); closing
+the changelog is done by hand, and branch/working-tree checks, date stamping, tagging and publishing happen from
+the repository root — see the [monorepo README](../README.md#releasing).
 
 ## Quick start
 
@@ -945,6 +948,7 @@ make all             # check + build
 make ci              # clean + deps + check + build
 make deps            # download + tidy
 make test-coverage   # coverage.html
+make release-ready   # report whether a release can be cut (changes nothing); tag + publish via ../Makefile
 ```
 
 Conventions that CI and review expect:

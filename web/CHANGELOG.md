@@ -13,14 +13,22 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-09-06
-
-First tagged release, covering the browser's whole development history including the release candidate that
-preceded it. It accepts any `docs/index.yaml` with an integer `version >= 1` (a newer schema degrades rather
-than making the tenant disappear) and understands the fields up to schema **version 4**, as written by
-`azure-rd` 0.1.0, with a compatibility shim for a version-2 index.
+## [0.1.0]
 
 ### Added
+
+#### Release Workflow 
+
+- **`npm run release-ready` reports whether a release can be cut.** It runs the tests and the build first, then
+  looks at this changelog: when `[Unreleased]` has not been closed into a new, still undated version section it
+  reports that no release is needed and succeeds; otherwise it checks that `NEXT-ITERATIONS.md` has no
+  struck-out entries (work that shipped but was never recorded here), that `[Unreleased]` is empty and that
+  `package.json` carries that version. Every check is run and reported with what to do about it; the script only
+  fails when all of them fail. It edits nothing and runs no git command: closing the changelog and bumping the
+  version are done by hand, and branch and working-tree checks, stamping the release date, tagging and the GitHub
+  release are a separate step at the repository root that runs this report first and acts on every project whose
+  newest heading is undated, so the browser and the CLI stay independently versioned. Procedure in the monorepo
+  README.
 
 #### The browser
 

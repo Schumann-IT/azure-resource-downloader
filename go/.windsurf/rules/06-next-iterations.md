@@ -34,6 +34,9 @@ Ideas do **not** live inside an entry — see Parked ideas.
 
 - **Remove once shipped.** When an entry's Plan is delivered in full, delete the entry. Its history is the
   `CHANGELOG.md` entry that recorded the work; do not leave "done" entries behind.
+- **A strikeout (`~~…~~`) is a temporary marker only.** It means "shipped, but not yet recorded in
+  `CHANGELOG.md`". `make release-ready` reports every remaining strikeout; resolve it — write the changelog
+  entry and delete the struck-out text — before a release is cut.
 - **Numbering is presentational.** Renumber the remaining entries to stay contiguous (`1..N`) after a
   removal. Because numbers shift, do **not** rely on `See NEXT-ITERATIONS.md §N` as a stable anchor from
   other files — describe the work instead. Stale `§N` references already in released `CHANGELOG.md` sections
