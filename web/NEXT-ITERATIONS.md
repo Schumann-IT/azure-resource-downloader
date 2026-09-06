@@ -1,11 +1,105 @@
 # Next iterations
 
-Standing decisions and parked ideas for the docs browser. `README.md` describes what it does today and
-`CHANGELOG.md` records what shipped; neither is repeated here.
+Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it does
+today and `CHANGELOG.md` records what shipped; neither is repeated here.
 
-**Nothing is currently scheduled.** Every idea below is deliberately unscheduled: picking one up means
+One entry is scheduled, below. Every idea in *Parked ideas* is deliberately unscheduled: picking one up means
 promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling its rationale
 against what is true at that point rather than copying it across.
+
+## 1. Build an export's index from the same axis logic as the sidebar filter
+
+**Goal.** An operator can publish a Confluence space whose index lets a reader get from *macOS*, or from a
+programme, to the pages it covers — the way the sidebar filter does in the browser — instead of only from a
+resource type. The export keeps its by-type **Pages** list as the spine and gains axis sections beside it when
+asked for them, classifying identically to the browser because both read the same axis rule and the same index
+data.
+
+> **Why now.** The export has an index today, but it is a *second, independent* grouping: `groupByType()` in
+> `src/docs/export/confluence.ts` knows nothing about the axes, so everything `buildFacetFilters()` can slice is
+> dropped at the export boundary. The shared primitive is cheapest to extract while there is still exactly one
+> consumer to migrate — a second whole-tenant format would have to be written against whichever rule it found.
+>
+> **Membership is read, never derived.** Axis ids, labels and display order come from the index header
+> (`index.facets`), membership from each resource's `facets` map. The export must not compute, re-label or
+> re-order anything, and nothing may be computed inside `buildNavigation()` or `buildFacetFilters()`, which the
+> export cannot see.
+>
+> **An axis is not a partition.** In the reference export 55 of 263 resources hold several `programme` values,
+> so a page appears under more than one value and the index says so rather than picking a primary; 63 carry no
+> `platform` and 170 no `scope`, so the uncategorised bucket is always rendered. Counts are counted over
+> distinct resources, never summed per value, so they match the sidebar's.
+>
+> **Layout is settled.** Axis sections go on `Overview.html`, *after* the by-type Pages list: the tenant summary
+> keeps the top of the page and there is still one page to import. Each axis is an H2 and each axis value a
+> collapsed `<details>` whose summary is `<label> (<count>)` — a real import turns that into a native expand —
+> so three axes over 263 resources read as ~10 scannable lines each instead of ~840 extra link rows. Ruled out:
+> per-axis index pages (reserved page names would compete with the collision-proof `<type leaf> — <name>`
+> scheme). Replacing the by-type grouping is never the default — it is the spine the sidebar uses — but is
+> available as an explicit operator choice, see the next note.
+>
+> **The choice is an operator default, not a per-request option.** The parked *one export button per tenant*
+> idea — a `GET /:tenant/_export` page with per-format controls — is not implemented, and this entry does not
+> build it: nothing about the export may become a URL the picker's plain `<a download>` cannot produce. So the
+> choice between the by-type index, the axis index, or both is made by the operator who runs the server, through
+> the one configuration mechanism this project has: **environment variables, read at their point of use**. No
+> config file, no query parameter, no new mechanism — `EXPORT_INDEX` joins `DOCS_ROOT` and `PORT`, and
+> `.env.example` documents all three.
+>
+> `EXPORT_INDEX` takes `type` (default: the by-type Pages list alone — today's export, byte for byte), `both`
+> (that list, then the axis sections) or `axis` (axis sections only). **`type` is the default, so the feature is
+> opt-in**: an operator who upgrades and changes nothing gets the same space they got before, and an export that
+> grew axis sections unasked would be a surprise in a document set people re-import. `axis` is offered rather
+> than ruled out because a multi-valued axis plus the always-rendered uncategorised bucket still reaches every
+> page, so it loses nothing but the spine. Unset, empty or unrecognised means `type` — an operator typo must not
+> fail an export, the same leniency `parseFacetSelection()` applies to a bad selection, and the fallback lands on
+> the mode that changes nothing.
+>
+> **It stays forward-compatible with that page.** If `GET /:tenant/_export` is ever built, the same three ids
+> become the values of a query parameter on `GET /:tenant/_export/confluence`, with `EXPORT_INDEX` as its
+> default, so a bookmarked option-less URL keeps producing whatever the operator configured. That is why the
+> value ids are fixed now and why the choice is parsed in one place rather than read from `process.env` deep in
+> the renderer. It also means the axis index is reachable per request *before* the variable is set, which is the
+> natural moment to revisit the default.
+
+**Plan.**
+
+- Extract the grouping seam as a pure, href-free primitive: `groupByAxis(index, axisId)` ⇒ ordered
+  `{ id, label, resources }` with the uncategorised bucket last and always present, plus an exported
+  `filterableAxes(index)` (today private in `src/docs/tenant-index.ts`), both reusing `matchesAxis` so an axis
+  nothing matched is omitted in an export exactly as in the sidebar. No routes, no active item, no chip state;
+  synchronous and Nest-free so it unit-tests without a module.
+- Rewire `buildFacetFilters`, `parseFacetSelection` and `countMatching` onto the same exported rule, so there is
+  one axis rule in the codebase rather than a sidebar copy and an export copy.
+- Render the axis sections in `overviewPage()` (`src/docs/export/confluence.ts`) after the `Pages` list: one H2
+  per axis, one collapsed `<details>` per value with `<label> (<count>)`, its `<ul>` reusing the existing page
+  titles and file hrefs (`plan.pageFileByDoc`), and a one-line note that a page can appear under several values.
+  `groupByType()` and the by-type list stay as they are.
+- Add the operator switch: an `ExportIndexMode = 'type' | 'both' | 'axis'` with a pure
+  `parseExportIndexMode(value)` in `src/docs/export/` that maps anything unrecognised to `type`, read from
+  `process.env.EXPORT_INDEX` **once, at its point of use** in `ExportService.confluence()` and passed into
+  `overviewPage()` as a plain option — `confluence.ts` stays pure and env-free so the mode is a test parameter,
+  not a global. `overviewPage()` omits the by-type list under `axis` and the axis sections under `type`, and
+  renders neither heading when the mode leaves it out.
+- Document the variable in the README `Configuration` table (`EXPORT_INDEX`, default `type`, the three ids and
+  the fallback) and in `.env.example`, which now exists and lists `DOCS_ROOT`, `PORT` and `EXPORT_INDEX`; drop
+  its *not implemented yet* section in the same edit. Note in both places that the app does not *load*
+  `.env` — it is a reference to source into a shell, so the environment-variables-only rule is untouched.
+- Confirm `details`/`summary` survive the serialiser (`src/docs/export/html-allowlist.ts` keeps both today) and
+  that `Overview.html` needs no allowlist change.
+- Tests in `test/export.spec.ts`: axes and values in header order; uncategorised last and rendered even when
+  empty; a multi-valued resource listed under each value; an axis no resource matches omitted; per-value counts
+  and the section totals equal to `countMatching` for the same selection; an index with no `facets` producing
+  exactly today's overview. Keep a case asserting that the **default mode emits no axis section at all**, even
+  for an index rich in facets, so the opt-in cannot regress. Plus `groupByAxis`/`filterableAxes` cases in
+  `test/tenant-index.spec.ts`, and `parseExportIndexMode` cases covering each id, unset, empty and garbage. One
+  e2e case in `test/docs.e2e.spec.ts` sets `EXPORT_INDEX` before building the app and asserts the served
+  `Overview.html` follows it, since the variable is only observable through the route.
+- Update the README export section (what `Overview.html` contains, and that its index is operator-configurable)
+  and add a `CHANGELOG.md` `[Unreleased]` entry stating that the export and the sidebar now classify through one
+  shared rule, that `EXPORT_INDEX` selects the index without adding a configuration mechanism or a mutating
+  route, that the default leaves the exported bytes unchanged, and that the export stays read-only,
+  index-derived and script-free.
 
 ## Standing decisions
 
@@ -231,43 +325,6 @@ TTL, unreadable ⇒ empty), producing file names only, with counts still taken f
 UX questions: whether a `readdir`-vs-`counts.excluded` mismatch should be flagged as a stale index, and
 whether resources without documentation should be visually de-emphasised.
 
-### Idea: Build an export's index from the same axis logic as the sidebar filter
-
-Give the Confluence export — and every later whole-tenant format — an index derived from the taxonomy axes, so a
-reader of an imported space can get from *macOS* or a programme to the pages it covers, the way the sidebar
-filter does. The export has an index today, the by-type **Pages** list on `Overview.html`, but it is a
-*second, independent* grouping: `groupByType()` in `src/docs/export/confluence.ts` knows nothing about the
-axes, so everything `buildFacetFilters()` can slice is dropped at the export boundary. **Parked** because the
-export is young and no one has yet imported a space and asked for the axis view, and because the by-type list
-is a working index for the one thing an imported page title carries. **Revisit** when an imported space is in
-real use, or as soon as a second whole-tenant format is built — the shared primitive below is cheapest to
-extract while there is only one consumer to migrate.
-
-What is settled if it is picked up. **The shared thing is a pure, href-free primitive, not `buildNavigation()`
-or `buildFacetFilters()`** — those bake in app routes, an active item and chip state. The seam is a grouping
-function (`index`, axis id ⇒ ordered `{ id, label, resources }`, uncategorised bucket last) plus the
-*filterable axis* rule that `filterableAxes()` holds privately today, so an axis nothing matched is omitted in
-an export exactly as it is in the sidebar, and each format keeps its own link shape — the same division that
-makes `buildExportPlan()` right to be its own index pass. Sharing it is not a refactor for its own sake: it is
-what guarantees an exported space classifies identically to the browser, rather than an export silently
-grouping by one rule and the sidebar by another. **Membership is read, never derived**: axis values come from
-the index header in its display order and per-resource `facets`, so the export must not compute or re-label
-anything. **An axis is not a partition** — 55 of 263 resources hold several `programme` values, so a page
-appears under more than one value and the index says so rather than picking a primary; 63 carry no `platform`
-and 170 no `scope`, so the uncategorised bucket is always rendered. **Counts are counted over resources**,
-never summed per value, so they match the sidebar's.
-
-Two layout decisions are made. The axis sections go **on `Overview.html`, after the by-type Pages list**, which
-stays as the spine: the tenant summary keeps the top of the page, and there is still one page to import and one
-place to look. Each axis is an H2 and **each axis value is a collapsed `<details>`** whose summary is
-`<label> (<count>)` — the importer turns that into a native expand (settled by a real import), so three axes
-over 263 resources read as ~10 scannable lines each instead of the ~840 extra link rows a flat rendering would
-add. Ruled out: separate per-axis index pages (more pages, and reserved page names competing with the
-`<type leaf> — <name>` scheme that makes document titles collision-proof), and replacing the by-type grouping,
-which would lose the spine the sidebar uses and force a primary-axis judgement. If the export ever grows a
-per-format option page, that layout becomes a *choice* rather than a fixed both-on-one-page — settle the two
-together rather than shipping one and retrofitting the other.
-
 ### Idea: Media and source YAML as page attachments
 
 Confluence's HTML import gives each page a media folder named after it, which is where the two images in the
@@ -324,10 +381,12 @@ picker*.
 Replace the per-format download links on the tenant picker with a **single** *Export* link per tenant card,
 pointing at a new HTML page (`GET /:tenant/_export`) that lists the available formats and lets the operator set
 that format's own options before downloading. First concrete option: the **Confluence index format** — group the
-overview's page list by resource type, or by a taxonomy axis. **Parked** because there is exactly one format
-today and it takes no options, so the page would be a route, a view and a control for a single button that
-already works. **Revisit** the moment either half stops being true: a second whole-tenant format, or the first
-real per-format option (the index-format choice being the likely trigger).
+overview's page list by resource type, by a taxonomy axis, or both. **Parked** because there is exactly one
+format today, and its one real option is settled per *server* rather than per request: the scheduled axis-index
+entry above puts that choice in the `EXPORT_INDEX` environment variable, so the page would still be a route, a
+view and a control for a single button that already works. **Revisit** the moment a second whole-tenant format
+appears, or a reader needs two different exports of the same tenant from one server — which is exactly what an
+environment variable cannot express, and the honest trigger for making the choice per request.
 
 What is settled if it is picked up. **The download route keeps its shape**: `GET /:tenant/_export/:format`
 streams the archive, options ride as query parameters on it, and every option has a default so a bookmarked
@@ -339,7 +398,8 @@ also the honest place for the things currently crammed onto a picker card: the o
 per format, and, cheaply, what the export will contain (page count, pending documents, an incomplete index),
 all index-derived.
 
-Two open questions. **How the controls are expressed** is undecided, with three candidates. **(a)** A plain
+One open question, plus one that is now settled elsewhere. **How the controls are expressed** is undecided, with
+three candidates. **(a)** A plain
 `<form method="get" action="/:tenant/_export/confluence">` with radio buttons and a submit button — pure HTML,
 no script, still read-only, and it scales to several options; it costs the app's first form and first non-anchor
 control, and a form cannot carry `download`, so attachment behaviour rests on the `Content-Disposition` header
@@ -349,8 +409,13 @@ soon as a format has two options. **(c)** Anchors first, with the GET form named
 once a format carries more than one option, and the query-parameter shape fixed up front so swapping the control
 changes no URL. Note that **(a) does not conflict with the no-client-side-JavaScript rule** — that rule bans
 shipped script and client-side state, not HTML controls; the objection to it is precedent, not compliance.
-Second, whether the axis-grouped index is an **option here or an addition to the overview** has to be settled
-together with the axis-index idea above, which currently assumes both groupings coexist on one page.
+Second, the axis-grouped index no longer poses an open question: the scheduled axis-index entry above settles it
+as the `EXPORT_INDEX` environment variable (`type` | `both` | `axis`, default `type`). If this page is built, the
+same three ids become that format's query parameter with `EXPORT_INDEX` as its default, so an option-less URL
+keeps producing what the operator configured — which makes the index format a *migration* of an existing choice
+rather than the first option, and moves the trigger for the page to a second format or a per-request need. Note
+that because the variable defaults to today's by-type index, a reader who wants the axis view on a server
+configured for `type` is the most likely first caller for this page.
 
 This amends *Export entry points live on the tenant picker*: the standing decision already names
 `GET /:tenant/_export` as the answer when a row of format links stops fitting, and this makes per-format

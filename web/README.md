@@ -88,6 +88,15 @@ Configuration is environment variables only; there is no config file.
 DOCS_ROOT=/path/to/output PORT=4000 npm run start:prod
 ```
 
+[`.env.example`](.env.example) lists every variable with its default. The app does **not** load it — there
+is no `dotenv` and no config file; it is a reference to copy and source into your own shell:
+
+```bash
+cp .env.example .env
+set -a; source .env; set +a
+npm run start:prod
+```
+
 ### Expected docs root layout
 
 ```

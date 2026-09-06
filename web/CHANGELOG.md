@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`.env.example` documents every environment variable the browser reads.** `DOCS_ROOT` and `PORT` were
+  described only in the README table; the example file now lists them with their built-in defaults, so
+  sourcing it unchanged behaves exactly like starting the server with an empty environment. It is a
+  **reference, not a mechanism**: nothing loads it, there is no `dotenv` dependency and no config file, so
+  configuration remains environment variables read at their point of use — the README shows the
+  `cp .env.example .env && set -a; source .env; set +a` shell idiom. `.env` itself is now gitignored so a
+  copy holding an operator's paths cannot be committed. The file also names the one *planned* variable,
+  `EXPORT_INDEX` (which index the Confluence export writes), commented out and marked as not implemented;
+  the work is scheduled in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md).
+
 - **The sidebar can be filtered along every taxonomy axis the CLI resolves, combining them, with counts that
   react to the selection.** `docs generate-index` with a `taxonomy:` section classifies each resource on one
   or more **axes** — *Programme* (CIS hardening, Defender, VPN…), *Platform*, *Assignment scope*, whatever the
