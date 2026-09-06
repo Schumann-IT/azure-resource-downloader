@@ -97,9 +97,24 @@ Rules for entries:
 - **Place new entries under `## [Unreleased]`**, in the matching `### Added` / `### Changed` /
   `### Fixed` / `### Breaking` subsection (create the subsection if it is missing). Never edit an
   already-released section to sneak in new work.
-- **Released sections are release candidates** (`## [RC1]`, `## [RC2]`, …), newest first, matching
-  `../go/CHANGELOG.md`. Cutting one means renaming `[Unreleased]` to the next `RC<n>` and starting a
-  fresh empty `[Unreleased]` — only do that when asked.
+- **Group entries by feature area under `####` subheadings** once a section gets long — 0.1.0 uses
+  *The browser*, *Views and navigation* and *Confluence export*. Put a new entry in the subheading it
+  belongs to; add a subheading only for a genuinely new area.
+- **One entry per user-visible feature**, the way a squash-merged feature branch would read. A fix that
+  only completes an existing feature belongs **inside that feature's entry**; a change with no observable
+  effect gets none.
+- **Tests get no entry.** Testing is assumed, not announced — the required coverage for a change is listed
+  in the Testing section above, and repeating it here adds nothing a reader can act on.
+- **Keep entries short: a bolded lead-in plus a few sentences.** Leave out implementation detail (internal
+  file, service and symbol names, occurrence counts, defect-by-defect narratives) and configuration detail
+  (variable enumerations, defaults, syntax) — **configuration and routes are documented in `README.md`**,
+  the single source of truth for them. Say that an option exists and what it is for, and point there.
+- **Released sections are SemVer versions with a date** (`## [0.1.0] - 2026-09-06`), newest first, each one
+  matching a `web/vX.Y.Z` git tag. This project's version line is its own and is unrelated to `go/`'s.
+  Cutting a release means renaming `[Unreleased]` to the new version, starting a fresh empty
+  `[Unreleased]`, and bumping `version` in `package.json` to match — only do that when asked. The
+  procedure lives in the **Releasing** section of `../README.md`; the earlier `RC1`/`RC2` naming is
+  retired, so do not reintroduce it.
 - **Explain *why* and which invariant now holds**, not just what moved. If a change touches a
   non-negotiable (path safety, read-only, one `markdown-it` instance, no client-side JS, no-restart
   freshness), say explicitly how it is preserved.

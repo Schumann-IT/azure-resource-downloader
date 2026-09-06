@@ -11,9 +11,14 @@ GOFMT=$(GOCMD) fmt
 GOMOD=$(GOCMD) mod
 
 # Version stamped into the binary so `--version` and export metadata track the
-# build. Prefers the annotated git tag, falling back to the short commit (with a
-# -dirty suffix), then "dev". Override with `make build VERSION=v1.2.3`.
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# build. Releases of this project are tagged `go/vX.Y.Z` in the monorepo, so the
+# tag lookup is restricted with --match: an unfiltered `git describe` would pick
+# up the sibling `web/` project's newest tag and stamp it into every
+# resources/metadata.yaml. The `go/` prefix is then stripped so `--version`
+# reports a plain vX.Y.Z. Falls back to the short commit (with a -dirty suffix),
+# then "dev". Override with `make build VERSION=v1.2.3`.
+GIT_DESCRIBE := $(shell git describe --tags --match 'go/v*' --always --dirty 2>/dev/null)
+VERSION ?= $(if $(GIT_DESCRIBE),$(patsubst go/%,%,$(GIT_DESCRIBE)),dev)
 LDFLAGS := -X azure-resource-downloader/cmd.version=$(VERSION)
 
 # Build the application

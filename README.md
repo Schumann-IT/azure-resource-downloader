@@ -78,6 +78,46 @@ Open <http://localhost:3000>. The browser reads `../output` by default
 az logout
 ```
 
+## Releasing
+
+The two projects are **released independently**. There is no repository-wide version: a release names one
+project, and the tag prefix says which.
+
+| Project | Tag | Version source of truth | Release notes |
+| --- | --- | --- | --- |
+| `go/` | `go/vX.Y.Z` | the tag (stamped into the binary via `-ldflags`) | that version's section of [`go/CHANGELOG.md`](go/CHANGELOG.md) |
+| `web/` | `web/vX.Y.Z` | the tag, mirrored into `web/package.json` | that version's section of [`web/CHANGELOG.md`](web/CHANGELOG.md) |
+
+Each project's version line moves on its own: `go/` can reach `v0.5.0` while `web/` stays at `v0.1.0`. **If
+only one project changed, only that project is tagged** — no empty release and no version bump for the other.
+A tag points at a commit of the shared history, so it records *which repository state produced this artifact*,
+not which files changed.
+
+Because the tags of both projects live in one repository, `go/Makefile` restricts its version lookup to
+`git describe --match 'go/v*'`. Without that filter a `web/` release would be stamped into `azure-rd
+--version` and into `toolVersion` in every `resources/metadata.yaml`.
+
+**Compatibility between the two is stated by the artifact, not by the version numbers.** They meet at
+`output/<tenant>/docs/index.yaml`, which carries its own `version:` schema field: a `go/` release says which
+schema version it *writes*, a `web/` release which versions it *reads*. Comparing `go/` and `web/` version
+numbers means nothing.
+
+To cut a release of `<project>` (`go` or `web`):
+
+1. Make sure the working tree is clean and `main` is up to date, and that the project's checks pass
+   (`make check` in `go/`, `npm test && npm run build` in `web/`).
+2. In that project's `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - <date>` and add a fresh, empty
+   `## [Unreleased]` above it. For `web/`, also set `version` in `package.json`.
+3. Commit (`chore(<project>): release vX.Y.Z`), then tag and push:
+
+   ```bash
+   git tag -a <project>/vX.Y.Z -m "<project> vX.Y.Z"
+   git push origin main --follow-tags
+   ```
+
+4. Publish a GitHub release for the tag, pasting that changelog section as the notes. For `go/`, attach
+   binaries built with `make build VERSION=vX.Y.Z` (the tag also produces this version automatically).
+
 ## More
 
 - CLI reference, flags, config and supported resource types: [`go/README.md`](go/README.md)
