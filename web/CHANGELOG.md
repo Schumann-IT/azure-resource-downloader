@@ -13,7 +13,7 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
-## [0.1.1]
+## [0.1.1] - 2026-09-07
 
 ### Fixed
 
