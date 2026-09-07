@@ -3,9 +3,166 @@
 Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it does
 today and `CHANGELOG.md` records what shipped; neither is repeated here.
 
-Nothing is scheduled right now. Every idea in *Parked ideas* is deliberately unscheduled: picking one up means
-promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling its rationale
+The *Fixes* below are scheduled: small, self-contained corrections that need no design work, listed so they
+are not forgotten between features. Every idea in *Parked ideas* is deliberately unscheduled: picking one up
+means promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling its rationale
 against what is true at that point rather than copying it across.
+
+## Fixes
+
+Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
+JavaScript, one `markdown-it` instance, path safety) and none depends on a documentation regeneration. Each
+carries its own e2e or spec case and a `CHANGELOG.md` entry under `[Unreleased]`; purely internal ones say so.
+
+### 1. Picker and health counts must be as fresh as the sidebar
+
+**Goal.** After `azure-rd docs generate-index` reruns, the tenant picker and `/healthz` show the new counts on
+the next request, the same as the sidebar already does.
+
+> `TenantInfo.documented`, `pending` and `generatedAt` are snapshotted when discovery runs and live for the
+> 30 s TTL, while `getIndex()` is validated by mtime + size on every request — so `/` can disagree with
+> `/:tenant` for half a minute. The freshness invariant is stated for documents, resources and the index; the
+> picker is the one view that still misses it.
+
+**Plan.**
+
+- Have `picker()` and `healthz()` read counts and `generatedAt` through `getIndex(info)` instead of the cached
+  `TenantInfo` fields; drop the duplicated fields from `TenantInfo` (`id`, `name`, paths stay).
+- e2e: rewrite a fixture's `index.yaml` counts and assert `/` and `/healthz` reflect them on the next request
+  without waiting out the TTL.
+
+### 2. Validate `PORT`
+
+**Goal.** A non-numeric or out-of-range `PORT` produces a clear message rather than an opaque `listen(NaN)`
+failure.
+
+**Plan.**
+
+- Parse `PORT` as an integer in `1..65535`; on anything else fall back to `3000` and say so in the single
+  startup line (still the only `console` use).
+- Document the fallback in the README configuration table and `.env.example`.
+
+### 3. Say what was not found
+
+**Goal.** The 404 view distinguishes an unknown tenant, an unknown export format and a missing document
+instead of always reading *Document not found*.
+
+**Plan.**
+
+- Pass a `kind` (`tenant` | `document` | `resource` | `export`) from `notFound()` and vary the headline in
+  `views/error.hbs`; keep the body free of filesystem paths.
+- e2e: assert the headline for an unknown tenant and for `/_export/<unknown>`.
+
+### 4. Align the header with the page content
+
+**Goal.** The breadcrumb in the top bar lines up with the sidebar and the document below it.
+
+> `views/partials/header.hbs` constrains its row to `max-w-5xl`; the document, tenant and resource layouts use
+> `max-w-7xl`, so on wide viewports the header content sits inset from everything under it. The picker and the
+> error page are `max-w-5xl` throughout and are already aligned.
+
+**Plan.**
+
+- Make the header's width a partial parameter (or default it to `max-w-7xl` and have the picker/error pages
+  pass `max-w-5xl`), so each page has one width.
+- `styles-build.spec.ts` needs nothing; verify visually on both layouts.
+
+### 5. Put the tenant in the page title
+
+**Goal.** A document tab and a history entry read `<document> · <tenant>` rather than the bare H1.
+
+**Plan.**
+
+- Compose `title` in the controller for the document, resource and tenant views; the picker keeps
+  *Documentation*.
+- e2e: assert the `<title>` on a document page contains the tenant id.
+
+### 6. Declare both colour schemes to the browser
+
+**Goal.** In dark mode the scrollbars, form-control chrome and overscroll area are dark too, not the light
+defaults around a dark page.
+
+> `body` carries `dark:bg-slate-950` but `<html>` does not, and no `color-scheme` is declared, so the UA
+> chrome and the area past the page edge stay white.
+
+**Plan.**
+
+- Add `<meta name="color-scheme" content="light dark">` to the shared `<head>`, and a `color-scheme: light dark`
+  plus dark background on `html` in `src/styles.css`.
+- `styles-build.spec.ts`: assert the `color-scheme` rule survives compilation.
+
+### 7. Print stylesheet
+
+**Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
+beside it.
+
+> CSS cannot open a closed `<details>`, so collapsed settings blocks print collapsed. State that in the README
+> instead of pretending otherwise; a reader who wants a full printout expands the blocks first.
+
+**Plan.**
+
+- `@media print`: hide `.site-header` and `.nav-tree`, un-stick the layout, let `.prose table` wrap, and drop
+  the `:target` highlights.
+- `styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
+  about collapsed blocks.
+
+### 8. Label the sidebar landmark
+
+**Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
+the per-axis filters.
+
+**Plan.**
+
+- `aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.
+- e2e: assert the attribute is present on a document page.
+
+### 9. Security headers, including a CSP that enforces the no-script rule
+
+**Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
+enforced by the browser rather than only promised by the README.
+
+> The parked *Drop the no-client-side-JavaScript rule* idea notes that today "there is no CSP header". A
+> `script-src 'none'` policy makes the rule verifiable from a response. The policy must allow what the pages
+> legitimately use: `style-src 'self' 'unsafe-inline'` for shiki's inline colours, `img-src 'self' data: https:`
+> for the masked-SVG icons and any image a document embeds, and `frame-ancestors 'none'`. The app stays
+> read-only and ships no script; this changes headers only.
+
+**Plan.**
+
+- One middleware in `configure-app.ts` (shared by runtime and e2e) setting `Content-Security-Policy`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and `X-Frame-Options: DENY`; no new
+  dependency needed.
+- Verify the YAML view, the section icons and a document with an external image still render under the
+  policy (browser console clean).
+- e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
+  list the headers and what the CSP permits.
+
+### 10. One `<head>` partial
+
+**Goal.** The five templates share one `<head>`, so a change such as the `color-scheme` meta or the title
+format is made once — the favicon link was the last change that had to be made five times.
+
+> Internal only: no observable change, so no `CHANGELOG.md` entry.
+
+**Plan.**
+
+- Extract `views/partials/head.hbs` taking `title`; use it from `page`, `picker`, `tenant`, `resource` and
+  `error`.
+- Do fixes 5 and 6 through it.
+
+### 11. Either wire ESLint or drop the dead `eslint-disable` comments
+
+**Goal.** The source contains no directives for a tool that is not configured.
+
+> `main.ts` and `configure-app.ts` carry `eslint-disable` comments; the README and the rules say there is no
+> lint script. Either state is fine; the mismatch is not.
+
+**Plan.**
+
+- Preferred: add `eslint` + `typescript-eslint` with a minimal flat config and an `npm run lint` script, run it
+  in `release-ready`, and update the README *Development conventions* and `02-style-and-quality.md`
+  (which currently say lint is not wired). A `CHANGELOG.md` entry, since it adds a script.
+- Otherwise: delete the two comments (internal, no entry).
 
 ## Standing decisions
 

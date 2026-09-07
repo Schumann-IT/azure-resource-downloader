@@ -53,13 +53,33 @@ export class DocsController {
     res.render('picker', { title: 'Documentation', tenants });
   }
 
-  // GET /healthz — discovery health.
+  // GET /healthz — discovery health. Always 200: the process is healthy even
+  // when the docs root is not there, so a probe that only reads the status code
+  // does not flap while a volume is remounted. `status` and `rootReadable` carry
+  // the deployment signal for probes that read the body; the root's path itself
+  // is never returned.
   @Get('healthz')
   async healthz(@Res() res: Response): Promise<void> {
+    const rootReadable = await this.discovery.rootReadable();
     const tenants = await this.discovery.list();
     const documents = tenants.reduce((n, t) => n + t.documented, 0);
     const pending = tenants.reduce((n, t) => n + t.pending, 0);
-    res.json({ status: 'ok', tenants: tenants.length, documents, pending });
+    res.json({
+      status: rootReadable ? 'ok' : 'degraded',
+      rootReadable,
+      tenants: tenants.length,
+      documents,
+      pending,
+    });
+  }
+
+  // GET /favicon.ico — browsers request this on their own for responses that
+  // carry no <link rel="icon"> (JSON, raw YAML, the export download). Without a
+  // route it would fall into `:tenant`, run discovery and render the 404 view
+  // on every such request; the icon itself is the static /favicon.svg.
+  @Get('favicon.ico')
+  favicon(@Res() res: Response): void {
+    res.redirect(301, '/favicon.svg');
   }
 
   // GET /:tenant — the tenant landing page: the generation agent's tenant-wide

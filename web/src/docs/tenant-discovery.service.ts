@@ -62,6 +62,20 @@ export class TenantDiscoveryService {
     return this.root;
   }
 
+  // Whether DOCS_ROOT exists and can be listed. Discovery treats an unreadable
+  // root as "no tenants" so that a misconfigured or unmounted root never crashes
+  // the app, which leaves a health probe unable to tell an empty tree from a
+  // missing one; this is the explicit signal. Not cached: it is one readdir, and
+  // a probe should see a remount immediately.
+  async rootReadable(): Promise<boolean> {
+    try {
+      await fs.readdir(this.root);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async list(): Promise<TenantInfo[]> {
     if (this.cache && Date.now() - this.cache.at < TTL_MS) {
       return this.cache.tenants;
