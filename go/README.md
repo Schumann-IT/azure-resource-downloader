@@ -945,7 +945,7 @@ make lint            # golangci-lint
 make fmt
 make check           # fmt + lint + test
 make all             # check + build
-make ci              # clean + deps + check + build
+make ci              # check + build
 make deps            # download + tidy
 make test-coverage   # coverage.html
 make release-ready   # report whether a release can be cut (changes nothing); tag + publish via ../Makefile

@@ -11,6 +11,14 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+#### Release Workflow
+
+- **`make ci` no longer runs `go mod download` and `go mod tidy` first.** Doing so before every lint defeated the
+  lint cache, so `make ci` — and `make release-ready`, which runs it — took minutes; it now runs `check` and
+  `build` only and finishes in seconds. Refreshing dependencies stays an explicit `make deps`.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added

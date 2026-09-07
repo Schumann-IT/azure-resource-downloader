@@ -113,7 +113,7 @@ check: fmt lint test
 	@echo "✅ All checks passed"
 
 # Run all quality checks and build (useful for CI/CD)
-ci: clean-bin deps check build
+ci: check build
 	@echo "✅ CI pipeline complete"
 
 # Display help
@@ -136,7 +136,7 @@ help:
 	@echo ""
 	@echo "Composite targets:"
 	@echo "  make check          - Run fmt + lint + test"
-	@echo "  make ci             - Run deps + check + build (for CI/CD)"
+	@echo "  make ci             - Run check + build (for CI/CD)"
 	@echo ""
 	@echo "  make help           - Display this help message"
 	@echo ""
