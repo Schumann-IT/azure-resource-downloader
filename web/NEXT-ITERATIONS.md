@@ -14,20 +14,7 @@ Each is a numbered work entry in its own right; none touches a non-negotiable (r
 JavaScript, one `markdown-it` instance, path safety) and none depends on a documentation regeneration. Each
 carries its own e2e or spec case and a `CHANGELOG.md` entry under `[Unreleased]`; purely internal ones say so.
 
-### 1. Stop the favicon request from hitting the tenant route
-
-**Goal.** A browser's automatic `/favicon.ico` request must not run tenant discovery and render the 404 page on
-every page view.
-
-> Today `/favicon.ico` matches `GET /:tenant`, so each page load costs a discovery lookup and an HTML 404.
-
-**Plan.**
-
-- Add an inline `data:` SVG `<link rel="icon">` to the shared `<head>` (or a static `public/favicon.svg`, which
-  `useStaticAssets` serves before any route).
-- e2e: `GET /favicon.ico` no longer returns the 404 view.
-
-### 2. Picker and health counts must be as fresh as the sidebar
+### 1. Picker and health counts must be as fresh as the sidebar
 
 **Goal.** After `azure-rd docs generate-index` reruns, the tenant picker and `/healthz` show the new counts on
 the next request, the same as the sidebar already does.
@@ -44,7 +31,7 @@ the next request, the same as the sidebar already does.
 - e2e: rewrite a fixture's `index.yaml` counts and assert `/` and `/healthz` reflect them on the next request
   without waiting out the TTL.
 
-### 3. Validate `PORT`
+### 2. Validate `PORT`
 
 **Goal.** A non-numeric or out-of-range `PORT` produces a clear message rather than an opaque `listen(NaN)`
 failure.
@@ -55,21 +42,7 @@ failure.
   startup line (still the only `console` use).
 - Document the fallback in the README configuration table and `.env.example`.
 
-### 4. Make a missing docs root visible to a health probe
-
-**Goal.** An operator can tell from `/healthz` that `DOCS_ROOT` does not exist or is unreadable, instead of
-reading `tenants: 0` as an empty but healthy tree.
-
-> No absolute path may reach the client, so the signal is a boolean, not the resolved root.
-
-**Plan.**
-
-- Add `rootReadable: boolean` to the `/healthz` JSON, from a `stat()`/`readdir()` of the root.
-- Decide whether `status` stays `ok` when the root is unreadable (the process is healthy; the deployment is
-  not) — the field is the signal either way. Document in the README routes table.
-- e2e: point `DOCS_ROOT` at a non-existent directory and assert the field.
-
-### 5. Say what was not found
+### 3. Say what was not found
 
 **Goal.** The 404 view distinguishes an unknown tenant, an unknown export format and a missing document
 instead of always reading *Document not found*.
@@ -80,7 +53,7 @@ instead of always reading *Document not found*.
   `views/error.hbs`; keep the body free of filesystem paths.
 - e2e: assert the headline for an unknown tenant and for `/_export/<unknown>`.
 
-### 6. Align the header with the page content
+### 4. Align the header with the page content
 
 **Goal.** The breadcrumb in the top bar lines up with the sidebar and the document below it.
 
@@ -94,7 +67,7 @@ instead of always reading *Document not found*.
   pass `max-w-5xl`), so each page has one width.
 - `styles-build.spec.ts` needs nothing; verify visually on both layouts.
 
-### 7. Put the tenant in the page title
+### 5. Put the tenant in the page title
 
 **Goal.** A document tab and a history entry read `<document> · <tenant>` rather than the bare H1.
 
@@ -104,7 +77,7 @@ instead of always reading *Document not found*.
   *Documentation*.
 - e2e: assert the `<title>` on a document page contains the tenant id.
 
-### 8. Declare both colour schemes to the browser
+### 6. Declare both colour schemes to the browser
 
 **Goal.** In dark mode the scrollbars, form-control chrome and overscroll area are dark too, not the light
 defaults around a dark page.
@@ -118,7 +91,7 @@ defaults around a dark page.
   plus dark background on `html` in `src/styles.css`.
 - `styles-build.spec.ts`: assert the `color-scheme` rule survives compilation.
 
-### 9. Print stylesheet
+### 7. Print stylesheet
 
 **Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
 beside it.
@@ -133,7 +106,7 @@ beside it.
 - `styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
   about collapsed blocks.
 
-### 10. Label the sidebar landmark
+### 8. Label the sidebar landmark
 
 **Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
 the per-axis filters.
@@ -143,7 +116,7 @@ the per-axis filters.
 - `aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.
 - e2e: assert the attribute is present on a document page.
 
-### 11. Security headers, including a CSP that enforces the no-script rule
+### 9. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -164,10 +137,10 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 12. One `<head>` partial
+### 10. One `<head>` partial
 
-**Goal.** The five templates share one `<head>`, so a change such as the favicon, the `color-scheme` meta or the
-title format is made once.
+**Goal.** The five templates share one `<head>`, so a change such as the `color-scheme` meta or the title
+format is made once — the favicon link was the last change that had to be made five times.
 
 > Internal only: no observable change, so no `CHANGELOG.md` entry.
 
@@ -175,9 +148,9 @@ title format is made once.
 
 - Extract `views/partials/head.hbs` taking `title`; use it from `page`, `picker`, `tenant`, `resource` and
   `error`.
-- Do fixes 1, 7 and 8 through it.
+- Do fixes 5 and 6 through it.
 
-### 13. Either wire ESLint or drop the dead `eslint-disable` comments
+### 11. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 

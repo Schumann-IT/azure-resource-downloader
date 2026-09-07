@@ -356,10 +356,41 @@ describe('Docs browser (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/healthz').expect(200);
     expect(res.body).toEqual({
       status: 'ok',
+      rootReadable: true,
       tenants: 3,
       documents: 4,
       pending: 2,
     });
+  });
+
+  it('serves a favicon and keeps /favicon.ico out of the tenant route', async () => {
+    // The static icon every HTML page links to.
+    const svg = await request(app.getHttpServer())
+      .get('/favicon.svg')
+      .expect(200);
+    expect(svg.headers['content-type']).toMatch(/image\/svg\+xml/);
+
+    // The browser's own /favicon.ico probe must not be treated as a tenant
+    // named "favicon.ico" and answered with the 404 view.
+    const ico = await request(app.getHttpServer())
+      .get('/favicon.ico')
+      .expect(301);
+    expect(ico.headers['location']).toBe('/favicon.svg');
+    expect(ico.text).not.toContain('Document not found');
+
+    // Every rendered page declares the icon so the probe is not made at all.
+    for (const route of [
+      '/',
+      '/mytenant',
+      '/mytenant/Microsoft.Graph/groups/g1',
+      '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      '/no-such-tenant',
+    ]) {
+      const res = await request(app.getHttpServer()).get(route);
+      expect(res.text).toContain(
+        '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
+      );
+    }
   });
 
   it('GET / lists exactly the real tenants with their index counts', async () => {
@@ -1106,6 +1137,50 @@ describe('Docs browser (e2e)', () => {
       .expect(200);
     return readZipEntry(res.body as Buffer, OVERVIEW_FILE);
   }
+});
+
+// A DOCS_ROOT that does not exist (unmounted volume, typo). Discovery already
+// degrades to "no tenants" instead of crashing; the health endpoint has to say
+// which of the two it is, without echoing the path.
+describe('Docs browser with a missing docs root (e2e)', () => {
+  let app: NestExpressApplication;
+  let missingRoot: string;
+
+  beforeAll(async () => {
+    const parent = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-'));
+    missingRoot = path.join(parent, 'does-not-exist');
+    await fsp.rm(parent, { recursive: true, force: true });
+    process.env.DOCS_ROOT = missingRoot;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureViews(app);
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('GET /healthz stays 200 but reports the root as unreadable', async () => {
+    const res = await request(app.getHttpServer()).get('/healthz').expect(200);
+    expect(res.body).toEqual({
+      status: 'degraded',
+      rootReadable: false,
+      tenants: 0,
+      documents: 0,
+      pending: 0,
+    });
+    expect(res.text).not.toContain(missingRoot);
+  });
+
+  it('GET / still renders the empty picker without leaking the path', async () => {
+    const res = await request(app.getHttpServer()).get('/').expect(200);
+    expect(res.text).toContain('No tenants found');
+    expect(res.text).not.toContain(missingRoot);
+  });
 });
 
 // Reads one entry, matched by the tail of its name, out of a zip in memory.

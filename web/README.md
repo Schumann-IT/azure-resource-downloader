@@ -147,7 +147,8 @@ Discovery and resolution rules:
 | Route | Response |
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
-| `GET /healthz` | JSON `{ status, tenants, documents, pending }`. |
+| `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. |
+| `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
 | `GET /:tenant/_export/confluence` | The whole tenant as an `application/zip` attachment for Confluence's HTML import. Any other format 404s. |
@@ -378,7 +379,7 @@ web/
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
 ├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}
-├── public/                              # app.css (generated, gitignored)
+├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
 ├── scripts/release-ready.js             # npm run release-ready: report whether a release can be cut (changes nothing)
 ├── .env.example                         # every variable at its default

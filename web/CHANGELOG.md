@@ -13,6 +13,23 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+#### The browser
+
+- **The browser's favicon probe no longer lands on the tenant route.** Every page now links a static SVG icon,
+  and `/favicon.ico` is answered with a redirect to it, so the request a browser makes on its own — on every
+  page, and on the JSON, raw-YAML and export responses that carry no icon link — no longer runs tenant
+  discovery and renders the 404 view as a tenant named `favicon.ico`. Still no client-side JavaScript, and
+  nothing under the docs root is touched.
+
+- **The health endpoint tells a missing docs root from an empty one.** Discovery deliberately treats an
+  unreadable `DOCS_ROOT` as "no tenants" so a misconfigured or unmounted root never takes the app down, which
+  left `/healthz` reporting `ok` with zero tenants for both cases. It now also reports whether the root can be
+  read and flags the response as `degraded` when it cannot, while staying `200` so a probe that only reads the
+  status code does not flap during a remount. The path itself is still never sent to a client. Shape in the
+  README routes table.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added
