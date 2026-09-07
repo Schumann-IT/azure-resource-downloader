@@ -13,6 +13,8 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+## [0.1.1]
+
 ### Fixed
 
 #### The browser
