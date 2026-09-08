@@ -23,11 +23,6 @@ export interface TenantInfo {
   // existence is checked at render time, so a summary written after discovery
   // was cached still shows up on the next request.
   summaryPath: string;
-  // In-scope resource counts, from the index (never by walking the tree).
-  documented: number;
-  pending: number;
-  // When the export was generated, from the index (mirrors the export).
-  generatedAt: string | null;
 }
 
 export const DOCS_DIR = 'docs';
@@ -185,9 +180,6 @@ export class TenantDiscoveryService {
       indexPath,
       resourcesDir: path.join(dir, RESOURCES_DIR),
       summaryPath: path.join(docsDir, SUMMARY_FILE),
-      documented: index.counts.documented,
-      pending: index.counts.pending,
-      generatedAt: index.generatedAt,
     };
   }
 }

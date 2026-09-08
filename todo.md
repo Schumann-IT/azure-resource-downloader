@@ -22,12 +22,11 @@ Scheduled work: **none**. Parked ideas only:
 ### Web docs browser (`web/NEXT-ITERATIONS.md`)
 
 Scheduled fixes (all self-contained, none touching a non-negotiable). Numbers follow `web/NEXT-ITERATIONS.md`
-after Branch B closed (the former 2 and 3 — `PORT` validation, 404 kinds — shipped and were removed; the
-former 4 and 5 are now 2 and 3):
+after Branch C closed (the former 1 — picker/`healthz` freshness — shipped and was removed; the former 2 and 3
+are now 1 and 2):
 
-1. Picker / `healthz` counts read through `getIndex()` (freshness parity with the sidebar)
-2. Security headers incl. CSP `script-src 'none'`
-3. Wire ESLint or delete the dead `eslint-disable` comments
+1. Security headers incl. CSP `script-src 'none'`
+2. Wire ESLint or delete the dead `eslint-disable` comments
 
 Standing decision: whole-tenant exports live on the picker card as plain `<a download>`; partial exports live
 next to the thing exported; Confluence REST sync needs POST and is therefore not offered at all.
@@ -76,7 +75,7 @@ Parked ideas, grouped:
 
 ### Web-internal
 
-- **Fix 2 (CSP)** is the enforcement mechanism for the no-JS rule and conflicts with **Drop the no-JS rule**;
+- **Fix 1 (CSP)** is the enforcement mechanism for the no-JS rule and conflicts with **Drop the no-JS rule**;
   relaxing to tier (b)/(c) means widening the CSP in the same edit.
 - **Drop the no-JS rule** blocks or deforms six ideas: search, name filter, actionable findings, clickable
   breadcrumbs, dark-mode toggle, tenant diff. Search is the honest first trigger; try a server-rendered
@@ -87,18 +86,18 @@ Parked ideas, grouped:
   discoverable; **resource landing page** is also the carrier for **browsable excluded bulk types**.
 - **Export chain**: further formats → single export button / `_export` page; attachments need a third served
   root (path-safety design change); REST sync requires abandoning read-only.
-- **Fix 3 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
+- **Fix 2 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
   (`web/scripts/lib/changelog.js`).
 - **Stale reference**: several web parked ideas cite "the scheduled axis-index entry above"; that entry has
   shipped (`EXPORT_INDEX`) and is gone — rephrase at next edit per the "describe the work, don't cite §N" rule.
 
 ### Observations
 
-- Go has zero scheduled work; web has three small fixes left, ready without design (two shipped in Branch A,
-  two shipped in Branch B).
+- Go has zero scheduled work; web has two small fixes left, ready without design (three shipped: two in
+  Branch A, one in Branch B, one in Branch C).
 - The most leveraged single item is a **Go template regeneration**: it unlocks web per-item summaries and is
   the only sane moment to fold in both Go regeneration-gated ideas.
-- The **no-JS rule** is the pivotal web decision — Fix 2 (CSP) hardens it; roughly a third of parked web ideas
+- The **no-JS rule** is the pivotal web decision — Fix 1 (CSP) hardens it; roughly a third of parked web ideas
   wait on relaxing it.
 
 ## 3. Web fixes — branch plan
@@ -131,19 +130,23 @@ Both correct the two non-happy paths; both touch `README.md`. Branch closed: the
       `{{headline}}`; body stays free of filesystem paths. e2e cases extended for unknown tenant, unknown
       document, missing resource and unknown export format.
 
-### Branch C — `fix/web-picker-freshness` (fix 1, alone)
+### Branch C — `fix/web-picker-freshness` (former fix 1, alone) — **DONE**
 
-- [ ] **1** Picker / `healthz` read counts and `generatedAt` through `getIndex(info)` — **M**; drop
-      `documented` / `pending` / `generatedAt` from `TenantInfo` (`src/docs/tenant-discovery.service.ts`),
-      rewire `healthz()` and `picker()` in `docs.controller.ts`; check every other `TenantInfo` consumer
-      (`src/docs/export/`). `healthz` becomes N index reads (cached by mtime + size). e2e: rewrite a fixture's
-      `index.yaml` counts and assert `/` and `/healthz` reflect them without waiting out the TTL.
+Branch closed: the entry was deleted from `web/NEXT-ITERATIONS.md` and the survivors renumbered 1–2.
+`npm run branch-ready` green (194 tests, build, no strikeouts, contiguous numbering).
 
-Kept separate: changes a service interface and touches the freshness invariant.
+- [x] Picker / `healthz` read counts and `generatedAt` through `getIndex(info)` — dropped `documented` /
+      `pending` / `generatedAt` from `TenantInfo` (`src/docs/tenant-discovery.service.ts`); added a private
+      `withIndex()` helper in `docs.controller.ts` (pairs each discovered tenant with a fresh `getIndex()` read,
+      drops any that turned unreadable) and rewired `healthz()` and `picker()` onto it; no other `TenantInfo`
+      consumer (`src/docs/export/`) touched those fields. `views/picker.hbs` needed no change. e2e case added:
+      regenerates a fixture's `index.yaml` counts and `generatedAt` and asserts `/` and `/healthz` reflect them
+      without waiting out the TTL. README (*No-restart refresh* feature bullet + `/healthz` routes row) and
+      CHANGELOG (`### Fixed` → `#### The browser`) updated in the same edit.
 
-### Branch D — `chore/web-security-headers` (fix 2, alone)
+### Branch D — `chore/web-security-headers` (fix 1, alone)
 
-- [ ] **2** One middleware in `src/configure-app.ts` (shared by runtime and e2e) setting
+- [ ] **1** One middleware in `src/configure-app.ts` (shared by runtime and e2e) setting
       `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
       `X-Frame-Options: DENY` — **M**. Policy: `script-src 'none'`, `style-src 'self' 'unsafe-inline'` (shiki),
       `img-src 'self' data: https:`, `frame-ancestors 'none'`. Verify in a browser with console open: YAML
@@ -153,9 +156,9 @@ Kept separate: changes a service interface and touches the freshness invariant.
 Kept separate: the correct policy is found empirically; a wrong `style-src` breaks every page; must be
 revisited if the no-JS rule is ever relaxed.
 
-### Branch E — `chore/web-eslint` (fix 3, alone)
+### Branch E — `chore/web-eslint` (fix 2, alone)
 
-- [ ] **3** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
+- [ ] **2** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
       `release-ready` (and `branch-ready`), update README *Development conventions* +
       `.windsurf/rules/02-style-and-quality.md`, CHANGELOG entry — **M** (the cost is triaging first-run
       findings). Alternative: delete the two `eslint-disable` comments in `src/main.ts` and
@@ -167,8 +170,8 @@ Kept separate: tooling/rules, and it modifies the scripts that gate the other br
 
 1. ~~**A** `fix/web-ui-polish` — fastest win, zero risk.~~ Done.
 2. ~~**B** `fix/web-startup-and-404` — small, self-contained.~~ Done.
-3. **C** `fix/web-picker-freshness` — interface change, review alone. **Next.**
-4. **D** `chore/web-security-headers` — empirical verification.
+3. ~~**C** `fix/web-picker-freshness` — interface change, review alone.~~ Done.
+4. **D** `chore/web-security-headers` — empirical verification. **Next.**
 5. **E** `chore/web-eslint` — last, so new lint findings don't churn the branches above and the gate exists
    before the next feature branch.
 

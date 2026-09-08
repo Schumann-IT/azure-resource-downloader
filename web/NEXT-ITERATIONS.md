@@ -18,24 +18,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 1. Picker and health counts must be as fresh as the sidebar
-
-**Goal.** After `azure-rd docs generate-index` reruns, the tenant picker and `/healthz` show the new counts on
-the next request, the same as the sidebar already does.
-
-> `TenantInfo.documented`, `pending` and `generatedAt` are snapshotted when discovery runs and live for the
-> 30 s TTL, while `getIndex()` is validated by mtime + size on every request — so `/` can disagree with
-> `/:tenant` for half a minute. The freshness invariant is stated for documents, resources and the index; the
-> picker is the one view that still misses it.
-
-**Plan.**
-
-- Have `picker()` and `healthz()` read counts and `generatedAt` through `getIndex(info)` instead of the cached
-  `TenantInfo` fields; drop the duplicated fields from `TenantInfo` (`id`, `name`, paths stay).
-- e2e: rewrite a fixture's `index.yaml` counts and assert `/` and `/healthz` reflect them on the next request
-  without waiting out the TTL.
-
-### 2. Security headers, including a CSP that enforces the no-script rule
+### 1. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -56,7 +39,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 3. Either wire ESLint or drop the dead `eslint-disable` comments
+### 2. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 

@@ -55,12 +55,37 @@ export class DocsController {
     private readonly exporter: ExportService,
   ) {}
 
+  // Discovered tenants paired with their freshly read index, on every call —
+  // counts and generatedAt must be as fresh as the sidebar, not snapshotted
+  // for the discovery TTL. A tenant whose index has gone unreadable or
+  // malformed inside that TTL is dropped for this request, the same
+  // conclusion the next scan would reach, so the picker and /healthz agree.
+  private async withIndex(): Promise<
+    Array<{ info: TenantInfo; index: TenantIndex }>
+  > {
+    const tenants = await this.discovery.list();
+    const paired = await Promise.all(
+      tenants.map(async (info) => {
+        const index = await this.discovery.getIndex(info);
+        return index ? { info, index } : null;
+      }),
+    );
+    return paired.filter(
+      (entry): entry is { info: TenantInfo; index: TenantIndex } =>
+        entry !== null,
+    );
+  }
+
   // GET / — tenant picker, which is also where a tenant's export is offered.
   @Get()
   async picker(@Res() res: Response): Promise<void> {
-    const tenants = (await this.discovery.list()).map((tenant) => ({
-      ...tenant,
-      exportHref: `/${tenant.id}/${EXPORT_PREFIX}/confluence`,
+    const tenants = (await this.withIndex()).map(({ info, index }) => ({
+      id: info.id,
+      name: info.name,
+      documented: index.counts.documented,
+      pending: index.counts.pending,
+      generatedAt: index.generatedAt,
+      exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
     }));
     res.render('picker', { title: 'Documentation', tenants });
   }
@@ -73,9 +98,15 @@ export class DocsController {
   @Get('healthz')
   async healthz(@Res() res: Response): Promise<void> {
     const rootReadable = await this.discovery.rootReadable();
-    const tenants = await this.discovery.list();
-    const documents = tenants.reduce((n, t) => n + t.documented, 0);
-    const pending = tenants.reduce((n, t) => n + t.pending, 0);
+    const tenants = await this.withIndex();
+    const documents = tenants.reduce(
+      (n, { index }) => n + index.counts.documented,
+      0,
+    );
+    const pending = tenants.reduce(
+      (n, { index }) => n + index.counts.pending,
+      0,
+    );
     res.json({
       status: rootReadable ? 'ok' : 'degraded',
       rootReadable,
