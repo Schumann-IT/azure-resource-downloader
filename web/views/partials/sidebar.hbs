@@ -1,4 +1,4 @@
-<aside class="nav-tree w-full lg:w-80 lg:shrink-0 lg:sticky lg:top-14 lg:self-start lg:max-h-[calc(100vh-4.5rem)] lg:overflow-y-auto lg:pr-2">
+<aside aria-label="Tenant navigation" class="nav-tree w-full lg:w-80 lg:shrink-0 lg:sticky lg:top-14 lg:self-start lg:max-h-[calc(100vh-4.5rem)] lg:overflow-y-auto lg:pr-2">
   <a href="/{{tenant}}" class="block text-base font-semibold hover:underline">{{name}}</a>
   <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
     {{counts.documented}} documented{{#if counts.pending}} · {{counts.pending}} pending{{/if}}{{#if generatedAt}}<br />exported {{generatedAt}}{{/if}}

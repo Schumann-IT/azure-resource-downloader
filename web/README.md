@@ -305,12 +305,19 @@ escape hatch) renders the source YAML with dual-theme output, so dark mode and t
 plain `prefers-color-scheme` and `:target` CSS. A highlighter load failure, or a file above the size cap,
 degrades to an escaped `<pre>` rather than an error.
 
+### Printing
+
+Printing a page, or saving it as a PDF, yields the document alone: the top bar and the navigation sidebar are
+hidden, the layout un-sticks into a single column and the wide tables wrap instead of scrolling. **Collapsed
+`<details>` blocks print collapsed** — CSS cannot open a disclosure element, and there is no client-side
+JavaScript to do it — so expand the settings blocks you want on paper before printing.
+
 ### CSS
 
 Tailwind CSS v4 with `@tailwindcss/typography`. Utility classes live in the `.hbs` templates, so
 `src/styles.css` declares `@source "../views/**/*.hbs"` — templates outside `views/` must be added there or
 their classes are purged. `styles.css` holds only the theme tokens and the rules Tailwind cannot express
-(`<details>`/`<summary>`, table overflow, section identity, dark mode).
+(`<details>`/`<summary>`, table overflow, section identity, dark mode, print).
 
 ## Security
 
