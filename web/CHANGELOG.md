@@ -48,6 +48,10 @@ section of the [repository README](../README.md) for the procedure.
 
 #### Views and navigation
 
+- **The 404 page says what was not found.** It used to always read *Document not found*; it now
+  distinguishes an unknown tenant, an unknown document, a missing source YAML and an unknown export format,
+  each with its own headline. The body still carries no filesystem path.
+
 - **The breadcrumb lines up with the page beneath it.** The top bar constrained its row more narrowly than the
   document, tenant and source-YAML layouts, so on a wide viewport the breadcrumb and the **Documentation |
   YAML** switcher sat inset from the sidebar and the document under them. The bar now takes its width from the
@@ -57,6 +61,10 @@ section of the [repository README](../README.md) for the procedure.
   and jump to it the way it already can for the view switcher and the taxonomy filters.
 
 #### The browser
+
+- **An invalid `PORT` no longer crashes startup.** Only unset/empty (falls back to `3000`, silently) or one
+  to five ASCII digits in `1..65535` (that port) are accepted; anything else falls back to `3000` too, with
+  the rejected value reported in the startup line. Configuration stays environment-only.
 
 - **Dark mode now covers the browser's own chrome.** Every page declares that it supports both colour schemes
   and paints the document dark, so scrollbars, form-control chrome and the area past the page edge follow the

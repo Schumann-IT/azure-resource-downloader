@@ -19,7 +19,8 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - **No client-side JavaScript.** Everything is server-rendered.
 
 ## Layout
-- `src/main.ts` → bootstrap, reads `PORT`.
+- `src/main.ts` → bootstrap, reads `PORT` via `resolvePort`.
+- `src/port.ts` → `resolvePort`, pure `PORT` parsing + fallback (unit tested; `main.ts` cannot be).
 - `src/configure-app.ts` → `configureViews(app)`: static assets, base views dir, partial
   registration, view engine. **Shared by `main.ts` and the e2e tests** so both configure the app
   identically — new view/asset wiring goes here, never inline in `main.ts`.

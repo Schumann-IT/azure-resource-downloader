@@ -35,29 +35,7 @@ the next request, the same as the sidebar already does.
 - e2e: rewrite a fixture's `index.yaml` counts and assert `/` and `/healthz` reflect them on the next request
   without waiting out the TTL.
 
-### 2. Validate `PORT`
-
-**Goal.** A non-numeric or out-of-range `PORT` produces a clear message rather than an opaque `listen(NaN)`
-failure.
-
-**Plan.**
-
-- Parse `PORT` as an integer in `1..65535`; on anything else fall back to `3000` and say so in the single
-  startup line (still the only `console` use).
-- Document the fallback in the README configuration table and `.env.example`.
-
-### 3. Say what was not found
-
-**Goal.** The 404 view distinguishes an unknown tenant, an unknown export format and a missing document
-instead of always reading *Document not found*.
-
-**Plan.**
-
-- Pass a `kind` (`tenant` | `document` | `resource` | `export`) from `notFound()` and vary the headline in
-  `views/error.hbs`; keep the body free of filesystem paths.
-- e2e: assert the headline for an unknown tenant and for `/_export/<unknown>`.
-
-### 4. Security headers, including a CSP that enforces the no-script rule
+### 2. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -78,7 +56,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 5. Either wire ESLint or drop the dead `eslint-disable` comments
+### 3. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 
