@@ -22,14 +22,12 @@ Scheduled work: **none**. Parked ideas only:
 ### Web docs browser (`web/NEXT-ITERATIONS.md`)
 
 Scheduled fixes (all self-contained, none touching a non-negotiable). Numbers follow `web/NEXT-ITERATIONS.md`
-after Branch A closed (the former 4–6 — header width, print stylesheet, sidebar `aria-label` — shipped and were
-removed; the former 7 and 8 are now 4 and 5):
+after Branch B closed (the former 2 and 3 — `PORT` validation, 404 kinds — shipped and were removed; the
+former 4 and 5 are now 2 and 3):
 
 1. Picker / `healthz` counts read through `getIndex()` (freshness parity with the sidebar)
-2. Validate `PORT`, fall back to 3000 with a message
-3. 404 view says *what* was not found (tenant / document / resource / export)
-4. Security headers incl. CSP `script-src 'none'`
-5. Wire ESLint or delete the dead `eslint-disable` comments
+2. Security headers incl. CSP `script-src 'none'`
+3. Wire ESLint or delete the dead `eslint-disable` comments
 
 Standing decision: whole-tenant exports live on the picker card as plain `<a download>`; partial exports live
 next to the thing exported; Confluence REST sync needs POST and is therefore not offered at all.
@@ -78,7 +76,7 @@ Parked ideas, grouped:
 
 ### Web-internal
 
-- **Fix 4 (CSP)** is the enforcement mechanism for the no-JS rule and conflicts with **Drop the no-JS rule**;
+- **Fix 2 (CSP)** is the enforcement mechanism for the no-JS rule and conflicts with **Drop the no-JS rule**;
   relaxing to tier (b)/(c) means widening the CSP in the same edit.
 - **Drop the no-JS rule** blocks or deforms six ideas: search, name filter, actionable findings, clickable
   breadcrumbs, dark-mode toggle, tenant diff. Search is the honest first trigger; try a server-rendered
@@ -89,18 +87,19 @@ Parked ideas, grouped:
   discoverable; **resource landing page** is also the carrier for **browsable excluded bulk types**.
 - **Export chain**: further formats → single export button / `_export` page; attachments need a third served
   root (path-safety design change); REST sync requires abandoning read-only.
-- **Fix 5 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
+- **Fix 3 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
   (`web/scripts/lib/changelog.js`).
 - **Stale reference**: several web parked ideas cite "the scheduled axis-index entry above"; that entry has
   shipped (`EXPORT_INDEX`) and is gone — rephrase at next edit per the "describe the work, don't cite §N" rule.
 
 ### Observations
 
-- Go has zero scheduled work; web has five small fixes left, ready without design (three shipped in Branch A).
+- Go has zero scheduled work; web has three small fixes left, ready without design (two shipped in Branch A,
+  two shipped in Branch B).
 - The most leveraged single item is a **Go template regeneration**: it unlocks web per-item summaries and is
   the only sane moment to fold in both Go regeneration-gated ideas.
-- The **no-JS rule** is the pivotal web decision — Fix 4 hardens it; roughly a third of parked web ideas wait
-  on relaxing it.
+- The **no-JS rule** is the pivotal web decision — Fix 2 (CSP) hardens it; roughly a third of parked web ideas
+  wait on relaxing it.
 
 ## 3. Web fixes — branch plan
 
@@ -119,17 +118,18 @@ entries were deleted from `web/NEXT-ITERATIONS.md` and the survivors renumbered 
 - [x] Print stylesheet — `@media print` in `src/styles.css`; `styles-build.spec.ts` assertion; README sentence
       about collapsed `<details>` printing collapsed.
 
-### Branch B — `fix/web-startup-and-404` (fixes 2, 3)
+### Branch B — `fix/web-startup-and-404` (former fixes 2, 3) — **DONE**
 
-Both correct the two non-happy paths; both touch `README.md`.
+Both correct the two non-happy paths; both touch `README.md`. Branch closed: the two entries were deleted from
+`web/NEXT-ITERATIONS.md` and the survivors renumbered 1–3.
 
-- [ ] **2** Validate `PORT` — **XS**; `src/main.ts` parse as integer `1..65535`, fall back to `3000` and say so
-      in the single startup line. Not e2e-testable (bootstrap only): extract a pure `parsePort()` with a spec.
-      README configuration table + `.env.example`.
-- [ ] **3** 404 kinds — **S**; `notFound()` in `src/docs/docs.controller.ts` gains a
-      `kind` (`tenant` | `document` | `resource` | `export`); call sites already distinguish by position.
-      `views/error.hbs` varies the headline; body stays free of filesystem paths. e2e: unknown tenant and
-      `/_export/<unknown>`.
+- [x] `PORT` validation — pure `resolvePort()` in `src/port.ts` (unit tested in `test/port.spec.ts`), wired into
+      `src/main.ts`; unset/empty falls back to `3000` silently, anything else falls back to `3000` with a note
+      in the startup line. README configuration table + `.env.example` + `.windsurf/rules/01-architecture.md`.
+- [x] 404 kinds — `notFound()` in `src/docs/docs.controller.ts` gained a `NotFoundKind`
+      (`tenant` | `document` | `resource` | `export`); all call sites updated. `views/error.hbs` renders
+      `{{headline}}`; body stays free of filesystem paths. e2e cases extended for unknown tenant, unknown
+      document, missing resource and unknown export format.
 
 ### Branch C — `fix/web-picker-freshness` (fix 1, alone)
 
@@ -141,9 +141,9 @@ Both correct the two non-happy paths; both touch `README.md`.
 
 Kept separate: changes a service interface and touches the freshness invariant.
 
-### Branch D — `chore/web-security-headers` (fix 4, alone)
+### Branch D — `chore/web-security-headers` (fix 2, alone)
 
-- [ ] **4** One middleware in `src/configure-app.ts` (shared by runtime and e2e) setting
+- [ ] **2** One middleware in `src/configure-app.ts` (shared by runtime and e2e) setting
       `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
       `X-Frame-Options: DENY` — **M**. Policy: `script-src 'none'`, `style-src 'self' 'unsafe-inline'` (shiki),
       `img-src 'self' data: https:`, `frame-ancestors 'none'`. Verify in a browser with console open: YAML
@@ -153,9 +153,9 @@ Kept separate: changes a service interface and touches the freshness invariant.
 Kept separate: the correct policy is found empirically; a wrong `style-src` breaks every page; must be
 revisited if the no-JS rule is ever relaxed.
 
-### Branch E — `chore/web-eslint` (fix 5, alone)
+### Branch E — `chore/web-eslint` (fix 3, alone)
 
-- [ ] **5** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
+- [ ] **3** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
       `release-ready` (and `branch-ready`), update README *Development conventions* +
       `.windsurf/rules/02-style-and-quality.md`, CHANGELOG entry — **M** (the cost is triaging first-run
       findings). Alternative: delete the two `eslint-disable` comments in `src/main.ts` and
@@ -166,13 +166,13 @@ Kept separate: tooling/rules, and it modifies the scripts that gate the other br
 ### Order
 
 1. ~~**A** `fix/web-ui-polish` — fastest win, zero risk.~~ Done.
-2. **B** `fix/web-startup-and-404` — small, self-contained. **Next.**
-3. **C** `fix/web-picker-freshness` — interface change, review alone.
+2. ~~**B** `fix/web-startup-and-404` — small, self-contained.~~ Done.
+3. **C** `fix/web-picker-freshness` — interface change, review alone. **Next.**
 4. **D** `chore/web-security-headers` — empirical verification.
 5. **E** `chore/web-eslint` — last, so new lint findings don't churn the branches above and the gate exists
-   before the next feature branch. If ESLint is not wanted yet, fold the delete-comments alternative into **B**.
+   before the next feature branch.
 
-(A and B were candidates for one merged branch; A has shipped on its own, so B proceeds alone.)
+(A and B were candidates for one merged branch; each shipped on its own instead.)
 
 ### Per-branch checklist
 
