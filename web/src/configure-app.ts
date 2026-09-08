@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import { join } from 'path';
 
 // hbs is a CommonJS singleton; require it directly so registerPartials is bound.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const hbs = require('hbs');
 
 // Baseline hardening headers, sent on every response. The CSP is derived from

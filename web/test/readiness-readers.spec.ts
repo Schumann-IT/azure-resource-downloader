@@ -7,12 +7,9 @@ import * as path from 'path';
 // silently pass a branch that still has shipped-but-uncleared entries — so they
 // are covered directly rather than through the scripts, which resolve their
 // paths from the project root and cannot be pointed at a fixture.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const {
-  readChangelog,
-  readStruckLines,
-  readEntryNumbers,
-} = require('../scripts/lib/changelog');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const changelog = require('../scripts/lib/changelog');
+const { readChangelog, readStruckLines, readEntryNumbers } = changelog;
 
 describe('readiness readers', () => {
   let dir: string;

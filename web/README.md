@@ -410,6 +410,7 @@ web/
 │   ├── release-ready.js                 # npm run release-ready: can a release be cut? (both change nothing)
 │   └── lib/changelog.js                 # CHANGELOG.md / NEXT-ITERATIONS.md readers both reports share
 ├── .env.example                         # every variable at its default
+├── eslint.config.mjs                    # the rule set `npm run lint` and WebStorm both run
 ├── CHANGELOG.md                         # Keep a Changelog; released sections match web/vX.Y.Z tags
 └── NEXT-ITERATIONS.md                   # outstanding work, shipped-but-uncleared entries, parked ideas
 ```
@@ -417,8 +418,19 @@ web/
 ## Development conventions
 
 - Run everything through the npm scripts from this folder (`npm run build`, `npm run start:dev`,
-  `npm run start:prod`, `npm test`). The Go `Makefile` in `../go` does not apply here, and there is no lint
-  script wired up yet.
+  `npm run start:prod`, `npm test`, `npm run lint`, `npm run lint:fix`). The Go `Makefile` in `../go` does not
+  apply here.
+- `eslint.config.mjs` is the single lint truth. `npm run lint` reports and is part of both readiness gates;
+  `npm run lint:fix` rewrites files and is deliberately in neither, since a gate must not change the tree.
+  **WebStorm needs no setup**: its default *Automatic ESLint configuration* runs the ESLint in this folder's
+  `node_modules` against this file, so an editor squiggle and a `npm run lint` finding are the same thing — if
+  the two disagree, the IDE is not in automatic mode. The bundled TypeScript inspections are a separate engine;
+  what only they report is an editor hint, not a merge gate. Findings are fixed in the code or silenced at the
+  one site with an `eslint-disable-next-line` naming the rule, and stale directives are themselves errors.
+  `@typescript-eslint/no-explicit-any` is off, because `any` is sanctioned on the untyped surfaces this app is
+  built on (markdown-it tokens, parsed YAML, the dynamically imported highlighter) and WebStorm does not flag it
+  by default either; `no-console` is on, which with the one directive in `src/main.ts` is what keeps `console`
+  to that single startup line.
 - The architecture invariants and style/testing requirements live in `.windsurf/rules/` **in this folder**
   (`01-architecture.md`, `02-style-and-quality.md`, `06-next-iterations.md`); the Go rules in `../go` do not
   apply.

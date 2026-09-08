@@ -15,7 +15,9 @@
 // character.
 const ILLEGAL = /[\\/:*?"<>|]+/g;
 
-// Control characters have no business in a file name either.
+// Control characters have no business in a file name either. Matching them
+// literally is the point, so the control-character warning is silenced here.
+// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/g;
 
 // Well below Confluence's 255-character title limit, leaving room for the

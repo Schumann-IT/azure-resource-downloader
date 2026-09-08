@@ -13,12 +13,20 @@ Run everything from this folder (npm scripts, not raw binaries):
 - `npm run start:dev` — Tailwind watch + Nest watch
 - `npm run start:prod` — build, then run `dist/main.js`
 - `npm test` — Jest (needs `--experimental-vm-modules`, already in the script)
-- `npm run branch-ready` — clean-tree preflight, tests + build, then report whether this feature/fix branch
-  is ready to ship
+- `npm run lint` — ESLint, reports only; part of both readiness gates
+- `npm run lint:fix` — ESLint with `--fix`; rewrites files, so it is in neither gate
+- `npm run branch-ready` — clean-tree preflight, tests + lint + build, then report whether this feature/fix
+  branch is ready to ship
 
-There is no lint script and no ESLint config in this project; the `eslint-disable` comments in the
-source are historical. Do not reference `eslint`/`prettier` commands in docs until they are actually
-wired up. **Never use the Go `Makefile` in the sibling `go/` folder** — it does not apply here.
+`eslint.config.mjs` is the **single lint truth**, and WebStorm mirrors it: its default *Automatic ESLint
+configuration* runs this folder's ESLint against that file, so the editor's findings and `npm run lint`'s are
+the same run. Never adjust the IDE to disagree with the config, and never weaken the config to go green — fix
+the finding, or silence it at the one site with an `eslint-disable-next-line` naming the rule and stating why.
+Stale directives are errors (`reportUnusedDisableDirectives`), so a suppression cannot outlive the finding it
+was written for. Adding or removing a rule changes what every developer's editor reports and belongs in
+`CHANGELOG.md`. The IDE's **bundled** TypeScript inspections are a separate engine: what only they report is an
+editor hint, not a merge gate. There is still no Prettier config — do not reference `prettier` commands.
+**Never use the Go `Makefile` in the sibling `go/` folder** — it does not apply here.
 
 ## TypeScript style
 - Match `tsconfig.json`: CommonJS modules, `strictNullChecks: true`, `noImplicitAny: false`.
@@ -33,7 +41,9 @@ wired up. **Never use the Go `Makefile` in the sibling `go/` folder** — it doe
   which is intentional (CommonJS singleton whose `registerPartials` must stay bound).
 - Nest DI via constructor injection with `private readonly`. No module-level mutable state; caches
   live as instance fields on a service.
-- Keep `any` confined to the untyped `markdown-it` plugin surface. New code gets real types.
+- Keep `any` confined to the untyped `markdown-it` plugin surface. New code gets real types. This is a review
+  rule, not a lint gate: `@typescript-eslint/no-explicit-any` is deliberately off (see the config for why), so
+  nothing but review enforces it.
 
 ## Error handling
 - Missing or unreadable documents/tenants are **normal**, not exceptional: map them to a 404 render.
