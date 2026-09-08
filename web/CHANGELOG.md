@@ -13,6 +13,38 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Added
+
+#### Release workflow
+
+- **`npm run branch-ready` reports whether a feature or fix branch is ready to ship.** It runs the tests and
+  the build, then checks that the work is recorded under `[Unreleased]`, that the `NEXT-ITERATIONS.md` entries
+  the branch delivered have been cleared out and the rest renumbered, and that the version was left alone —
+  bumping it and closing the changelog belong to the release. Like the release report it edits nothing, but it
+  reports every check and exits non-zero if any of them failed, so it can gate a merge. It also refuses to run
+  while this folder has uncommitted changes, so the verdict describes the commit that will be merged; that
+  read-only, folder-scoped check is the only git either report runs. Also available as `make branch-ready-web`
+  from the repository root; what it checks is documented in `README.md`.
+
+### Changed
+
+#### Views and navigation
+
+- **A page's tab and history entry name the tenant it belongs to.** A title now reads
+  `<document> · <tenant>`, with the document first because tabs truncate from the right while the tenant is the
+  part that repeats across every tab opened from one export. The source-YAML view names the file it shows, so
+  the two representations of one resource — routinely open side by side through the **Documentation | YAML**
+  switcher — no longer produce identical tabs. The tenant picker keeps its own title.
+
+### Fixed
+
+#### The browser
+
+- **Dark mode now covers the browser's own chrome.** Every page declares that it supports both colour schemes
+  and paints the document dark, so scrollbars, form-control chrome and the area past the page edge follow the
+  theme instead of staying light around a dark page. Theme selection still follows the system preference alone:
+  no client-side JavaScript and nothing stored.
+
 ## [0.1.1] - 2026-09-07
 
 ### Fixed

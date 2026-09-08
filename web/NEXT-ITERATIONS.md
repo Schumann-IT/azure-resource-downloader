@@ -14,6 +14,10 @@ Each is a numbered work entry in its own right; none touches a non-negotiable (r
 JavaScript, one `markdown-it` instance, path safety) and none depends on a documentation regeneration. Each
 carries its own e2e or spec case and a `CHANGELOG.md` entry under `[Unreleased]`; purely internal ones say so.
 
+A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry is written. It stays here,
+struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
+the code lands.
+
 ### 1. Picker and health counts must be as fresh as the sidebar
 
 **Goal.** After `azure-rd docs generate-index` reruns, the tenant picker and `/healthz` show the new counts on
@@ -67,31 +71,7 @@ instead of always reading *Document not found*.
   pass `max-w-5xl`), so each page has one width.
 - `styles-build.spec.ts` needs nothing; verify visually on both layouts.
 
-### 5. Put the tenant in the page title
-
-**Goal.** A document tab and a history entry read `<document> · <tenant>` rather than the bare H1.
-
-**Plan.**
-
-- Compose `title` in the controller for the document, resource and tenant views; the picker keeps
-  *Documentation*.
-- e2e: assert the `<title>` on a document page contains the tenant id.
-
-### 6. Declare both colour schemes to the browser
-
-**Goal.** In dark mode the scrollbars, form-control chrome and overscroll area are dark too, not the light
-defaults around a dark page.
-
-> `body` carries `dark:bg-slate-950` but `<html>` does not, and no `color-scheme` is declared, so the UA
-> chrome and the area past the page edge stay white.
-
-**Plan.**
-
-- Add `<meta name="color-scheme" content="light dark">` to the shared `<head>`, and a `color-scheme: light dark`
-  plus dark background on `html` in `src/styles.css`.
-- `styles-build.spec.ts`: assert the `color-scheme` rule survives compilation.
-
-### 7. Print stylesheet
+### 5. Print stylesheet
 
 **Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
 beside it.
@@ -106,7 +86,7 @@ beside it.
 - `styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
   about collapsed blocks.
 
-### 8. Label the sidebar landmark
+### 6. Label the sidebar landmark
 
 **Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
 the per-axis filters.
@@ -116,7 +96,7 @@ the per-axis filters.
 - `aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.
 - e2e: assert the attribute is present on a document page.
 
-### 9. Security headers, including a CSP that enforces the no-script rule
+### 7. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -137,20 +117,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 10. One `<head>` partial
-
-**Goal.** The five templates share one `<head>`, so a change such as the `color-scheme` meta or the title
-format is made once — the favicon link was the last change that had to be made five times.
-
-> Internal only: no observable change, so no `CHANGELOG.md` entry.
-
-**Plan.**
-
-- Extract `views/partials/head.hbs` taking `title`; use it from `page`, `picker`, `tenant`, `resource` and
-  `error`.
-- Do fixes 5 and 6 through it.
-
-### 11. Either wire ESLint or drop the dead `eslint-disable` comments
+### 8. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 

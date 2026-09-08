@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readChangelog, readStruckLines } = require('./lib/changelog');
 
 const root = path.resolve(__dirname, '..');
 const changelogPath = path.join(root, 'CHANGELOG.md');
@@ -40,18 +41,9 @@ if (!fs.existsSync(changelogPath)) {
   console.error('❌ CHANGELOG.md not found');
   process.exit(1);
 }
-const lines = fs.readFileSync(changelogPath, 'utf8').split('\n');
-const unreleasedIndex = lines.findIndex((line) => line === '## [Unreleased]');
-let unreleasedItems = [];
-if (unreleasedIndex !== -1) {
-  let nextHeading = lines.findIndex((line, i) => i > unreleasedIndex && line.startsWith('## '));
-  if (nextHeading === -1) nextHeading = lines.length;
-  unreleasedItems = lines.slice(unreleasedIndex + 1, nextHeading).filter((line) => line.trim() !== '');
-}
-const heading = lines.find((line) => /^## \[\d+\.\d+\.\d+\]/.test(line)) ?? '';
-const versionMatch = /^## \[(\d+\.\d+\.\d+)\]/.exec(heading);
-const version = versionMatch ? versionMatch[1] : '';
-if (version === '' || heading !== `## [${version}]`) {
+const { unreleasedIndex, unreleasedItems, heading, version, awaitingRelease } =
+  readChangelog(changelogPath);
+if (!awaitingRelease) {
   if (version === '') {
     console.log('ℹ️  CHANGELOG.md has no version section yet');
   } else {
@@ -67,18 +59,15 @@ if (version === '' || heading !== `## [${version}]`) {
 console.log(`🚀 newest changelog version ${version} is closed and awaiting release (web/v${version})`);
 
 // 1. No struck-out entries in NEXT-ITERATIONS.md. A strikeout marks work that
-//    shipped but has not been moved into CHANGELOG.md yet.
+//    shipped and is waiting to be cleared out, which is part of cutting the
+//    release rather than of implementing.
 if (!fs.existsSync(nextPath)) {
   fail('NEXT-ITERATIONS.md not found');
 } else {
-  const struck = fs
-    .readFileSync(nextPath, 'utf8')
-    .split('\n')
-    .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => /(^|[^~])~~[^~]/.test(line));
+  const struck = readStruckLines(nextPath);
   if (struck.length > 0) {
     fail(
-      'NEXT-ITERATIONS.md has struck-out entries — move them into CHANGELOG.md and delete them:',
+      'NEXT-ITERATIONS.md has struck-out entries — delete them (and check CHANGELOG.md records the work):',
       struck.map(({ line, n }) => `${n}:${line}`).join('\n'),
     );
   } else {

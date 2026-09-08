@@ -109,7 +109,7 @@ azure-resource-downloader/
 ├── go/          azure-rd CLI (Go 1.24) — see go/README.md
 ├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
 ├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
-├── Makefile     release entry points for both projects (see Releasing)
+├── Makefile     release entry points for both projects, plus the branch-ready gates (see Releasing)
 ├── scripts/     release.sh — tags and publishes prepared releases
 └── README.md    this file
 ```
@@ -134,8 +134,19 @@ never closed, so it gets no tag and no release.
 `## [Unreleased]` to a bare `## [X.Y.Z]` — **no date**; the publish step stamps it — and start a fresh, empty
 `## [Unreleased]` above it. For `web/`, also set `version` in `package.json` and `package-lock.json`
 (`npm version X.Y.Z --no-git-tag-version` in `web/`). Delete any struck-out entries from the project's
-`NEXT-ITERATIONS.md` — a strikeout marks work that shipped but was not yet recorded in the changelog. Commit and
-merge to `main`.
+`NEXT-ITERATIONS.md` — a strikeout marks work that shipped and is waiting to be cleared out — and check the
+changelog records them. Commit and merge to `main`.
+
+This is also checked *per branch*, before the merge rather than at release time: `make branch-ready-go`
+(→ `make -C go branch-ready`) and `make branch-ready-web` (→ `npm --prefix web run branch-ready`), or
+`make branch-ready` for both. Each runs its project's own pipeline (`go/`: `make ci`; `web/`: tests and build),
+then reports whether the branch cleared its struck-out entries, renumbered the rest and wrote its
+`## [Unreleased]` entry; `web/` also checks that `version` was left alone (`go/` has no version file — its
+version is the tag). Each changes nothing, but exits non-zero if any check failed, so it can gate a merge.
+Each refuses to run at all while its own folder has uncommitted changes — a read-only `git status --porcelain`
+scoped to that folder, so the verdict describes the commit that will be merged and an edit in the sibling
+project cannot block it. Details in the [go README](go/README.md#development) and the
+[web README](web/README.md#development-conventions).
 
 **2. Report whether a release can be cut** — each project's `release-ready` goal only reports; it changes
 nothing and runs no git command:
@@ -156,9 +167,13 @@ fail, so it is a report to read, not a gate that stops on the first problem.
 **3. Publish** — `make release` (and `make release-status`) run both `release-ready` goals first as make
 prerequisites, so a project whose pipeline fails stops the release before anything happens. Then the publisher
 verifies the repository state: the current branch must be `main` (override with `RELEASE_BRANCH=<name>`) and
-the working tree clean, since it tags and pushes `HEAD`. These two checks live only here. Then, for every
-project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto that heading
-(`## [X.Y.Z] - YYYY-MM-DD`) and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog edit any
+the working tree clean, since it tags and pushes `HEAD`. These two checks live only here — the `release-ready`
+goals run no git at all, and the only other git the readiness tooling runs is each `branch-ready` goal's
+folder-scoped clean-tree preflight (`go/`'s `make build` additionally runs a read-only `git describe` for the
+version stamp).
+
+Then, for every project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto
+that heading (`## [X.Y.Z] - YYYY-MM-DD`) and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog edit any
 tooling makes — then tags that commit `<project>/vX.Y.Z`, pushes the branch and the tags, and creates a GitHub
 release titled `<project> vX.Y.Z` whose notes are that changelog section. Projects whose newest heading is
 already dated are skipped; an undated heading whose tag already exists is refused.

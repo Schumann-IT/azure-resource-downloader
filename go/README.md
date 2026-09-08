@@ -103,8 +103,9 @@ Releases are tagged `go/vX.Y.Z`; `make build` derives the version from the neare
 `vX.Y.Z-N-g<sha>`, `-dirty` for an uncommitted tree, `dev` outside a checkout) and stamps it into `--version`
 and into every `resources/metadata.yaml` it writes. `make release-ready` only reports whether a release can be
 cut (changelog closed into an undated `## [X.Y.Z]` heading, nothing struck out in `NEXT-ITERATIONS.md`); closing
-the changelog is done by hand, and branch/working-tree checks, date stamping, tagging and publishing happen from
-the repository root — see the [monorepo README](../README.md#releasing).
+the changelog is done by hand, and date stamping, tagging and publishing happen from the repository root — see
+the [monorepo README](../README.md#releasing). Its counterpart for a feature or fix branch is
+`make branch-ready` (see [Development](#development)).
 
 ## Quick start
 
@@ -941,14 +942,16 @@ make build           # binary with version stamp
 make test            # go test ./...
 make test-race       # with the race detector — required for any change touching goroutines, channels,
                      # sync primitives, the pipeline or the concurrent listing
-make lint            # golangci-lint
-make fmt
-make check           # fmt + lint + test
-make all             # check + build
-make ci              # check + build
+make lint            # golangci-lint --fix: applies the fixes it can, rewrites files
+make lint-check      # golangci-lint without --fix: reports only
+make fmt             # rewrites files
+make fmt-check       # reports unformatted files, rewrites nothing
+make check           # fmt-check + lint-check + test — modifies nothing, so it can report on a commit as-is
+make ci              # check + build (the default goal)
 make deps            # download + tidy
 make test-coverage   # coverage.html
 make release-ready   # report whether a release can be cut (changes nothing); tag + publish via ../Makefile
+make branch-ready    # gate: clean tree, ci, then is this feature/fix branch ready to ship? (changes nothing)
 ```
 
 Conventions that CI and review expect:
@@ -961,6 +964,21 @@ Conventions that CI and review expect:
 - `README.md` is the single source of truth for what the tool does today; `NEXT-ITERATIONS.md` holds
   outstanding work and parked ideas; no other documentation Markdown lives in this folder (the embedded
   `generate_prompt_template.md` is program input, not documentation).
+- Delivered work is **struck through** in `NEXT-ITERATIONS.md` rather than deleted, so a branch can be
+  reviewed against what its entries set out to do. Clearing them out and renumbering the rest is part of
+  closing the branch, which is what `make branch-ready` gates; `make release-ready` repeats the strikeout check
+  at release time as a backstop.
+- `make branch-ready` (or `make branch-ready-go` from the repository root) reports whether a feature or fix
+  branch is ready to ship: `make ci` passes, the struck-out `NEXT-ITERATIONS.md` entries have been cleared out
+  and the rest renumbered contiguously, and `## [Unreleased]` records the work. It edits nothing, and unlike
+  `release-ready` it reports every check and **exits non-zero if any of them failed**, so it can gate a merge.
+  An empty `[Unreleased]` is reported, not failed: a branch with no user-visible effect legitimately has none.
+  There is no version check — this project's version is the `go/vX.Y.Z` tag, not a file.
+- It **refuses to run while `go/` has uncommitted changes**, before `make ci`, so the verdict describes the
+  commit that will be merged rather than the editor's current state. That preflight is a read-only
+  `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it; outside a clone it
+  says so and waves the run through. `release-ready` runs no git at all, and `ci` runs only the read-only
+  `fmt-check`/`lint-check`, so nothing between the preflight and the verdict can change the tree.
 
 Editor and AI-assistant rules live in `.windsurf/rules/` and apply to this folder only:
 

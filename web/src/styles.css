@@ -12,6 +12,24 @@
 }
 
 /* -------------------------------------------------------------------------
+   Document-level colour scheme. The UA paints scrollbars, form-control chrome
+   and the overscroll area from the scheme <html> declares, so without this a
+   dark page keeps light chrome around it. The dark background is a literal
+   slate-950 rather than var(--color-slate-950): Tailwind v4 only emits a theme
+   variable something references, so the reference would break the day no
+   template uses dark:bg-slate-950.
+   ------------------------------------------------------------------------- */
+html {
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: oklch(0.129 0.042 264.695);
+  }
+}
+
+/* -------------------------------------------------------------------------
    <details>/<summary> — the dominant visual element in these docs, and the
    one thing @tailwindcss/typography does not style. Scoped under .prose.
    ------------------------------------------------------------------------- */
