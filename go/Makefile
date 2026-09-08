@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-race test-coverage run help lint fmt deps check all ci loc release-ready
+.PHONY: build install clean test test-race test-coverage run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -81,11 +81,33 @@ fmt:
 	@$(GOFMT) ./...
 	@echo "✅ Code formatted"
 
-# Lint code (requires golangci-lint)
+# Report unformatted files without rewriting them. `check` and `ci` depend on
+# this (and on `lint-check`) rather than on `fmt`/`lint` so they never modify
+# the working tree: a report on a commit must describe that commit, not a
+# version the pipeline has just rewritten.
+fmt-check:
+	@echo "🎨 Checking formatting..."
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ Unformatted files — run 'make fmt' and commit the result:" >&2; \
+		echo "$$unformatted" >&2; \
+		exit 1; \
+	fi
+	@echo "✅ Formatting OK"
+
+# Lint and auto-fix what the linters can fix (requires golangci-lint). Rewrites
+# files; remaining findings are reported and fail the target.
 lint:
-	@echo "🔍 Linting code..."
-	@golangci-lint run ./...
+	@echo "🔍 Linting code (with --fix)..."
+	@golangci-lint run --fix ./...
 	@echo "✅ Linting complete"
+
+# Report lint findings without fixing them. The read-only counterpart of `lint`,
+# for the same reason `fmt-check` exists beside `fmt`.
+lint-check:
+	@echo "🔍 Checking lint..."
+	@golangci-lint run ./...
+	@echo "✅ Lint OK"
 
 # Count lines of code (requires cloc)
 loc:
@@ -108,8 +130,23 @@ loc:
 release-ready: ci
 	@scripts/release-ready.sh
 
-# Check code quality (fmt + lint + test)
-check: fmt lint test
+# Is a feature or fix branch ready to ship? Refuses while go/ has uncommitted
+# changes (so the verdict describes the commit that will be merged), runs `ci`,
+# then reports: no struck-out NEXT-ITERATIONS entries left, entries numbered
+# 1..N, work recorded under [Unreleased]. Edits nothing, but unlike
+# `release-ready` it exits non-zero if ANY check failed, so it can gate a merge.
+# Not a release target and not a prerequisite of one. The preflight must run
+# before `ci`; `ci` itself is read-only (fmt-check/lint-check), so the tree the
+# report sees is the tree the preflight approved.
+branch-ready:
+	@scripts/working-tree-clean.sh
+	@$(MAKE) --no-print-directory ci
+	@scripts/branch-ready.sh
+
+# Check code quality (fmt-check + lint-check + test). Read-only: nothing here
+# rewrites a file, so `check`, `ci` and `release-ready` leave the working tree
+# as found.
+check: fmt-check lint-check test
 	@echo "✅ All checks passed"
 
 # Run all quality checks and build (useful for CI/CD)
@@ -129,19 +166,22 @@ help:
 	@echo "  make test-coverage  - Run tests with coverage report"
 	@echo "  make deps           - Download and tidy dependencies"
 	@echo "  make run            - Run the application"
-	@echo "  make fmt            - Format code"
-	@echo "  make lint           - Lint code (requires golangci-lint)"
+	@echo "  make fmt            - Format code (rewrites files)"
+	@echo "  make fmt-check      - Report unformatted files without rewriting them"
+	@echo "  make lint           - Lint and auto-fix (rewrites files; requires golangci-lint)"
+	@echo "  make lint-check     - Report lint findings without fixing them"
 	@echo "  make loc            - Count lines of code (requires cloc)"
 	@echo "  make release-ready  - Report whether a release can be cut (tag/publish from the repo root)"
+	@echo "  make branch-ready   - Gate: is this feature/fix branch ready to ship? (clean tree, ci, changelog written, strikeouts cleared)"
 	@echo ""
 	@echo "Composite targets:"
-	@echo "  make check          - Run fmt + lint + test"
+	@echo "  make check          - Run fmt-check + lint-check + test (modifies nothing)"
 	@echo "  make ci             - Run check + build (for CI/CD)"
 	@echo ""
 	@echo "  make help           - Display this help message"
 	@echo ""
 	@echo "⚠️  Always use 'make' targets instead of running commands directly!"
-	@echo "    ✅ make lint    (not: golangci-lint run)"
+	@echo "    ✅ make lint    (not: golangci-lint run --fix)"
 	@echo "    ✅ make test    (not: go test)"
 	@echo "    ✅ make build   (not: go build)"
 

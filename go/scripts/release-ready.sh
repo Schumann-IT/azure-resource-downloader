@@ -16,6 +16,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 changelog="CHANGELOG.md"
 next="NEXT-ITERATIONS.md"
+# shellcheck source=lib/changelog.sh
+source scripts/lib/changelog.sh
 passed=0
 failed=0
 
@@ -29,21 +31,15 @@ fail() {
   failed=$((failed + 1))
 }
 
-# Non-blank lines under `## [Unreleased]`.
-unreleased_items() {
-  awk '/^## \[Unreleased\]$/ {f=1; next} /^## / {f=0} f' "$changelog" | grep -v '^[[:space:]]*$' || true
-}
-
-# Is a release pending? Closing [Unreleased] writes a bare `## [X.Y.Z]`; the root
-# release script stamps the date when it publishes. So an undated newest heading
-# means "closed, awaiting release"; a dated or missing one means nothing to do.
+# Is a release pending? An undated newest heading means "closed, awaiting
+# release"; a dated or missing one means nothing to do (see lib/changelog.sh).
 if [[ ! -f "$changelog" ]]; then
   echo "❌ $changelog not found" >&2
   exit 1
 fi
-heading=$(grep -m 1 -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$changelog" || true)
-version=$(printf '%s' "$heading" | sed -n 's/^## \[\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\].*/\1/p')
-if [[ -z "$version" || "$heading" != "## [$version]" ]]; then
+heading=$(newest_heading)
+version=$(newest_version)
+if ! awaiting_release; then
   if [[ -z "$version" ]]; then
     echo "ℹ️  $changelog has no version section yet"
   else
@@ -60,19 +56,23 @@ fi
 echo "🚀 newest changelog version $version is closed and awaiting release (go/v$version)"
 
 # 1. No struck-out entries in NEXT-ITERATIONS.md. A strikeout marks work that
-#    shipped but has not been moved into CHANGELOG.md yet.
+#    shipped and is still waiting to be cleared out; `make branch-ready` gates
+#    that at branch close, this is the release-time backstop.
 if [[ ! -f "$next" ]]; then
   fail "$next not found"
-elif struck=$(grep -nE '(^|[^~])~~[^~]' "$next"); then
-  fail "$next has struck-out entries — move them into $changelog and delete them:"
-  echo "$struck" >&2
 else
-  ok "$next has no struck-out entries"
+  struck=$(struck_lines)
+  if [[ -n "$struck" ]]; then
+    fail "$next has struck-out entries — delete them (and check $changelog records the work):"
+    echo "$struck" >&2
+  else
+    ok "$next has no struck-out entries"
+  fi
 fi
 
 # 2. CHANGELOG.md has an empty `## [Unreleased]` section: everything pending has
 #    already been moved into the version section that is about to be released.
-if ! grep -q '^## \[Unreleased\]$' "$changelog"; then
+if ! has_unreleased; then
   fail "$changelog has no '## [Unreleased]' section"
 else
   unreleased=$(unreleased_items)

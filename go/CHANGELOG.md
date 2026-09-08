@@ -11,6 +11,20 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Added
+
+#### Release Workflow
+
+- **`make branch-ready` reports whether a feature or fix branch is ready to ship.** It runs `make ci`, then checks
+  that the work is recorded under `[Unreleased]` and that the `NEXT-ITERATIONS.md` entries the branch delivered
+  have been cleared out and the rest renumbered — struck-out entries now stay in place while a branch is in
+  progress and are deleted when it closes, so a reviewer can see what the branch set out to do beside what it
+  did. Like the release report it edits nothing, but it reports every check and exits non-zero if any of them
+  failed, so it can gate a merge. It refuses to run while this folder has uncommitted changes, so the verdict
+  describes the commit that will be merged; that read-only, folder-scoped check is the only git either report
+  runs. Also available as `make branch-ready-go` from the repository root; what it checks is documented in
+  `README.md`.
+
 ### Fixed
 
 #### Release Workflow
@@ -18,6 +32,11 @@ section of the [repository README](../README.md) for the procedure.
 - **`make ci` no longer runs `go mod download` and `go mod tidy` first.** Doing so before every lint defeated the
   lint cache, so `make ci` — and `make release-ready`, which runs it — took minutes; it now runs `check` and
   `build` only and finishes in seconds. Refreshing dependencies stays an explicit `make deps`.
+- **`make check` no longer rewrites files.** It ran `go fmt`, so a readiness report could describe a working
+  tree that `check` itself had just changed. Formatting and linting now each come as a pair: `make fmt` and
+  `make lint` fix what they can (`lint` now runs `golangci-lint --fix`), while the new `make fmt-check` and
+  `make lint-check` only report and fail. `check` — and therefore `ci` and `release-ready` — runs the `-check`
+  variants, so it leaves the working tree exactly as it found it.
 
 ## [0.1.0] - 2026-09-07
 

@@ -109,7 +109,7 @@ azure-resource-downloader/
 ├── go/          azure-rd CLI (Go 1.24) — see go/README.md
 ├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
 ├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
-├── Makefile     release entry points for both projects, plus branch-ready-web (see Releasing)
+├── Makefile     release entry points for both projects, plus the branch-ready gates (see Releasing)
 ├── scripts/     release.sh — tags and publishes prepared releases
 └── README.md    this file
 ```
@@ -137,13 +137,16 @@ never closed, so it gets no tag and no release.
 `NEXT-ITERATIONS.md` — a strikeout marks work that shipped and is waiting to be cleared out — and check the
 changelog records them. Commit and merge to `main`.
 
-For `web/` this is also checked *per branch*, before the merge rather than at release time:
-`make branch-ready-web` (→ `npm --prefix web run branch-ready`) runs the tests and the build, then reports
-whether the branch cleared its struck-out entries, renumbered the rest and wrote its `## [Unreleased]` entry,
-and that it left `version` alone. It changes nothing, but it exits non-zero if any check failed, so it can
-gate a merge. It refuses to run at all while `web/` has uncommitted changes — a read-only
-`git status --porcelain` scoped to that folder, so the verdict describes the commit that will be merged.
-Details in the [web README](web/README.md#development-conventions).
+This is also checked *per branch*, before the merge rather than at release time: `make branch-ready-go`
+(→ `make -C go branch-ready`) and `make branch-ready-web` (→ `npm --prefix web run branch-ready`), or
+`make branch-ready` for both. Each runs its project's own pipeline (`go/`: `make ci`; `web/`: tests and build),
+then reports whether the branch cleared its struck-out entries, renumbered the rest and wrote its
+`## [Unreleased]` entry; `web/` also checks that `version` was left alone (`go/` has no version file — its
+version is the tag). Each changes nothing, but exits non-zero if any check failed, so it can gate a merge.
+Each refuses to run at all while its own folder has uncommitted changes — a read-only `git status --porcelain`
+scoped to that folder, so the verdict describes the commit that will be merged and an edit in the sibling
+project cannot block it. Details in the [go README](go/README.md#development) and the
+[web README](web/README.md#development-conventions).
 
 **2. Report whether a release can be cut** — each project's `release-ready` goal only reports; it changes
 nothing and runs no git command:
@@ -165,8 +168,9 @@ fail, so it is a report to read, not a gate that stops on the first problem.
 prerequisites, so a project whose pipeline fails stops the release before anything happens. Then the publisher
 verifies the repository state: the current branch must be `main` (override with `RELEASE_BRANCH=<name>`) and
 the working tree clean, since it tags and pushes `HEAD`. These two checks live only here — the `release-ready`
-goals run no git at all, and the one other git command in the repository's tooling is `branch-ready-web`'s
-web/-scoped clean-tree preflight.
+goals run no git at all, and the only other git the readiness tooling runs is each `branch-ready` goal's
+folder-scoped clean-tree preflight (`go/`'s `make build` additionally runs a read-only `git describe` for the
+version stamp).
 
 Then, for every project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto
 that heading (`## [X.Y.Z] - YYYY-MM-DD`) and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog edit any

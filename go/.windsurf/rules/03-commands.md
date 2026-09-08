@@ -11,15 +11,18 @@ This project uses a Makefile to standardize development workflows. All instructi
 ## Required Make Targets
 
 When providing instructions or examples:
-- ✅ `make lint` — NOT `golangci-lint run`
+- ✅ `make lint` — NOT `golangci-lint run --fix` (applies fixes, rewrites files)
+- ✅ `make lint-check` — NOT `golangci-lint run` (reports only; what `check`/`ci` run)
 - ✅ `make test` — NOT `go test ./...`
 - ✅ `make build` — NOT `go build`
-- ✅ `make fmt` — NOT `go fmt ./...`
+- ✅ `make fmt` — NOT `go fmt ./...` (rewrites files)
+- ✅ `make fmt-check` — NOT `gofmt -l` (reports only; what `check`/`ci` run)
 - ✅ `make deps` — NOT `go mod tidy`
-- ✅ `make check` — Run fmt + lint + test
-- ✅ `make all` — Run fmt + lint + test + build
-- ✅ `make ci` — For CI/CD pipelines
+- ✅ `make check` — Run fmt-check + lint-check + test; modifies nothing
+- ✅ `make ci` — Run check + build (default goal; for CI/CD pipelines)
 - ✅ `make test-race` — Run tests with the Go race detector
+- ✅ `make branch-ready` — Clean-tree preflight, `ci`, then report whether this feature/fix branch is ready to ship (gate: fails on any ❌)
+- ✅ `make release-ready` — `ci`, then report whether a release can be cut (report: fails only if all ❌)
 
 ## When to run `make test-race`
 
