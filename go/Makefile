@@ -96,9 +96,13 @@ fmt-check:
 	@echo "✅ Formatting OK"
 
 # Lint and auto-fix what the linters can fix (requires golangci-lint). Rewrites
-# files; remaining findings are reported and fail the target.
+# files; remaining findings are reported and fail the target. The config is
+# verified first so a typo in .golangci.yml fails loudly instead of silently
+# reverting to golangci-lint's defaults — which would lint with a different set
+# than the editor does.
 lint:
 	@echo "🔍 Linting code (with --fix)..."
+	@golangci-lint config verify
 	@golangci-lint run --fix ./...
 	@echo "✅ Linting complete"
 
@@ -106,6 +110,7 @@ lint:
 # for the same reason `fmt-check` exists beside `fmt`.
 lint-check:
 	@echo "🔍 Checking lint..."
+	@golangci-lint config verify
 	@golangci-lint run ./...
 	@echo "✅ Lint OK"
 
@@ -168,8 +173,8 @@ help:
 	@echo "  make run            - Run the application"
 	@echo "  make fmt            - Format code (rewrites files)"
 	@echo "  make fmt-check      - Report unformatted files without rewriting them"
-	@echo "  make lint           - Lint and auto-fix (rewrites files; requires golangci-lint)"
-	@echo "  make lint-check     - Report lint findings without fixing them"
+	@echo "  make lint           - Verify .golangci.yml, then lint and auto-fix (rewrites files; requires golangci-lint)"
+	@echo "  make lint-check     - Verify .golangci.yml, then report lint findings without fixing them"
 	@echo "  make loc            - Count lines of code (requires cloc)"
 	@echo "  make release-ready  - Report whether a release can be cut (tag/publish from the repo root)"
 	@echo "  make branch-ready   - Gate: is this feature/fix branch ready to ship? (clean tree, ci, changelog written, strikeouts cleared)"

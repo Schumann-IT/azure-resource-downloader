@@ -194,7 +194,7 @@ func TestDetermineWorkerCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := determineWorkerCount(wc, tt.resourceType, nil, tt.workersFlag, tt.explicit)
+			got := determineWorkerCount(wc, tt.resourceType, tt.workersFlag, tt.explicit)
 			if got != tt.want {
 				t.Errorf("determineWorkerCount() = %d, want %d", got, tt.want)
 			}

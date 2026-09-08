@@ -49,29 +49,38 @@ of being whatever the installed golangci-lint happens to default to.
 >
 > **Schema.** `version: "2"`, validated with `golangci-lint config verify`, so a typo in the file fails loudly
 > in CI instead of silently reverting to defaults.
+>
+> **What the trial run settled.** `unconvert` and govet's `nilness` report nothing on this codebase, so both
+> are enabled at zero cost. `unparam` found one dead parameter (removed) and six "always receives the same
+> argument" reports — five in test helpers, excluded by path, and one on a fact accessor whose signature is
+> deliberately symmetric with its siblings, silenced at the site. govet's `shadow` reported only idiomatic
+> `if err := f(); err != nil` blocks and is **not** enabled; the reason is recorded in the config. Note that
+> gofmt moves a `//nolint` directive to the end of its comment block, so the prose reason goes *above* it and
+> the directive line stays short. Also confirmed: golangci-lint finds no config when started from the
+> repository root, so the explicit path in GoLand is required rather than optional.
 
 **Plan.**
 
-- Add `go/.golangci.yml` (`version: "2"`): `linters.default: standard`, an explicit `enable` list for the
+- ~~Add `go/.golangci.yml` (`version: "2"`): `linters.default: standard`, an explicit `enable` list for the
   additions the mapping settles on (`unconvert`; `unparam` pending the trial run), `settings.govet.enable`
   with `nilness` (and `shadow` if the profile check says so), `formatters.enable: [gofmt]`. Each enabled
   linter carries a comment naming the GoLand inspection it mirrors, so the file *is* the mapping and a later
-  reader can tell a parity choice from a project preference.
-- Run `make lint-check` on the new config and triage: a finding is fixed in the code or excluded with a
+  reader can tell a parity choice from a project preference.~~
+- ~~Run `make lint-check` on the new config and triage: a finding is fixed in the code or excluded with a
   written reason under `linters.exclusions`, never by dropping the linter to go green. Run `make test-race`
-  if any fix touches concurrent code.
-- Prepend `golangci-lint config verify` to the `lint-check` and `lint` targets in the `Makefile`, so
-  `check`/`ci`/`branch-ready`/`release-ready` all fail on a broken config.
+  if any fix touches concurrent code.~~
+- ~~Prepend `golangci-lint config verify` to the `lint-check` and `lint` targets in the `Makefile`, so
+  `check`/`ci`/`branch-ready`/`release-ready` all fail on a broken config.~~
 - GoLand: Settings | Go | Linters → *Use config* → `go/.golangci.yml`. Verify the plugin's findings in the
-  editor match `make lint-check` on a file with a known finding; verify whether opening the repository root
-  finds the file without the explicit path.
-- Docs: README *Development* section (the config file, that it is the single lint truth, the one-time GoLand
+  editor match `make lint-check` on a file with a known finding. **Outstanding — needs the IDE**; the config,
+  the docs and the verification that the path must be explicit are done.
+- ~~Docs: README *Development* section (the config file, that it is the single lint truth, the one-time GoLand
   setting and the verification above); `02-style-and-quality.md` — "passes `golangci-lint run` with default
   linters" becomes "passes `make lint-check` with the linters configured in `.golangci.yml`, which GoLand runs
   too"; `01-project.md` repo layout gains the `.golangci.yml` line; `03-commands.md` is unchanged (the make
-  targets keep their names and their read-only / rewriting split).
-- `CHANGELOG.md` entry under `[Unreleased]` *Added* (the config and the IDE parity), plus a note under
-  *Changed* if the triage step changes any exported behaviour — otherwise the code fixes ride the same entry.
+  targets keep their names and their read-only / rewriting split).~~
+- ~~`CHANGELOG.md` entry under `[Unreleased]` *Added* (the config and the IDE parity), plus a note under
+  *Changed* if the triage step changes any exported behaviour — otherwise the code fixes ride the same entry.~~
 
 ## Parked ideas
 
