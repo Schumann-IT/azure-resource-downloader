@@ -35,85 +35,7 @@ the next request, the same as the sidebar already does.
 - e2e: rewrite a fixture's `index.yaml` counts and assert `/` and `/healthz` reflect them on the next request
   without waiting out the TTL.
 
-### ~~2. Validate `PORT`~~
-
-**Goal.** A non-numeric or out-of-range `PORT` produces a clear message rather than an opaque `listen(NaN)`
-failure.
-
-> **Today.** `src/main.ts` reads `process.env.PORT ? Number(process.env.PORT) : 3000` and passes the result
-> straight to `app.listen()`. Nothing else reads `PORT`. `Number()` accepts `" 3000 "`, `"1e3"` and `"0x1F"`, and
-> `PORT=0` asks the OS for a random port — none of which an operator means. `main.ts` cannot be unit tested
-> (it listens), so the parsing has to live in a pure helper.
->
-> **Rule.** Three outcomes, and only three: **unset or empty** → `3000`, silently (that is the documented
-> default, not an error); **exactly one to five ASCII digits** (`/^\d{1,5}$/` on the raw value, no trimming) whose
-> value is in `1..65535` → that port; **anything else** → `3000`, and the startup line says so. No other
-> configuration mechanism and no new environment variable; `console` stays confined to `main.ts`.
-
-**Plan.**
-
-- ~~Add `src/port.ts` exporting `DEFAULT_PORT = 3000` and a pure, synchronous
-  `resolvePort(raw: string | undefined): { port: number; rejected?: string }` implementing the rule above:
-  `rejected` is set to the raw value only in the third case. Short *why* comment on the export (the
-  `Number()` pitfalls).~~
-- ~~In `src/main.ts` replace the inline expression with `const { port, rejected } = resolvePort(process.env.PORT)`
-  and keep the **single** `console.log`, appending a clause when `rejected` is set:
-  `Docs browser listening on http://localhost:3000 (PORT="abc" is not a port in 1..65535, using 3000)`. The
-  raw value goes through `JSON.stringify` so a value with spaces is visible. No second `console` call.~~
-- ~~`test/port.spec.ts` (Jest, no Nest module): `undefined` and `''` → `3000` with `rejected` undefined; `'8080'`,
-  `'1'`, `'65535'` → the number, no `rejected`; `'0'`, `'65536'`, `'abc'`, `'80a'`, `' 3000'`, `'1e3'`, `'0x1F'`,
-  `'-1'`, `'3000.0'` → `3000` with `rejected` equal to the input.~~
-- ~~README: the `PORT` row of the configuration table says the accepted range and that anything else falls back
-  to `3000` with a note in the startup line; the `main.ts` line in the **Layout** tree gains a sibling
-  `port.ts` entry (`# PORT parsing + fallback`). `.env.example`: extend the `PORT` comment with the same one-line
-  rule. Also add `port.ts` to the Layout list in `.windsurf/rules/01-architecture.md`.~~
-- ~~`CHANGELOG.md`, `[Unreleased]` → `### Fixed` → `#### The browser`: one bolded lead-in
-  (*An invalid `PORT` no longer crashes startup*) plus two sentences — what is accepted, that the fallback is
-  announced in the startup line, and that configuration stays environment-only. Then strike this entry's plan
-  items and title.~~
-
-### ~~3. Say what was not found~~
-
-**Goal.** The 404 view distinguishes an unknown tenant, an unknown export format and a missing document
-instead of always reading *Document not found*.
-
-> **Today.** Every 404 goes through the private `notFound(res, tenant, requested)` at the bottom of
-> `src/docs/docs.controller.ts`, which renders `views/error.hbs` with `title: 'Not found'`; the template
-> hard-codes `<h1>Document not found</h1>` and prints the tenant and the requested path in the body.
-> `configure-app.ts` registers **no Handlebars helpers** (there is no `eq`), so the template cannot branch on a
-> string — the headline must be chosen in the controller and the template only prints it. The body stays as it
-> is: it already shows only the tenant segment and the request-derived path, never a filesystem path.
->
-> **Headlines** (exact strings, asserted by the e2e cases): `tenant` → *Tenant not found*; `document` →
-> *Document not found*; `resource` → *Source YAML not found*; `export` → *Export format not found*.
-
-**Plan.**
-
-- ~~In `docs.controller.ts` add `type NotFoundKind = 'tenant' | 'document' | 'resource' | 'export'` and a
-  `const NOT_FOUND_HEADLINE: Record<NotFoundKind, string>` with the four strings above. Change the signature to
-  `notFound(res, kind, tenant, requested)`; it renders `error` with `title: headline`, `headline`, `tenant`,
-  `requested` — the `<title>` becomes the headline, so the tab says what happened too.~~
-- ~~Update all 12 call sites by the condition they guard, not by handler: `discovery.get()` returned `null` or
-  `discovery.getIndex()` returned `null` → `'tenant'` (in every handler); the export handler's `format !==
-  'confluence'` → `'export'`; in the `_resource` handler `resolveResource()` returning `null` and the
-  highlighter throwing → `'resource'`; in the document handler the `TOOL_ARTIFACTS` hit, `resolveWithinTenant()`
-  returning `null` and the renderer throwing → `'document'`.~~
-- ~~`views/error.hbs`: replace the literal headline with `{{headline}}` (double-stache, escaped). Nothing else in
-  the template changes; no new CSS.~~
-- ~~e2e, in `test/docs.e2e.spec.ts`, extend the existing cases rather than adding new tenants: *GET an unknown
-  tenant returns 404* asserts the body contains `Tenant not found`; *404s an unknown export format and an
-  unknown tenant* asserts `Export format not found` for `/mytenant/_export/docx` and `Tenant not found` for
-  `/nosuchtenant/_export/confluence`; *GET an unknown document …* asserts `Document not found`; *404s for a
-  missing resource …* asserts `Source YAML not found`. Keep every existing `not.toContain(root)` assertion; the
-  `/favicon.ico` case's `not.toContain('Document not found')` stays valid.~~
-- ~~README, **Routes** section: the paragraph after the table ("Anything that does not resolve … renders the 404
-  view") gains one sentence saying the view names what was missing — tenant, document, source YAML or export
-  format — and still never leaks a path.~~
-- ~~`CHANGELOG.md`, `[Unreleased]` → `### Fixed` → `#### Views and navigation`: one bolded lead-in (*The 404
-  page says what was not found*) plus a sentence on the four cases and one stating that the body still carries
-  no filesystem path. Then strike this entry's plan items and title.~~
-
-### 4. Security headers, including a CSP that enforces the no-script rule
+### 2. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -134,7 +56,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 5. Either wire ESLint or drop the dead `eslint-disable` comments
+### 3. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 
