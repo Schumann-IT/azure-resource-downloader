@@ -175,7 +175,7 @@ export class DocsController {
       const rendered = await this.highlighter.render(resolved);
       const index = await this.discovery.getIndex(info);
       res.render('resource', {
-        title: path.posix.basename(docPath),
+        title: withTenant(`${path.posix.basename(docPath)}.yaml`, info.name),
         tenant,
         breadcrumb: this.breadcrumb(relPath),
         source: `${docPath}.yaml`,
@@ -237,7 +237,7 @@ export class DocsController {
       // `meta.source` stays a label and is only used as the has-a-source flag.
       const hasSource = typeof page.meta.source === 'string' && !!page.meta.source;
       res.render('page', {
-        title: page.title || relPath,
+        title: withTenant(page.title || relPath, info.name),
         body: page.html,
         tenant,
         breadcrumb: this.breadcrumb(relPath),
@@ -340,4 +340,11 @@ function joinPath(value: any): string {
 
 function stripExtension(relPath: string): string {
   return relPath.replace(/\.(md|yaml)$/i, '');
+}
+
+// Page title for a view inside a tenant. The document name leads because tabs
+// and the history dropdown truncate from the right, while the tenant is the
+// part that repeats across every tab opened from one export.
+function withTenant(label: string, tenant: string): string {
+  return tenant ? `${label} · ${tenant}` : label;
 }

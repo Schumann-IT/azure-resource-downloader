@@ -46,6 +46,16 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toContain('prefers-color-scheme');
   });
 
+  it('declares both colour schemes and a dark html background', () => {
+    // Without these the UA paints scrollbars, form chrome and the overscroll
+    // area light around a dark page. Asserted as its own case: the dark-mode
+    // case above only greps `prefers-color-scheme` and would pass regardless.
+    expect(css).toMatch(/html\s*\{[^}]*color-scheme:\s*light dark/);
+    expect(css).toMatch(
+      /@media \(prefers-color-scheme:\s*dark\)\s*\{\s*html\s*\{[^}]*background-color/,
+    );
+  });
+
   it('includes the YAML view rules (shiki variables, gutter, :target)', () => {
     expect(css).toContain('--shiki-light');
     expect(css).toContain('--shiki-dark');

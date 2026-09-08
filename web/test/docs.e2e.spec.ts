@@ -390,7 +390,33 @@ describe('Docs browser (e2e)', () => {
       expect(res.text).toContain(
         '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
       );
+      // The shared <head> declares both schemes so the UA chrome follows the
+      // page instead of staying light around a dark one.
+      expect(res.text).toContain(
+        '<meta name="color-scheme" content="light dark" />',
+      );
     }
+  });
+
+  it('names the tenant in the page title, and the YAML view apart from the document', async () => {
+    const doc = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    // The document's own H1, then the tenant as the index names it.
+    expect(doc.text).toContain('<title>Policy One · My Tenant</title>');
+
+    // Both representations of one resource are routinely open at once, so their
+    // tabs must not read the same.
+    const yaml = await request(app.getHttpServer())
+      .get(
+        '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+      )
+      .expect(200);
+    expect(yaml.text).toContain('<title>p1.yaml · My Tenant</title>');
+
+    // The picker is not inside a tenant, so it keeps its own title.
+    const picker = await request(app.getHttpServer()).get('/').expect(200);
+    expect(picker.text).toContain('<title>Documentation</title>');
   });
 
   it('GET / lists exactly the real tenants with their index counts', async () => {

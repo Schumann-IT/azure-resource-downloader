@@ -378,7 +378,7 @@ web/
 │           ├── export-index-mode.ts     # EXPORT_INDEX → by-type / axis / both overview index
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
-├── views/                               # page/tenant/resource/picker/error + partials/{header,sidebar}
+├── views/                               # page/tenant/resource/picker/error + partials/{head,header,sidebar}
 ├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
 ├── scripts/release-ready.js             # npm run release-ready: report whether a release can be cut (changes nothing)
