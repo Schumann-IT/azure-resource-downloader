@@ -947,11 +947,15 @@ describe('Docs browser (e2e)', () => {
       .get('/mytenant/does/not/exist')
       .expect(404);
     expect(res.text).toContain('404');
+    expect(res.text).toContain('Document not found');
     expect(res.text).not.toContain(root); // no absolute path leaked
   });
 
   it('GET an unknown tenant returns 404', async () => {
-    await request(app.getHttpServer()).get('/nope-tenant').expect(404);
+    const res = await request(app.getHttpServer())
+      .get('/nope-tenant')
+      .expect(404);
+    expect(res.text).toContain('Tenant not found');
     // The skipped housekeeping dir is not routable as a tenant either.
     await request(app.getHttpServer()).get('/_to_delete').expect(404);
   });
@@ -1028,6 +1032,7 @@ describe('Docs browser (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant/_resource/Microsoft.Graph/groups/g1')
       .expect(404);
+    expect(res.text).toContain('Source YAML not found');
     expect(res.text).not.toContain(root);
   });
 
@@ -1167,12 +1172,15 @@ describe('Docs browser (e2e)', () => {
   });
 
   it('404s an unknown export format and an unknown tenant', async () => {
-    await request(app.getHttpServer())
+    const format = await request(app.getHttpServer())
       .get('/mytenant/_export/docx')
       .expect(404);
-    await request(app.getHttpServer())
+    expect(format.text).toContain('Export format not found');
+
+    const tenant = await request(app.getHttpServer())
       .get('/nosuchtenant/_export/confluence')
       .expect(404);
+    expect(tenant.text).toContain('Tenant not found');
   });
 
   // The overview page out of the streamed archive. The index mode changes no

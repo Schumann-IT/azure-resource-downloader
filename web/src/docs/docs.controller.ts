@@ -34,6 +34,18 @@ const TOOL_ARTIFACTS = new Set(['generate']);
 // so its own document route is a duplicate and redirects there.
 const SUMMARY_ROUTE = 'summary';
 
+// What a 404 can be about, and the exact headline for each — asserted by the
+// e2e cases. Chosen in the controller because the template has no `eq`
+// helper to branch a string itself.
+type NotFoundKind = 'tenant' | 'document' | 'resource' | 'export';
+
+const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
+  tenant: 'Tenant not found',
+  document: 'Document not found',
+  resource: 'Source YAML not found',
+  export: 'Export format not found',
+};
+
 @Controller()
 export class DocsController {
   constructor(
@@ -93,10 +105,10 @@ export class DocsController {
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
-    if (!info) return this.notFound(res, tenant, '');
+    if (!info) return this.notFound(res, 'tenant', tenant, '');
 
     const index = await this.discovery.getIndex(info);
-    if (!index) return this.notFound(res, tenant, '');
+    if (!index) return this.notFound(res, 'tenant', tenant, '');
 
     let summary: string | null = null;
     try {
@@ -129,13 +141,13 @@ export class DocsController {
     @Res() res: Response,
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
-    if (!info) return this.notFound(res, tenant, EXPORT_PREFIX);
+    if (!info) return this.notFound(res, 'tenant', tenant, EXPORT_PREFIX);
     if (format !== 'confluence') {
-      return this.notFound(res, tenant, `${EXPORT_PREFIX}/${format}`);
+      return this.notFound(res, 'export', tenant, `${EXPORT_PREFIX}/${format}`);
     }
 
     const index = await this.discovery.getIndex(info);
-    if (!index) return this.notFound(res, tenant, EXPORT_PREFIX);
+    if (!index) return this.notFound(res, 'tenant', tenant, EXPORT_PREFIX);
 
     await this.exporter.confluence(info, index, res);
   }
@@ -154,10 +166,10 @@ export class DocsController {
     const relPath = joinPath(params.path ?? params['0'] ?? '');
 
     const info = await this.discovery.get(tenant);
-    if (!info) return this.notFound(res, tenant, relPath);
+    if (!info) return this.notFound(res, 'tenant', tenant, relPath);
 
     const resolved = resolveResource(info.resourcesDir, relPath);
-    if (!resolved) return this.notFound(res, tenant, relPath);
+    if (!resolved) return this.notFound(res, 'resource', tenant, relPath);
 
     if (raw !== undefined) {
       res.sendFile(resolved, {
@@ -196,7 +208,7 @@ export class DocsController {
           : null,
       });
     } catch {
-      this.notFound(res, tenant, relPath);
+      this.notFound(res, 'resource', tenant, relPath);
     }
   }
 
@@ -211,11 +223,11 @@ export class DocsController {
     const relPath = joinPath(params.path ?? params['0'] ?? '');
 
     const info = await this.discovery.get(tenant);
-    if (!info) return this.notFound(res, tenant, relPath);
+    if (!info) return this.notFound(res, 'tenant', tenant, relPath);
 
     const rootDoc = relPath.replace(/\.md$/i, '').toLowerCase();
     if (TOOL_ARTIFACTS.has(rootDoc)) {
-      return this.notFound(res, tenant, relPath);
+      return this.notFound(res, 'document', tenant, relPath);
     }
     if (rootDoc === SUMMARY_ROUTE) {
       res.redirect(302, `/${tenant}`);
@@ -223,7 +235,7 @@ export class DocsController {
     }
 
     const resolved = resolveWithinTenant(info.dir, relPath);
-    if (!resolved) return this.notFound(res, tenant, relPath);
+    if (!resolved) return this.notFound(res, 'document', tenant, relPath);
 
     try {
       const page = await this.renderer.render(resolved, {
@@ -251,7 +263,7 @@ export class DocsController {
           : null,
       });
     } catch {
-      this.notFound(res, tenant, relPath);
+      this.notFound(res, 'document', tenant, relPath);
     }
   }
 
@@ -327,10 +339,16 @@ export class DocsController {
       .map((label) => ({ label }));
   }
 
-  private notFound(res: Response, tenant: string, requested: string): void {
+  private notFound(
+    res: Response,
+    kind: NotFoundKind,
+    tenant: string,
+    requested: string,
+  ): void {
+    const headline = NOT_FOUND_HEADLINE[kind];
     res
       .status(404)
-      .render('error', { title: 'Not found', tenant, requested });
+      .render('error', { title: headline, headline, tenant, requested });
   }
 }
 

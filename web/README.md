@@ -85,7 +85,7 @@ Environment variables only; there is no config file and no `dotenv`.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DOCS_ROOT` | `../output` (relative to `process.cwd()`) | Root that is scanned for tenant folders. With the monorepo layout the default already points at the shared export tree at the repo root. |
-| `PORT` | `3000` | HTTP listen port. |
+| `PORT` | `3000` | HTTP listen port. Accepts 1 to 5 ASCII digits in `1..65535`; unset or empty means the default, silently, and anything else falls back to the default too, with a note in the startup line. |
 | `EXPORT_INDEX` | `type` | Which index the Confluence export writes onto `Overview.html`: `type` (the by-type **Pages** list only), `both` (that list, then one collapsible section per taxonomy axis) or `axis` (the axis sections only). Unset, empty or unrecognised means `type`, so a typo can neither fail an export nor change what it contains. |
 
 ```bash
@@ -157,8 +157,9 @@ Discovery and resolution rules:
 | `GET /:tenant/*path` | A document inside the tenant's `docs/` folder; the `.md` suffix is optional. Filter parameters apply to its sidebar. |
 
 Anything that does not resolve to a Markdown file inside the tenant's `docs/` — or to a `.yaml` file inside
-its `resources/` — renders the 404 view, which never leaks a filesystem path. `docs/generate.md` is tool
-input, not documentation, and is never served.
+its `resources/` — renders the 404 view, which never leaks a filesystem path. The view names what was
+missing — tenant, document, source YAML or export format — rather than always saying *Document not found*.
+`docs/generate.md` is tool input, not documentation, and is never served.
 
 `_resource` and `_export` are *representation* prefixes, not path segments: they never appear in the
 breadcrumb, and they cannot collide with a resource type because no Azure/Graph type segment starts with `_`.
@@ -364,6 +365,7 @@ Required coverage for a change: `path-safety.ts` → `path-safety.spec.ts`; `ten
 web/
 ├── src/
 │   ├── main.ts                          # bootstrap (PORT)
+│   ├── port.ts                          # PORT parsing + fallback
 │   ├── configure-app.ts                 # hbs view engine + static assets (shared with e2e tests)
 │   ├── dynamic-import.ts                # native import() escape hatch for ESM-only deps
 │   ├── app.module.ts
