@@ -23,21 +23,72 @@ the code lands.
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
 
-> The parked *Drop the no-client-side-JavaScript rule* idea notes that today "there is no CSP header". A
-> `script-src 'none'` policy makes the rule verifiable from a response. The policy must allow what the pages
-> legitimately use: `style-src 'self' 'unsafe-inline'` for shiki's inline colours, `img-src 'self' data: https:`
-> for the masked-SVG icons and any image a document embeds, and `frame-ancestors 'none'`. The app stays
-> read-only and ships no script; this changes headers only.
+> **Today.** No response carries a `Content-Security-Policy`, `Referrer-Policy` or `X-Frame-Options` header;
+> `X-Content-Type-Options: nosniff` is set by hand on exactly two responses (the `?raw` YAML in
+> `docs.controller.ts` and the export zip in `export/export.service.ts`). The parked *Drop the
+> no-client-side-JavaScript rule* idea below says in so many words that "there is no CSP header". Everything
+> the app wires into Express lives in `configureViews()` in `src/configure-app.ts`, which both `main.ts` and the
+> e2e suite call — so that is the one place a header middleware belongs. No new dependency: Express `app.use()`
+> and `res.setHeader()` are enough.
+>
+> **What the pages actually load**, verified in the source, which fixes the policy: one stylesheet (`/app.css`,
+> same origin); inline `style="--shiki-light:…;--shiki-dark:…"` attributes on every token of the YAML view
+> (`yaml-highlighter.service.ts` renders with `defaultColor: false`), so `style-src` **must** carry
+> `'unsafe-inline'`; `data:` SVG icons via CSS `mask` for the severity and section icons in `src/styles.css`
+> (mask fetches are image loads, so `img-src` **must** allow `data:`); `/favicon.svg`; and whatever image a
+> generated document embeds (`https:` at most). No fonts, no `fetch`, no frames, no forms, no media, no
+> workers — so `default-src 'none'` is safe and is what makes `script-src` fall to none without being named.
+>
+> **Policy (exact header values).**
+> `Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;
+> frame-ancestors 'none'; base-uri 'none'` — `X-Content-Type-Options: nosniff` — `Referrer-Policy: same-origin`
+> — `X-Frame-Options: DENY` (redundant with `frame-ancestors` for modern browsers, kept for older ones). The
+> headers go on **every** response, including JSON, raw YAML, the zip, redirects, 404s and static assets: they
+> are harmless where irrelevant and a single unconditional middleware is the whole point. Still read-only,
+> still no script; this changes headers only. Not an XSS boundary — `markdown-it` keeps `html: true` — but the
+> browser now refuses to run a script even if one arrived from the docs root.
 
 **Plan.**
 
-- One middleware in `configure-app.ts` (shared by runtime and e2e) setting `Content-Security-Policy`,
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and `X-Frame-Options: DENY`; no new
-  dependency needed.
-- Verify the YAML view, the section icons and a document with an external image still render under the
-  policy (browser console clean).
-- e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
-  list the headers and what the CSP permits.
+- In `src/configure-app.ts` add `export const SECURITY_HEADERS: Readonly<Record<string, string>>` with the four
+  header/value pairs above (the CSP on one line, directives separated by `; `), with a *why* comment naming
+  what each CSP directive permits and for which page element. Then, as the **first** statement of
+  `configureViews()` — before `app.useStaticAssets()`, so `/favicon.svg` and `/app.css` are covered too — add
+  `app.use((_req, res, next) => { for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value); next(); })`.
+  Type the callback parameters with `Request`, `Response`, `NextFunction` from `express` (already a dependency).
+  Update the function's comment: it wires the view engine, static assets **and the security headers**. Leave
+  the two existing per-route `X-Content-Type-Options` calls alone; they now duplicate the global value.
+- e2e, in `test/docs.e2e.spec.ts`: one new case *every response carries the security headers* with a local
+  helper `expectSecurityHeaders(res)` asserting the **literal** values above for all four headers (not the
+  exported constant — the test must fail if the constant is wrong). Apply it to: `GET /` (picker),
+  `GET /healthz` (JSON), `GET /favicon.svg` (static — proves the middleware runs before `express.static`),
+  `GET /mytenant/Microsoft.Graph/groups/g1` (document), `GET /mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1`
+  (YAML view) and the same with `?raw`, `GET /mytenant/_export/confluence` (zip; use `.buffer().parse(binaryParser)`
+  like the existing export cases), and `GET /nope-tenant` (a 404). No fixture changes.
+- **Manual step, for the user** (a model cannot drive a browser): `npm run start:dev` against a real export,
+  open DevTools → Console, and load (a) a document with **Security**/**Settings** sections (section icons must
+  show), (b) the tenant landing page with a findings table (severity icons must show), (c) a YAML view (colours in
+  both light and dark scheme), (d) a document embedding an external image, (e) click the picker's export link.
+  Any `Refused to load …` line names the directive to widen; widen **only that directive**, and record why in
+  the `SECURITY_HEADERS` comment. If the console is clean, nothing else changes.
+- README: in **Security**, after the path-safety bullets, a short paragraph *Response headers* listing the
+  four headers with their values and one clause per CSP directive saying what it permits and why (stylesheet
+  + shiki inline colours; same-origin and `data:` icons and `https:` document images; no framing; no scripts by
+  omission). In the **Features** list, the *No client-side JavaScript* bullet gains "…and a `Content-Security-Policy`
+  that lets no script run". In the **Layout** tree, the `configure-app.ts` line becomes
+  `# hbs view engine + static assets + security headers (shared with e2e tests)`. Make the same one-line change
+  to the `configure-app.ts` entry in `.windsurf/rules/01-architecture.md`.
+- In this file, the parked *Drop the no-client-side-JavaScript rule* idea: replace "and there is no CSP header,
+  so the real boundary is the trust placed in the docs root either way" with "and although the CSP now
+  refuses to run script, raw HTML from the docs root still renders, so the real boundary is the trust placed
+  in the docs root either way"; and add one sentence to its tier (b)/(c) paragraph that relaxing the rule means
+  widening `script-src` in the same edit.
+- `CHANGELOG.md`, `[Unreleased]` → `### Added` → `#### The browser`: one bolded lead-in (*Every response
+  carries security headers, including a Content Security Policy that lets no script run*) plus two or three
+  sentences — which headers, that the policy is derived from what the pages actually load (stylesheet, shiki's
+  inline colours, `data:` icons, document images) and is listed in the README, and that this makes the
+  no-client-side-JavaScript rule browser-enforced while the app stays read-only and ships no script. Then
+  strike this entry's plan items and title.
 
 ### 2. Either wire ESLint or drop the dead `eslint-disable` comments
 
