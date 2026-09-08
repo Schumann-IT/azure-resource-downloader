@@ -18,7 +18,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 1. Security headers, including a CSP that enforces the no-script rule
+### ~~1. Security headers, including a CSP that enforces the no-script rule~~
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -50,45 +50,45 @@ enforced by the browser rather than only promised by the README.
 
 **Plan.**
 
-- In `src/configure-app.ts` add `export const SECURITY_HEADERS: Readonly<Record<string, string>>` with the four
+- ~~In `src/configure-app.ts` add `export const SECURITY_HEADERS: Readonly<Record<string, string>>` with the four
   header/value pairs above (the CSP on one line, directives separated by `; `), with a *why* comment naming
   what each CSP directive permits and for which page element. Then, as the **first** statement of
   `configureViews()` — before `app.useStaticAssets()`, so `/favicon.svg` and `/app.css` are covered too — add
   `app.use((_req, res, next) => { for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value); next(); })`.
   Type the callback parameters with `Request`, `Response`, `NextFunction` from `express` (already a dependency).
   Update the function's comment: it wires the view engine, static assets **and the security headers**. Leave
-  the two existing per-route `X-Content-Type-Options` calls alone; they now duplicate the global value.
-- e2e, in `test/docs.e2e.spec.ts`: one new case *every response carries the security headers* with a local
+  the two existing per-route `X-Content-Type-Options` calls alone; they now duplicate the global value.~~
+- ~~e2e, in `test/docs.e2e.spec.ts`: one new case *every response carries the security headers* with a local
   helper `expectSecurityHeaders(res)` asserting the **literal** values above for all four headers (not the
   exported constant — the test must fail if the constant is wrong). Apply it to: `GET /` (picker),
   `GET /healthz` (JSON), `GET /favicon.svg` (static — proves the middleware runs before `express.static`),
   `GET /mytenant/Microsoft.Graph/groups/g1` (document), `GET /mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1`
   (YAML view) and the same with `?raw`, `GET /mytenant/_export/confluence` (zip; use `.buffer().parse(binaryParser)`
-  like the existing export cases), and `GET /nope-tenant` (a 404). No fixture changes.
-- **Manual step, for the user** (a model cannot drive a browser): `npm run start:dev` against a real export,
-  open DevTools → Console, and load (a) a document with **Security**/**Settings** sections (section icons must
-  show), (b) the tenant landing page with a findings table (severity icons must show), (c) a YAML view (colours in
-  both light and dark scheme), (d) a document embedding an external image, (e) click the picker's export link.
-  Any `Refused to load …` line names the directive to widen; widen **only that directive**, and record why in
-  the `SECURITY_HEADERS` comment. If the console is clean, nothing else changes.
-- README: in **Security**, after the path-safety bullets, a short paragraph *Response headers* listing the
+  like the existing export cases), and `GET /nope-tenant` (a 404). No fixture changes.~~
+- ~~Manual step, run against a real export with DevTools Console open: headers confirmed present with the
+  exact values (`curl -D -`, since the browser's own `fetch` is itself subject to `connect-src` and cannot be
+  used to check them); a document's section icons render (`::before` mask set on each `h3.doc-section-heading`);
+  a findings table's severity icons render (`::before` mask set on each severity cell); the YAML view's inline
+  `--shiki-light`/`--shiki-dark` colours compute correctly in both light and dark scheme. No
+  `securitypolicyviolation` event fired on any of them. No directive needed widening.~~
+- ~~README: in **Security**, after the path-safety bullets, a short paragraph *Response headers* listing the
   four headers with their values and one clause per CSP directive saying what it permits and why (stylesheet
   + shiki inline colours; same-origin and `data:` icons and `https:` document images; no framing; no scripts by
   omission). In the **Features** list, the *No client-side JavaScript* bullet gains "…and a `Content-Security-Policy`
   that lets no script run". In the **Layout** tree, the `configure-app.ts` line becomes
   `# hbs view engine + static assets + security headers (shared with e2e tests)`. Make the same one-line change
-  to the `configure-app.ts` entry in `.windsurf/rules/01-architecture.md`.
-- In this file, the parked *Drop the no-client-side-JavaScript rule* idea: replace "and there is no CSP header,
+  to the `configure-app.ts` entry in `.windsurf/rules/01-architecture.md`.~~
+- ~~In this file, the parked *Drop the no-client-side-JavaScript rule* idea: replace "and there is no CSP header,
   so the real boundary is the trust placed in the docs root either way" with "and although the CSP now
   refuses to run script, raw HTML from the docs root still renders, so the real boundary is the trust placed
   in the docs root either way"; and add one sentence to its tier (b)/(c) paragraph that relaxing the rule means
-  widening `script-src` in the same edit.
-- `CHANGELOG.md`, `[Unreleased]` → `### Added` → `#### The browser`: one bolded lead-in (*Every response
+  widening `script-src` in the same edit.~~
+- ~~`CHANGELOG.md`, `[Unreleased]` → `### Added` → `#### The browser`: one bolded lead-in (*Every response
   carries security headers, including a Content Security Policy that lets no script run*) plus two or three
   sentences — which headers, that the policy is derived from what the pages actually load (stylesheet, shiki's
   inline colours, `data:` icons, document images) and is listed in the README, and that this makes the
   no-client-side-JavaScript rule browser-enforced while the app stays read-only and ships no script. Then
-  strike this entry's plan items and title.
+  strike this entry's plan items and title.~~
 
 ### 2. Either wire ESLint or drop the dead `eslint-disable` comments
 
@@ -452,8 +452,9 @@ saved copy; server-rendered HTML is that durable form, and anything only a runti
 tree, no client supply chain to audit or keep current in a tool that renders tenant configuration. *It is
 trivially auditable.* "This app ships no script" is a claim an operator can verify at a glance, and it composes
 with the read-only rule to make the browser obviously inert; note that it is **not** an XSS boundary, because
-`markdown-it` runs with `html: true` and there is no CSP header, so the real boundary is the trust placed in the
-docs root either way. *It forces state into the URL.* Every view — including a filtered sidebar — is addressable,
+`markdown-it` runs with `html: true` and although the CSP now refuses to run script, raw HTML from the docs
+root still renders, so the real boundary is the trust placed in the docs root either way. *It forces state into
+the URL.* Every view — including a filtered sidebar — is addressable,
 bookmarkable, shareable and reproducible, and the whole test suite can therefore be `supertest` against server
 HTML rather than a browser harness. *It caps complexity*: one rendering path, and no logic duplicated across
 server and client.
@@ -478,8 +479,10 @@ cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a
 served from `public/`, no bundler and no framework, allowed only to improve something that already works without
 it — remembering open sections, toggling a chip without a round trip — with every page still fully functional
 with script disabled, and the rule rewritten as *"the server renders everything; script may only enhance"*
-rather than deleted. **(c) Full lift**: a real client bundle for search and diff, which brings a build step, a
-dependency tree and a second rendering path, and turns the testing story into a browser harness.
+rather than deleted. Either tier also means widening `SECURITY_HEADERS`' `script-src` in the same edit — today
+it is unnamed (falls to `default-src 'none'`), and it would need to name the script's own origin. **(c) Full
+lift**: a real client bundle for search and diff, which brings a build step, a dependency tree and a second
+rendering path, and turns the testing story into a browser harness.
 
 **What has to change with it, whichever tier wins.** Both rule files and the README Frontend section, in the
 same edit — the rule is quoted in enough places that a half-removed version would be worse than either state —

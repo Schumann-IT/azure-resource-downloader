@@ -363,6 +363,55 @@ describe('Docs browser (e2e)', () => {
     });
   });
 
+  it('every response carries the baseline security headers', async () => {
+    const expectSecurityHeaders = (res: request.Response): void => {
+      expect(res.headers['content-security-policy']).toBe(
+        "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'",
+      );
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['referrer-policy']).toBe('same-origin');
+      expect(res.headers['x-frame-options']).toBe('DENY');
+    };
+
+    expectSecurityHeaders(await request(app.getHttpServer()).get('/').expect(200));
+    expectSecurityHeaders(
+      await request(app.getHttpServer()).get('/healthz').expect(200),
+    );
+    // Static assets: proves the middleware runs before express.static.
+    expectSecurityHeaders(
+      await request(app.getHttpServer()).get('/favicon.svg').expect(200),
+    );
+    expectSecurityHeaders(
+      await request(app.getHttpServer())
+        .get('/mytenant/Microsoft.Graph/groups/g1')
+        .expect(200),
+    );
+    expectSecurityHeaders(
+      await request(app.getHttpServer())
+        .get(
+          '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1',
+        )
+        .expect(200),
+    );
+    expectSecurityHeaders(
+      await request(app.getHttpServer())
+        .get(
+          '/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1?raw',
+        )
+        .expect(200),
+    );
+    expectSecurityHeaders(
+      await request(app.getHttpServer())
+        .get('/mytenant/_export/confluence')
+        .buffer()
+        .parse(binaryParser)
+        .expect(200),
+    );
+    expectSecurityHeaders(
+      await request(app.getHttpServer()).get('/nope-tenant').expect(404),
+    );
+  });
+
   it('serves a favicon and keeps /favicon.ico out of the tenant route', async () => {
     // The static icon every HTML page links to.
     const svg = await request(app.getHttpServer())
