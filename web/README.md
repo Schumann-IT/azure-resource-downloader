@@ -381,7 +381,11 @@ web/
 ├── views/                               # page/tenant/resource/picker/error + partials/{head,header,sidebar}
 ├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
-├── scripts/release-ready.js             # npm run release-ready: report whether a release can be cut (changes nothing)
+├── scripts/
+│   ├── branch-ready.js                  # npm run branch-ready: is this feature/fix branch ready to ship?
+│   ├── working-tree-clean.js            # its preflight: refuse to report on uncommitted changes
+│   ├── release-ready.js                 # npm run release-ready: can a release be cut? (both change nothing)
+│   └── lib/changelog.js                 # CHANGELOG.md / NEXT-ITERATIONS.md readers both reports share
 ├── .env.example                         # every variable at its default
 ├── CHANGELOG.md                         # Keep a Changelog; released sections match web/vX.Y.Z tags
 └── NEXT-ITERATIONS.md                   # outstanding work, shipped-but-uncleared entries, parked ideas
@@ -411,6 +415,18 @@ web/
 - Delivered work is **struck through** in `NEXT-ITERATIONS.md` rather than deleted, so a branch can be
   reviewed against what its entries set out to do. Clearing them out and renumbering the rest is part of
   closing the branch and cutting the release, which is why `release-ready` reports any that are left.
+- `npm run branch-ready` (or `make branch-ready-web` from the repository root) reports whether a feature or
+  fix branch is ready to ship: tests and build pass, the struck-out `NEXT-ITERATIONS.md` entries have been
+  cleared out and the rest renumbered contiguously, `## [Unreleased]` records the work, and `version` is
+  untouched — bumping it and closing the changelog belong to the release. It edits nothing, and unlike
+  `release-ready` it reports every check and **exits non-zero if any of them failed**, so it can gate a
+  merge. An empty `[Unreleased]` is reported, not failed: a branch with no user- or operator-visible effect
+  legitimately has none.
+- It **refuses to run while `web/` has uncommitted changes**, before the tests and the build, so the verdict
+  describes the commit that will be merged rather than the editor's current state. That preflight is the only
+  git this project's tooling runs — read-only `git status --porcelain`, scoped to `web/` so an unrelated edit
+  in `../go` cannot block it. Outside a clone (no git, no repository) it says so and waves the run through.
+  `release-ready` runs no git at all.
 
 ## Known limitations
 

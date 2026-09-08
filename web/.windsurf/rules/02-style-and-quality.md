@@ -13,6 +13,8 @@ Run everything from this folder (npm scripts, not raw binaries):
 - `npm run start:dev` — Tailwind watch + Nest watch
 - `npm run start:prod` — build, then run `dist/main.js`
 - `npm test` — Jest (needs `--experimental-vm-modules`, already in the script)
+- `npm run branch-ready` — clean-tree preflight, tests + build, then report whether this feature/fix branch
+  is ready to ship
 
 There is no lint script and no ESLint config in this project; the `eslint-disable` comments in the
 source are historical. Do not reference `eslint`/`prettier` commands in docs until they are actually
@@ -116,7 +118,13 @@ Rules for entries:
   date is stamped by the root release script when it publishes, never by hand. `npm run release-ready`
   never edits these files: it only reports whether a release can be cut (empty `[Unreleased]`,
   `package.json` matching, no struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no
-  git command. Branch and working-tree checks, date stamping, tagging and the GitHub release happen from
+  git command. `npm run branch-ready` is its counterpart for a feature/fix branch and asks the opposite
+  questions (`[Unreleased]` **written**, strikeouts cleared and entries renumbered, `version` **untouched**);
+  it also changes nothing, but it reports every check and exits non-zero if **any** of them failed, so it can
+  gate a merge. It is the one place in this project's tooling that runs git: a read-only
+  `git status --porcelain` scoped to `web/`, as a **preflight** that refuses to report on uncommitted changes
+  (so the verdict describes the commit that will be merged) and degrades to a skip outside a clone. The
+  repository-wide branch and working-tree checks, date stamping, tagging and the GitHub release happen from
   the repository root; the procedure lives in the **Releasing** section of `../README.md`. The earlier
   `RC1`/`RC2` naming is retired, so do not reintroduce it.
 - **Explain *why* and which invariant now holds**, not just what moved. If a change touches a

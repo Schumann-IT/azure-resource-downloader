@@ -13,6 +13,19 @@ the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Added
+
+#### Release workflow
+
+- **`npm run branch-ready` reports whether a feature or fix branch is ready to ship.** It runs the tests and
+  the build, then checks that the work is recorded under `[Unreleased]`, that the `NEXT-ITERATIONS.md` entries
+  the branch delivered have been cleared out and the rest renumbered, and that the version was left alone —
+  bumping it and closing the changelog belong to the release. Like the release report it edits nothing, but it
+  reports every check and exits non-zero if any of them failed, so it can gate a merge. It also refuses to run
+  while this folder has uncommitted changes, so the verdict describes the commit that will be merged; that
+  read-only, folder-scoped check is the only git either report runs. Also available as `make branch-ready-web`
+  from the repository root; what it checks is documented in `README.md`.
+
 ### Changed
 
 #### Views and navigation

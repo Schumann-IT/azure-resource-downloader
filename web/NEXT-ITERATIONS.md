@@ -71,51 +71,7 @@ instead of always reading *Document not found*.
   pass `max-w-5xl`), so each page has one width.
 - `styles-build.spec.ts` needs nothing; verify visually on both layouts.
 
-### ~~5. Put the tenant in the page title~~
-
-**Goal.** A document tab and a history entry read `<document> · <tenant>` rather than the bare H1.
-
-> The document name leads: tabs and the history dropdown truncate from the right, and the tenant is the
-> token that repeats across every tab opened from one export. The YAML view reads `<name>.yaml ·
-> <tenant>` so the two representations of one resource — routinely open side by side through the
-> **Documentation | YAML** switcher — stop producing identical tabs. The tenant label is
-> `TenantInfo.name` (the index's `tenant`, falling back to the folder id), so a tab matches the label
-> the picker shows. The tenant landing page already titles itself with the tenant and stays as it is,
-> the picker keeps *Documentation*, and the 404 view's title stays *Not found* — that view belongs to
-> the "Say what was not found" fix above.
->
-> Shipped together with the shared-`<head>` extraction and the colour-scheme declaration: all three edit
-> the same five `<head>` blocks. Composing the title in the controller leaves the Confluence export
-> untouched — its page titles come from the exporter's own H1 lookup, and the importer takes the page
-> title from the file name regardless.
-
-**Plan.**
-
-- ~~Compose `title` in `docs.controller.ts` for the document (`<H1> · <tenant>`) and resource
-  (`<name>.yaml · <tenant>`) views; leave the tenant, picker and error titles as they are.~~
-- ~~e2e: assert a document page's `<title>` carries both the H1 and the tenant, and that the YAML view of
-  the same resource has a different one.~~
-
-### ~~6. Declare both colour schemes to the browser~~
-
-**Goal.** In dark mode the scrollbars, form-control chrome and overscroll area are dark too, not the light
-defaults around a dark page.
-
-> `body` carries `dark:bg-slate-950` but `<html>` does not, and no `color-scheme` is declared, so the UA
-> chrome and the area past the page edge stay white.
-
-**Plan.**
-
-- ~~Add `<meta name="color-scheme" content="light dark">` to the shared `<head>`, and a `color-scheme: light dark`
-  plus dark background on `html` in `src/styles.css`.~~
-- ~~Write that background as a literal colour, not `var(--color-slate-950)`: Tailwind v4 only emits a theme
-  variable that something references, so the rule would silently break the day no template uses
-  `dark:bg-slate-950`.~~
-- ~~`styles-build.spec.ts`: assert the `color-scheme` rule and the dark `html` background survive compilation,
-  as their own case — the existing dark-mode case only greps `prefers-color-scheme` and would pass
-  vacuously.~~
-
-### 7. Print stylesheet
+### 5. Print stylesheet
 
 **Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
 beside it.
@@ -130,7 +86,7 @@ beside it.
 - `styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
   about collapsed blocks.
 
-### 8. Label the sidebar landmark
+### 6. Label the sidebar landmark
 
 **Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
 the per-axis filters.
@@ -140,7 +96,7 @@ the per-axis filters.
 - `aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.
 - e2e: assert the attribute is present on a document page.
 
-### 9. Security headers, including a CSP that enforces the no-script rule
+### 7. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -161,27 +117,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### ~~10. One `<head>` partial~~
-
-**Goal.** The five templates share one `<head>`, so a change such as the `color-scheme` meta or the title
-format is made once — the favicon link was the last change that had to be made five times.
-
-> Internal only: no observable change, so no `CHANGELOG.md` entry.
->
-> Done **first**: the tenant-in-the-title fix and the colour-scheme fix above both change that same
-> `<head>`, so the three are one change, and the other order means editing five templates twice.
-> `configure-app.ts` already registers the whole `views/partials` directory, so the new file needs no
-> wiring, and a partial inherits its caller's context, so `{{> head}}` resolves `{{title}}` without being
-> passed anything. The Confluence exporter's own minimal `<head>` (no stylesheet, no favicon) is not one of
-> the five and keeps building itself.
-
-**Plan.**
-
-- ~~Extract `views/partials/head.hbs`; use it from `page`, `picker`, `tenant`, `resource` and `error`.~~
-- ~~No new spec: the e2e case asserting the exact `<link rel="icon">` markup on four routes is already the
-  guard that every template goes through the partial.~~
-
-### 11. Either wire ESLint or drop the dead `eslint-disable` comments
+### 8. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 

@@ -15,6 +15,7 @@
     "start:dev": "npm run css:build && concurrently -k \"npm:css:watch\" \"nest start --watch\"",
     "start:prod": "npm run build && node dist/main.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "branch-ready": "node scripts/working-tree-clean.js && npm run test && npm run build && node scripts/branch-ready.js",
     "release-ready": "npm run test && npm run build && node scripts/release-ready.js"
   },
   "dependencies": {

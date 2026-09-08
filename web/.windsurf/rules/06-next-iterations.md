@@ -37,9 +37,10 @@ Ideas do **not** live inside an entry — see Parked ideas.
   reviewer of the branch can see what it set out to do beside what the diff does. Writing the
   `CHANGELOG.md` entry is still part of the same edit — striking out is not a substitute for it.
 - **Deleting is part of closing the branch / cutting the release, not of implementing.** Only then are the
-  struck-out entries removed and the rest renumbered. `npm run release-ready` reports every remaining
-  strikeout for exactly that reason: a strikeout is work that shipped and is still waiting to be cleared
-  out (and, if it was missed, recorded in `CHANGELOG.md`).
+  struck-out entries removed and the rest renumbered. `npm run branch-ready` is the gate for that step — it
+  fails while any strikeout is left, and also checks that the remaining entries are numbered contiguously;
+  `npm run release-ready` repeats the strikeout check at release time as a backstop. A strikeout is work
+  that shipped and is still waiting to be cleared out (and, if it was missed, recorded in `CHANGELOG.md`).
 - **A partially delivered entry keeps its unstruck items.** Strike only the plan items that are actually
   done; what is left unstruck is the outstanding work, and the entry survives the release with those items.
 - **Numbering is presentational.** Renumber the remaining entries to stay contiguous (`1..N`) after a
