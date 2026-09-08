@@ -6,9 +6,9 @@ globs: NEXT-ITERATIONS.md
 
 # Managing NEXT-ITERATIONS.md
 
-`NEXT-ITERATIONS.md` (repo root) tracks **only outstanding work and parked ideas**. `README.md` is the single
-source of truth for what the tool does today; `CHANGELOG.md` is the historical record of what shipped. Nothing
-that has already shipped belongs in this file.
+`NEXT-ITERATIONS.md` (repo root) tracks **outstanding work and parked ideas**, plus the entries that shipped
+since the last release and are struck through while they wait to be cleared out. `README.md` is the single
+source of truth for what the tool does today; `CHANGELOG.md` is the historical record of what shipped.
 
 This is a sanctioned Markdown file (alongside `README.md` and `CHANGELOG.md`) and is exempt from the "no
 separate Markdown files" documentation rule.
@@ -32,22 +32,27 @@ Ideas do **not** live inside an entry — see Parked ideas.
 
 ## Lifecycle
 
-- **Remove once shipped.** When an entry's Plan is delivered in full, delete the entry. Its history is the
-  `CHANGELOG.md` entry that recorded the work; do not leave "done" entries behind.
-- **A strikeout (`~~…~~`) is a temporary marker only.** It means "shipped, but not yet recorded in
-  `CHANGELOG.md`". `npm run release-ready` reports every remaining strikeout; resolve it — write the
-  changelog entry and delete the struck-out text — before a release is cut.
+- **Strike out what ships; do not delete it.** When work lands, wrap the delivered plan items in `~~…~~`,
+  and the entry's title too once the whole Plan is delivered. The entry stays in place, struck, so a
+  reviewer of the branch can see what it set out to do beside what the diff does. Writing the
+  `CHANGELOG.md` entry is still part of the same edit — striking out is not a substitute for it.
+- **Deleting is part of closing the branch / cutting the release, not of implementing.** Only then are the
+  struck-out entries removed and the rest renumbered. `npm run release-ready` reports every remaining
+  strikeout for exactly that reason: a strikeout is work that shipped and is still waiting to be cleared
+  out (and, if it was missed, recorded in `CHANGELOG.md`).
+- **A partially delivered entry keeps its unstruck items.** Strike only the plan items that are actually
+  done; what is left unstruck is the outstanding work, and the entry survives the release with those items.
 - **Numbering is presentational.** Renumber the remaining entries to stay contiguous (`1..N`) after a
-  removal. Because numbers shift, do **not** rely on `See NEXT-ITERATIONS.md §N` as a stable anchor from
-  other files — describe the work instead. Stale `§N` references already in released `CHANGELOG.md` sections
-  are history: leave them as-is.
+  removal, which means numbers shift at release time. Do **not** rely on `See NEXT-ITERATIONS.md §N` as a
+  stable anchor from other files — describe the work instead. Stale `§N` references already in released
+  `CHANGELOG.md` sections are history: leave them as-is.
 - **Keep entries self-contained.** An entry must not depend on another entry it might outlive. Restate what
   it needs rather than pointing at a sibling `§N`.
 
 ## Parked ideas
 
 - A trailing `## Parked ideas` area collects ideas that are deliberately not scheduled, kept here rather than
-  in a work entry so they survive as the entries around them ship and are removed.
+  in a work entry so they survive as the entries around them ship and are cleared out.
 - Each idea is a `### Idea: <title>` subsection stating what it is, **why it is parked**, and the explicit
   **revisit conditions** that would make it worth doing.
 - **Promotion.** When a parked idea is picked up, **move it into a new numbered work entry and refine it**:

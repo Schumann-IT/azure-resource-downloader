@@ -384,7 +384,7 @@ web/
 ├── scripts/release-ready.js             # npm run release-ready: report whether a release can be cut (changes nothing)
 ├── .env.example                         # every variable at its default
 ├── CHANGELOG.md                         # Keep a Changelog; released sections match web/vX.Y.Z tags
-└── NEXT-ITERATIONS.md                   # outstanding work and parked ideas
+└── NEXT-ITERATIONS.md                   # outstanding work, shipped-but-uncleared entries, parked ideas
 ```
 
 ## Development conventions
@@ -408,6 +408,9 @@ web/
   [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 - This README is the single source of truth for what the browser does today; deliberate scope cuts go in
   [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md). No other Markdown files live here.
+- Delivered work is **struck through** in `NEXT-ITERATIONS.md` rather than deleted, so a branch can be
+  reviewed against what its entries set out to do. Clearing them out and renumbering the rest is part of
+  closing the branch and cutting the release, which is why `release-ready` reports any that are left.
 
 ## Known limitations
 

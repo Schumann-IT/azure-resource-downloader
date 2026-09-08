@@ -67,7 +67,8 @@ if (version === '' || heading !== `## [${version}]`) {
 console.log(`🚀 newest changelog version ${version} is closed and awaiting release (web/v${version})`);
 
 // 1. No struck-out entries in NEXT-ITERATIONS.md. A strikeout marks work that
-//    shipped but has not been moved into CHANGELOG.md yet.
+//    shipped and is waiting to be cleared out, which is part of cutting the
+//    release rather than of implementing.
 if (!fs.existsSync(nextPath)) {
   fail('NEXT-ITERATIONS.md not found');
 } else {
@@ -78,7 +79,7 @@ if (!fs.existsSync(nextPath)) {
     .filter(({ line }) => /(^|[^~])~~[^~]/.test(line));
   if (struck.length > 0) {
     fail(
-      'NEXT-ITERATIONS.md has struck-out entries — move them into CHANGELOG.md and delete them:',
+      'NEXT-ITERATIONS.md has struck-out entries — delete them (and check CHANGELOG.md records the work):',
       struck.map(({ line, n }) => `${n}:${line}`).join('\n'),
     );
   } else {
