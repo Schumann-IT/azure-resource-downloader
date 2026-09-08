@@ -1,7 +1,8 @@
 # TODO — backlog review and web fix plan
 
 Snapshot taken 2026-09-08 from `go/NEXT-ITERATIONS.md` and `web/NEXT-ITERATIONS.md`. Those two files stay
-authoritative; this is a working plan on top of them.
+authoritative; this is a working plan on top of them. **The web fix plan (section 3) is complete: all five
+branches A–E have shipped.** Both backlogs now hold parked ideas only.
 
 ## 1. Backlog overview
 
@@ -21,10 +22,8 @@ Scheduled work: **none**. Parked ideas only:
 
 ### Web docs browser (`web/NEXT-ITERATIONS.md`)
 
-Scheduled fixes (all self-contained, none touching a non-negotiable). Numbers follow `web/NEXT-ITERATIONS.md`
-after Branch D closed (the former 1 — security headers/CSP — shipped and was removed; the former 2 is now 1):
-
-1. Wire ESLint or delete the dead `eslint-disable` comments
+Scheduled work: **none**. The last fix (wire ESLint, former 1) shipped in Branch E and its entry was deleted;
+the *Fixes* section reads *None outstanding.*
 
 Standing decision: whole-tenant exports live on the picker card as plain `<a download>`; partial exports live
 next to the thing exported; Confluence REST sync needs POST and is therefore not offered at all.
@@ -85,15 +84,13 @@ Parked ideas, grouped:
   discoverable; **resource landing page** is also the carrier for **browsable excluded bulk types**.
 - **Export chain**: further formats → single export button / `_export` page; attachments need a third served
   root (path-safety design change); REST sync requires abandoning read-only.
-- **Fix 1 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
-  (`web/scripts/lib/changelog.js`).
 - **Stale reference**: several web parked ideas cite "the scheduled axis-index entry above"; that entry has
   shipped (`EXPORT_INDEX`) and is gone — rephrase at next edit per the "describe the work, don't cite §N" rule.
 
 ### Observations
 
-- Go has zero scheduled work; web has one small fix left, ready without design (four shipped: two in Branch A,
-  one in Branch B, one in Branch C, one in Branch D).
+- Neither project has scheduled work left. All five web fixes shipped (two in Branch A, one each in B, C, D
+  and E); Branch E also committed the Go lint configuration, which was not in this plan.
 - The most leveraged single item is a **Go template regeneration**: it unlocks web per-item summaries and is
   the only sane moment to fold in both Go regeneration-gated ideas.
 - The **no-JS rule** is the pivotal web decision — the CSP now hardens it; roughly a third of parked web ideas
@@ -163,15 +160,36 @@ Branch closed: the entry was deleted from `web/NEXT-ITERATIONS.md` and the survi
       `.windsurf/rules/01-architecture.md` updated in the same edit; CHANGELOG under `### Added` → `#### The
       browser`.
 
-### Branch E — `chore/web-eslint` (fix 1, alone)
+### Branch E — `chore/web-eslint` (fix 1, alone) — **DONE**
 
-- [ ] **1** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
-      `release-ready` (and `branch-ready`), update README *Development conventions* +
-      `.windsurf/rules/02-style-and-quality.md`, CHANGELOG entry — **M** (the cost is triaging first-run
-      findings). Alternative: delete the two `eslint-disable` comments in `src/main.ts` and
-      `src/configure-app.ts` — **XS**, internal, no CHANGELOG entry.
+The preferred path was taken. Branch closed: the entry was deleted from `web/NEXT-ITERATIONS.md` (*Fixes* now
+reads *None outstanding.*). The branch grew a Go counterpart that was not in this plan — a committed
+`go/.golangci.yml` with GoLand parity — planned as `go/NEXT-ITERATIONS.md` entry 1 on the branch itself and
+deleted on close, so Go's file is back to parked ideas only. `make branch-ready` green for both projects.
 
-Kept separate: tooling/rules, and it modifies the scripts that gate the other branches.
+- [x] `eslint` + `@eslint/js` + `typescript-eslint` + `globals` as devDependencies; `web/eslint.config.mjs`
+      with `@eslint/js` and `typescript-eslint` recommended (not type-checked), `no-console: 'error'`,
+      `reportUnusedDisableDirectives: 'error'`, Node/Jest globals, a CommonJS block for `scripts/`. Every
+      deviation carries its reason in the file. `@typescript-eslint/no-explicit-any` is **off**: the trial run
+      produced 74 findings, 66 of them `any` on the sanctioned untyped surfaces (markdown-it tokens, parsed
+      YAML, the dynamically imported highlighter), and WebStorm does not flag explicit `any` by default either,
+      so enabling it would have broken the parity the fix was about. The other eight were fixed in code (dead
+      initialiser, unused spec parameter), retargeted (`no-var-requires` → `no-require-imports`, twice) or
+      silenced at the site with a reason (the control-character regex in `page-name.ts`).
+- [x] `npm run lint` (reports) and `npm run lint:fix` (rewrites); `lint` wired into both `branch-ready` and
+      `release-ready` between `test` and `build`, `lint:fix` in neither. README *Development conventions* +
+      layout tree, `.windsurf/rules/02-style-and-quality.md` (the "no lint script" paragraph replaced by the
+      config-is-single-truth rule; `no-explicit-any` demoted to a review rule), CHANGELOG under `### Added` →
+      `#### Release workflow`. WebStorm parity verified manually: same findings in the editor with no setup.
+- [x] Go counterpart: `go/.golangci.yml` (`version: "2"`, `standard` set + `unconvert`, `unparam`, govet
+      `nilness`, each annotated with the GoLand inspection it mirrors; `shadow` deliberately off with the reason
+      in the file; `unparam` excluded for `_test.go`; `gofmt` the only formatter). `golangci-lint config verify`
+      prepended to `make lint` / `make lint-check`. Triage: one dead parameter removed, one `//nolint:unparam`
+      with a stated reason. README *Linting and the editor* subsection (the *Use config* path must be explicit:
+      golangci-lint finds no config from the monorepo root), rules `01`/`02`, CHANGELOG under `### Added` →
+      `#### Release Workflow`. GoLand parity verified manually.
+
+Kept separate as planned: tooling/rules, and it modified the scripts that gate the other branches.
 
 ### Order
 
@@ -179,8 +197,8 @@ Kept separate: tooling/rules, and it modifies the scripts that gate the other br
 2. ~~**B** `fix/web-startup-and-404` — small, self-contained.~~ Done.
 3. ~~**C** `fix/web-picker-freshness` — interface change, review alone.~~ Done.
 4. ~~**D** `chore/web-security-headers` — empirical verification.~~ Done.
-5. **E** `chore/web-eslint` — last, so new lint findings don't churn the branches above and the gate exists
-   before the next feature branch. **Next.**
+5. ~~**E** `chore/web-eslint` — last, so new lint findings don't churn the branches above and the gate exists
+   before the next feature branch.~~ Done.
 
 (A and B were candidates for one merged branch; each shipped on its own instead.)
 
