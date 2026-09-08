@@ -18,19 +18,60 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 1. Either wire ESLint or drop the dead `eslint-disable` comments
+### 1. Wire ESLint so the CLI and WebStorm report the same findings
 
-**Goal.** The source contains no directives for a tool that is not configured.
+**Goal.** `npm run lint` exists, the readiness gates run it, and what it reports is exactly what WebStorm
+underlines in the editor — one set of lint findings from one committed configuration, with no directive in the
+source for a rule that is not enforced.
 
-> `main.ts` and `configure-app.ts` carry `eslint-disable` comments; the README and the rules say there is no
-> lint script. Either state is fine; the mismatch is not.
+> **Decision.** Wire ESLint rather than delete the directives. `src/main.ts`, `src/configure-app.ts` and
+> `test/readiness-readers.spec.ts` carry `eslint-disable-next-line` comments while the README and
+> `02-style-and-quality.md` say there is no lint script; the mismatch ends by making the comments true.
+>
+> **How parity with WebStorm works.** WebStorm's ESLint integration defaults to *Automatic ESLint
+> configuration*: it runs the ESLint package from the project's `node_modules` against the nearest
+> `eslint.config.*`, so once a flat config exists the editor's ESLint findings *are* the CLI's, by construction,
+> with nothing to set up per developer. The IDE's **bundled** TypeScript inspections are a different engine and
+> cannot be exported into an ESLint config, and `.idea/` is gitignored so an inspection profile cannot ship
+> either. "Reflect the IDE defaults" therefore means two things: pick a rule set that flags what WebStorm's
+> default TypeScript inspections flag where the two overlap (unused symbols and imports, unreachable code,
+> `require` in an ES module, stray `any`), and rely on the ESLint half being identical because it is the same
+> run. Anything only the bundled inspections report stays an editor hint, not a gate.
+>
+> **Rule set.** `@eslint/js` recommended plus `typescript-eslint` recommended, **not** the type-checked
+> variant: `tsconfig.json` has `noImplicitAny: false` and the sanctioned `any` on the `markdown-it` plugin
+> surface would drown in `no-unsafe-*`. `@typescript-eslint/no-explicit-any` is in the recommended set; the
+> style rule that confines `any` to that surface decides how it is scoped (a file-level override for the
+> plugin files rather than turning the rule off). `scripts/*.js` are CommonJS Node scripts and need the Node
+> globals and `sourceType: 'commonjs'` in their own block, or `no-undef` flags `require`/`process`/`module`.
+>
+> **The three directives.** `@typescript-eslint/no-var-requires` is deprecated in typescript-eslint v8; the
+> recommended rule that fires on `require('hbs')` is `@typescript-eslint/no-require-imports`. `no-console` is
+> not in the `@eslint/js` recommended set. ESLint 9 reports unused disable directives by default, so as written
+> all three comments would themselves be findings. `no-console` is worth **enabling** rather than dropping the
+> comment: the style rule already limits `console` to the single startup line in `main.ts`, and the rule plus
+> that one live directive is what enforces it.
 
 **Plan.**
 
-- Preferred: add `eslint` + `typescript-eslint` with a minimal flat config and an `npm run lint` script, run it
-  in `release-ready`, and update the README *Development conventions* and `02-style-and-quality.md`
-  (which currently say lint is not wired). A `CHANGELOG.md` entry, since it adds a script.
-- Otherwise: delete the two comments (internal, no entry).
+- Add `eslint`, `@eslint/js`, `typescript-eslint` and `globals` as dev dependencies.
+- Add `eslint.config.mjs` at the project root: ignore `dist/`, `node_modules/`, `public/` and `coverage/`;
+  one block for `src/**/*.ts` and `test/**/*.ts` with the two recommended sets, `no-console: 'error'` and the
+  `no-explicit-any` scoping above; one block for `scripts/**/*.js` with Node globals and CommonJS;
+  `linterOptions.reportUnusedDisableDirectives: 'error'`. Every deviation from the recommended sets carries a
+  comment saying why, the way the existing "why" comments do.
+- Add `lint` (`eslint .`) and `lint:fix` scripts. Put `npm run lint` into `branch-ready` and `release-ready`
+  after `test`, before `build`; `lint:fix` stays out of both gates because they must not rewrite files.
+- Retarget the directives: the two `require` sites disable `@typescript-eslint/no-require-imports`, the
+  `main.ts` line keeps `no-console`. Run `npm run lint` and fix what it finds in the source; a finding is
+  fixed in the code or excluded with a written reason in the config, never by weakening the rule set to go
+  green.
+- README *Development conventions*: the new scripts, that the config is the single lint truth, and that
+  WebStorm picks it up automatically (nothing to configure; if the editor disagrees with the CLI, the editor
+  is not in *Automatic ESLint configuration* mode). `02-style-and-quality.md`: replace the "there is no lint
+  script … historical" paragraph with `npm run lint` in *Commands* and the rule that the IDE mirrors the
+  config, not the other way round.
+- `CHANGELOG.md` entry under `[Unreleased]` *Added*, since it adds scripts and a gate step.
 
 ## Standing decisions
 
