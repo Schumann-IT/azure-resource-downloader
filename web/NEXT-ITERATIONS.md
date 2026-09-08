@@ -18,60 +18,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### ~~1. Picker and health counts must be as fresh as the sidebar~~
-
-**Goal.** After `azure-rd docs generate-index` reruns, the tenant picker and `/healthz` show the new counts on
-the next request, the same as the sidebar already does.
-
-> **Today.** `readTenant()` in `src/docs/tenant-discovery.service.ts` parses `docs/index.yaml` to decide that a
-> folder is a tenant and, in the same step, copies `index.counts.documented`, `index.counts.pending` and
-> `index.generatedAt` into `TenantInfo`. That list is cached for the 30 s discovery TTL. `picker()` and
-> `healthz()` in `src/docs/docs.controller.ts` are the only readers of those three fields (`views/picker.hbs`
-> prints `this.documented` / `this.pending` / `this.generatedAt` per card; `healthz()` sums the two counts).
-> Every other view calls `discovery.getIndex(info)`, which re-`stat()`s the file and re-parses when mtime or size
-> moved — so the sidebar is fresh while the picker is up to 30 s stale.
->
-> **Rule.** Counts and `generatedAt` come from `getIndex(info)` on every request; `TenantInfo` carries identity
-> and paths only. A tenant whose index has become unreadable or malformed *inside* the TTL window (`getIndex()`
-> returns `undefined`) is left out of that request's picker list and out of every `/healthz` number, `tenants`
-> included — it is what discovery will conclude at the next scan, and it keeps the picker's card count equal to
-> the `tenants` figure. `TenantInfo.name` stays snapshotted on purpose: it is used as a title in several views
-> that do not all hold the index, and a renamed tenant is not the staleness this entry fixes. Cost: one `stat()`
-> per tenant per `/` or `/healthz` request, the same price every other page already pays.
-
-**Plan.**
-
-- ~~In `tenant-discovery.service.ts` remove `documented`, `pending` and `generatedAt` from `TenantInfo` and from
-  the object literal `readTenant()` returns. Keep the `readIndex()` call there — it is still the tenant marker.
-  Rewrite the `list()`-cache comment on the class if it mentions counts (it says "parsed index is cached by
-  mtime + size"; that stays true).~~
-- ~~In `docs.controller.ts` add a private helper
-  `private async withIndex(): Promise<Array<{ info: TenantInfo; index: TenantIndex }>>` that maps
-  `await this.discovery.list()` through `getIndex()` (`Promise.all`) and drops entries whose index is
-  `undefined`. `TenantIndex` is already imported from `./tenant-index`.~~
-- ~~`picker()`: build each card from `{ info, index }` — `id: info.id`, `name: info.name`,
-  `documented: index.counts.documented`, `pending: index.counts.pending`, `generatedAt: index.generatedAt`,
-  `exportHref` as today. `views/picker.hbs` needs no change: it already reads exactly those field names.~~
-- ~~`healthz()`: `tenants` is the length of the `withIndex()` result; `documents` and `pending` sum
-  `index.counts.documented` / `index.counts.pending` over it. `rootReadable` and `status` are unchanged.~~
-- ~~e2e, in `test/docs.e2e.spec.ts`, one new case next to *reflects a regenerated index.yaml on the next request
-  without a restart*: overwrite `tenantDir/index.yaml` with `INDEX_YAML` where `documented: 2` → `documented: 12`,
-  `pending: 1` → `pending: 0` and `generatedAt: "2026-01-01T00:00:00Z"` → `generatedAt: "2026-02-02T00:00:00Z"`
-  (the two-digit count makes the file **size** differ, so the mtime+size cache key changes even on a filesystem
-  with coarse mtime). Then, without waiting: `GET /` contains `12 documented` and `exported 2026-02-02T00:00:00Z`;
-  `GET /healthz` body equals `{ status: 'ok', rootReadable: true, tenants: 3, documents: 14, pending: 1 }` (the
-  suite's baseline is `4` / `2` with `mytenant` contributing `2` / `1`). Restore `INDEX_YAML` at the end of the
-  case, as the sibling test does. Leave the existing *GET /healthz reports …* and *GET / lists …* cases as they
-  are — they still hold.~~
-- ~~README: in the **Features** list, the *No-restart refresh* bullet says the picker and `/healthz` counts are
-  index-fresh too (only a *newly discovered* tenant waits for the TTL); in the **Routes** table, the `/healthz`
-  row says its counts are read from each tenant's `index.yaml` on every call.~~
-- ~~`CHANGELOG.md`, `[Unreleased]` → `### Fixed` → `#### The browser`: one bolded lead-in (*The tenant picker and
-  the health endpoint no longer lag a regenerated index*) plus two sentences — what was stale and for how long,
-  and that counts are now index-derived per request while the discovery TTL still governs only which folders
-  are tenants. Then strike this entry's plan items and title.~~
-
-### 2. Security headers, including a CSP that enforces the no-script rule
+### 1. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -92,7 +39,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 3. Either wire ESLint or drop the dead `eslint-disable` comments
+### 2. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 
