@@ -962,9 +962,9 @@ verify the file against the v2 schema first, so a typo fails loudly instead of s
 defaults), and GoLand runs the same binary with the same file — Settings | **Go | Linters** → *Use config* →
 `.golangci.yml`, a one-time per-developer setting because `.idea/` is not committed. Note the path is resolved
 from the working directory: pointing at it explicitly (or opening this folder rather than the repository root)
-is required, since golangci-lint finds no config when started from the monorepo root. `golangci-lint fmt` in
-the IDE formats with `gofmt` alone, exactly what `make fmt` does, so format-on-save cannot produce a diff that
-`make fmt-check` rejects.
+is required, since golangci-lint finds no config when started from the monorepo root. The file also declares
+`gofmt` as the only formatter, so GoLand's golangci-lint-based format-on-save produces exactly what `make fmt`
+does and cannot leave a diff that `make fmt-check` rejects.
 
 The file enables golangci-lint's default set — `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused` —
 plus `unconvert`, `unparam` and govet's `nilness` pass, each mirroring a GoLand inspection that is on by
