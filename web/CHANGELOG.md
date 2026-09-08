@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This project is released independently of the CLI in `go/`: its releases are tagged `web/vX.Y.Z` in the
 monorepo and the versions below are its own, unrelated to `go/`'s. Compatibility with an export is stated per
-release as the highest `docs/index.yaml` schema version this browser reads. See the **Releasing** section of
-the [repository README](../README.md) for the procedure.
+release as the highest `docs/index.yaml` schema version this browser reads. See the **Development workflow**
+section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 

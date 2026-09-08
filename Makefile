@@ -6,7 +6,7 @@
 # release can be cut, and `make release` stamps the date, commits, tags and
 # publishes every project whose newest heading is still undated. The
 # repository-wide branch and working-tree checks live in `make release` only.
-# See README.md#releasing.
+# See README.md#development-workflow (step 4, Release).
 # The `branch-ready*` targets are the ones here that are not part of releasing:
 # they report whether a feature or fix branch is ready to be merged.
 

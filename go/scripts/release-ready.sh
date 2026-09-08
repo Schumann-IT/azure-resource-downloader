@@ -8,7 +8,7 @@
 # success ("no release needed"). Otherwise every check is run and reported, and
 # the script exits non-zero only when ALL checks fail. Branch and working-tree
 # checks, tagging and the GitHub release live at the repository root
-# (`make release`). See ../../README.md#releasing.
+# (`make release`). See ../../README.md#development-workflow (step 4, Release).
 #
 # Usage: scripts/release-ready.sh          (normally via `make release-ready`)
 set -uo pipefail

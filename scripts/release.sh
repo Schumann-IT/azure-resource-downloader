@@ -11,7 +11,7 @@
 # the tags, and creates one GitHub release per project with that changelog
 # section as notes. Projects whose newest version is already dated are skipped,
 # so the script is safe to run when only one project changed.
-# See README.md#releasing.
+# See README.md#development-workflow (step 4, Release).
 #
 # Usage: scripts/release.sh [status|publish]   (normally via `make release-status` / `make release`)
 # Env:   RELEASE_BRANCH  branch releases are cut from (default: main)

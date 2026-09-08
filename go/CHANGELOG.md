@@ -6,8 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 This project is released independently of the documentation browser in `web/`: its releases are tagged
-`go/vX.Y.Z` in the monorepo and the versions below are its own, unrelated to `web/`'s. See the **Releasing**
-section of the [repository README](../README.md) for the procedure.
+`go/vX.Y.Z` in the monorepo and the versions below are its own, unrelated to `web/`'s. See the
+**Development workflow** section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 

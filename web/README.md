@@ -408,7 +408,7 @@ web/
   in `package.json` kept in step — both edited by hand. `npm run release-ready` only reports whether a release
   can be cut (changelog closed into an undated `## [X.Y.Z]` heading, `package.json` matching, nothing struck out
   in `NEXT-ITERATIONS.md`); branch/working-tree checks, date stamping, tagging and the GitHub release happen from
-  the repository root — see the [monorepo README](../README.md#releasing). Changes to the Go CLI go in
+  the repository root — see the [monorepo README](../README.md#development-workflow). Changes to the Go CLI go in
   [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 - This README is the single source of truth for what the browser does today; deliberate scope cuts go in
   [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md). No other Markdown files live here.

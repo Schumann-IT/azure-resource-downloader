@@ -104,7 +104,7 @@ Releases are tagged `go/vX.Y.Z`; `make build` derives the version from the neare
 and into every `resources/metadata.yaml` it writes. `make release-ready` only reports whether a release can be
 cut (changelog closed into an undated `## [X.Y.Z]` heading, nothing struck out in `NEXT-ITERATIONS.md`); closing
 the changelog is done by hand, and date stamping, tagging and publishing happen from the repository root — see
-the [monorepo README](../README.md#releasing). Its counterpart for a feature or fix branch is
+the [monorepo README](../README.md#development-workflow). Its counterpart for a feature or fix branch is
 `make branch-ready` (see [Development](#development)).
 
 ## Quick start
@@ -960,7 +960,8 @@ Conventions that CI and review expect:
   errors are returned, not logged and returned.
 - Tests use no network and no real export: fixtures are built in temp directories.
 - `CHANGELOG.md` is updated in the same change for anything a user can notice, under `## [Unreleased]`; released
-  sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `go/vX.Y.Z` tag (procedure in the monorepo README).
+  sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `go/vX.Y.Z` tag (procedure in the
+  [monorepo README](../README.md#development-workflow)).
 - `README.md` is the single source of truth for what the tool does today; `NEXT-ITERATIONS.md` holds
   outstanding work and parked ideas; no other documentation Markdown lives in this folder (the embedded
   `generate_prompt_template.md` is program input, not documentation).

@@ -125,7 +125,7 @@ Rules for entries:
   `git status --porcelain` scoped to `web/`, as a **preflight** that refuses to report on uncommitted changes
   (so the verdict describes the commit that will be merged) and degrades to a skip outside a clone. The
   repository-wide branch and working-tree checks, date stamping, tagging and the GitHub release happen from
-  the repository root; the procedure lives in the **Releasing** section of `../README.md`. The earlier
+  the repository root; the procedure lives in the **Development workflow** section of `../README.md`. The earlier
   `RC1`/`RC2` naming is retired, so do not reintroduce it.
 - **Explain *why* and which invariant now holds**, not just what moved. If a change touches a
   non-negotiable (path safety, read-only, one `markdown-it` instance, no client-side JS, no-restart

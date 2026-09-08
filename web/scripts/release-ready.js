@@ -8,7 +8,8 @@
 // to release and the script reports success ("no release needed"). Otherwise
 // every check is run and reported, and the script exits non-zero only when ALL
 // checks fail. Branch and working-tree checks, tagging and the GitHub release
-// live at the repository root (`make release`). See ../../README.md#releasing.
+// live at the repository root (`make release`). See
+// ../../README.md#development-workflow (step 4, Release).
 //
 // Usage: npm run release-ready
 'use strict';
