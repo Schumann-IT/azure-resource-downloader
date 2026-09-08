@@ -41,56 +41,90 @@ Parked ideas, grouped:
 - **Infra**: watch-based cache invalidation.
 - **Rule change**: drop the no-client-side-JavaScript rule (tiers: keep / progressive enhancement / full lift).
 
-## 2. Dependencies
+## 2. Inter-project dependencies
 
-### Cross-project (Go → web)
+Reassessed 2026-09-08 against the code, not the backlog prose: each claim below was checked in
+`go/internal/docs/` (`generateindex.go`, `generateprompt.go`, `taxonomy.go`, `generate_prompt_template.md`) and
+`web/src/docs/tenant-index.ts`. Intra-project couplings that the authoritative backlogs already state in full
+(the no-JS rule's blast radius, the export chain, the CSP/`script-src` coupling) are **not** repeated here — they
+drift when copied.
 
-- **Per-item summary in the sidebar** (web *name filter and per-item context*) is gated on a Go
-  **regeneration** whose template writes `summary:` frontmatter — today 0 of 263 resources carry it. Web
-  plumbing is ready; the blocker is Go.
-- **Per-finding severity** (Go parked) exists solely to serve web colouring/filtering; web's *actionable
-  findings block* already tags `data-severity` at tenant-summary level. Go's revisit condition is "the web side
-  needs per-item severity" — mutual wait.
-- **Sidebar by taxonomy axis** (web) consumes the v3 `index.yaml` `facets` registry Go emits; a
-  function-shaped spine needs a Go-side operator-authored axis or a populated `functionGroup`. Go
-  **taxonomy bootstrap** work would enlarge the axes the web spine depends on.
-- **Tenant diff** (web) is explicitly undecided on *which project owns it*: Go holds the facts
-  (`metadata.yaml`, hashes); web holds the view. Cross-tenant identity normalisation is unresolved on both sides.
-- **Browsable excluded bulk types** (web) depends on Go's `counts.excluded` and the "groups only documented
-  when referenced" rule.
-- **Resolve Graph ids in YAML** (Go) — its revisit trigger is "a consumer of `resources/` other than the doc
-  pipeline"; the web YAML view arguably is one, and shows raw GUIDs by design today.
+### The one hard dependency, and it is tracked by neither backlog
 
-### Go-internal
+**Go's prompt template never asks for `summary:`.** The plumbing on both sides is complete: `docFrontmatter`
+has a `Summary` field, `GenerateIndex` copies it into each `index.yaml` resource, and the web renders it as
+per-item context when present. But the template's *Frontmatter (required)* section lists `source`,
+`sourceSha256`, `promptSha256`, `platformGroup`, `functionGroup`, `generatedAt` — and nothing else. The web
+backlog's "0 of 263 and 0 of 148 resources carry it" is therefore **by construction**, not model behaviour, and
+the web idea *name filter and per-item context* is blocked on a Go change that `go/NEXT-ITERATIONS.md` does not
+list. **Recommendation:** add it to Go's backlog as a regeneration-gated item (one frontmatter line in the
+template plus its rule text), explicitly batched with the two existing regeneration-gated ideas — it must not
+ship alone, because any template edit moves `promptSha256` for every type.
 
-- **Batching**: both regeneration-gated ideas (*per-finding severity*, *taxonomy bootstrap*) must ride the
-  **same** regeneration; promoting one obliges surveying the other. Any future template change is the natural
-  carrier for both, plus the `summary:` frontmatter the web is waiting on.
-- **Taxonomy bootstrap** must ride the non-hashed `docs/generate.md`, never `doc-prompt.md` — hard coupling to
-  the hash design in `internal/docs/generateprompt.go`.
+A second finding on the same evidence: the template already **requires** `platformGroup` / `functionGroup`
+(chosen from each type's `<!-- doc-groups -->` marker), yet the web reports both **empty in both reference
+exports**. So the reference exports predate the current template. The next regeneration fills them with no
+further Go change, and the web's existing badge rendering lights up on its own.
 
-### Web-internal
+### Regeneration is the single cross-project lever
 
-- **The CSP** (`SECURITY_HEADERS` in `src/configure-app.ts`) is the enforcement mechanism for the no-JS rule
-  and conflicts with **Drop the no-JS rule**; relaxing to tier (b)/(c) means widening `script-src` in the same
-  edit — today it is unnamed and falls to `default-src 'none'`.
-- **Drop the no-JS rule** blocks or deforms six ideas: search, name filter, actionable findings, clickable
-  breadcrumbs, dark-mode toggle, tenant diff. Search is the honest first trigger; try a server-rendered
-  `GET /:tenant/_search` first.
-- **Search** subsumes **name filter in sidebar**.
-- **Clickable breadcrumbs** become nearly free once a per-type listing page exists.
-- **Two-group nav tree** is a fallback only if **resource landing page** fails to make the YAML switcher
-  discoverable; **resource landing page** is also the carrier for **browsable excluded bulk types**.
-- **Export chain**: further formats → single export button / `_export` page; attachments need a third served
-  root (path-safety design change); REST sync requires abandoning read-only.
-- **Stale reference**: several web parked ideas cite "the scheduled axis-index entry above"; that entry has
-  shipped (`EXPORT_INDEX`) and is gone — rephrase at next edit per the "describe the work, don't cite §N" rule.
+Four things ride the next documentation regeneration, and only one is currently written down on the Go side as
+work: `summary:` (above — **not tracked**), refreshed `platformGroup`/`functionGroup` (free), *per-finding
+severity* (Go parked) and *taxonomy bootstrap* (Go parked). The Go-internal rule stands — promoting any one
+obliges surveying the others, because the cost (a full regeneration of every non-`record` type) is paid once —
+and *taxonomy bootstrap* must ride the non-hashed `docs/generate.md`, never a per-type `doc-prompt.md`, or it
+couples a cheap taxonomy edit to that expensive regeneration.
+
+### Facets and taxonomy (Go → web) — verified compatible
+
+- Go emits **`index.yaml` version 4**: `facets` is the sole grouping surface; the transitional `programmes` /
+  `groups` mirrors of v3 are gone. The web accepts any version ≥ 1, reads `facets` first and synthesises a
+  single programme axis from `programmes` only for a v2 index, so v4 is read correctly today. The web backlog's
+  *sidebar by taxonomy axis* still says "v3" — wording only, harmless, fix at next edit.
+- A **function-shaped spine needs no Go change**: `TaxonomyConfig` accepts arbitrary `axes`, each value matched
+  by rules over the exported facts (`name`, `type`, `odataType`, `platforms` as regex; `scope` exact). A
+  `function` axis is an operator-authored config section, not a feature. Go's *taxonomy bootstrap* would help
+  author it from evidence, which is its only bearing on the web spine — it enlarges the *values* an operator can
+  promote, not the axis mechanism.
+- `functionGroup` as the alternative spine carrier is weaker than the config axis: it is single-valued,
+  label-only and LLM-chosen, whereas an axis is id-bearing, ordered by the header and deterministic — the
+  properties the web idea says a spine needs.
+
+### Mutual waits with no owner
+
+- **Per-finding severity.** Go revisits "when the web side needs per-item severity"; the web's *actionable
+  findings block* revisits "when the findings table stops being readable in one pass" (15 rows today). A
+  deadlock by design, and a correct one while the table is short. The trigger belongs to the **web** side
+  (reader demand), and it is regeneration-gated on the Go side, so it queues behind the lever above.
+- **Tenant diff.** Ownership is explicitly undecided: Go holds the facts that make a semantic diff cheap
+  (`metadata.yaml`: `sourceSha256`, `resourceId`, `displayName`, assignment targets per resource), the web holds
+  the view and every route is single-`:tenant`. The shared prerequisite — a **stateable, testable normalisation
+  of tenant-local identity** (GUIDs, group ids, names) — is work neither backlog lists. Until a stage/prod pair
+  is actually exported into one docs root, leaving it unowned is the right call.
+
+### One-directional, verified stable
+
+- **Browsable excluded bulk types** (web) rests on Go's `counts.excluded` (emitted per type) and the in-scope
+  rule that documents a group only when an assignment references it (`inScope` in `generateindex.go`). Both are
+  stable contracts; if picked up it is web-only work.
+- **Resolve Graph ids in YAML** (Go) is **not** a dependency, despite its revisit trigger naming "a consumer of
+  `resources/` other than the doc pipeline". The web YAML view is such a consumer and shows raw GUIDs **by
+  design** — the two backlogs made the same choice from opposite ends (names belong in the documentation, facts
+  stay facts). Nothing to reconcile.
+
+### Housekeeping in the authoritative files
+
+- `web/NEXT-ITERATIONS.md` still cites "the scheduled axis-index entry above" twice (in *one export button per
+  tenant*); that entry shipped as `EXPORT_INDEX` and is gone. Rephrase at next edit — describe the work, do not
+  cite an entry.
+- Same file, *sidebar by taxonomy axis*: "v3" → v4 (see above).
 
 ### Observations
 
 - Neither project has scheduled work left; both lint configurations (`go/.golangci.yml`, `web/eslint.config.mjs`)
   are committed and gate merges, so the next branch starts from a clean baseline.
-- The most leveraged single item is a **Go template regeneration**: it unlocks web per-item summaries and is
-  the only sane moment to fold in both Go regeneration-gated ideas.
-- The **no-JS rule** is the pivotal web decision — the CSP now hardens it; roughly a third of parked web ideas
-  wait on relaxing it.
+- The **regeneration is the lever**, and the `summary:` template gap is the one concrete, cheap Go change waiting
+  to be scheduled for it. It is also the only cross-project blocker where one side is finished and the other side
+  has not written the work down — the gap this reassessment exists to catch.
+- The **no-JS rule** stays the pivotal web decision; the CSP now hardens it and roughly a third of parked web ideas
+  wait on relaxing it. Its full blast radius is stated in the web backlog and is not repeated here.
