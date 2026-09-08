@@ -15,6 +15,15 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Added
 
+#### The browser
+
+- **Every response carries security headers, including a Content Security Policy that lets no script run.**
+  `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options` and a `Content-Security-Policy` are now set on
+  every response. The policy is derived from what the pages actually load — the stylesheet, shiki's inline
+  colours, the `data:` mask icons and `https:` document images — and is listed in `README.md`. This makes the
+  no-client-side-JavaScript rule enforceable by the browser rather than only stated in the docs, while the app
+  stays read-only and ships no script.
+
 #### Release workflow
 
 - **`npm run branch-ready` reports whether a feature or fix branch is ready to ship.** It runs the tests and

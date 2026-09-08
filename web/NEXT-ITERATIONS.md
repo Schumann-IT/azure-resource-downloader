@@ -18,28 +18,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 1. Security headers, including a CSP that enforces the no-script rule
-
-**Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
-enforced by the browser rather than only promised by the README.
-
-> The parked *Drop the no-client-side-JavaScript rule* idea notes that today "there is no CSP header". A
-> `script-src 'none'` policy makes the rule verifiable from a response. The policy must allow what the pages
-> legitimately use: `style-src 'self' 'unsafe-inline'` for shiki's inline colours, `img-src 'self' data: https:`
-> for the masked-SVG icons and any image a document embeds, and `frame-ancestors 'none'`. The app stays
-> read-only and ships no script; this changes headers only.
-
-**Plan.**
-
-- One middleware in `configure-app.ts` (shared by runtime and e2e) setting `Content-Security-Policy`,
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and `X-Frame-Options: DENY`; no new
-  dependency needed.
-- Verify the YAML view, the section icons and a document with an external image still render under the
-  policy (browser console clean).
-- e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
-  list the headers and what the CSP permits.
-
-### 2. Either wire ESLint or drop the dead `eslint-disable` comments
+### 1. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 
@@ -401,8 +380,9 @@ saved copy; server-rendered HTML is that durable form, and anything only a runti
 tree, no client supply chain to audit or keep current in a tool that renders tenant configuration. *It is
 trivially auditable.* "This app ships no script" is a claim an operator can verify at a glance, and it composes
 with the read-only rule to make the browser obviously inert; note that it is **not** an XSS boundary, because
-`markdown-it` runs with `html: true` and there is no CSP header, so the real boundary is the trust placed in the
-docs root either way. *It forces state into the URL.* Every view — including a filtered sidebar — is addressable,
+`markdown-it` runs with `html: true` and although the CSP now refuses to run script, raw HTML from the docs
+root still renders, so the real boundary is the trust placed in the docs root either way. *It forces state into
+the URL.* Every view — including a filtered sidebar — is addressable,
 bookmarkable, shareable and reproducible, and the whole test suite can therefore be `supertest` against server
 HTML rather than a browser harness. *It caps complexity*: one rendering path, and no logic duplicated across
 server and client.
@@ -427,8 +407,10 @@ cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a
 served from `public/`, no bundler and no framework, allowed only to improve something that already works without
 it — remembering open sections, toggling a chip without a round trip — with every page still fully functional
 with script disabled, and the rule rewritten as *"the server renders everything; script may only enhance"*
-rather than deleted. **(c) Full lift**: a real client bundle for search and diff, which brings a build step, a
-dependency tree and a second rendering path, and turns the testing story into a browser harness.
+rather than deleted. Either tier also means widening `SECURITY_HEADERS`' `script-src` in the same edit — today
+it is unnamed (falls to `default-src 'none'`), and it would need to name the script's own origin. **(c) Full
+lift**: a real client bundle for search and diff, which brings a build step, a dependency tree and a second
+rendering path, and turns the testing story into a browser harness.
 
 **What has to change with it, whichever tier wins.** Both rule files and the README Frontend section, in the
 same edit — the rule is quoted in enough places that a half-removed version would be worse than either state —

@@ -58,7 +58,8 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   and export timestamp shown on the tenant picker and `/healthz`; only a newly generated tenant folder waits
   out the 30 s discovery TTL.
 - **No client-side JavaScript.** Everything is server-rendered Handlebars + Tailwind; dark mode follows
-  `prefers-color-scheme`.
+  `prefers-color-scheme`, and a `Content-Security-Policy` that lets no script run.
+  See [Security](#security).
 
 ## Quick start
 
@@ -337,6 +338,18 @@ All request-derived filesystem access goes through that function. Error response
 filesystem path, stack trace or raw exception message. The app stays read-only: no route writes, moves or
 deletes anything under the docs root.
 
+### Response headers
+
+Every response carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
+`X-Frame-Options: DENY` and a `Content-Security-Policy`, set once in `configureViews()` so runtime and e2e
+agree. The policy is `default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;
+frame-ancestors 'none'; base-uri 'none'` — no directive is broader than what the pages load: `style-src`
+allows `'unsafe-inline'` for the inline colours shiki's dual-theme output writes on every YAML token;
+`img-src` allows `data:` for the severity/section icons (`data:` SVGs applied through a CSS mask) and
+`https:` for an image a document embeds; nothing permits a frame; and no directive names `script-src`, so no
+script may run at all. This is not an XSS boundary — `markdown-it` still renders with `html: true` — but it
+makes the no-client-side-JavaScript rule enforceable by the browser, not only stated here.
+
 ## Tests
 
 ```bash
@@ -367,7 +380,7 @@ web/
 ├── src/
 │   ├── main.ts                          # bootstrap (PORT)
 │   ├── port.ts                          # PORT parsing + fallback
-│   ├── configure-app.ts                 # hbs view engine + static assets (shared with e2e tests)
+│   ├── configure-app.ts                 # hbs view engine + static assets + security headers (shared with e2e tests)
 │   ├── dynamic-import.ts                # native import() escape hatch for ESM-only deps
 │   ├── app.module.ts
 │   ├── styles.css                       # Tailwind v4 entry (+ @source for .hbs)

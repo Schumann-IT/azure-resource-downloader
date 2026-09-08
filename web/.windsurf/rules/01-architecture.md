@@ -21,9 +21,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 ## Layout
 - `src/main.ts` → bootstrap, reads `PORT` via `resolvePort`.
 - `src/port.ts` → `resolvePort`, pure `PORT` parsing + fallback (unit tested; `main.ts` cannot be).
-- `src/configure-app.ts` → `configureViews(app)`: static assets, base views dir, partial
-  registration, view engine. **Shared by `main.ts` and the e2e tests** so both configure the app
-  identically — new view/asset wiring goes here, never inline in `main.ts`.
+- `src/configure-app.ts` → `configureViews(app)`: security headers, static assets, base views dir,
+  partial registration, view engine. **Shared by `main.ts` and the e2e tests** so both configure the
+  app identically — new view/asset wiring goes here, never inline in `main.ts`.
 - `src/dynamic-import.ts` → `dynamicImport`, a `new Function('return import(specifier)')` escape
   hatch. Required because TypeScript would down-level `import()` to `require()`, which cannot load
   ESM-only packages (`markdown-it-anchor` v9, `shiki`). Load ESM-only deps through it, never with
