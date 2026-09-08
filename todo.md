@@ -22,11 +22,9 @@ Scheduled work: **none**. Parked ideas only:
 ### Web docs browser (`web/NEXT-ITERATIONS.md`)
 
 Scheduled fixes (all self-contained, none touching a non-negotiable). Numbers follow `web/NEXT-ITERATIONS.md`
-after Branch C closed (the former 1 — picker/`healthz` freshness — shipped and was removed; the former 2 and 3
-are now 1 and 2):
+after Branch D closed (the former 1 — security headers/CSP — shipped and was removed; the former 2 is now 1):
 
-1. Security headers incl. CSP `script-src 'none'`
-2. Wire ESLint or delete the dead `eslint-disable` comments
+1. Wire ESLint or delete the dead `eslint-disable` comments
 
 Standing decision: whole-tenant exports live on the picker card as plain `<a download>`; partial exports live
 next to the thing exported; Confluence REST sync needs POST and is therefore not offered at all.
@@ -75,8 +73,9 @@ Parked ideas, grouped:
 
 ### Web-internal
 
-- **Fix 1 (CSP)** is the enforcement mechanism for the no-JS rule and conflicts with **Drop the no-JS rule**;
-  relaxing to tier (b)/(c) means widening the CSP in the same edit.
+- **The CSP** (`SECURITY_HEADERS` in `src/configure-app.ts`) is the enforcement mechanism for the no-JS rule
+  and conflicts with **Drop the no-JS rule**; relaxing to tier (b)/(c) means widening `script-src` in the same
+  edit — today it is unnamed and falls to `default-src 'none'`.
 - **Drop the no-JS rule** blocks or deforms six ideas: search, name filter, actionable findings, clickable
   breadcrumbs, dark-mode toggle, tenant diff. Search is the honest first trigger; try a server-rendered
   `GET /:tenant/_search` first.
@@ -86,18 +85,18 @@ Parked ideas, grouped:
   discoverable; **resource landing page** is also the carrier for **browsable excluded bulk types**.
 - **Export chain**: further formats → single export button / `_export` page; attachments need a third served
   root (path-safety design change); REST sync requires abandoning read-only.
-- **Fix 2 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
+- **Fix 1 (ESLint)** touches `release-ready`, which shares parsing with `branch-ready`
   (`web/scripts/lib/changelog.js`).
 - **Stale reference**: several web parked ideas cite "the scheduled axis-index entry above"; that entry has
   shipped (`EXPORT_INDEX`) and is gone — rephrase at next edit per the "describe the work, don't cite §N" rule.
 
 ### Observations
 
-- Go has zero scheduled work; web has two small fixes left, ready without design (three shipped: two in
-  Branch A, one in Branch B, one in Branch C).
+- Go has zero scheduled work; web has one small fix left, ready without design (four shipped: two in Branch A,
+  one in Branch B, one in Branch C, one in Branch D).
 - The most leveraged single item is a **Go template regeneration**: it unlocks web per-item summaries and is
   the only sane moment to fold in both Go regeneration-gated ideas.
-- The **no-JS rule** is the pivotal web decision — Fix 1 (CSP) hardens it; roughly a third of parked web ideas
+- The **no-JS rule** is the pivotal web decision — the CSP now hardens it; roughly a third of parked web ideas
   wait on relaxing it.
 
 ## 3. Web fixes — branch plan
@@ -144,21 +143,29 @@ Branch closed: the entry was deleted from `web/NEXT-ITERATIONS.md` and the survi
       without waiting out the TTL. README (*No-restart refresh* feature bullet + `/healthz` routes row) and
       CHANGELOG (`### Fixed` → `#### The browser`) updated in the same edit.
 
-### Branch D — `chore/web-security-headers` (fix 1, alone)
+### Branch D — `chore/web-security-headers` (former fix 1, alone) — **DONE**
 
-- [ ] **1** One middleware in `src/configure-app.ts` (shared by runtime and e2e) setting
-      `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
-      `X-Frame-Options: DENY` — **M**. Policy: `script-src 'none'`, `style-src 'self' 'unsafe-inline'` (shiki),
-      `img-src 'self' data: https:`, `frame-ancestors 'none'`. Verify in a browser with console open: YAML
-      view, section icons, a document with an external image, the export download. e2e: headers on document
-      page, YAML view, export. README Security section lists the headers.
+Branch closed: the entry was deleted from `web/NEXT-ITERATIONS.md` and the survivor renumbered to 1.
 
-Kept separate: the correct policy is found empirically; a wrong `style-src` breaks every page; must be
-revisited if the no-JS rule is ever relaxed.
+- [x] `SECURITY_HEADERS` middleware in `src/configure-app.ts` (first statement of `configureViews()`, ahead of
+      static assets), sent on every response: `Content-Security-Policy: default-src 'none'; style-src 'self'
+      'unsafe-inline'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'`,
+      `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`. Policy derived
+      from what the pages actually load — shiki's inline `--shiki-light`/`--shiki-dark` vars need
+      `'unsafe-inline'`; the `data:` SVG mask icons need `img-src data:`; nothing else is loaded, so
+      `default-src 'none'` leaves `script-src` unnamed. e2e case in `test/docs.e2e.spec.ts` asserts the literal
+      header values on the picker, JSON, static favicon, a document, the YAML view (html and `?raw`), the
+      export zip and a 404. Manually verified against a real export with DevTools open (`curl -D -` for exact
+      header values, since the browser's own `fetch` is itself blocked by `connect-src`): section-heading icons,
+      findings-table severity icons and the YAML view's inline colours all render with no
+      `securitypolicyviolation` event — no directive needed widening. README (*No client-side JavaScript*
+      feature bullet, new *Response headers* subsection under Security, Layout tree) and
+      `.windsurf/rules/01-architecture.md` updated in the same edit; CHANGELOG under `### Added` → `#### The
+      browser`.
 
-### Branch E — `chore/web-eslint` (fix 2, alone)
+### Branch E — `chore/web-eslint` (fix 1, alone)
 
-- [ ] **2** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
+- [ ] **1** Preferred: add `eslint` + `typescript-eslint`, minimal flat config, `npm run lint`, hook into
       `release-ready` (and `branch-ready`), update README *Development conventions* +
       `.windsurf/rules/02-style-and-quality.md`, CHANGELOG entry — **M** (the cost is triaging first-run
       findings). Alternative: delete the two `eslint-disable` comments in `src/main.ts` and
@@ -171,9 +178,9 @@ Kept separate: tooling/rules, and it modifies the scripts that gate the other br
 1. ~~**A** `fix/web-ui-polish` — fastest win, zero risk.~~ Done.
 2. ~~**B** `fix/web-startup-and-404` — small, self-contained.~~ Done.
 3. ~~**C** `fix/web-picker-freshness` — interface change, review alone.~~ Done.
-4. **D** `chore/web-security-headers` — empirical verification. **Next.**
+4. ~~**D** `chore/web-security-headers` — empirical verification.~~ Done.
 5. **E** `chore/web-eslint` — last, so new lint findings don't churn the branches above and the gate exists
-   before the next feature branch.
+   before the next feature branch. **Next.**
 
 (A and B were candidates for one merged branch; each shipped on its own instead.)
 
