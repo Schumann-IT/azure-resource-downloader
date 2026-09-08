@@ -57,46 +57,7 @@ instead of always reading *Document not found*.
   `views/error.hbs`; keep the body free of filesystem paths.
 - e2e: assert the headline for an unknown tenant and for `/_export/<unknown>`.
 
-### ~~4. Align the header with the page content~~
-
-**Goal.** The breadcrumb in the top bar lines up with the sidebar and the document below it.
-
-> `views/partials/header.hbs` constrains its row to `max-w-5xl`; the document, tenant and resource layouts use
-> `max-w-7xl`, so on wide viewports the header content sits inset from everything under it. The picker and the
-> error page are `max-w-5xl` throughout and are already aligned.
-
-**Plan.**
-
-- ~~Make the header's width a partial parameter (or default it to `max-w-7xl` and have the picker/error pages
-  pass `max-w-5xl`), so each page has one width.~~
-- ~~`styles-build.spec.ts` needs nothing; verify visually on both layouts.~~
-
-### ~~5. Print stylesheet~~
-
-**Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
-beside it.
-
-> CSS cannot open a closed `<details>`, so collapsed settings blocks print collapsed. State that in the README
-> instead of pretending otherwise; a reader who wants a full printout expands the blocks first.
-
-**Plan.**
-
-- ~~`@media print`: hide `.site-header` and `.nav-tree`, un-stick the layout, let `.prose table` wrap, and drop
-  the `:target` highlights.~~
-- ~~`styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
-  about collapsed blocks.~~
-
-### ~~6. Label the sidebar landmark~~
-
-**Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
-the per-axis filters.
-
-**Plan.**
-
-- ~~`aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.~~
-- ~~e2e: assert the attribute is present on a document page.~~
-
-### 7. Security headers, including a CSP that enforces the no-script rule
+### 4. Security headers, including a CSP that enforces the no-script rule
 
 **Goal.** Every response carries the baseline hardening headers, and the *no client-side JavaScript* rule is
 enforced by the browser rather than only promised by the README.
@@ -117,7 +78,7 @@ enforced by the browser rather than only promised by the README.
 - e2e: assert the headers on a document page, the YAML view and the export download. README Security section:
   list the headers and what the CSP permits.
 
-### 8. Either wire ESLint or drop the dead `eslint-disable` comments
+### 5. Either wire ESLint or drop the dead `eslint-disable` comments
 
 **Goal.** The source contains no directives for a tool that is not configured.
 
