@@ -1,0 +1,69 @@
+# golangci-lint configuration — the single lint truth for this project.
+#
+# `make lint-check` (and `make lint`, which adds --fix) run golangci-lint with
+# this file, and GoLand runs the same binary with the same file once Settings |
+# Go | Linters | "Use config" points at it, so the editor cannot report a
+# different set of findings than the one that gates a merge.
+#
+# Every linter beyond the default set is enabled to mirror a GoLand inspection
+# that is on in the default profile, and says which one. That keeps this file a
+# parity statement rather than a taste statement: a stricter-than-the-IDE choice
+# is a separate decision, not something to slip in here.
+#
+# `golangci-lint config verify` validates this file against the v2 schema and
+# runs as part of `make lint-check`, so a typo fails loudly instead of silently
+# falling back to the defaults.
+version: "2"
+
+linters:
+  # The set golangci-lint enables with no config at all: errcheck, govet,
+  # ineffassign, staticcheck, unused. Naming it pins the baseline to the file
+  # instead of to whichever version happens to be installed, and mirrors
+  # GoLand's own bundled inspections for unhandled errors (errcheck), vet's
+  # default passes (govet) and unused constants/variables/functions/types
+  # (unused). staticcheck covers the deprecated-element, self-assignment,
+  # unreachable-code and redundancy families; its ST style checks stay at
+  # golangci-lint's own default subset.
+  default: standard
+
+  enable:
+    # GoLand: "Redundant type conversion" (GoRedundantConversionInspection).
+    - unconvert
+    # GoLand: "Unused parameter" (GoUnusedParameterInspection). unparam is
+    # stricter than the inspection — besides unused parameters it reports
+    # parameters that always receive the same argument, which is the normal
+    # shape of a test helper. Excluded for tests below rather than disabled, so
+    # the dead-parameter half still applies to the code that ships.
+    - unparam
+
+  settings:
+    govet:
+      enable:
+        # GoLand: "Nilness analyzer". Not in vet's default pass set, so it has
+        # to be named here even though govet itself is already on.
+        - nilness
+      # Deliberately NOT enabled: `shadow`. GoLand has a "Shadowing variable"
+      # inspection, but the analyzer is not part of vet's default suite, is off
+      # by default in gopls, and upstream has proposed deprecating it as a
+      # failed experiment. On this codebase it reports only idiomatic
+      # `if err := f(); err != nil` blocks, where satisfying it would mean
+      # renaming variables in correct error handling. It stays an editor hint,
+      # not a merge gate.
+
+  exclusions:
+    rules:
+      # unparam's "always receives" reports are noise in test helpers, which
+      # exist precisely to be called with one fixed argument set today and
+      # another tomorrow. GoLand's "Unused parameter" inspection does not
+      # report that shape either, so excluding it here keeps the two in step.
+      - path: _test\.go$
+        linters:
+          - unparam
+
+formatters:
+  enable:
+    # gofmt only. `make fmt` runs `go fmt`, i.e. gofmt, so GoLand's
+    # format-on-save through `golangci-lint fmt` produces exactly the same
+    # bytes, and `make fmt-check` keeps guarding it independently. goimports or
+    # gofumpt would rewrite files that `make fmt` leaves alone.
+    - gofmt

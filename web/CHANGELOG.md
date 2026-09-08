@@ -26,14 +26,21 @@ section of the [repository README](../README.md) for the procedure.
 
 #### Release workflow
 
-- **`npm run branch-ready` reports whether a feature or fix branch is ready to ship.** It runs the tests and
-  the build, then checks that the work is recorded under `[Unreleased]`, that the `NEXT-ITERATIONS.md` entries
-  the branch delivered have been cleared out and the rest renumbered, and that the version was left alone —
-  bumping it and closing the changelog belong to the release. Like the release report it edits nothing, but it
-  reports every check and exits non-zero if any of them failed, so it can gate a merge. It also refuses to run
-  while this folder has uncommitted changes, so the verdict describes the commit that will be merged; that
-  read-only, folder-scoped check is the only git either report runs. Also available as `make branch-ready-web`
-  from the repository root; what it checks is documented in `README.md`.
+- **Linting is wired up, and the editor reports the same findings as the command line.** `npm run lint` (and
+  `npm run lint:fix`, which rewrites files and is therefore in neither readiness gate) runs ESLint against a
+  committed configuration, and both `branch-ready` and `release-ready` now run it, so a lint regression cannot
+  reach a merge or a release. WebStorm needs no setup to agree with it: it runs the same ESLint against the same
+  file by default. Stale suppressions are errors in their own right, which is what closes the gap this replaces
+  — the source used to carry `eslint-disable` comments for rules nothing enforced. Which rules are on, and why
+  two deviate from the recommended sets, is documented in `README.md`.
+- **`npm run branch-ready` reports whether a feature or fix branch is ready to ship.** It runs the tests, the
+  linter and the build, then checks that the work is recorded under `[Unreleased]`, that the
+  `NEXT-ITERATIONS.md` entries the branch delivered have been cleared out and the rest renumbered, and that the
+  version was left alone — bumping it and closing the changelog belong to the release. Like the release report
+  it edits nothing, but it reports every check and exits non-zero if any of them failed, so it can gate a
+  merge. It also refuses to run while this folder has uncommitted changes, so the verdict describes the commit
+  that will be merged; that read-only, folder-scoped check is the only git either report runs. Also available as
+  `make branch-ready-web` from the repository root; what it checks is documented in `README.md`.
 
 #### Views and navigation
 

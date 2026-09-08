@@ -18,6 +18,7 @@ trigger: always_on
     - `internal/retry/`         → Exponential backoff for transient Azure API failures
     - `main.go`                 → Entry point (calls cmd.Execute())
     - `Makefile`                → Build automation
+    - `.golangci.yml`           → The linter set `make lint`/`make lint-check` and GoLand both run (single lint truth)
 - **External dependencies**:
     - Azure SDK for Go (azcore, azidentity, armresources, armcompute, armstorage, armsubscriptions)
     - Microsoft Graph SDK for Go (stable v1.0 + beta for Intune endpoints) + Kiota (abstractions, JSON serialization)

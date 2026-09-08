@@ -6,7 +6,12 @@ globs: **/*.go
 
 # Style & Quality
 - Formatting: run `go fmt` and `goimports` on all generated code
-- Lint: write code that passes `golangci-lint run` with default linters
+- Lint: write code that passes `make lint-check`, i.e. the linters configured in `.golangci.yml` (the default
+  set plus `unconvert`, `unparam` and govet's `nilness`). That file is the single lint truth and GoLand runs it
+  too, so the editor mirrors the config, never the other way round: fix a finding in the code, or silence it at
+  the one site with a `//nolint:<linter>` stating why — never by dropping a linter to go green. Adding or
+  removing a linter is a deliberate change to what every developer's editor reports, and belongs in
+  `CHANGELOG.md`.
 - Errors:
     - Wrap with `%w` and `fmt.Errorf` (no `%v`).
     - Sentinel errors via `var ErrX = errors.New("x")` in package scope.

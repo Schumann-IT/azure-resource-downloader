@@ -434,6 +434,12 @@ func stringSliceFromData(data map[string]interface{}, key string) []string {
 // boolPtrFromData returns a pointer to the bool value at key in the cleaned
 // data, or nil when the key is absent or not a bool. The pointer distinguishes
 // "false" from "not a group / not present".
+//
+// key stays a parameter to match the sibling fact accessors (stringFromData,
+// stringSliceFromData) even though only one bool fact is recorded today, which
+// is why unparam is silenced here.
+//
+//nolint:unparam // keeps the signature symmetric with the sibling accessors
 func boolPtrFromData(data map[string]interface{}, key string) *bool {
 	if data == nil {
 		return nil

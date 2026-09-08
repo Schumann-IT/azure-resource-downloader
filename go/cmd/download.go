@@ -270,7 +270,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine worker count based on resource type and API
-	workers := determineWorkerCount(workerConfig, effectiveType, requests, workersFlag, workersExplicit)
+	workers := determineWorkerCount(workerConfig, effectiveType, workersFlag, workersExplicit)
 
 	log.Info("Worker configuration",
 		"workers", workers,
@@ -451,7 +451,7 @@ func buildWorkerConfig() *models.WorkerConfig {
 // Explicitness is passed in (cmd.Flags().Changed("workers")) rather than sniffed
 // from the value, so an explicit --workers 5 is honoured for API types and the
 // default literal is never duplicated here.
-func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string, requests []*models.FetchRequest, workersFlag int, workersExplicit bool) int {
+func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string, workersFlag int, workersExplicit bool) int {
 	// Priority 1: an explicitly set --workers flag wins for every API.
 	if workersExplicit {
 		return workersFlag

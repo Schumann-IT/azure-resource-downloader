@@ -875,6 +875,7 @@ go/
 ├── config.example.yaml           reference schema — every option at its default, documented
 ├── config-tailored-intune.yaml   worked Intune configuration incl. a full taxonomy
 ├── Makefile                      build / test / lint targets (the only supported way to run them)
+├── .golangci.yml                 the linter set `make lint` and GoLand both run
 ├── CHANGELOG.md                  Keep a Changelog; released sections match go/vX.Y.Z tags
 ├── NEXT-ITERATIONS.md            outstanding work and parked ideas
 └── .windsurf/rules/              editor / AI-assistant rules for this folder
@@ -954,10 +955,32 @@ make release-ready   # report whether a release can be cut (changes nothing); ta
 make branch-ready    # gate: clean tree, ci, then is this feature/fix branch ready to ship? (changes nothing)
 ```
 
+### Linting and the editor
+
+`.golangci.yml` is the single lint truth: `make lint-check` and `make lint` run golangci-lint with it (both
+verify the file against the v2 schema first, so a typo fails loudly instead of silently reverting to the
+defaults), and GoLand runs the same binary with the same file — Settings | **Go | Linters** → *Use config* →
+`.golangci.yml`, a one-time per-developer setting because `.idea/` is not committed. Note the path is resolved
+from the working directory: pointing at it explicitly (or opening this folder rather than the repository root)
+is required, since golangci-lint finds no config when started from the monorepo root. The file also declares
+`gofmt` as the only formatter, so GoLand's golangci-lint-based format-on-save produces exactly what `make fmt`
+does and cannot leave a diff that `make fmt-check` rejects.
+
+The file enables golangci-lint's default set — `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused` —
+plus `unconvert`, `unparam` and govet's `nilness` pass, each mirroring a GoLand inspection that is on by
+default, and each annotated in the file with the inspection it mirrors. Choices that would be stricter than
+the IDE are deliberately left out: govet's `shadow` pass is off (it is not in vet's default suite, upstream has
+proposed deprecating it, and here it reports only idiomatic `if err := f(); err != nil` blocks), and
+`unparam`'s "parameter always receives the same argument" reports are excluded for `_test.go`, where they are
+the normal shape of a test helper. What only GoLand's own bundled inspections report stays an editor hint, not
+a merge gate.
+
 Conventions that CI and review expect:
 
 - Every exported symbol has a doc comment; `context.Context` is the first parameter of anything that does I/O;
   errors are returned, not logged and returned.
+- Lint findings are fixed in the code, or silenced at the single site with a `//nolint:<linter>` carrying the
+  reason. Dropping a linter from `.golangci.yml` to go green would also change what the editor reports.
 - Tests use no network and no real export: fixtures are built in temp directories.
 - `CHANGELOG.md` is updated in the same change for anything a user can notice, under `## [Unreleased]`; released
   sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `go/vX.Y.Z` tag (procedure in the

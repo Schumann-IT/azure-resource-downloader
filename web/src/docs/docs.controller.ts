@@ -141,7 +141,7 @@ export class DocsController {
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, 'tenant', tenant, '');
 
-    let summary: string | null = null;
+    let summary: string | null;
     try {
       const page = await this.renderer.render(info.summaryPath, {
         tenant,

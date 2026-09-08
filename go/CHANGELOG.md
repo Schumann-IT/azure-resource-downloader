@@ -15,6 +15,13 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Release Workflow
 
+- **The linter set is now committed, so the editor and the command line agree.** A `.golangci.yml` pins which
+  linters run instead of leaving it to whichever golangci-lint version happens to be installed, and GoLand can
+  be pointed at the same file, so an IDE warning and a `make lint-check` finding are the same thing. Beyond the
+  default set it enables only checks that mirror an inspection GoLand has on by default, each annotated with
+  the one it mirrors; checks that would be stricter than the IDE are deliberately left out. `make lint` and
+  `make lint-check` validate the file before linting, so a typo in it fails the run rather than silently
+  reverting to the defaults. How to point the IDE at it is documented in `README.md`.
 - **`make branch-ready` reports whether a feature or fix branch is ready to ship.** It runs `make ci`, then checks
   that the work is recorded under `[Unreleased]` and that the `NEXT-ITERATIONS.md` entries the branch delivered
   have been cleared out and the rest renumbered — struck-out entries now stay in place while a branch is in

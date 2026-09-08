@@ -18,19 +18,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 1. Either wire ESLint or drop the dead `eslint-disable` comments
-
-**Goal.** The source contains no directives for a tool that is not configured.
-
-> `main.ts` and `configure-app.ts` carry `eslint-disable` comments; the README and the rules say there is no
-> lint script. Either state is fine; the mismatch is not.
-
-**Plan.**
-
-- Preferred: add `eslint` + `typescript-eslint` with a minimal flat config and an `npm run lint` script, run it
-  in `release-ready`, and update the README *Development conventions* and `02-style-and-quality.md`
-  (which currently say lint is not wired). A `CHANGELOG.md` entry, since it adds a script.
-- Otherwise: delete the two comments (internal, no entry).
+*None outstanding.*
 
 ## Standing decisions
 

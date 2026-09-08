@@ -177,8 +177,7 @@ describe('applyMarkerBlocks', () => {
 });
 
 describe('wrapSections', () => {
-  const makeToken = (type: string, tag: string, nesting: number) =>
-    new FakeToken(type, tag);
+  const makeToken = (type: string, tag: string) => new FakeToken(type, tag);
 
   function wrapped(tokens: FakeToken[], ranges: any[] = []) {
     applySectionHeadings(tokens as any);
