@@ -54,8 +54,9 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   Confluence's HTML import, offered as a download link per tenant on the picker. **One-way**; see
   [Confluence export](#confluence-export).
 - **No-restart refresh** — regenerated documents, re-downloaded resources and a regenerated `index.yaml`
-  appear on the next request (per-request `stat()` against an mtime/size-keyed cache); newly generated
-  tenants appear within the 30 s discovery TTL.
+  appear on the next request (per-request `stat()` against an mtime/size-keyed cache), including the counts
+  and export timestamp shown on the tenant picker and `/healthz`; only a newly generated tenant folder waits
+  out the 30 s discovery TTL.
 - **No client-side JavaScript.** Everything is server-rendered Handlebars + Tailwind; dark mode follows
   `prefers-color-scheme`.
 
@@ -147,7 +148,7 @@ Discovery and resolution rules:
 | Route | Response |
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
-| `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. |
+| `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. `documents` and `pending` are read from each tenant's `index.yaml` on every call, not cached, so a regenerated index is reflected immediately. |
 | `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |

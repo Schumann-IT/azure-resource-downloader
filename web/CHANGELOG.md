@@ -62,6 +62,12 @@ section of the [repository README](../README.md) for the procedure.
 
 #### The browser
 
+- **The tenant picker and the health endpoint no longer lag a regenerated index.** Their document/pending
+  counts and export timestamp were snapshotted for the 30 s discovery TTL, so a fresh `azure-rd docs
+  generate-index` could disagree with the sidebar for up to half a minute. Both now read every tenant's
+  `index.yaml` per request, the same freshness the rest of the app already has; the TTL still governs only
+  which folders are discovered as tenants.
+
 - **An invalid `PORT` no longer crashes startup.** Only unset/empty (falls back to `3000`, silently) or one
   to five ASCII digits in `1..65535` (that port) are accepted; anything else falls back to `3000` too, with
   the rejected value reported in the startup line. Configuration stays environment-only.

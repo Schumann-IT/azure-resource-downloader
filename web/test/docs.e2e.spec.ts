@@ -898,6 +898,35 @@ describe('Docs browser (e2e)', () => {
     await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
   });
 
+  it('reflects a regenerated index.yaml in the picker and /healthz counts, within the discovery TTL', async () => {
+    await fsp.writeFile(
+      path.join(tenantDir, 'index.yaml'),
+      INDEX_YAML.replace('documented: 2', 'documented: 12')
+        .replace('pending: 1', 'pending: 0')
+        .replace(
+          'generatedAt: "2026-01-01T00:00:00Z"',
+          'generatedAt: "2026-02-02T00:00:00Z"',
+        ),
+    );
+
+    const picker = await request(app.getHttpServer()).get('/').expect(200);
+    expect(picker.text).toContain('12 documented');
+    expect(picker.text).toContain('exported 2026-02-02T00:00:00Z');
+
+    const health = await request(app.getHttpServer())
+      .get('/healthz')
+      .expect(200);
+    expect(health.body).toEqual({
+      status: 'ok',
+      rootReadable: true,
+      tenants: 3,
+      documents: 14,
+      pending: 1,
+    });
+
+    await fsp.writeFile(path.join(tenantDir, 'index.yaml'), INDEX_YAML);
+  });
+
   it('drops the source echo under the H1 but keeps prose mentions of other resources', async () => {
     const res = await request(app.getHttpServer())
       .get(
