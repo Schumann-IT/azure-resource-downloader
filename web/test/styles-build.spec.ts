@@ -121,6 +121,18 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/\.prose\s+table\.doc-metadata/);
   });
 
+  it('includes the print rules (chrome hidden, layout un-stuck, tables wrap)', () => {
+    expect(css).toContain('@media print');
+    const print = css.slice(css.indexOf('@media print'));
+    expect(print).toMatch(/\.site-header/);
+    expect(print).toMatch(/\.nav-tree/);
+    expect(print).toMatch(/\.doc-layout\s*\{[^}]*display:\s*block/);
+    // Wide tables scroll on screen; on paper there is nothing to scroll.
+    expect(print).toMatch(/\.prose\s+table\s*\{[^}]*white-space:\s*normal/);
+    // A :target tint would print as a band around the last anchor followed.
+    expect(print).toMatch(/:target/);
+  });
+
   it('still emits the typography prose classes', () => {
     expect(css).toMatch(/prose/);
   });

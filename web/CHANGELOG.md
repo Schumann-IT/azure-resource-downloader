@@ -26,6 +26,14 @@ section of the [repository README](../README.md) for the procedure.
   read-only, folder-scoped check is the only git either report runs. Also available as `make branch-ready-web`
   from the repository root; what it checks is documented in `README.md`.
 
+#### Views and navigation
+
+- **Documents print as documents.** Printing a page or saving it as a PDF now yields the document alone: the top
+  bar and the navigation sidebar are left off the page, the layout un-sticks into a single column and the wide
+  tables wrap instead of scrolling off the sheet. Collapsed settings blocks still print collapsed — no
+  stylesheet can open a disclosure element and this browser ships no script — which the README now says plainly
+  rather than leaving a reader to discover it on paper.
+
 ### Changed
 
 #### Views and navigation
@@ -37,6 +45,16 @@ section of the [repository README](../README.md) for the procedure.
   switcher — no longer produce identical tabs. The tenant picker keeps its own title.
 
 ### Fixed
+
+#### Views and navigation
+
+- **The breadcrumb lines up with the page beneath it.** The top bar constrained its row more narrowly than the
+  document, tenant and source-YAML layouts, so on a wide viewport the breadcrumb and the **Documentation |
+  YAML** switcher sat inset from the sidebar and the document under them. The bar now takes its width from the
+  page it belongs to, and the narrow pages — the tenant picker and the 404 view — keep theirs.
+
+- **The navigation sidebar has a name.** It is now labelled as a landmark, so assistive technology can announce
+  and jump to it the way it already can for the view switcher and the taxonomy filters.
 
 #### The browser
 

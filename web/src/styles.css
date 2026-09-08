@@ -765,3 +765,49 @@ html {
     color: var(--color-brand-400);
   }
 }
+
+/* -------------------------------------------------------------------------
+   Print / PDF. A printed page is the document alone: the sticky top bar and
+   the navigation tree are browser chrome and would otherwise land on paper,
+   the tree beside a column narrowed to make room for it. The screen's wide
+   tables scroll, which paper cannot, so they wrap here instead, and the
+   `:target` tints are dropped — a reader who printed after following an
+   anchor would get a grey band around whatever they last jumped to.
+
+   Collapsed `<details>` blocks print collapsed: CSS cannot open a disclosure
+   element, and forcing `display: block` on the content would print it without
+   its marker state, which is worse than an honest omission. See README.
+   ------------------------------------------------------------------------- */
+@media print {
+  .site-header,
+  .nav-tree {
+    display: none;
+  }
+
+  /* Un-stick and un-column the layout so the document owns the page box. */
+  .doc-layout {
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+
+  .doc-main {
+    max-width: none;
+  }
+
+  .prose table {
+    display: table;
+    width: 100%;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .doc-section-heading {
+    scroll-margin-top: 0;
+  }
+
+  .doc-section-heading:target,
+  .yaml-view .line:target {
+    background: none;
+  }
+}

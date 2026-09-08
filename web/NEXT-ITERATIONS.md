@@ -57,7 +57,7 @@ instead of always reading *Document not found*.
   `views/error.hbs`; keep the body free of filesystem paths.
 - e2e: assert the headline for an unknown tenant and for `/_export/<unknown>`.
 
-### 4. Align the header with the page content
+### ~~4. Align the header with the page content~~
 
 **Goal.** The breadcrumb in the top bar lines up with the sidebar and the document below it.
 
@@ -67,11 +67,11 @@ instead of always reading *Document not found*.
 
 **Plan.**
 
-- Make the header's width a partial parameter (or default it to `max-w-7xl` and have the picker/error pages
-  pass `max-w-5xl`), so each page has one width.
-- `styles-build.spec.ts` needs nothing; verify visually on both layouts.
+- ~~Make the header's width a partial parameter (or default it to `max-w-7xl` and have the picker/error pages
+  pass `max-w-5xl`), so each page has one width.~~
+- ~~`styles-build.spec.ts` needs nothing; verify visually on both layouts.~~
 
-### 5. Print stylesheet
+### ~~5. Print stylesheet~~
 
 **Goal.** Printing or saving a document as PDF yields the document, not the sticky header and the sidebar
 beside it.
@@ -81,20 +81,20 @@ beside it.
 
 **Plan.**
 
-- `@media print`: hide `.site-header` and `.nav-tree`, un-stick the layout, let `.prose table` wrap, and drop
-  the `:target` highlights.
-- `styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
-  about collapsed blocks.
+- ~~`@media print`: hide `.site-header` and `.nav-tree`, un-stick the layout, let `.prose table` wrap, and drop
+  the `:target` highlights.~~
+- ~~`styles-build.spec.ts`: assert the print block survives compilation. README: one sentence under Rendering
+  about collapsed blocks.~~
 
-### 6. Label the sidebar landmark
+### ~~6. Label the sidebar landmark~~
 
 **Goal.** Assistive technology can name the navigation sidebar the way it already names the view switcher and
 the per-axis filters.
 
 **Plan.**
 
-- `aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.
-- e2e: assert the attribute is present on a document page.
+- ~~`aria-label="Tenant navigation"` on the `<aside>` in `views/partials/sidebar.hbs`.~~
+- ~~e2e: assert the attribute is present on a document page.~~
 
 ### 7. Security headers, including a CSP that enforces the no-script rule
 

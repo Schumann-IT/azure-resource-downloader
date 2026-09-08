@@ -690,6 +690,29 @@ describe('Docs browser (e2e)', () => {
     );
   });
 
+  it('names the navigation sidebar as a landmark', async () => {
+    // Assistive technology needs a name for the <aside>, the way the view
+    // switcher and the facet filters already have one.
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1')
+      .expect(200);
+    expect(res.text).toMatch(
+      /<aside aria-label="Tenant navigation"[^>]*class="nav-tree/,
+    );
+  });
+
+  it('gives the top bar the same width as the page under it', async () => {
+    const wide = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/groups/g1')
+      .expect(200);
+    // The document layout is max-w-7xl, so an inset max-w-5xl header row would
+    // leave the breadcrumb out of line with the sidebar and the document.
+    expect(wide.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
+
+    const narrow = await request(app.getHttpServer()).get('/').expect(200);
+    expect(narrow.text).toMatch(/<div class="mx-auto max-w-5xl px-4 py-3/);
+  });
+
   it('tags the summary Findings table and its severities for the stylesheet', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant')
