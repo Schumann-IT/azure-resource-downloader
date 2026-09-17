@@ -5,7 +5,7 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
-## 1. Separate enumerating what the tool handles from what the tenant contains
+## 1. ~~Separate enumerating what the tool handles from what the tenant contains~~
 
 **Goal.** Split the overloaded listing command in two. `resource types` answers "what can this binary handle?" —
 the handler behind each Azure type and the API it speaks — and, whenever a usable session happens to be
@@ -66,14 +66,14 @@ meaning: what the tenant actually contains, per resource, without downloading an
 
 **Plan.**
 
-- Rename the moved supported-types command to `resource types`, and extend its output from a flat list of Azure
+- ~~Rename the moved supported-types command to `resource types`, and extend its output from a flat list of Azure
   types to the mapping an operator actually wants: each supported Azure type, the handler that implements it and
   the API it speaks, grouped so the ARM and Microsoft Graph surfaces are distinguishable at a glance. The map
-  itself remains answerable with no session and no subscription, as it is today.
-- Derive the handler identity from what the registry already knows rather than widening `ResourceHandler`; a new
+  itself remains answerable with no session and no subscription, as it is today.~~
+- ~~Derive the handler identity from what the registry already knows rather than widening `ResourceHandler`; a new
   interface method would have to be implemented by every handler, which is a high price for a listing command.
-  Only add one if deriving it proves genuinely unreadable.
-- Append each type's resource count in the tenant whenever a session is available, rendered as the per-type
+  Only add one if deriving it proves genuinely unreadable.~~
+- ~~Append each type's resource count in the tenant whenever a session is available, rendered as the per-type
   roll-up of the same listing the other resource commands use. Decide it by attempting authentication
   non-interactively: a usable session counts, anything that would prompt or fail degrades to the type map plus a
   note saying counts were omitted and why. Never fail the command over it. Concretely: the Azure CLI credential
@@ -81,30 +81,30 @@ meaning: what the tenant actually contains, per resource, without downloading an
   inside `GetToken`* — exactly the prompt the invariant forbids — so construct it with azidentity's option that
   disables automatic authentication, and treat the resulting authentication-required error as "no session".
   Cover the would-prompt path with a fake credential in a unit test; a signed-in developer machine never
-  exercises it, so without that test the blocking behaviour ships unnoticed.
-- Add `resource list`, enumerating the tenant's resources for the selected types. With no selection it covers
-  every registered type, exactly as a full download would.
-- Route both through the same listing path the download command uses to build its fetch requests, so scope,
-  filters and the treatment of unlistable types are shared code rather than a parallel implementation.
-- Promote the selection flags — and the pipeline flags that genuinely affect listing concurrency — from
+  exercises it, so without that test the blocking behaviour ships unnoticed.~~
+- ~~Add `resource list`, enumerating the tenant's resources for the selected types. With no selection it covers
+  every registered type, exactly as a full download would.~~
+- ~~Route both through the same listing path the download command uses to build its fetch requests, so scope,
+  filters and the treatment of unlistable types are shared code rather than a parallel implementation.~~
+- ~~Promote the selection flags — and the pipeline flags that genuinely affect listing concurrency — from
   `resource download` to the `resource` parent, now that every subcommand under it honours them: `resource types`
   filters its map by type offline and narrows what it counts online, and `resource list` selects what it
   enumerates. Counting or listing every registered type is the expensive half of a download's listing phase, so
-  an operator narrowing the scope should pay only for that scope.
-- Report per type: the resources found and their ids, and — when an export for the tenant exists — the display
+  an operator narrowing the scope should pay only for that scope.~~
+- ~~Report per type: the resources found and their ids, and — when an export for the tenant exists — the display
   names joined from its `resources/metadata.yaml`, marking resources not present in the export as new. Never
-  fetch to obtain a name.
-- Keep the coverage distinction the rest of the tool makes in both commands: a type that could not be listed is
+  fetch to obtain a name.~~
+- ~~Keep the coverage distinction the rest of the tool makes in both commands: a type that could not be listed is
   reported as unknown and excluded from the counts, never conflated with a type that listed to zero resources,
-  and never rendered as `0`.
-- Write nothing at all in either command. Because neither has an output artifact, `--dry-run` is a no-op for
-  them; say so rather than inventing a file for the flag to withhold.
-- Exit zero even when some types are unknown or the counts were omitted, consistent with the rest of the tool:
+  and never rendered as `0`.~~
+- ~~Write nothing at all in either command. Because neither has an output artifact, `--dry-run` is a no-op for
+  them; say so rather than inventing a file for the flag to withhold.~~
+- ~~Exit zero even when some types are unknown or the counts were omitted, consistent with the rest of the tool:
   missing permissions and missing sessions warn, they never fail a run. Non-zero exits are reserved for real
-  errors — an unreachable API mid-listing, not an absent privilege.
-- Add tests for both commands, document them in `README.md` with example output, and record them in
+  errors — an unreachable API mid-listing, not an absent privilege.~~
+- ~~Add tests for both commands, document them in `README.md` with example output, and record them in
   `CHANGELOG.md` — the new command under `Added`, the enriched type map under `Changed`, and the repurposing of
-  the `list` spelling under `Breaking`.
+  the `list` spelling under `Breaking`.~~
 
 ## 2. Detect drift between the tenant and the export on disk
 
