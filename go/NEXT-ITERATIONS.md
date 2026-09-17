@@ -328,6 +328,38 @@ a successful run produces.
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
 ship and are removed. Each records why it is parked and what would make it worth doing.
 
+### Idea: routine dependency updates, and consolidating on one Microsoft Graph SDK
+
+Two related pieces of dependency hygiene. First, a routine update pass (`go get -u`, `make deps`, `make check`)
+over the direct dependencies. Second, investigate whether the module can carry **one** Microsoft Graph SDK
+instead of two. The direction is the opposite of the intuitive one: `msgraph-beta-sdk-go` is imported by 53
+handler files and serves the Intune/device-management endpoints that **do not exist on v1.0**, so it can never
+be the one removed. The candidate for removal is `msgraph-sdk-go` (v1.0), used by one shared client constructor
+and seven handlers (conditional access, groups, organization, authentication methods/strengths, authorization
+policy, on-premises synchronization) — the beta endpoint is a superset, so those seven could move. The prize is
+real: the two generated SDKs dominate compile time and binary size, and one of them is nearly gone already.
+**Not planned — parked deliberately**, for three reasons:
+
+- **A dependency bump is not hash-neutral by construction.** A Graph SDK update can change which properties a
+  model carries and therefore the YAML bytes the export writes — moving `sourceSha256` for resources that did
+  not change in the tenant, which reads as mass drift and forces documentation regeneration. Until the drift
+  command exists there is no cheap way to *prove* a bump content-neutral; after it ships, "update, re-download
+  a fixture tenant, drift must report zero findings" becomes the standard verification, and updates get cheap.
+- **Moving the seven v1.0 types to beta trades a stability contract for uniformity.** v1.0 responses are
+  contractually stable; beta responses may change shape at Microsoft's discretion. Today the most stable,
+  most-referenced types (groups, conditional access) deliberately sit on the stable endpoint. Consolidation
+  buys shorter builds but makes every type's bytes hostage to beta churn.
+- **The switch itself moves hashes once.** Re-fetching those seven types through the beta endpoint will change
+  their YAML (beta models carry extra properties), so their `sourceSha256` values move and their documents
+  regenerate — a one-time cost that should ride a regeneration scheduled for another reason, not force its own.
+
+**Revisit when** the drift command has shipped (it is the verification tool this work lacks), and either a
+security advisory forces an SDK bump anyway or build time becomes a felt cost. If consolidation is picked up:
+move the seven handlers one at a time, verify each with a fixture-tenant drift run, expect and batch the
+one-time hash movement, and only then drop the v1.0 module. If beta churn is the worry instead, the same
+investigation can conclude the opposite consolidation is wiser once Microsoft ports the Intune endpoints to
+v1.0 — check that first; it would remove the *beta* SDK and the churn with it.
+
 ### Idea: per-finding severity in document `Security` sections
 
 Tag every individual security callout *inside each resource's document* with `**[risk]**` / `**[review]**` /
