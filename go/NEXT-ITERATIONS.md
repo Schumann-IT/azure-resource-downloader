@@ -35,14 +35,22 @@ in the tenant.
 >
 > **`--dry-run` governs writes, not fetches.** Unlike a download — which may skip the fetch under `--dry-run`
 > because part of its question is answerable offline — nothing about drift can be answered without the tenant's
-> current bytes. So a dry run still fetches and still reports in full; it only withholds the artifact, and says
-> that an artifact from an earlier run is still on disk and was not refreshed.
+> current bytes. So a dry run still fetches and still reports in full; it only withholds the `drift/` tree
+> (clearing nothing), and says that an observation from an earlier run is still on disk and was not refreshed.
 >
-> **The artifact lives in neither owned tree.** `<tenant>/drift.yaml` sits beside `resources/` and `docs/`
-> because a drift record is neither a resource nor a document: it is an observation *about* the export. That
-> keeps `resources/` write-exclusive to the download itself and prune territory, and leaves the set of files
-> `azure-rd` writes under `docs/` closed. Nothing deletes it — `--prune` remains the only delete path — so a
-> re-baseline leaves it behind, to be recognised as stale by the baseline it names rather than removed.
+> **The artifact tree lives beside the owned trees, shaped like them.** Everything a drift run writes lives
+> under `<tenant>/drift/`, a sibling of `resources/` and `docs/`, because a drift record is neither a resource
+> nor a document: it is an observation *about* the export. The tree mirrors `resources/` exactly —
+> `drift/metadata.yaml` at its root describes the observation, payloads sit at
+> `drift/<APIType>/<endpoint>/<name>.yaml` — so a payload's path is its resource's path with the tree root
+> swapped, and the metadata sits where every consumer of an export already looks for it. That keeps
+> `resources/` write-exclusive to the download itself and prune territory — drift never writes a resource file
+> or an undescribed YAML into the export — and leaves the set of files `azure-rd` writes under `docs/` closed.
+> A drift run owns its observation space: it clears `drift/` before writing, so the tree holds exactly the
+> latest observation and can never accumulate stale leftovers. That narrows the delete rule rather than
+> breaking it: `--prune` remains the only delete path *inside the export* (`resources/`); only a drift run
+> touches `drift/`. A re-baseline leaves the tree behind, to be recognised as stale by the baseline its
+> metadata names rather than removed.
 >
 > **Scope: inline base64 mode only.** With `base64-decode` in its default `inline` mode the decoded payload
 > stays in the resource YAML, so `sourceSha256` covers a resource's full content and no per-artifact fact is
@@ -64,9 +72,9 @@ in the tenant.
   returning a prepared run. Keep `internal/cmdutil` to flag groups and prompts. The extraction earns its keep
   here, with a second consumer: it is what makes the two commands incapable of diverging in auth or selection
   semantics.
-- Keep `resource drift` read-only with respect to the export: it writes no resource file, never updates
-  `metadata.yaml`, never touches `docs/` and never prunes. Its single output is the drift artifact.
-  Re-baselining is a normal `resource download`.
+- Keep `resource drift` read-only with respect to the export: it writes nothing under `resources/`, never
+  updates the export's `metadata.yaml`, never touches `docs/` and never prunes. Its only output is the
+  `drift/` tree. Re-baselining is a normal `resource download`.
 - Resolve the export directory and cross-check it against `metadata.tenant` the way the `docs` subcommands do,
   including the offline `--domain` escape, so drift cannot be reported against the wrong tenant.
 - Run a comparability preflight before fetching anything: refuse (distinct "cannot answer" exit code) when
@@ -82,16 +90,35 @@ in the tenant.
 - Gate removals on the same rule as `--prune`: only assert that a resource is gone when the run is `Complete`
   and its type was actually covered. Report types that could not be listed as *unknown*, excluded from the
   totals, and state explicitly when removals were suppressed.
-- Persist one artifact per tenant, `<output>/<tenant>/drift.yaml`, overwritten on every run and withheld
+- Persist one artifact per tenant, `<output>/<tenant>/drift/metadata.yaml` — at the root of its tree exactly
+  as the export's own `metadata.yaml` sits at the root of `resources/` — overwritten on every run and withheld
   entirely under `--dry-run`. It records facts only — the verdicts and field deltas — never a severity,
   classification or other revisable judgement, so revising how drift is presented never requires re-running a
-  check.
+  check. A removed resource is a verdict here and nothing more: there are no bytes to persist for a deletion,
+  and the export's own `presentInTenant` stays untouched until a real re-download.
+- Persist the fetched bytes of every *added*, *changed* and *renamed* resource in the same tree, with paths
+  mirroring `resources/` exactly (`drift/<APIType>/<endpoint>/<name>.yaml`), so a payload joins to its
+  baseline file, its finding and its document by the same key — and write the same marshalled bytes the
+  writer would, so a payload is byte-comparable with the baseline file it shadows. A rename is a content
+  change whose key moved: its payload lands at the *new* key and its finding carries both keys, baseline and
+  payload, so old and new bytes stay joinable. Payloads are always at least two levels deep, so they can
+  never collide with the tree's own `metadata.yaml`, mirroring the rule that keeps `generate.md` and
+  `index.yaml` safe at the `docs/` root.
+- Make each observation own its tree: clear `drift/` before writing, so it holds exactly the current
+  observation, and list the written payload paths in `drift/metadata.yaml`, so a consumer never trusts a file
+  the named observation did not produce. Under `--dry-run` nothing is written and nothing is cleared — the
+  previous observation stays intact and is reported as not refreshed.
 - Make the artifact self-describing about what it measured: the baseline it was compared against (the export's
   `generatedAt`, tool version and transform-config hash), the tenant, run completeness, the verdict counts and
   the types whose drift is unknown. A consumer must be able to tell that a re-download has invalidated it
   instead of silently trusting a record of a superseded baseline.
 - Key each finding the way `docs generate-index` keys a resource, and carry the derived document path, so a
   drift finding joins to its document and to `index.yaml` with no extra wiring on the consuming side.
+- Give each finding the facts a consumer needs without opening any YAML: the display name (old and new when
+  renamed), the baseline's `sourceSha256` and the payload's sha256 — all read from the resource or computed
+  from its bytes, never a judgement. The hashes give a per-file integrity check on top of the tree-level
+  baseline gate: a consumer can verify the baseline file it is about to diff is the one the verdict was
+  decided against, and cache a computed diff under a stable key.
 - Keep the artifact deterministic apart from the moment of observation: hash the findings alone into a
   `findingsSha256`, so re-running over an unchanged tenant produces identical bytes except the timestamp and
   "the same drift as last time" is a single comparison. This is also what would let an append-only history
@@ -106,15 +133,20 @@ in the tenant.
 - Close the loop with the documentation pipeline by reporting how many documents the observed drift will make
   stale once re-baselined, pointing at `docs generate-prompt`.
 - Deferred, deliberately: an append-only drift history (a timeline of checks rather than the latest one).
-  Unbounded growth needs a retention policy, and there is no delete path in the tool besides `--prune`, so it
-  waits until a consumer actually needs a timeline rather than "has it drifted since the export?".
-- Cover with unit tests over a fixture export: each verdict, rename matching, removal suppression on an
-  incomplete run, the comparability refusals, that `--dry-run` writes nothing, and that the artifact is
+  Unbounded growth needs a retention policy, and the only delete paths in the tool are `--prune` (inside the
+  export) and a drift run clearing its own `drift/` tree — neither expires history — so it waits until a
+  consumer actually needs a timeline rather than "has it drifted since the export?".
+- Cover with unit tests over a fixture export: each verdict, rename matching (including that the payload
+  lands at the new key with both keys on the finding), removal suppression on an incomplete run, the
+  comparability refusals, that `--dry-run` writes nothing and clears nothing, that the payload tree is
+  cleared and rebuilt to exactly the current findings (a reverted resource leaves no leftover), that a drift
+  run never writes under `resources/` or `docs/`, and that the artifact is
   byte-identical over an unchanged tenant apart from its timestamp. Cover the extracted run preparation where
   the moved code was covered before.
-- Document the command and its artifact in `README.md` (usage, the drift artifact's shape and purpose, and the
-  output layout gaining a file at the tenant root), name the new file in the rules' output-layout section, and
-  record the capability in `CHANGELOG.md`.
+- Document the command and its tree in `README.md` (usage, the drift metadata's shape and purpose, and the
+  output layout gaining a `drift/` tree at the tenant root, shaped like `resources/`), name it in the rules'
+  output-layout section — including the narrowed delete rule (`--prune` is the only delete path inside the
+  export; a drift run clears only its own `drift/` tree) — and record the capability in `CHANGELOG.md`.
 
 ## Parked ideas
 

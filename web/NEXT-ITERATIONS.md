@@ -265,6 +265,41 @@ re-import cost is felt. Note that it cannot reuse the export link's shape at all
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
 
+### Idea: A drift view — render the CLI's drift observation as configuration diffs
+
+*As an operator I would like to see what changed in the tenant since its export was taken — as a readable
+per-resource diff — so I can decide whether to re-download and regenerate.* The comparison engine is not this
+app's job: the CLI plans a `resource drift` command that writes a `drift/` tree beside `resources/` and
+`docs/`, shaped exactly like `resources/` — `drift/metadata.yaml` at its root records the verdicts (added /
+changed / removed / renamed) with per-finding display names, the baseline's and payload's hashes, the index
+key and the derived document path, plus the baseline it measured against (export `generatedAt`,
+transform-config hash) and a payload listing; the fetched bytes of added, changed and renamed resources sit
+at `drift/<type>/<name>.yaml`, marshalled exactly as the export marshals, so they are byte-comparable with
+the baseline. The browser would only render: a findings list from `drift/metadata.yaml` alone, and a diff
+per finding — *changed*: `resources/<key>` vs `drift/<key>`; *added*: payload only; *removed*: the last-known
+configuration from the untouched baseline; *renamed*: old key vs new key, both named on the finding.
+**Parked** because the CLI command has not shipped, so there is no drift tree to render, and because a
+readable diff of a 317-setting document wants interaction the no-client-side-JavaScript rule forbids — the
+same obstacle the tenant diff idea below records; a server-rendered unified diff with the existing line-anchor
+machinery is the honest script-free first version. **Revisit** when the CLI's drift command ships and a real
+observation exists in a docs root someone wants to read.
+
+What is settled if it is picked up. **The validity gate is mandatory**: the observation names its baseline,
+and a mismatch against the live export's `resources/metadata.yaml` renders as "drift data outdated — re-run
+`azure-rd resource drift`", never as a diff against the wrong baseline; the per-finding hashes allow the same
+check per file before diffing. **Serving `drift/` is a third root** under the `resolveWithinRoot()` pattern,
+`.yaml` as its single extension, exactly like `resources/` — and it is no new class of exposure, because the
+**Documentation | YAML** switcher already serves raw source YAML (including resolved secrets when the export
+was made that way); a diff view merely highlights what changed within the same trust boundary as the docs
+root. **The listing derives from `drift/metadata.yaml`, never from walking the tree**, keeping the
+counts-from-the-index non-negotiable intact — the observation's metadata is to `drift/` what `index.yaml` is
+to `docs/`. The route belongs behind a `_drift` representation prefix (a findings page at `GET
+/:tenant/_drift`, a per-finding diff below it), declared before the document catch-all like its siblings, and
+the document path each finding carries links a diff to its documentation with no extra wiring. This idea is
+**disjoint from the tenant diff below**: one tenant across time, identity trivially preserved (same GUIDs on
+both sides), and the comparison already decided by the CLI — none of the cross-tenant identity problem that
+parks the other.
+
 ### Idea: Tenant diff
 
 *As an administrator I would like to diff the configuration of two tenants, so I can detect and understand
