@@ -174,6 +174,10 @@ Completeness is reported separately from the exit code: a run is *complete* when
 nothing was cancelled and every request produced a result — an incomplete run can still exit `0`, and
 `metadata.yaml` records which.
 
+**Interrupts:** Ctrl+C cancels the run cleanly — listing and fetching stop, in-flight requests are drained and
+reported as cancelled in the summary, and the run is recorded as incomplete (so it can never mark a resource
+absent or feed `--prune`). A second Ctrl+C force-quits.
+
 **What a run prints:** per-type counts as listing finishes, progress every 10 %, then a summary with
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
 reason) and the types that listed empty, and finally whether the run is complete.
@@ -1033,11 +1037,10 @@ Editor and AI-assistant rules live in `.windsurf/rules/` and apply to this folde
 - **Assignment targets in the YAML carry GUIDs only.** Group, filter and notification-template names are
   resolved in the *documentation* (from the exported groups/filters/templates), not in the resource files. A
   transformer that resolved them in the YAML is deliberately parked — see `NEXT-ITERATIONS.md` for why.
-- **Graceful interrupt is not implemented**: Ctrl+C stops the process without cleaning up partial writes.
-  Re-running is safe (writes are idempotent and `metadata.yaml` merges), but a resource file may be truncated
-  until the next run rewrites it.
-- **Writes are not atomic** (no temp-file-and-rename), so do not point another consumer at `resources/` while a
-  download is running.
+- **Resource file writes are not atomic** (no temp-file-and-rename), so do not point another consumer at
+  `resources/` while a download is running. `metadata.yaml` is the exception: it is written to a temp file and
+  renamed into place, so the export baseline can never be left truncated. Re-running is always safe (writes are
+  idempotent and `metadata.yaml` merges).
 - **App-only authentication is out of scope** by design, so the tool cannot run unattended.
 
 ## License

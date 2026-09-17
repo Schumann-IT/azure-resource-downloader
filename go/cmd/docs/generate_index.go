@@ -1,9 +1,8 @@
 package docs
 
 import (
-	"context"
 	"errors"
-	"os"
+	"fmt"
 	"sort"
 
 	"azure-resource-downloader/internal/cmdutil"
@@ -71,7 +70,7 @@ Examples:
 func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	cmdutil.BindFlags(cmd)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	log := logger.Default
 
 	baseOutput := viper.GetString("output")
@@ -86,8 +85,7 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	if viper.IsSet("taxonomy") {
 		var cfg docsengine.TaxonomyConfig
 		if err := viper.UnmarshalKey("taxonomy", &cfg); err != nil {
-			log.Error("Invalid 'taxonomy' config section", "error", err)
-			os.Exit(exitCannotAnswer)
+			return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("invalid 'taxonomy' config section: %w", err))
 		}
 		taxonomy = &cfg
 	}
@@ -96,8 +94,7 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
 		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
-		log.Error("Cannot resolve which export to index", "error", err)
-		os.Exit(exitCannotAnswer)
+		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to index: %w", err))
 	}
 	log.Info("Indexing export", "dir", tenantDir)
 
@@ -111,13 +108,13 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, docsengine.ErrNoMetadata):
-			log.Error("No export metadata found; run 'azure-rd download' first", "error", err)
+			err = fmt.Errorf("no export metadata found; run 'azure-rd resource download' first: %w", err)
 		case errors.Is(err, docsengine.ErrTenantMismatch):
-			log.Error("Refusing to index the wrong export", "error", err)
+			err = fmt.Errorf("refusing to index the wrong export: %w", err)
 		default:
-			log.Error("Failed to generate documentation index", "error", err)
+			err = fmt.Errorf("failed to generate documentation index: %w", err)
 		}
-		os.Exit(exitCannotAnswer)
+		return cmdutil.WithExitCode(exitCannotAnswer, err)
 	}
 
 	reportGenerateIndex(res, dryRun)

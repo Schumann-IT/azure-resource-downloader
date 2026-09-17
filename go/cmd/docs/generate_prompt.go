@@ -18,9 +18,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Exit codes for docs generate-prompt. 0 is success (whether or not work was
-// found, unless --exit-code); a distinct code marks "could not answer" so CI can
-// tell an unanswerable run from a clean one.
+// Exit codes for docs generate-prompt, carried to the root Execute via
+// cmdutil.WithExitCode. 0 is success (whether or not work was found, unless
+// --exit-code); a distinct code marks "could not answer" so CI can tell an
+// unanswerable run from a clean one.
 const (
 	exitCannotAnswer = 2
 	exitStaleFound   = 3
@@ -79,7 +80,7 @@ Examples:
 func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	cmdutil.BindFlags(cmd)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	log := logger.Default
 
 	baseOutput := viper.GetString("output")
@@ -93,8 +94,7 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
 		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
-		log.Error("Cannot resolve which export to document", "error", err)
-		os.Exit(exitCannotAnswer)
+		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to document: %w", err))
 	}
 	log.Info("Documenting export", "dir", tenantDir)
 
@@ -103,8 +103,7 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	if promptPath != "" {
 		template, err = os.ReadFile(promptPath)
 		if err != nil {
-			log.Error("Cannot read --prompt template", "path", promptPath, "error", err)
-			os.Exit(exitCannotAnswer)
+			return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot read --prompt template: %w", err))
 		}
 	}
 
@@ -128,13 +127,13 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, docsengine.ErrNoMetadata):
-			log.Error("No export metadata found; run 'azure-rd download' first", "error", err)
+			err = fmt.Errorf("no export metadata found; run 'azure-rd resource download' first: %w", err)
 		case errors.Is(err, docsengine.ErrTenantMismatch):
-			log.Error("Refusing to document the wrong export", "error", err)
+			err = fmt.Errorf("refusing to document the wrong export: %w", err)
 		default:
-			log.Error("Failed to generate documentation prompt", "error", err)
+			err = fmt.Errorf("failed to generate documentation prompt: %w", err)
 		}
-		os.Exit(exitCannotAnswer)
+		return cmdutil.WithExitCode(exitCannotAnswer, err)
 	}
 
 	reportGeneratePrompt(res, dryRun)
@@ -143,7 +142,7 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	// re-splice, or documents to migrate — so a clean CI run means every
 	// document on disk matches the export, not merely that none is missing.
 	if exitCode && res.HasPendingWork() {
-		os.Exit(exitStaleFound)
+		return cmdutil.WithExitCode(exitStaleFound, errors.New("stale documentation found (see the report above)"))
 	}
 	return nil
 }

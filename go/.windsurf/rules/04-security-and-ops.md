@@ -33,10 +33,11 @@ trigger: always_on
   - Selection: `--resource-id`, `--type`, `--resource-group` (all repeatable/config-backed; none given = every registered type)
 
 ## Operations
-- **Graceful shutdown**:
-  - Use context with timeout in pipeline (implemented)
-  - TARGET (not yet implemented): cancel operations on interrupt (Ctrl+C) and clean up partial downloads
+- **Graceful shutdown** (implemented):
+  - `Execute` wraps the run context with `signal.NotifyContext` (SIGINT/SIGTERM) and every command uses `cmd.Context()`, so Ctrl+C cancels listing and fetching cleanly: the pipeline drains, every request still produces one (Cancelled) result, and the run is recorded incomplete — so it can never mark a resource absent or feed `--prune`. A second Ctrl+C force-quits (the first signal restores default disposition).
+  - Per-operation timeout via context in the pipeline (implemented)
 - **Error handling**:
+  - Commands NEVER call `os.Exit` inline: `RunE` returns the error (a distinct exit code rides `cmdutil.WithExitCode`; `cmdutil.ExitCode` unwraps it) and the ONLY `os.Exit` lives in `cmd.Execute`. Root sets `SilenceErrors` and `execute()` is the single error print site — exactly one print per failure; usage is shown for invocation mistakes only (SilenceUsage is set once flags parsed, in root's `PersistentPreRunE`, which also loads the config — `cobra.EnableTraverseRunHooks` keeps it running under group hooks)
   - Continue processing other resources if one fails
   - Permission errors (ARM 403, Graph missing scopes/Forbidden) NEVER fail the run: warn + skip via `azure.IsPermissionError`, reported as skipped in the summary
   - Collect errors in `ExecutionSummary`
@@ -76,7 +77,7 @@ trigger: always_on
 
 ## Production Readiness
 - **Idempotent**: Re-running should be safe (overwrites existing files)
-- **Atomic writes**: TARGET (not yet implemented) — write to temp file, then rename
+- **Atomic writes**: `resources/metadata.yaml` is written atomically (temp file in the same directory, then rename — `writeMetadata`), so the export baseline can never be left truncated. Resource YAML/artifact writes are deliberately not atomic; extend the pattern only if a consumer needs it
 - **Validation**: Validate resource IDs before processing
 - **Azure API versions**: Use stable API versions in handlers
 - **Retries**: implemented in `internal/retry` (exponential backoff, retryable-error allowlist) and used by the fetcher

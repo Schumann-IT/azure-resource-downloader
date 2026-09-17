@@ -110,7 +110,7 @@ func AddPersistentPipelineFlags(cmd *cobra.Command) {
 
 // definePipelineFlags is the single definition of the pipeline tuning flags.
 func definePipelineFlags(f *pflag.FlagSet) {
-	f.Int("workers", DefaultWorkerCount, "number of concurrent workers")
+	f.Int("workers", DefaultWorkerCount, "number of concurrent workers; when not set explicitly, per-API defaults apply (Microsoft Graph 5, ARM 20)")
 	f.Int("timeout", DefaultTimeoutSeconds, "per-operation timeout in seconds (applied around each resource fetch)")
 }
 

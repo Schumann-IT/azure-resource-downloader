@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"os"
+	"fmt"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
@@ -46,9 +46,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// documentation, even offline or without 'az login'.
 	cred, err := azure.NewCredential(viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
-		// Runtime error - print and exit without showing help
-		log.Error("Failed to prepare Azure credentials", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to prepare Azure credentials: %w", err)
 	}
 
 	// Create handler registry pre-populated with all supported resource types.
