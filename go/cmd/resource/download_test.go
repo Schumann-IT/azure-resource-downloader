@@ -1,4 +1,4 @@
-package cmd
+package resource
 
 import (
 	"azure-resource-downloader/internal/cmdutil"

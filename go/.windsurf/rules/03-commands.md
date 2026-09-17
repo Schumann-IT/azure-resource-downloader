@@ -86,9 +86,12 @@ make check
 6. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
 ## "Add a CLI command"
-1. Create `cmd/<command>.go` with Cobra structure. For a command **group with subcommands**, keep the parent in package `cmd` (like `docs`) and put each subcommand in its own directory `cmd/<command>/` as a separate package exposing an exported constructor (e.g. `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`.
-2. In `init()` (flat command) or the constructor (directory subcommand): `rootCmd.AddCommand(<command>Cmd)`, then **opt into the flag groups the command actually uses** from `../../internal/cmdutil` — `cmdutil.AddAzureAuthFlags`, `cmdutil.AddSelectionFlags`, `cmdutil.AddPipelineFlags` — plus any command-specific flags declared on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
-3. **Call `cmdutil.BindFlags(cmd)` as the first statement of `RunE`**, before reading any value. Local flags are bound to Viper per-execution so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command.
+1. Prefer adding the command to an existing group over a new top-level verb. The surface is grouped by noun: `resource` (commands acting on a tenant's Azure resources) and `docs` (commands acting on an export's documentation). Both parents live in package `cmd` (`cmd/resource.go`, `cmd/docs.go`) and each subcommand is a separate package in its own directory (`cmd/resource/`, `cmd/docs/`) exposing an exported constructor (e.g. `NewDownloadCommand`, `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`, and anything else it shares with root (e.g. the tool version) lives in its own `internal/` package.
+2. Register flags where they are honoured:
+   - **Used by every subcommand of the group** → once on the parent, via the persistent variants in `../../internal/cmdutil` (`AddPersistentAzureAuthFlags`, `AddPersistentSelectionFlags`, `AddPersistentPipelineFlags`). Promote a group to the parent only when *all* its subcommands honour it; until then it stays on the ones that do.
+   - **Used by this command only** → the local variants (`AddAzureAuthFlags`, `AddSelectionFlags`, `AddPipelineFlags`) plus command-specific flags on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
+   - Cobra validates flag groups (`MarkFlagsRequiredTogether`) against the flag set of the command it runs, so a pairing cannot be declared on a parent for its children. Enforce it in the group's `PersistentPreRunE` instead — see `cmdutil.RequireAuthFlagPair`, used by `newResourceCommand`.
+3. **Call `cmdutil.BindFlags(cmd)` as the first statement of `RunE`**, before reading any value. It binds every flag that applies to the command — its own *and* those inherited from its group and root — to Viper per-execution, so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command. Do not narrow it back to local flags only: a group-declared flag would keep working on the command line while silently ignoring `AZURE_RD_*` and the config file.
 4. Implement `RunE` function with:
    - Configuration loading via Viper (after `cmdutil.BindFlags`)
    - Azure client initialization
@@ -99,7 +102,7 @@ make check
 6. Update README.md with new command usage
 7. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
-**Do not add a flag to a command that ignores it.** Persistent flags were deliberately narrowed for this reason: `list` previously advertised `--type` and `--resource-group` and silently ignored them.
+**Do not add a flag to a command that ignores it.** Persistent flags were deliberately narrowed for this reason: `list` previously advertised `--type` and `--resource-group` and silently ignored them. Hoisting a flag onto a group parent is the same mechanism and can reintroduce the same defect, so the test in `cmd/resource_test.go` asserts both directions: every subcommand sees the group's shared flags, and no subcommand offers one it ignores.
 
 **Destructive commands**: if the command deletes anything, it must respect `--dry-run` by listing what it would remove, and share one eligibility decision between the preview and the real path (see `prunableKeys` in `internal/docs/metadata.go`) so the two cannot diverge.
 
@@ -114,6 +117,7 @@ make check
 1. Add field to `models.PipelineConfig` struct
 2. Declare the flag in the right place:
    - **Command-specific** (the normal case) → on that command's `Flags()`, or in the matching group helper in `../../internal/cmdutil` if more than one command needs it
+   - **Group-wide** → the group parent's `PersistentFlags`, via the persistent helpers in `../../internal/cmdutil`, and only once *every* subcommand of that group honours it (the `resource` group holds the authentication flags this way)
    - **Global** → `cmd/root.go` → `PersistentFlags`, and only if *every* command genuinely needs it. Root currently holds only `--config`, `--output`, `--dry-run` and `--log-level`; adding a fifth needs a reason
 3. Binding: local flags are bound automatically by `cmdutil.BindFlags(cmd)` in the command's `RunE` — do NOT add a manual `viper.BindPFlag()` for them. Only the four global flags are bound explicitly in `root.go`'s `init()`
 4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `cmdutil.DefaultWorkerCount` in `../../internal/cmdutil`)
@@ -144,5 +148,5 @@ Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyRe
   ✅ All checks passed: make check
   ✅ CHANGELOG.md updated under [Unreleased]
   ⚠️  Manual: Add to README.md supported types table
-  ⚠️  Manual: Test with: ./azure-rd list
+  ⚠️  Manual: Test with: ./azure-rd resource list
   ```

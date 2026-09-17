@@ -1,7 +1,11 @@
-package cmd
+// Package resource implements the `azure-rd resource ...` subcommands: the
+// commands that act on a tenant's Azure resources. The parent command lives in
+// package cmd, which attaches each subcommand through the constructors exported
+// here; this package must not import package cmd (that would be an import
+// cycle), so anything shared with the root command comes from internal/.
+package resource
 
 import (
-	cmdutil "azure-resource-downloader/internal/cmdutil"
 	"context"
 	"fmt"
 	"os"
@@ -9,21 +13,26 @@ import (
 	"time"
 
 	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
+	"azure-resource-downloader/internal/version"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-// downloadCmd represents the download command
-var downloadCmd = &cobra.Command{
-	Use:   "download",
-	Short: "Download Azure resources",
-	Long: `Download Azure resources and transform them into YAML format. By
+// NewDownloadCommand builds the `resource download` command. The authentication
+// flags come from the `resource` parent; selection, pipeline tuning and the
+// download-only switches are declared here.
+func NewDownloadCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "download",
+		Short: "Download Azure resources",
+		Long: `Download Azure resources and transform them into YAML format. By
 default each resource type directory also receives a dedicated AI documentation
 prompt (doc-prompt.md); pass --no-prompt to skip writing them.
 
@@ -44,55 +53,56 @@ a dedicated app registration with --client-id/--tenant-id (device-code flow).
 
 Examples:
   # Download a specific resource by ID
-  azure-rd download --resource-id "/subscriptions/.../resourceGroups/my-rg"
+  azure-rd resource download --resource-id "/subscriptions/.../resourceGroups/my-rg"
 
   # Download one or more resource types (--type is repeatable)
-  azure-rd download --type "Microsoft.Storage/storageAccounts" --type "Microsoft.Compute/virtualMachines"
+  azure-rd resource download --type "Microsoft.Storage/storageAccounts" --type "Microsoft.Compute/virtualMachines"
 
   # Download every registered resource type (no --type filter)
-  azure-rd download
+  azure-rd resource download
 
   # Download all resources in a resource group with an explicit subscription
-  azure-rd download --subscription "sub-id" --resource-group "my-rg"
+  azure-rd resource download --subscription "sub-id" --resource-group "my-rg"
 
   # Preview without writing files
-  azure-rd download --type "Microsoft.Compute/virtualMachines" --dry-run
+  azure-rd resource download --type "Microsoft.Compute/virtualMachines" --dry-run
 
   # Resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)
-  azure-rd download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
+  azure-rd resource download --type "Microsoft.Graph/deviceConfigurations" --resolve-secrets
 
   # Sign in to a dedicated app registration (device-code) for Graph/Intune scopes
-  azure-rd download --client-id "<app-id>" --tenant-id "<tenant-id>"
+  azure-rd resource download --client-id "<app-id>" --tenant-id "<tenant-id>"
 
   # Load settings from a config file (see config.example.yaml; flags still win)
-  azure-rd download --config ~/.azure-rd.yaml
+  azure-rd resource download --config ~/.azure-rd.yaml
 
   # Also delete resources that are no longer in the tenant (complete runs only)
-  azure-rd download --prune
+  azure-rd resource download --prune
 
   # List what --prune would delete, without deleting anything
-  azure-rd download --prune --dry-run`,
-	RunE: runDownload,
-}
+  azure-rd resource download --prune --dry-run`,
+		RunE: runDownload,
+	}
 
-func init() {
-	rootCmd.AddCommand(downloadCmd)
+	// The authentication flags are inherited from the `resource` parent. These
+	// groups stay local until a sibling subcommand honours them as well, so no
+	// command advertises a flag it ignores. Flags are bound to viper
+	// per-execution in runDownload via cmdutil.BindFlags.
+	cmdutil.AddSelectionFlags(cmd)
+	cmdutil.AddPipelineFlags(cmd)
 
-	// download opts into every command-flag group plus its own switches. Flags
-	// are bound to viper per-execution in runDownload via bindFlags.
-	cmdutil.AddAzureAuthFlags(downloadCmd)
-	cmdutil.AddSelectionFlags(downloadCmd)
-	cmdutil.AddPipelineFlags(downloadCmd)
+	cmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
+	cmd.Flags().Bool("no-prompt", false, "skip writing the per-type documentation LLM prompt files (doc-prompt.md); prompts are written by default")
+	cmd.Flags().Bool("prune", false, "delete files under resources/ for resources this run establishes are no longer in the tenant (requires a complete run)")
 
-	downloadCmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
-	downloadCmd.Flags().Bool("no-prompt", false, "skip writing the per-type documentation LLM prompt files (doc-prompt.md); prompts are written by default")
-	downloadCmd.Flags().Bool("prune", false, "delete files under resources/ for resources this run establishes are no longer in the tenant (requires a complete run)")
+	return cmd
 }
 
 func runDownload(cmd *cobra.Command, args []string) error {
-	// Bind this command's local flags to viper before reading any values so the
-	// flag > env > config > default precedence holds without a sibling command
-	// stealing the binding.
+	// Bind the flags that apply to this command (its own and those inherited
+	// from the resource group and root) to viper before reading any values, so
+	// the flag > env > config > default precedence holds without a sibling
+	// command stealing the binding.
 	cmdutil.BindFlags(cmd)
 
 	ctx := context.Background()
@@ -121,15 +131,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	resolveSecrets := viper.GetBool("resolve-secrets")
 
 	// Build worker configuration
-	workerConfig := buildWorkerConfig()
+	workerConfig := BuildWorkerConfig()
 
 	log := logger.Default
 
 	// Build transformer configurations
-	transformerConfigs := buildTransformerConfigs()
+	transformerConfigs := BuildTransformerConfigs()
 
 	// Build per-resource-type property filters
-	resourceFilters := buildResourceFilters()
+	resourceFilters := BuildResourceFilters()
 
 	// Log which transformers will be used
 	if len(transformerConfigs) == 0 {
@@ -363,7 +373,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	exportRun := docs.ExportRun{
 		Output:                 output,
 		Tenant:                 tenant,
-		ToolVersion:            toolVersion(),
+		ToolVersion:            version.Tool(),
 		GeneratedAt:            time.Now(),
 		Scope:                  docs.RunScope{Types: selectedTypes, ResourceIDs: resourceIDs, ResourceGroup: resourceGroup},
 		TransformConfigSha256:  docs.HashTransformConfig(transformerConfigs, resolveSecrets),
@@ -419,8 +429,10 @@ func selectedTypeNames(registry *handlers.Registry, selectedTypes []string, reso
 	}
 }
 
-// buildWorkerConfig constructs worker configuration from config file
-func buildWorkerConfig() *models.WorkerConfig {
+// BuildWorkerConfig constructs worker configuration from config file. It is
+// exported so the config.example.yaml no-op guard in package cmd can assert
+// that loading the example produces the built-in defaults.
+func BuildWorkerConfig() *models.WorkerConfig {
 	config := models.DefaultWorkerConfig()
 
 	// Read general workers setting from config (overrides defaults)
@@ -466,11 +478,13 @@ func determineWorkerCount(workerConfig *models.WorkerConfig, resourceType string
 	return workerConfig.Default
 }
 
-// buildResourceFilters constructs per-resource-type property filters from the
+// BuildResourceFilters constructs per-resource-type property filters from the
 // "filters" config key (resourceType -> {property -> regex}). A resource is
 // kept only when every property regex for its type matches. Invalid entries are
-// logged and skipped so the run proceeds with the valid filters.
-func buildResourceFilters() []models.ResourceFilter {
+// logged and skipped so the run proceeds with the valid filters. It is exported
+// so the config.example.yaml no-op guard in package cmd can assert that the
+// example defines no filters.
+func BuildResourceFilters() []models.ResourceFilter {
 	log := logger.Default
 
 	if !viper.IsSet("filters") {
@@ -500,8 +514,11 @@ func buildResourceFilters() []models.ResourceFilter {
 	return filters
 }
 
-// buildTransformerConfigs constructs transformer configurations from viper
-func buildTransformerConfigs() []models.TransformerConfig {
+// BuildTransformerConfigs constructs transformer configurations from viper. It
+// is exported so the config.example.yaml no-op guard in package cmd can assert
+// that loading the example yields the default transformer set — and therefore
+// the same transformConfigSha256 in resources/metadata.yaml.
+func BuildTransformerConfigs() []models.TransformerConfig {
 	log := logger.Default
 
 	// Check if transformers key exists in config

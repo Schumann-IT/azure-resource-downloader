@@ -7,7 +7,7 @@ It is the CLI half of the [azure-resource-downloader](../README.md) monorepo; th
 [`web/`](../web/README.md) project browses what this tool and the documentation agent produce. The two share
 nothing but the export tree on disk.
 
-What it does, in one paragraph: `azure-rd download` signs in as *you* (delegated permissions only — never a
+What it does, in one paragraph: `azure-rd resource download` signs in as *you* (delegated permissions only — never a
 service principal), enumerates 53 resource types across Microsoft Graph and ARM, and writes one YAML per
 resource under `output/<tenant>/resources/` together with a facts-only `metadata.yaml` and a per-type
 documentation specification (`doc-prompt.md`). `azure-rd docs generate-prompt` then compares that metadata
@@ -113,8 +113,8 @@ the [monorepo README](../README.md#development-workflow). Its counterpart for a 
 # 1. Sign in and export everything. Graph types prompt once for the app
 #    registration's client id (and tenant id); pass them to skip the prompt.
 az login
-./azure-rd download --output ../output
-./azure-rd download --output ../output --client-id <app-id> --tenant-id <tenant-id>
+./azure-rd resource download --output ../output
+./azure-rd resource download --output ../output --client-id <app-id> --tenant-id <tenant-id>
 
 # 2. Decide what to document (offline; --domain is the export folder name)
 ./azure-rd docs generate-prompt --output ../output --domain contoso.onmicrosoft.com
@@ -134,7 +134,7 @@ tree at the repo root, which is also the browser's default `DOCS_ROOT`.
 ## Commands
 
 Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
-command and must follow it: `azure-rd download --type X`, not `azure-rd --type X download`. `--help` on any
+command and must follow it: `azure-rd resource download --type X`, not `azure-rd --type X download`. `--help` on any
 command lists its flags; this section explains what they do.
 
 ### `download`
@@ -142,13 +142,13 @@ command lists its flags; this section explains what they do.
 Exports resources. With no selection flag it exports **every registered type** — a full export.
 
 ```bash
-azure-rd download                                   # full export
-azure-rd download --type Microsoft.Graph/deviceCompliancePolicies \
+azure-rd resource download                                   # full export
+azure-rd resource download --type Microsoft.Graph/deviceCompliancePolicies \
                   --type Microsoft.Graph/groups     # only these types
-azure-rd download --resource-group my-rg            # one ARM resource group (the group itself)
-azure-rd download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
-azure-rd download --dry-run                         # list what would be downloaded
-azure-rd download --prune                           # also delete files for resources gone from the tenant
+azure-rd resource download --resource-group my-rg            # one ARM resource group (the group itself)
+azure-rd resource download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
+azure-rd resource download --dry-run                         # list what would be downloaded
+azure-rd resource download --prune                           # also delete files for resources gone from the tenant
 ```
 
 | Flag | Meaning |
@@ -179,7 +179,7 @@ Prints every registered resource type with its API (`Microsoft.Graph` or `Azure 
 **offline** — no sign-in, no network — and is the reference for `--type` values.
 
 ```bash
-azure-rd list
+azure-rd resource list
 ```
 
 ### `docs generate-prompt`
@@ -331,7 +331,7 @@ echo "Tenant ID: $(az account show --query tenantId -o tsv)"
 Then run with it:
 
 ```bash
-azure-rd download --client-id "$APP_ID" --tenant-id "<tenant-id>"
+azure-rd resource download --client-id "$APP_ID" --tenant-id "<tenant-id>"
 ```
 
 > **Pass `--client-id` to `azure-rd`, not to `az login`.** Tokens from `az account get-access-token` are always
@@ -376,8 +376,8 @@ CLI flag  >  AZURE_RD_* environment variable  >  --config file  >  built-in defa
   not as a default — it changes the recorded hashes.
 
 ```bash
-azure-rd download --config ./azure-rd.yaml
-AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd download
+azure-rd resource download --config ./azure-rd.yaml
+AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd resource download
 ```
 
 ## Output layout
@@ -387,7 +387,7 @@ Everything lives under `<output>/<tenant>/` in two sibling trees that mirror eac
 ```
 output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
-    ├── resources/                                written by azure-rd download — and only by it
+    ├── resources/                                written by azure-rd resource download — and only by it
     │   ├── metadata.yaml                         facts about this export (see below)
     │   ├── Microsoft.Graph/
     │   │   ├── deviceCompliancePolicies/
@@ -638,7 +638,7 @@ Value ids appear in browser URLs — never rename or reuse one; labels are free 
 
 ## Supported resource types
 
-53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd list` prints the same list. Graph types use the
+53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd resource list` prints the same list. Graph types use the
 **beta** endpoint unless marked *v1.0*; all Graph permissions are **delegated** scopes, so the signed-in user
 also needs the matching Intune / Entra role.
 

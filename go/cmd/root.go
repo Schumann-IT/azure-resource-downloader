@@ -5,25 +5,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
+	"azure-resource-downloader/internal/version"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-// version is the tool version reported by `--version` and recorded in export
-// metadata. It is empty in a plain `go build` and injected at release time via
-// -ldflags "-X azure-resource-downloader/cmd.version=<v>". When unset,
-// resolveVersion falls back to the module version or VCS revision the Go
-// toolchain embeds, so the reported version tracks the binary rather than a
-// literal that never moves.
-var version = ""
 
 // Package-level flag variables are prefixed with "flag" so they never collide
 // with (and shadow) local variables in command implementations, which commonly
@@ -58,53 +50,8 @@ Run 'azure-rd --debug' (with no subcommand) to print a diagnostic report of the
 current Azure session — how the tool is authenticated, who is signed in, and which
 tenant, subscription and output directory a download would use right now. It writes
 nothing and is safe to run at any time.`,
-	Version: resolveVersion(),
+	Version: version.Resolve(),
 	RunE:    runRoot,
-}
-
-// resolveVersion returns the tool version, preferring an ldflags-injected value,
-// then the module version of a `go install …@version` build, then the embedded
-// VCS revision (with a -dirty suffix for uncommitted changes), and finally
-// "dev". This is why toolVersion in metadata.yaml actually moves when the binary
-// does — letting a later docs step attribute a prompt-hash change to an upgrade
-// rather than reporting it as content drift.
-func resolveVersion() string {
-	if version != "" {
-		return version
-	}
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "dev"
-	}
-	if v := info.Main.Version; v != "" && v != "(devel)" {
-		return v
-	}
-	var rev string
-	var dirty bool
-	for _, s := range info.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			rev = s.Value
-		case "vcs.modified":
-			dirty = s.Value == "true"
-		}
-	}
-	if rev != "" {
-		if len(rev) > 12 {
-			rev = rev[:12]
-		}
-		if dirty {
-			rev += "-dirty"
-		}
-		return rev
-	}
-	return "dev"
-}
-
-// toolVersion returns the tool identifier recorded in export metadata, derived
-// from the root command's version so there is a single source of truth.
-func toolVersion() string {
-	return "azure-rd " + rootCmd.Version
 }
 
 // Execute runs the root command
@@ -137,15 +84,19 @@ func init() {
 	// The root command itself does one thing besides dispatching to subcommands:
 	// with --debug (and no subcommand) it prints a diagnostic report of the
 	// current Azure session. That report authenticates exactly like download, so
-	// the auth flags are registered locally on root — NOT persistently, so the
-	// subcommands keep declaring their own copies via cmdutil and do not silently
-	// inherit them.
+	// the auth flags are registered locally on root — NOT persistently, so other
+	// top-level commands do not silently inherit them.
+	//
+	// This is deliberately a second registration of the same group: the resource
+	// command group declares it persistently for its own subcommands (see
+	// newResourceCommand). Both are needed — root's copy serves --debug, the
+	// group's copy serves its subcommands — and neither is redundant.
 	rootCmd.Flags().BoolVar(&flagDebug, "debug", false, "print a diagnostic report of the current Azure session and exit (no files written)")
 	cmdutil.AddAzureAuthFlags(rootCmd)
 
 	// Subcommand packages that live in their own directory register through a
-	// constructor (they cannot import package cmd without a cycle). Flat-file
-	// commands in package cmd still self-register in their own init().
+	// constructor (they cannot import package cmd without a cycle).
+	rootCmd.AddCommand(newResourceCommand())
 	rootCmd.AddCommand(NewCommand())
 }
 

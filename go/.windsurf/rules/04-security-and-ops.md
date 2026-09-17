@@ -26,7 +26,7 @@ trigger: always_on
   ```
 - **Config file**: read ONLY when `--config <path>` is passed (no auto-discovery of `~/.azure-rd.yaml`); a mistyped `--config` path is a fatal error. Reference schema: `config.example.yaml`.
 - **Env key replacer**: `initConfig` sets `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))`. Removing it silently breaks every hyphenated override (`AZURE_RD_LOG_LEVEL` would have to be spelled `AZURE_RD_LOG-LEVEL`).
-- **Flag placement**: only `--config`, `--output`, `--dry-run` and `--log-level` are global. Auth, selection and pipeline-tuning flags are per-command groups in `../../internal/cmdutil` (exported `AddAzureAuthFlags`/`AddSelectionFlags`/`AddPipelineFlags`/`BindFlags`), so they must follow the subcommand (`azure-rd download --type X`, not `azure-rd --type X download`).
+- **Flag placement**: only `--config`, `--output`, `--dry-run` and `--log-level` are global. Auth, selection and pipeline-tuning flags come from `../../internal/cmdutil` (local `AddAzureAuthFlags`/`AddSelectionFlags`/`AddPipelineFlags`, persistent `AddPersistent*` for a whole group, plus `BindFlags`), so they must follow the command or its group (`azure-rd resource download --type X`, not `azure-rd --type X resource download`). The `resource` group declares the auth flags persistently for all its subcommands.
 - **All flags are optional**:
   - `--subscription` is auto-detected from the signed-in user's default subscription; with no subscription at all, Graph types still download and ARM types are skipped with a warning
   - `--output`, `--workers`, `--dry-run`, `--timeout`, `--resolve-secrets`, `--no-prompt`, `--prune`, `--log-level`, `--client-id`/`--tenant-id`
@@ -71,7 +71,7 @@ trigger: always_on
 - **Error context**: Always include resource ID in error messages
 - **Log verbosity**: `--log-level` flag / `log-level` config / `AZURE_RD_LOG_LEVEL` or `LOG_LEVEL` env (debug, info, warn, error)
   ```bash
-  ./azure-rd download --log-level debug ...
+  ./azure-rd resource download --log-level debug ...
   ```
 
 ## Production Readiness

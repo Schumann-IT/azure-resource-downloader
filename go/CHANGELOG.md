@@ -11,6 +11,16 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+### Breaking
+
+- **The resource-facing commands moved under one `resource` noun.** `azure-rd download` is now
+  `azure-rd resource download` and `azure-rd list` is now `azure-rd resource list`; the old spellings are gone
+  and are not kept as aliases, so **any script, CI job or alias invoking them must be updated**. The surface now
+  reads consistently with the existing `docs` group, and the flags the resource commands share are declared once
+  on the group rather than per command, so a later resource verb inherits one definition instead of restating it.
+  Nothing about what the commands do, which flags they accept or what they write has changed. Configuration and
+  `AZURE_RD_*` overrides are unaffected.
+
 ### Added
 
 #### Release Workflow

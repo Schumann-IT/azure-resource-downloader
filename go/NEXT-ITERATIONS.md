@@ -5,7 +5,7 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
-## 1. Regroup the resource-facing commands under one `resource` noun
+## ~~1. Regroup the resource-facing commands under one `resource` noun~~
 
 **Goal.** Give the commands that act on a tenant's resources a single home: `azure-rd download` becomes
 `azure-rd resource download` and `azure-rd list` becomes `azure-rd resource list`. Both move unchanged in
@@ -38,39 +38,41 @@ rest instead of opting into them command by command.
 
 **Plan.**
 
-- Add a `resource` parent command in package `cmd`, mirroring `docs`, and move `download` and `list` under it as
+- ~~Add a `resource` parent command in package `cmd`, mirroring `docs`, and move `download` and `list` under it as
   `resource download` and `resource list`, behaviour unchanged. Each subcommand lives in `cmd/resource/` as its
-  own package exposing a constructor the parent attaches, so it never imports package `cmd`.
-- Declare the shared flags once, as persistent flags on the `resource` parent, starting with the authentication
+  own package exposing a constructor the parent attaches, so it never imports package `cmd`.~~
+- ~~Declare the shared flags once, as persistent flags on the `resource` parent, starting with the authentication
   group that both subcommands already honour. Selection and pipeline tuning stay on `resource download` until a
   sibling genuinely honours them, at which point that work promotes them. Command-specific switches
-  (`--resolve-secrets`, `--no-prompt`, `--prune`) stay on the subcommand that implements them, always.
-- Prove the `client-id`/`tenant-id` required-together pairing still fails on the subcommands once the flags are
+  (`--resolve-secrets`, `--no-prompt`, `--prune`) stay on the subcommand that implements them, always.~~
+- ~~Prove the `client-id`/`tenant-id` required-together pairing still fails on the subcommands once the flags are
   inherited — Cobra's flag-group validation has historically been unreliable across the parent/child boundary.
   Add a regression test (`resource download --client-id` without `--tenant-id` must error), and if Cobra does
-  not enforce the pairing on children, enforce it in the parent's persistent pre-run instead of dropping it.
-- Keep `internal/cmdutil` the single place the flag groups are defined, and teach its helpers to register on a
+  not enforce the pairing on children, enforce it in the parent's persistent pre-run instead of dropping it.~~
+  Cobra does not enforce it on children, so `cmdutil.RequireAuthFlagPair` enforces it in the group's persistent
+  pre-run.
+- ~~Keep `internal/cmdutil` the single place the flag groups are defined, and teach its helpers to register on a
   persistent flag set as well as a local one — one definition of names, defaults and usage strings, with the
   caller choosing the target — so parent-level and command-level registration cannot drift into two spellings of
-  the same flag.
-- Leave root's own local copy of the auth flags in place: `azure-rd --debug` needs them, and they are
+  the same flag.~~
+- ~~Leave root's own local copy of the auth flags in place: `azure-rd --debug` needs them, and they are
   deliberately local so other top-level commands do not inherit them. After this change the auth flags are
   registered twice — locally on root, persistently on `resource` — which is intentional and must be commented as
-  such at both sites, because it reads like an oversight.
-- Make the Viper binding helper bind inherited flags as well as local ones, keeping it per-execution so a
+  such at both sites, because it reads like an oversight.~~
+- ~~Make the Viper binding helper bind inherited flags as well as local ones, keeping it per-execution so a
   sibling command's identically named flag still cannot be picked up. Add a test that a parent-declared flag
   resolves in the documented order — flag, then `AZURE_RD_*` env var, then config file, then default — because
-  this is exactly the breakage that would otherwise pass unnoticed.
-- Keep `resource list` offline and subscription-free exactly as it is today, including the lazy credential that
-  lets it work without a signed-in session.
-- Break the one hidden dependency on package `cmd` that the move exposes: the tool-version string recorded in
+  this is exactly the breakage that would otherwise pass unnoticed.~~
+- ~~Keep `resource list` offline and subscription-free exactly as it is today, including the lazy credential that
+  lets it work without a signed-in session.~~
+- ~~Break the one hidden dependency on package `cmd` that the move exposes: the tool-version string recorded in
   export metadata is derived from the root command's `Version`, which a subcommand package cannot reach. Move
   the version into a shared package that both the root command and the moved code read, so it stays a single
-  source of truth.
-- Carry the existing download and list tests over to the new packages unchanged in intent.
-- Update `README.md` (every command invocation, including the examples), the rules' command-recipe section, and
+  source of truth.~~ Now `internal/version`; the Makefile's `-ldflags -X` target moved with it.
+- ~~Carry the existing download and list tests over to the new packages unchanged in intent.~~
+- ~~Update `README.md` (every command invocation, including the examples), the rules' command-recipe section, and
   any config documentation that names a command. Record the rename in `CHANGELOG.md` under `Breaking` with the
-  old-to-new mapping spelled out.
+  old-to-new mapping spelled out.~~
 
 ## 2. Separate enumerating what the tool handles from what the tenant contains
 
