@@ -29,6 +29,16 @@ This project is released independently of the documentation browser in `web/`: i
   several. `--help`, the README title and the example config header now lead with the Entra ID / Intune tenant
   and the documentation half; the `azure-rd` binary name, module path and `AZURE_RD_*` prefix are unchanged.
 
+### Fixed
+
+- **A download without an `az login` session now fails immediately, naming the cause.** Previously a missing
+  session never failed loudly: every step degrades deliberately for permission-poor identities (subscription and
+  tenant resolution warn and continue, unlistable types are skipped one by one), so a full authentication
+  failure compounded into warnings ending in "No resources to download" — after prompting for an app
+  registration. The download now verifies the Azure CLI session before anything else, including that prompt, and
+  stops with a clear `run 'az login' first` error; explicit `--client-id`/`--tenant-id` skips the check, since
+  the device-code sign-in needs no CLI session.
+
 ### Added
 
 #### Release Workflow

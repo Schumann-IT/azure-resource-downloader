@@ -43,6 +43,11 @@ a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	// download to sign in and by list to construct its (lazy) credential.
 	// Selection and pipeline tuning stay on download until a sibling honours
 	// them too, so no command ever advertises a flag it ignores.
+	//
+	// This is deliberately a second registration of the auth group: root
+	// declares the same flags locally for `azure-rd --debug` (see root.go's
+	// init). Both are needed — root's copy serves --debug, this one serves the
+	// group's subcommands — and neither is redundant.
 	cmdutil.AddPersistentAzureAuthFlags(cmd)
 
 	cmd.AddCommand(resource.NewDownloadCommand())

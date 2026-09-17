@@ -268,6 +268,14 @@ the flags are unset, the tool lists the affected types with the scopes each need
 id and tenant id** (the tenant defaults to the CLI session's tenant; press Enter to accept). Refusing the prompt
 aborts the run — a partial export that silently skipped every Graph type would be worse than stopping.
 
+Unless `--client-id` is set, `resource download` **verifies the CLI session before anything else — including
+the dedicated-app prompt** — and fails immediately with `run 'az login' first` when there is none. Without that
+check, a missing session would only compound into warnings — subscription and tenant resolution degrade
+deliberately for permission-poor identities, and each type's listing is skipped individually — ending in "No
+resources to download" instead of naming the cause, after prompting for an app registration the operator may
+not have been asked about otherwise. Passing `--client-id`/`--tenant-id` explicitly skips the check: the
+device-code sign-in needs no CLI session, because its first token request *is* the sign-in.
+
 Once signed in, the token's scopes decide what is read. A type whose scope the token lacks is **skipped with a
 warning**, never a failure: its listing is recorded as "could not be listed", the run is marked incomplete,
 and nothing is inferred about its resources. The token decoder under [`--debug`](#--debug) shows which scopes

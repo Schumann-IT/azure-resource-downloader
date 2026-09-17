@@ -193,6 +193,26 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		log.Error("Failed to prepare Azure credentials", "error", err)
 		os.Exit(1)
 	}
+
+	// With no --client-id, this run leans on the Azure CLI session — for the
+	// token itself, or at least for the tenant default of the dedicated-app
+	// prompt below — so prove that session exists FIRST. Every later step
+	// degrades deliberately when it fails (subscription and tenant resolution
+	// warn and continue for tenant-only identities; unlistable types are
+	// skipped per type), so without this check a missing 'az login' compounds
+	// into warnings ending in "No resources to download", and the operator is
+	// asked for an app registration before ever learning they are not signed
+	// in. Explicit --client-id/--tenant-id (device-code) is exempt: that
+	// sign-in happens at the first token request and needs no CLI session.
+	if clientID == "" {
+		if err := azure.VerifySession(ctx, probeCred); err != nil {
+			log.Error("Not signed in to Azure; run 'az login' first (or pass --client-id/--tenant-id for device-code sign-in)",
+				"reason", azure.ErrorSummary(err))
+			log.Debug("Session verification failed", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	probeRegistry := handlers.NewRegistry(probeCred, sub, resolveSecrets)
 	requirements := probeRegistry.DedicatedAppRequirements(
 		selectedTypeNames(probeRegistry, selectedTypes, resourceGroup, resourceIDs))
