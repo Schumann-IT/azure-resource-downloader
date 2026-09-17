@@ -11,6 +11,34 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+### Breaking
+
+- **The resource-facing commands moved under one `resource` noun.** `azure-rd download` is now
+  `azure-rd resource download` and `azure-rd list` is now `azure-rd resource list`; the old spellings are gone
+  and are not kept as aliases, so **any script, CI job or alias invoking them must be updated**. The surface now
+  reads consistently with the existing `docs` group, and the flags the resource commands share are declared once
+  on the group rather than per command, so a later resource verb inherits one definition instead of restating it.
+  Nothing about what the commands do, which flags they accept or what they write has changed. Configuration and
+  `AZURE_RD_*` overrides are unaffected.
+
+### Changed
+
+- **The tool now describes itself as what it became: tenant configuration export and documentation.** The
+  "Azure Resource Downloader" expansion predates the documentation pipeline and misnames the content — nearly
+  all exported types are Entra ID / Intune configuration, not ARM resources, and downloading is one verb among
+  several. `--help`, the README title and the example config header now lead with the Entra ID / Intune tenant
+  and the documentation half; the `azure-rd` binary name, module path and `AZURE_RD_*` prefix are unchanged.
+
+### Fixed
+
+- **A download without an `az login` session now fails immediately, naming the cause.** Previously a missing
+  session never failed loudly: every step degrades deliberately for permission-poor identities (subscription and
+  tenant resolution warn and continue, unlistable types are skipped one by one), so a full authentication
+  failure compounded into warnings ending in "No resources to download" — after prompting for an app
+  registration. The download now verifies the Azure CLI session before anything else, including that prompt, and
+  stops with a clear `run 'az login' first` error; explicit `--client-id`/`--tenant-id` skips the check, since
+  the device-code sign-in needs no CLI session.
+
 ### Added
 
 #### Release Workflow

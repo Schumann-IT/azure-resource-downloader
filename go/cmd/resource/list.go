@@ -1,10 +1,10 @@
-package cmd
+package resource
 
 import (
-	"azure-resource-downloader/internal/cmdutil"
 	"os"
 
 	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 
@@ -12,27 +12,25 @@ import (
 	"github.com/spf13/viper"
 )
 
-// listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List supported resource types",
-	Long: `List all Azure resource types that are currently supported by the tool.
+// NewListCommand builds the `resource list` command. It declares no flags of
+// its own: the authentication flags it needs come from the `resource` parent,
+// and selection or pipeline tuning would be misleading here because this
+// command ignores them.
+func NewListCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List supported resource types",
+		Long: `List all Azure resource types that are currently supported by the tool.
 
 This command shows which resource types have handlers registered and can be
 downloaded.`,
-	RunE: runList,
-}
-
-func init() {
-	rootCmd.AddCommand(listCmd)
-
-	// list only needs authentication to construct the client; selection and
-	// pipeline-tuning flags would be misleading here (list ignores them).
-	cmdutil.AddAzureAuthFlags(listCmd)
+		RunE: runList,
+	}
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	// Bind this command's local flags to viper before reading any values so the
+	// Bind the flags that apply to this command (inherited from the resource
+	// group and root) to viper before reading any values so the
 	// flag > env > config > default precedence holds without a sibling command
 	// stealing the binding.
 	cmdutil.BindFlags(cmd)
@@ -44,8 +42,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	// neither a subscription nor a signed-in session. Build a lazy credential
 	// (no network, no token fetch until first use) purely so the registry's
 	// handler constructors succeed — the same offline path download uses for its
-	// probe registry. This keeps `azure-rd list` usable as documentation, even
-	// offline or without 'az login'.
+	// probe registry. This keeps `azure-rd resource list` usable as
+	// documentation, even offline or without 'az login'.
 	cred, err := azure.NewCredential(viper.GetString("client-id"), viper.GetString("tenant-id"))
 	if err != nil {
 		// Runtime error - print and exit without showing help

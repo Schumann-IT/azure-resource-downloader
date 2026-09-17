@@ -19,7 +19,7 @@ GOMOD=$(GOCMD) mod
 # then "dev". Override with `make build VERSION=v1.2.3`.
 GIT_DESCRIBE := $(shell git describe --tags --match 'go/v*' --always --dirty 2>/dev/null)
 VERSION ?= $(if $(GIT_DESCRIBE),$(patsubst go/%,%,$(GIT_DESCRIBE)),dev)
-LDFLAGS := -X azure-resource-downloader/cmd.version=$(VERSION)
+LDFLAGS := -X azure-resource-downloader/internal/version.version=$(VERSION)
 
 # Build the application
 build:
@@ -160,7 +160,7 @@ ci: check build
 
 # Display help
 help:
-	@echo "Azure Resource Downloader - Makefile commands:"
+	@echo "azure-rd - Makefile commands:"
 	@echo ""
 	@echo "Primary targets:"
 	@echo "  make build          - Build the binary"

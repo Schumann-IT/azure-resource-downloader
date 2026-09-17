@@ -1,4 +1,4 @@
-# azure-rd — Azure Resource Downloader
+# azure-rd — tenant configuration export & documentation
 
 `azure-rd` exports the configuration of an **Entra ID / Intune tenant** (plus a few Azure Resource Manager
 types) as clean, reproducible YAML, and drives the **incremental, AI-generated documentation** of that export.
@@ -7,7 +7,7 @@ It is the CLI half of the [azure-resource-downloader](../README.md) monorepo; th
 [`web/`](../web/README.md) project browses what this tool and the documentation agent produce. The two share
 nothing but the export tree on disk.
 
-What it does, in one paragraph: `azure-rd download` signs in as *you* (delegated permissions only — never a
+What it does, in one paragraph: `azure-rd resource download` signs in as *you* (delegated permissions only — never a
 service principal), enumerates 53 resource types across Microsoft Graph and ARM, and writes one YAML per
 resource under `output/<tenant>/resources/` together with a facts-only `metadata.yaml` and a per-type
 documentation specification (`doc-prompt.md`). `azure-rd docs generate-prompt` then compares that metadata
@@ -22,8 +22,8 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Commands](#commands)
-  - [`download`](#download)
-  - [`list`](#list)
+  - [`resource download`](#resource-download)
+  - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
   - [`docs generate-index`](#docs-generate-index)
   - [`--debug`](#--debug)
@@ -113,8 +113,8 @@ the [monorepo README](../README.md#development-workflow). Its counterpart for a 
 # 1. Sign in and export everything. Graph types prompt once for the app
 #    registration's client id (and tenant id); pass them to skip the prompt.
 az login
-./azure-rd download --output ../output
-./azure-rd download --output ../output --client-id <app-id> --tenant-id <tenant-id>
+./azure-rd resource download --output ../output
+./azure-rd resource download --output ../output --client-id <app-id> --tenant-id <tenant-id>
 
 # 2. Decide what to document (offline; --domain is the export folder name)
 ./azure-rd docs generate-prompt --output ../output --domain contoso.onmicrosoft.com
@@ -133,22 +133,27 @@ tree at the repo root, which is also the browser's default `DOCS_ROOT`.
 
 ## Commands
 
-Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
-command and must follow it: `azure-rd download --type X`, not `azure-rd --type X download`. `--help` on any
-command lists its flags; this section explains what they do.
+Commands are grouped by the noun they act on: `resource …` for a tenant's Azure resources, `docs …` for the
+generated documentation of an export.
 
-### `download`
+Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
+command or its group and must follow it: `azure-rd resource download --type X`, not
+`azure-rd --type X resource download`. The authentication flags (`--subscription`, `--client-id`,
+`--tenant-id`) are declared once on the `resource` group, so every subcommand under it accepts them. `--help`
+on any command lists its flags; this section explains what they do.
+
+### `resource download`
 
 Exports resources. With no selection flag it exports **every registered type** — a full export.
 
 ```bash
-azure-rd download                                   # full export
-azure-rd download --type Microsoft.Graph/deviceCompliancePolicies \
-                  --type Microsoft.Graph/groups     # only these types
-azure-rd download --resource-group my-rg            # one ARM resource group (the group itself)
-azure-rd download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
-azure-rd download --dry-run                         # list what would be downloaded
-azure-rd download --prune                           # also delete files for resources gone from the tenant
+azure-rd resource download                                   # full export
+azure-rd resource download --type Microsoft.Graph/deviceCompliancePolicies \
+                           --type Microsoft.Graph/groups     # only these types
+azure-rd resource download --resource-group my-rg            # one ARM resource group (the group itself)
+azure-rd resource download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
+azure-rd resource download --dry-run                         # list what would be downloaded
+azure-rd resource download --prune                           # also delete files for resources gone from the tenant
 ```
 
 | Flag | Meaning |
@@ -173,13 +178,13 @@ nothing was cancelled and every request produced a result — an incomplete run 
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
 reason) and the types that listed empty, and finally whether the run is complete.
 
-### `list`
+### `resource list`
 
 Prints every registered resource type with its API (`Microsoft.Graph` or `Azure Resource Manager`). It is
 **offline** — no sign-in, no network — and is the reference for `--type` values.
 
 ```bash
-azure-rd list
+azure-rd resource list
 ```
 
 ### `docs generate-prompt`
@@ -263,6 +268,14 @@ the flags are unset, the tool lists the affected types with the scopes each need
 id and tenant id** (the tenant defaults to the CLI session's tenant; press Enter to accept). Refusing the prompt
 aborts the run — a partial export that silently skipped every Graph type would be worse than stopping.
 
+Unless `--client-id` is set, `resource download` **verifies the CLI session before anything else — including
+the dedicated-app prompt** — and fails immediately with `run 'az login' first` when there is none. Without that
+check, a missing session would only compound into warnings — subscription and tenant resolution degrade
+deliberately for permission-poor identities, and each type's listing is skipped individually — ending in "No
+resources to download" instead of naming the cause, after prompting for an app registration the operator may
+not have been asked about otherwise. Passing `--client-id`/`--tenant-id` explicitly skips the check: the
+device-code sign-in needs no CLI session, because its first token request *is* the sign-in.
+
 Once signed in, the token's scopes decide what is read. A type whose scope the token lacks is **skipped with a
 warning**, never a failure: its listing is recorded as "could not be listed", the run is marked incomplete,
 and nothing is inferred about its resources. The token decoder under [`--debug`](#--debug) shows which scopes
@@ -331,7 +344,7 @@ echo "Tenant ID: $(az account show --query tenantId -o tsv)"
 Then run with it:
 
 ```bash
-azure-rd download --client-id "$APP_ID" --tenant-id "<tenant-id>"
+azure-rd resource download --client-id "$APP_ID" --tenant-id "<tenant-id>"
 ```
 
 > **Pass `--client-id` to `azure-rd`, not to `az login`.** Tokens from `az account get-access-token` are always
@@ -376,8 +389,8 @@ CLI flag  >  AZURE_RD_* environment variable  >  --config file  >  built-in defa
   not as a default — it changes the recorded hashes.
 
 ```bash
-azure-rd download --config ./azure-rd.yaml
-AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd download
+azure-rd resource download --config ./azure-rd.yaml
+AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd resource download
 ```
 
 ## Output layout
@@ -387,7 +400,7 @@ Everything lives under `<output>/<tenant>/` in two sibling trees that mirror eac
 ```
 output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
-    ├── resources/                                written by azure-rd download — and only by it
+    ├── resources/                                written by azure-rd resource download — and only by it
     │   ├── metadata.yaml                         facts about this export (see below)
     │   ├── Microsoft.Graph/
     │   │   ├── deviceCompliancePolicies/
@@ -638,7 +651,7 @@ Value ids appear in browser URLs — never rename or reuse one; labels are free 
 
 ## Supported resource types
 
-53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd list` prints the same list. Graph types use the
+53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd resource list` prints the same list. Graph types use the
 **beta** endpoint unless marked *v1.0*; all Graph permissions are **delegated** scopes, so the signed-in user
 also needs the matching Intune / Entra role.
 

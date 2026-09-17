@@ -9,6 +9,7 @@ import (
 	"azure-resource-downloader/internal/logger"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
@@ -36,6 +37,25 @@ func NewClient(ctx context.Context, subscriptionID, clientID, tenantID string) (
 		return nil, err
 	}
 	return NewClientWithCredential(ctx, cred, subscriptionID, tenantID)
+}
+
+// VerifySession proves that a credential can actually produce a token by
+// performing one token request. Credentials are deliberately lazy (no network
+// until first use), so without this a missing 'az login' session never fails
+// loudly: subscription resolution warns and continues (correct for tenant-only
+// identities), tenant resolution warns and continues, and every resource
+// type's listing then fails one by one — ending in "no resources to download"
+// instead of naming the actual cause. Callers on the Azure CLI path should
+// verify before starting a run; the device-code path must NOT be verified this
+// way, because its first token request initiates the interactive sign-in.
+func VerifySession(ctx context.Context, cred azcore.TokenCredential) error {
+	_, err := cred.GetToken(ctx, policy.TokenRequestOptions{
+		Scopes: []string{"https://graph.microsoft.com/.default"},
+	})
+	if err != nil {
+		return fmt.Errorf("no usable Azure session: %w (hint: run 'az login' first)", err)
+	}
+	return nil
 }
 
 // CLIDefaultTenantID returns the tenant ID of the current Azure CLI session

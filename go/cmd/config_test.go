@@ -6,9 +6,11 @@ import (
 	"strconv"
 	"testing"
 
+	"azure-resource-downloader/cmd/resource"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/models"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -64,17 +66,34 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 	flagConfigFile = filepath.Join("..", "config.example.yaml")
 	initConfig()
 
-	// flagDefault returns the built-in default of a download/root flag as its
-	// string form so this test never re-hardcodes a default that could drift
-	// from the flag definition.
+	// flagDefault returns the built-in default of a flag that applies to
+	// `resource download` as its string form, so this test never re-hardcodes a
+	// default that could drift from the flag definition. The lookup walks the
+	// same chain Cobra does: the command's own flags, then the flags its group
+	// declares persistently, then root's globals.
+	resourceCmd := newResourceCommand()
+	var downloadCmd *cobra.Command
+	for _, sub := range resourceCmd.Commands() {
+		if sub.Name() == "download" {
+			downloadCmd = sub
+			break
+		}
+	}
+	if downloadCmd == nil {
+		t.Fatal("no download subcommand on the resource command")
+	}
+
 	flagDefault := func(name string) string {
 		if f := downloadCmd.Flags().Lookup(name); f != nil {
+			return f.DefValue
+		}
+		if f := resourceCmd.PersistentFlags().Lookup(name); f != nil {
 			return f.DefValue
 		}
 		if f := rootCmd.PersistentFlags().Lookup(name); f != nil {
 			return f.DefValue
 		}
-		t.Fatalf("no flag named %q on download or root command", name)
+		t.Fatalf("no flag named %q on resource download, the resource group or root", name)
 		return ""
 	}
 
@@ -112,18 +131,18 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 
 	// Non-flag, config-only sections must resolve to the same values the
 	// download command builds when no config file is present.
-	if got, want := buildWorkerConfig(), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
-		t.Errorf("buildWorkerConfig() from config.example.yaml = %+v, want default %+v", got, want)
+	if got, want := resource.BuildWorkerConfig(), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
+		t.Errorf("BuildWorkerConfig() from config.example.yaml = %+v, want default %+v", got, want)
 	}
 
-	gotTransformers := buildTransformerConfigs()
+	gotTransformers := resource.BuildTransformerConfigs()
 	wantTransformers := models.DefaultTransformerConfigs()
 	if !reflect.DeepEqual(gotTransformers, wantTransformers) {
-		t.Errorf("buildTransformerConfigs() from config.example.yaml = %+v, want default %+v", gotTransformers, wantTransformers)
+		t.Errorf("BuildTransformerConfigs() from config.example.yaml = %+v, want default %+v", gotTransformers, wantTransformers)
 	}
 
-	if got := buildResourceFilters(); len(got) != 0 {
-		t.Errorf("buildResourceFilters() from config.example.yaml = %+v, want none (filters must stay commented out)", got)
+	if got := resource.BuildResourceFilters(); len(got) != 0 {
+		t.Errorf("BuildResourceFilters() from config.example.yaml = %+v, want none (filters must stay commented out)", got)
 	}
 
 	// The taxonomy section changes docs/index.yaml when active, so it must stay
