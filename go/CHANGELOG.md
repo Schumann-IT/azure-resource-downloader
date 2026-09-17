@@ -18,11 +18,46 @@ This project is released independently of the documentation browser in `web/`: i
   and are not kept as aliases, so **any script, CI job or alias invoking them must be updated**. The surface now
   reads consistently with the existing `docs` group, and the flags the resource commands share are declared once
   on the group rather than per command, so a later resource verb inherits one definition instead of restating it.
-  Nothing about what the commands do, which flags they accept or what they write has changed. Configuration and
-  `AZURE_RD_*` overrides are unaffected.
+  Nothing about `download` — what it does, which flags it accepts or what it writes — changed in that move;
+  `resource list` is repurposed separately (next bullet). Configuration and `AZURE_RD_*` overrides are
+  unaffected.
+- **`resource list` now lists the tenant, not the tool.** The supported-type map moved to the new
+  `resource types`; `resource list` keeps its spelling and changes its meaning to what the tenant actually
+  contains. This is the more dangerous break of the two: a caller that kept working after the regrouping now
+  gets the tenant's resources where it used to get the supported types — no error, just different output — and
+  it now requires a signed-in session where the old command worked offline. **Anything invoking
+  `azure-rd resource list` (or the pre-grouping `azure-rd list`) for the supported types must switch to
+  `azure-rd resource types`.**
+
+### Added
+
+- **`azure-rd resource types` — the map of what this build supports, with tenant counts when a session allows.**
+  Prints every registered resource type with the handler that implements it and the API it speaks, grouped by
+  API surface; this half is a property of the binary and works offline, with no subscription and no sign-in.
+  Whenever a usable session happens to be available the map gains per-type tenant counts, rolled up from the
+  same listing a download performs — whether they appear is decided by the session, never by a flag, and the
+  session is probed **without ever prompting**: the device-code credential is built with automatic
+  authentication disabled, so a sign-in that would require interaction reads as “no session” and the command
+  degrades to the offline map with a note. The output always states which of the two it printed; a type whose
+  listing was refused is counted as unknown — never 0 — and unknown or omitted counts never fail the command.
+- **`azure-rd resource list` — what the tenant contains, per resource, without downloading.** Enumerates the
+  selected types (all registered types when unselected, exactly as a full download would) through the same
+  listing path a download uses to build its fetch requests, so the two can never disagree about scope. Listing
+  yields ids; when an export for the tenant exists, display names recorded in its `resources/metadata.yaml` are
+  joined in and resources the export does not know yet are marked new — nothing is fetched merely to prettify
+  the listing. Unlistable types are reported as unknown, never as empty, and do not fail the command.
 
 ### Changed
 
+- **The selection flags (`--type`, `--resource-id`, `--resource-group`) and `--workers` moved from
+  `resource download` onto the `resource` group**, now that every subcommand honours them: `types` narrows its
+  map offline and its counts online, `list` selects what it enumerates, and `--workers` bounds the listing
+  concurrency they all share. `--timeout` stays on `download`, the only command that fetches individual
+  resources. Invocations are unaffected — the flags follow the subcommand either way — as are configuration
+  keys and `AZURE_RD_*` overrides.
+- **An explicit `--workers` now also bounds the per-type listing concurrency.** Previously it only sized the
+  per-resource fetch workers while listing always ran at the Microsoft Graph worker count; the one derivation
+  is now shared by `download`, `list` and `types`, so the flag means the same thing wherever listing happens.
 - **The tool now describes itself as what it became: tenant configuration export and documentation.** The
   "Azure Resource Downloader" expansion predates the documentation pipeline and misnames the content — nearly
   all exported types are Entra ID / Intune configuration, not ARM resources, and downloading is one verb among

@@ -84,7 +84,7 @@ timeout: 300
 # Selection — WHAT to download
 # ---------------------------------------------------------------------------
 # If none of the three keys below is set, every registered resource type is
-# downloaded (a full export). Run 'azure-rd resource list' to see the registered types.
+# downloaded (a full export). Run 'azure-rd resource types' to see the registered types.
 
 # Explicit Azure resource IDs. Equivalent to repeating --resource-id.
 # Example:

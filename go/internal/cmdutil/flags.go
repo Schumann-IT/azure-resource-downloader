@@ -96,22 +96,31 @@ func defineSelectionFlags(f *pflag.FlagSet) {
 	f.String("resource-group", "", "download resources in this resource group")
 }
 
-// AddPipelineFlags registers the pipeline tuning flags locally on cmd:
-// --workers and --timeout.
-func AddPipelineFlags(cmd *cobra.Command) {
-	definePipelineFlags(cmd.Flags())
+// AddWorkersFlag registers --workers locally on cmd. Workers bound the
+// concurrency of both the per-type listing calls and the per-resource fetches,
+// so every command that lists or downloads honours it.
+func AddWorkersFlag(cmd *cobra.Command) {
+	defineWorkersFlag(cmd.Flags())
 }
 
-// AddPersistentPipelineFlags registers the pipeline tuning flags on cmd's
-// persistent flag set, for a command group whose every subcommand honours them.
-func AddPersistentPipelineFlags(cmd *cobra.Command) {
-	definePipelineFlags(cmd.PersistentFlags())
+// AddPersistentWorkersFlag registers --workers on cmd's persistent flag set,
+// for a command group whose every subcommand honours it (at minimum for the
+// listing concurrency).
+func AddPersistentWorkersFlag(cmd *cobra.Command) {
+	defineWorkersFlag(cmd.PersistentFlags())
 }
 
-// definePipelineFlags is the single definition of the pipeline tuning flags.
-func definePipelineFlags(f *pflag.FlagSet) {
+// AddTimeoutFlag registers --timeout locally on cmd. It stays local to the
+// commands that fetch individual resources: the per-operation timeout wraps
+// each resource fetch, so a command that only lists would advertise it and
+// ignore it.
+func AddTimeoutFlag(cmd *cobra.Command) {
+	cmd.Flags().Int("timeout", DefaultTimeoutSeconds, "per-operation timeout in seconds (applied around each resource fetch)")
+}
+
+// defineWorkersFlag is the single definition of the --workers flag.
+func defineWorkersFlag(f *pflag.FlagSet) {
 	f.Int("workers", DefaultWorkerCount, "number of concurrent workers; when not set explicitly, per-API defaults apply (Microsoft Graph 5, ARM 20)")
-	f.Int("timeout", DefaultTimeoutSeconds, "per-operation timeout in seconds (applied around each resource fetch)")
 }
 
 // BindFlags binds every flag that applies to cmd to viper so each value can

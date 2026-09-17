@@ -23,6 +23,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Quick start](#quick-start)
 - [Commands](#commands)
   - [`resource download`](#resource-download)
+  - [`resource types`](#resource-types)
   - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
   - [`docs generate-index`](#docs-generate-index)
@@ -139,8 +140,10 @@ generated documentation of an export.
 Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
 command or its group and must follow it: `azure-rd resource download --type X`, not
 `azure-rd --type X resource download`. The authentication flags (`--subscription`, `--client-id`,
-`--tenant-id`) are declared once on the `resource` group, so every subcommand under it accepts them. `--help`
-on any command lists its flags; this section explains what they do.
+`--tenant-id`), the selection flags (`--type`, `--resource-id`, `--resource-group`) and `--workers` are
+declared once on the `resource` group, so every subcommand under it accepts them; `--timeout` stays on
+`download`, the only command that fetches individual resources. `--help` on any command lists its flags; this
+section explains what they do.
 
 ### `resource download`
 
@@ -182,13 +185,76 @@ absent or feed `--prune`). A second Ctrl+C force-quits.
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
 reason) and the types that listed empty, and finally whether the run is complete.
 
-### `resource list`
+### `resource types`
 
-Prints every registered resource type with its API (`Microsoft.Graph` or `Azure Resource Manager`). It is
-**offline** — no sign-in, no network — and is the reference for `--type` values.
+Shows what this build can handle: every registered resource type, the handler that implements it and the API
+it speaks, grouped by API surface. The map itself is a property of the binary — it needs **no subscription, no
+sign-in and no network** — and is the reference for `--type` values.
+
+When a usable session happens to be available, the map is enriched with how many resources of each type the
+tenant holds, counted by the same listing `resource list` and `resource download` perform. Whether the counts
+appear is decided by the session, never by a flag — and the session is probed **without ever prompting**: a
+sign-in that would require interaction (device-code, browser) counts as “no session”, and the command prints
+the offline map with a note saying so. The output always states which of the two it printed. A type whose
+listing was refused (missing permissions, no subscription) is counted as **unknown — never 0**, which would
+mean “listed and found nothing”; unknown or omitted counts never make the command fail.
 
 ```bash
-azure-rd resource list
+azure-rd resource types                                   # the full map (works offline)
+azure-rd resource types --type Microsoft.Graph/groups    # one type, with its count when signed in
+```
+
+Without a session (offline map only):
+
+```
+INFO Supported Azure resource types count=53
+INFO Tenant counts omitted (no usable session without prompting); showing the offline type map only reason=…
+INFO Azure.ResourceManager (3 types)
+INFO Microsoft.Resources/resourceGroups handler=arm.ResourceGroupHandler
+…
+INFO Microsoft.Graph (50 types)
+INFO Microsoft.Graph/groups handler=graph.GraphCollectionHandler
+…
+```
+
+With a session, the same lines gain a count column:
+
+```
+INFO Tenant counts included from a live listing types_unknown=1
+…
+INFO Microsoft.Graph/groups handler=graph.GraphCollectionHandler count=42
+INFO Microsoft.Graph/deviceCompliancePolicies handler=graph.GraphCollectionHandler count=unknown reason=missing permissions …
+```
+
+### `resource list`
+
+Lists what the tenant actually contains, per resource, **without downloading anything**. With no selection it
+covers every registered type, exactly as a full download would; the enumeration is the same listing a download
+uses to build its fetch requests, so the two can never disagree about what is in scope — only the framing
+differs (“what is there” versus “what would be written”).
+
+Listing yields resource ids. When an export for the tenant already exists under `--output`, the display names
+recorded in its `resources/metadata.yaml` are joined in, and resources the export does not know yet are marked
+`new=true` — nothing is ever fetched merely to prettify the listing. A type that could not be listed is
+reported as **unknown**, never as empty, and does not fail the command. The command writes nothing, so
+`--dry-run` changes nothing.
+
+This command's question is online-only, so unlike `resource types` it requires a session and fails up front
+without one.
+
+```bash
+azure-rd resource list                                    # everything the tenant contains
+azure-rd resource list --type Microsoft.Graph/groups     # one type only
+azure-rd resource list --client-id … --tenant-id …       # with a dedicated app for Graph/Intune scopes
+```
+
+```
+INFO Microsoft.Graph/groups count=3
+INFO  id=07f9a17e-… name="All Staff"
+INFO  id=2f1b4c9d-… name="Intune Admins"
+INFO  id=9c3e51ab-… new=true
+WARN Type could not be listed; its contents are unknown (not zero) type=Microsoft.Graph/deviceCompliancePolicies reason=…
+INFO Tenant listing finished resources=3 types_unknown=1 types_empty=12
 ```
 
 ### `docs generate-prompt`
@@ -655,7 +721,7 @@ Value ids appear in browser URLs — never rename or reuse one; labels are free 
 
 ## Supported resource types
 
-53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd resource list` prints the same list. Graph types use the
+53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd resource types` prints the same list. Graph types use the
 **beta** endpoint unless marked *v1.0*; all Graph permissions are **delegated** scopes, so the signed-in user
 also needs the matching Intune / Entra role.
 

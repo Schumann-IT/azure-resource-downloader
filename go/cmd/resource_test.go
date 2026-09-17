@@ -24,15 +24,16 @@ func subcommand(t *testing.T, parent *cobra.Command, name string) *cobra.Command
 }
 
 // TestResourceGroupSharesAuthFlags guards the point of the grouping: the
-// authentication flags are declared once on the parent and visible to every
-// subcommand, while flags only one subcommand honours stay off the others. A
-// command must never advertise a flag it ignores.
+// authentication and selection flags and --workers are declared once on the
+// parent and visible to every subcommand (all three honour them), while flags
+// only download honours stay off the siblings. A command must never advertise a
+// flag it ignores.
 func TestResourceGroupSharesAuthFlags(t *testing.T) {
 	resourceCmd := newResourceCommand()
 
-	for _, name := range []string{"download", "list"} {
+	for _, name := range []string{"download", "types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
-		for _, flag := range []string{"subscription", "client-id", "tenant-id"} {
+		for _, flag := range []string{"subscription", "client-id", "tenant-id", "type", "resource-id", "resource-group", "workers"} {
 			// InheritedFlags is what a subcommand gets from its parents, and
 			// asking for it is also what merges those flags into Flags() before
 			// execution.
@@ -45,12 +46,14 @@ func TestResourceGroupSharesAuthFlags(t *testing.T) {
 		}
 	}
 
-	// Selection and pipeline tuning are download-only until a sibling honours
-	// them, so list must not offer them.
-	list := subcommand(t, resourceCmd, "list")
-	for _, flag := range []string{"type", "resource-id", "resource-group", "workers", "timeout"} {
-		if list.Flags().Lookup(flag) != nil {
-			t.Errorf("resource list offers --%s but ignores it", flag)
+	// --timeout wraps each resource fetch and the remaining switches are
+	// download-only concerns, so types and list must not offer them.
+	for _, name := range []string{"types", "list"} {
+		sub := subcommand(t, resourceCmd, name)
+		for _, flag := range []string{"timeout", "prune", "no-prompt", "resolve-secrets"} {
+			if sub.Flags().Lookup(flag) != nil {
+				t.Errorf("resource %s offers --%s but ignores it", name, flag)
+			}
 		}
 	}
 

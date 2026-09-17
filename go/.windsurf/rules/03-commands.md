@@ -88,8 +88,8 @@ make check
 ## "Add a CLI command"
 1. Prefer adding the command to an existing group over a new top-level verb. The surface is grouped by noun: `resource` (commands acting on a tenant's Azure resources) and `docs` (commands acting on an export's documentation). Both parents live in package `cmd` (`cmd/resource.go`, `cmd/docs.go`) and each subcommand is a separate package in its own directory (`cmd/resource/`, `cmd/docs/`) exposing an exported constructor (e.g. `NewDownloadCommand`, `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`, and anything else it shares with root (e.g. the tool version) lives in its own `internal/` package.
 2. Register flags where they are honoured:
-   - **Used by every subcommand of the group** → once on the parent, via the persistent variants in `../../internal/cmdutil` (`AddPersistentAzureAuthFlags`, `AddPersistentSelectionFlags`, `AddPersistentPipelineFlags`). Promote a group to the parent only when *all* its subcommands honour it; until then it stays on the ones that do.
-   - **Used by this command only** → the local variants (`AddAzureAuthFlags`, `AddSelectionFlags`, `AddPipelineFlags`) plus command-specific flags on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
+   - **Used by every subcommand of the group** → once on the parent, via the persistent variants in `../../internal/cmdutil` (`AddPersistentAzureAuthFlags`, `AddPersistentSelectionFlags`, `AddPersistentWorkersFlag`). Promote a group to the parent only when *all* its subcommands honour it; until then it stays on the ones that do. The `resource` group holds auth, selection and `--workers` this way.
+   - **Used by this command only** → the local variants (`AddAzureAuthFlags`, `AddSelectionFlags`, `AddWorkersFlag`, `AddTimeoutFlag`) plus command-specific flags on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
    - Cobra validates flag groups (`MarkFlagsRequiredTogether`) against the flag set of the command it runs, so a pairing cannot be declared on a parent for its children. Enforce it in the group's `PersistentPreRunE` instead — see `cmdutil.RequireAuthFlagPair`, used by `newResourceCommand`.
 3. **Call `cmdutil.BindFlags(cmd)` as the first statement of `RunE`**, before reading any value. It binds every flag that applies to the command — its own *and* those inherited from its group and root — to Viper per-execution, so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command. Do not narrow it back to local flags only: a group-declared flag would keep working on the command line while silently ignoring `AZURE_RD_*` and the config file.
 4. Implement `RunE` function with:
@@ -148,5 +148,5 @@ Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyRe
   ✅ All checks passed: make check
   ✅ CHANGELOG.md updated under [Unreleased]
   ⚠️  Manual: Add to README.md supported types table
-  ⚠️  Manual: Test with: ./azure-rd resource list
+  ⚠️  Manual: Test with: ./azure-rd resource types
   ```

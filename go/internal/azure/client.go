@@ -78,7 +78,32 @@ func CLIDefaultTenantID(ctx context.Context) string {
 // request. This lets callers construct a credential cheaply — e.g. to probe
 // which resource types need a dedicated app before committing to a sign-in.
 func NewCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
-	return newCredential(clientID, tenantID)
+	return newCredential(clientID, tenantID, false)
+}
+
+// NewNonInteractiveCredential builds the same credential NewCredential would,
+// but guaranteed never to prompt: the device-code variant is constructed with
+// automatic authentication disabled, so a token request that would need user
+// interaction fails with an authentication-required error instead of starting
+// the sign-in flow. Commands for which a token is a convenience rather than a
+// requirement (e.g. enriching an offline answer with tenant counts) must use
+// this constructor, so they can never block on a login prompt.
+func NewNonInteractiveCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
+	return newCredential(clientID, tenantID, true)
+}
+
+// ProbeSession reports whether cred can mint a token without user interaction,
+// with a human-readable reason when it cannot. Every failure counts as "no
+// session": for a caller to whom a token is a convenience, a missing 'az
+// login', an expired session and a sign-in that would require interaction all
+// mean the same thing — degrade to the offline answer. It never returns an
+// error, so a probe can never fail the command that runs it.
+func ProbeSession(ctx context.Context, cred azcore.TokenCredential) (bool, string) {
+	if err := VerifySession(ctx, cred); err != nil {
+		logger.Default.Debug("Session probe failed", "error", err)
+		return false, ErrorSummary(err)
+	}
+	return true, ""
 }
 
 // NewClientWithCredential builds a Client around an already-created credential.
@@ -124,8 +149,11 @@ func NewClientWithCredential(ctx context.Context, cred azcore.TokenCredential, s
 // requests. With no clientID it reuses the existing Azure CLI session (az login).
 // When clientID is provided it starts an interactive device-code sign-in against
 // the given app registration so that delegated scopes unavailable to the Azure
-// CLI first-party app can be requested.
-func newCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
+// CLI first-party app can be requested. disableAutomaticAuth applies only to the
+// device-code variant (the Azure CLI credential never prompts — it fails fast
+// without a session): when set, a token request that would require interaction
+// returns an authentication-required error instead of starting the sign-in.
+func newCredential(clientID, tenantID string, disableAutomaticAuth bool) (azcore.TokenCredential, error) {
 	if clientID == "" {
 		cred, err := azidentity.NewAzureCLICredential(nil)
 		if err != nil {
@@ -147,6 +175,7 @@ func newCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
 			logger.Default.Info("Device-code sign-in required", "instructions", msg.Message)
 			return nil
 		},
+		DisableAutomaticAuthentication: disableAutomaticAuth,
 	}
 	cred, err := azidentity.NewDeviceCodeCredential(opts)
 	if err != nil {
