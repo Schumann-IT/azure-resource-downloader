@@ -212,6 +212,27 @@ func WriteExportMetadata(run ExportRun) error {
 	return nil
 }
 
+// LoadExportMetadata reads <tenantDir>/resources/metadata.yaml, the export's
+// baseline of recorded facts. It returns ErrNoMetadata when the export has
+// none, so callers can distinguish "no export yet" from a read failure. This is
+// the one loader every consumer of an existing export shares (the docs engines,
+// the resource list name join), so they can never read different facts from the
+// same file.
+func LoadExportMetadata(tenantDir string) (Metadata, error) {
+	metaPath := filepath.Join(tenantDir, models.ResourcesDirName, MetadataFileName)
+	if _, err := os.Stat(metaPath); err != nil {
+		if os.IsNotExist(err) {
+			return Metadata{}, fmt.Errorf("%w: %s", ErrNoMetadata, metaPath)
+		}
+		return Metadata{}, fmt.Errorf("failed to stat metadata: %w", err)
+	}
+	m, err := loadMetadata(metaPath)
+	if err != nil {
+		return Metadata{}, fmt.Errorf("failed to read metadata: %w", err)
+	}
+	return m, nil
+}
+
 // loadMetadata reads an existing metadata file, returning an empty (but
 // initialised) Metadata when the file does not exist.
 func loadMetadata(metaPath string) (Metadata, error) {

@@ -25,9 +25,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-// NewDownloadCommand builds the `resource download` command. The authentication
-// flags come from the `resource` parent; selection, pipeline tuning and the
-// download-only switches are declared here.
+// NewDownloadCommand builds the `resource download` command. The
+// authentication and selection flags and --workers come from the `resource`
+// parent; only the download-only switches are declared here.
 func NewDownloadCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "download",
@@ -84,12 +84,11 @@ Examples:
 		RunE: runDownload,
 	}
 
-	// The authentication flags are inherited from the `resource` parent. These
-	// groups stay local until a sibling subcommand honours them as well, so no
-	// command advertises a flag it ignores. Flags are bound to viper
-	// per-execution in runDownload via cmdutil.BindFlags.
-	cmdutil.AddSelectionFlags(cmd)
-	cmdutil.AddPipelineFlags(cmd)
+	// The authentication and selection flags and --workers are inherited from
+	// the `resource` parent; --timeout stays here because only download fetches
+	// individual resources, so a sibling advertising it would ignore it. Flags
+	// are bound to viper per-execution in runDownload via cmdutil.BindFlags.
+	cmdutil.AddTimeoutFlag(cmd)
 
 	cmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets to plaintext (writes secrets to disk)")
 	cmd.Flags().Bool("no-prompt", false, "skip writing the per-type documentation LLM prompt files (doc-prompt.md); prompts are written by default")
@@ -266,13 +265,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
 
-	// Bound the concurrency of the per-type listing calls. Most listed types
-	// are Microsoft Graph collections, so use the Graph worker count (which
-	// respects its stricter rate limits) as the listing concurrency.
-	listConcurrency := workerConfig.MicrosoftGraph
-	if listConcurrency < 1 {
-		listConcurrency = workerConfig.Default
-	}
+	// Bound the concurrency of the per-type listing calls.
+	listConcurrency := listingConcurrency(workerConfig, workersFlag, workersExplicit)
 
 	// Build fetch requests
 	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub, listConcurrency)
@@ -473,6 +467,22 @@ func BuildWorkerConfig(workersExplicit bool) *models.WorkerConfig {
 	}
 
 	return config
+}
+
+// listingConcurrency returns the bounded concurrency for the per-type listing
+// calls, shared by every resource subcommand that lists (download, list,
+// types) so a --workers override means the same thing in all of them. An
+// explicit --workers wins; otherwise the Microsoft Graph worker count applies,
+// because most listed types are Graph collections and its rate limits are the
+// stricter ones.
+func listingConcurrency(workerConfig *models.WorkerConfig, workersFlag int, workersExplicit bool) int {
+	if workersExplicit && workersFlag > 0 {
+		return workersFlag
+	}
+	if workerConfig.MicrosoftGraph > 0 {
+		return workerConfig.MicrosoftGraph
+	}
+	return workerConfig.Default
 }
 
 // determineWorkerCount determines the worker count based on resource type.

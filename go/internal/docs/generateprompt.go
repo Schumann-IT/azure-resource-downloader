@@ -196,17 +196,9 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 	log := logger.Default
 
 	resourcesDir := filepath.Join(opts.TenantDir, models.ResourcesDirName)
-	metaPath := filepath.Join(resourcesDir, MetadataFileName)
-	if _, err := os.Stat(metaPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: %s", ErrNoMetadata, metaPath)
-		}
-		return nil, fmt.Errorf("failed to stat metadata: %w", err)
-	}
-
-	m, err := loadMetadata(metaPath)
+	m, err := LoadExportMetadata(opts.TenantDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata: %w", err)
+		return nil, err
 	}
 
 	if opts.ExpectDomain != "" && m.Tenant != "" && !strings.EqualFold(m.Tenant, opts.ExpectDomain) {

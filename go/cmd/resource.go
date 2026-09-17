@@ -20,7 +20,8 @@ func newResourceCommand() *cobra.Command {
 		Use:   "resource",
 		Short: "Work with a tenant's Azure resources",
 		Long: `Commands that act on the Azure resources of a tenant: see which resource
-types this build supports, and download them as clean YAML.
+types this build supports (types), see what the tenant contains (list), and
+download it as clean YAML (download).
 
 The flags these commands share are declared here, on the group, so every
 subcommand resolves them identically. All are optional: with no selection, a
@@ -39,18 +40,23 @@ a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	}
 
 	// Shared flags live on the group, not on each subcommand. Only groups every
-	// subcommand honours belong here: the authentication flags are used by
-	// download to sign in and by list to construct its (lazy) credential.
-	// Selection and pipeline tuning stay on download until a sibling honours
-	// them too, so no command ever advertises a flag it ignores.
+	// subcommand honours belong here: the authentication flags serve download's
+	// and list's sign-in and types' (lazy, non-interactive) credential; the
+	// selection flags scope what download fetches, what list enumerates and
+	// what types shows and counts; --workers bounds the listing concurrency all
+	// three share. --timeout stays on download: it wraps each resource fetch,
+	// which only download performs, so a sibling advertising it would ignore it.
 	//
-	// This is deliberately a second registration of the auth group: root
-	// declares the same flags locally for `azure-rd --debug` (see root.go's
-	// init). Both are needed — root's copy serves --debug, this one serves the
-	// group's subcommands — and neither is redundant.
+	// The auth group is deliberately a second registration: root declares the
+	// same flags locally for `azure-rd --debug` (see root.go's init). Both are
+	// needed — root's copy serves --debug, this one serves the group's
+	// subcommands — and neither is redundant.
 	cmdutil.AddPersistentAzureAuthFlags(cmd)
+	cmdutil.AddPersistentSelectionFlags(cmd)
+	cmdutil.AddPersistentWorkersFlag(cmd)
 
 	cmd.AddCommand(resource.NewDownloadCommand())
+	cmd.AddCommand(resource.NewTypesCommand())
 	cmd.AddCommand(resource.NewListCommand())
 	return cmd
 }
