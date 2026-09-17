@@ -33,10 +33,11 @@ var (
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
 	Use:   "azure-rd",
-	Short: "Azure Resource Downloader - Download and transform Azure resources",
-	Long: `Azure Resource Downloader is a CLI tool that downloads Azure resources,
-transforms them into clean YAML format, and generates per-resource-type AI
-documentation prompts by default (pass --no-prompt to skip them).
+	Short: "Export and document an Entra ID / Intune tenant's configuration",
+	Long: `azure-rd exports the configuration of an Entra ID / Intune tenant (plus a
+few Azure Resource Manager types) as clean, reproducible YAML, and drives the
+incremental, AI-generated documentation of that export. Per-resource-type AI
+documentation prompts are written by default (pass --no-prompt to skip them).
 
 The tool follows a pipeline pattern with async processing for maximum performance.
 It's designed to be easily extensible with support for multiple Azure resource types.

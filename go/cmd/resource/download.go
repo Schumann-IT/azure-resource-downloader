@@ -169,7 +169,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		log.Info("No subscription specified, will use default from Azure CLI session")
 	}
 
-	log.Info("Azure Resource Downloader",
+	log.Info("azure-rd",
 		"subscription", func() string {
 			if sub == "" {
 				return "<default>"

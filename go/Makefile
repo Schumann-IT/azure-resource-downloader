@@ -160,7 +160,7 @@ ci: check build
 
 # Display help
 help:
-	@echo "Azure Resource Downloader - Makefile commands:"
+	@echo "azure-rd - Makefile commands:"
 	@echo ""
 	@echo "Primary targets:"
 	@echo "  make build          - Build the binary"

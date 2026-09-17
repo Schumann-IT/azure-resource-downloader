@@ -21,6 +21,14 @@ This project is released independently of the documentation browser in `web/`: i
   Nothing about what the commands do, which flags they accept or what they write has changed. Configuration and
   `AZURE_RD_*` overrides are unaffected.
 
+### Changed
+
+- **The tool now describes itself as what it became: tenant configuration export and documentation.** The
+  "Azure Resource Downloader" expansion predates the documentation pipeline and misnames the content — nearly
+  all exported types are Entra ID / Intune configuration, not ARM resources, and downloading is one verb among
+  several. `--help`, the README title and the example config header now lead with the Entra ID / Intune tenant
+  and the documentation half; the `azure-rd` binary name, module path and `AZURE_RD_*` prefix are unchanged.
+
 ### Added
 
 #### Release Workflow

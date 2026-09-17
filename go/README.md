@@ -1,4 +1,4 @@
-# azure-rd — Azure Resource Downloader
+# azure-rd — tenant configuration export & documentation
 
 `azure-rd` exports the configuration of an **Entra ID / Intune tenant** (plus a few Azure Resource Manager
 types) as clean, reproducible YAML, and drives the **incremental, AI-generated documentation** of that export.
@@ -22,8 +22,8 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Commands](#commands)
-  - [`download`](#download)
-  - [`list`](#list)
+  - [`resource download`](#resource-download)
+  - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
   - [`docs generate-index`](#docs-generate-index)
   - [`--debug`](#--debug)
@@ -133,18 +133,23 @@ tree at the repo root, which is also the browser's default `DOCS_ROOT`.
 
 ## Commands
 
-Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
-command and must follow it: `azure-rd resource download --type X`, not `azure-rd --type X download`. `--help` on any
-command lists its flags; this section explains what they do.
+Commands are grouped by the noun they act on: `resource …` for a tenant's Azure resources, `docs …` for the
+generated documentation of an export.
 
-### `download`
+Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
+command or its group and must follow it: `azure-rd resource download --type X`, not
+`azure-rd --type X resource download`. The authentication flags (`--subscription`, `--client-id`,
+`--tenant-id`) are declared once on the `resource` group, so every subcommand under it accepts them. `--help`
+on any command lists its flags; this section explains what they do.
+
+### `resource download`
 
 Exports resources. With no selection flag it exports **every registered type** — a full export.
 
 ```bash
 azure-rd resource download                                   # full export
 azure-rd resource download --type Microsoft.Graph/deviceCompliancePolicies \
-                  --type Microsoft.Graph/groups     # only these types
+                           --type Microsoft.Graph/groups     # only these types
 azure-rd resource download --resource-group my-rg            # one ARM resource group (the group itself)
 azure-rd resource download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
 azure-rd resource download --dry-run                         # list what would be downloaded
@@ -173,7 +178,7 @@ nothing was cancelled and every request produced a result — an incomplete run 
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
 reason) and the types that listed empty, and finally whether the run is complete.
 
-### `list`
+### `resource list`
 
 Prints every registered resource type with its API (`Microsoft.Graph` or `Azure Resource Manager`). It is
 **offline** — no sign-in, no network — and is the reference for `--type` values.

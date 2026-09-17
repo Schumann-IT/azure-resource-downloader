@@ -1,4 +1,4 @@
-# Example configuration file for Azure Resource Downloader
+# Example configuration file for azure-rd
 # Save it anywhere and load it explicitly with --config, e.g.:
 #   azure-rd resource download --config ~/.azure-rd.yaml
 # Without --config no config file is read and the built-in defaults apply.

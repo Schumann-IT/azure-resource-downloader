@@ -286,6 +286,43 @@ in the tenant.
   output layout gaining a file at the tenant root), name the new file in the rules' output-layout section, and
   record the capability in `CHANGELOG.md`.
 
+## 4. Harden the command runtime and the export writes
+
+**Goal.** Make the commands behave like well-mannered processes: errors are returned and printed once, Ctrl+C
+cancels a run cleanly instead of killing it mid-write, and the export metadata can never be left half-written.
+Each item cashes in a target the ops rules already state or a defect this iteration observed; none changes what
+a successful run produces.
+
+> **Why now.** Drift detection (see the drift entry) turns `resources/metadata.yaml` into the baseline every
+> comparison trusts, which raises the price of a corrupted or half-written file from "re-run the download" to
+> "wrong verdicts". The interrupt and atomicity work should land before or with it.
+>
+> **Not regeneration-gated.** Nothing here touches a documentation template or moves a `promptSha256`.
+
+**Plan.**
+
+- Return errors from `RunE` instead of calling `os.Exit(1)` inline (the download and list commands exit in ~8
+  places today). Inline exits skip deferred cleanup, make the commands untestable end-to-end, and sidestep the
+  "return errors" rule. Exit codes stay what they are; the only `os.Exit` lives in `Execute`.
+- Fix the double-printed error while at it: Cobra prints a returned error and `Execute` prints it again (visible
+  on any flag-validation failure). Set `SilenceErrors` on root and keep exactly one print site.
+- Cancel on interrupt: wrap the run's context with `signal.NotifyContext` so Ctrl+C stops listing and fetching
+  cleanly. The pipeline already handles cancellation correctly — every request still produces a result, the run
+  is marked incomplete, and an incomplete run cannot mark anything absent or prune — so this delivers the
+  stated graceful-shutdown target without touching the pipeline.
+- Write `resources/metadata.yaml` atomically (temp file in the same directory, then rename), so a run killed
+  mid-write can never leave a truncated baseline. Extend the same pattern to other writes later if it proves
+  worth it; the metadata file is the one whose corruption is expensive.
+- Close the latent `viper.IsSet("workers")` trap: once flags are bound, `IsSet` is always true, so the worker
+  config builder unconditionally copies the flag default into its general default. Benign only while both
+  defaults are 5 — thread `cmd.Flags().Changed("workers")` through instead, as the worker-count decision already
+  does.
+- Tell the truth in `--workers`' usage string: the flag default is 5, but the effective default is per-API
+  (ARM 20, Microsoft Graph 5) when the flag is not set. One clause in the flag description.
+- Cover the changed behaviour: a test that an interrupted run yields an incomplete summary with every request
+  accounted for, a test that a failed metadata write leaves the previous file intact, and one that errors are
+  printed exactly once. Record the user-visible fixes in `CHANGELOG.md`.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
