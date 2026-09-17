@@ -232,9 +232,13 @@ a successful run produces.
 
 **Plan.**
 
-- Return errors from `RunE` instead of calling `os.Exit(1)` inline (the download and list commands exit in ~8
-  places today). Inline exits skip deferred cleanup, make the commands untestable end-to-end, and sidestep the
-  "return errors" rule. Exit codes stay what they are; the only `os.Exit` lives in `Execute`.
+- Return errors from `RunE` instead of calling `os.Exit` inline — in **all** commands: download and list
+  (~8 plain `os.Exit(1)` sites), the root `--debug` report, and the `docs` subcommands, whose distinct exit
+  codes (2 "cannot answer", 3 "stale found") survive via an exit-code-carrying error type that `Execute`
+  unwraps with `errors.As` to pick the process exit code. Config loading moves out of `cobra.OnInitialize`
+  (which cannot return an error) into a hook that can. Inline exits skip deferred cleanup, make the commands
+  untestable end-to-end, and sidestep the "return errors" rule. Exit codes stay what they are; the only
+  `os.Exit` lives in `Execute`.
 - Fix the double-printed error while at it: Cobra prints a returned error and `Execute` prints it again (visible
   on any flag-validation failure). Set `SilenceErrors` on root and keep exactly one print site.
 - Cancel on interrupt: wrap the run's context with `signal.NotifyContext` so Ctrl+C stops listing and fetching
