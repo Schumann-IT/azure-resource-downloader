@@ -31,6 +31,8 @@ This project is released independently of the documentation browser in `web/`: i
 
 ### Fixed
 
+#### Downloading a tenant's configuration
+
 - **A download without an `az login` session now fails immediately, naming the cause.** Previously a missing
   session never failed loudly: every step degrades deliberately for permission-poor identities (subscription and
   tenant resolution warn and continue, unlistable types are skipped one by one), so a full authentication
@@ -39,7 +41,38 @@ This project is released independently of the documentation browser in `web/`: i
   stops with a clear `run 'az login' first` error; explicit `--client-id`/`--tenant-id` skips the check, since
   the device-code sign-in needs no CLI session.
 
+#### Command-line surface and configuration
+
+- **Errors now surface once, through one path, with the right exit code.** Commands return errors instead of
+  exiting mid-run, so deferred cleanup always runs and the `docs` subcommands' distinct exit codes ("cannot
+  answer", "stale found") are preserved end-to-end; previously a failure could be printed twice — once by the
+  command framework and once by the tool. Usage is still shown for an invocation mistake, but no longer for a
+  runtime failure, and the `--exit-code` gate of `docs generate-prompt` now prints one line naming why it exits
+  non-zero instead of exiting silently. The `--workers` help text now states that the per-API defaults apply
+  when the flag is not set, and a latent trap was closed where the flag's default could silently overwrite the
+  general worker default from configuration.
+
+#### Release Workflow
+
+- **`make ci` no longer runs `go mod download` and `go mod tidy` first.** Doing so before every lint defeated the
+  lint cache, so `make ci` — and `make release-ready`, which runs it — took minutes; it now runs `check` and
+  `build` only and finishes in seconds. Refreshing dependencies stays an explicit `make deps`.
+- **`make check` no longer rewrites files.** It ran `go fmt`, so a readiness report could describe a working
+  tree that `check` itself had just changed. Formatting and linting now each come as a pair: `make fmt` and
+  `make lint` fix what they can (`lint` now runs `golangci-lint --fix`), while the new `make fmt-check` and
+  `make lint-check` only report and fail. `check` — and therefore `ci` and `release-ready` — runs the `-check`
+  variants, so it leaves the working tree exactly as it found it.
+
 ### Added
+
+#### Downloading a tenant's configuration
+
+- **Ctrl+C now stops a run cleanly, and the export metadata can never be left half-written.** An interrupt
+  cancels the run through the pipeline's normal cancellation path: every request is still accounted for, the
+  summary reports the cancellations and the run is recorded as incomplete — so an interrupted run can never
+  mark a resource absent or feed `--prune`. A second Ctrl+C force-quits. `resources/metadata.yaml` — the
+  baseline every later comparison trusts — is now replaced atomically (temp file, then rename), so a run
+  killed at any moment leaves either the previous file or the new one, never a truncated mix.
 
 #### Release Workflow
 
@@ -59,19 +92,6 @@ This project is released independently of the documentation browser in `web/`: i
   describes the commit that will be merged; that read-only, folder-scoped check is the only git either report
   runs. Also available as `make branch-ready-go` from the repository root; what it checks is documented in
   `README.md`.
-
-### Fixed
-
-#### Release Workflow
-
-- **`make ci` no longer runs `go mod download` and `go mod tidy` first.** Doing so before every lint defeated the
-  lint cache, so `make ci` — and `make release-ready`, which runs it — took minutes; it now runs `check` and
-  `build` only and finishes in seconds. Refreshing dependencies stays an explicit `make deps`.
-- **`make check` no longer rewrites files.** It ran `go fmt`, so a readiness report could describe a working
-  tree that `check` itself had just changed. Formatting and linting now each come as a pair: `make fmt` and
-  `make lint` fix what they can (`lint` now runs `golangci-lint --fix`), while the new `make fmt-check` and
-  `make lint-check` only report and fail. `check` — and therefore `ci` and `release-ready` — runs the `-check`
-  variants, so it leaves the working tree exactly as it found it.
 
 ## [0.1.0] - 2026-09-07
 

@@ -217,43 +217,6 @@ in the tenant.
   output layout gaining a file at the tenant root), name the new file in the rules' output-layout section, and
   record the capability in `CHANGELOG.md`.
 
-## 3. Harden the command runtime and the export writes
-
-**Goal.** Make the commands behave like well-mannered processes: errors are returned and printed once, Ctrl+C
-cancels a run cleanly instead of killing it mid-write, and the export metadata can never be left half-written.
-Each item cashes in a target the ops rules already state or a defect this iteration observed; none changes what
-a successful run produces.
-
-> **Why now.** Drift detection (see the drift entry) turns `resources/metadata.yaml` into the baseline every
-> comparison trusts, which raises the price of a corrupted or half-written file from "re-run the download" to
-> "wrong verdicts". The interrupt and atomicity work should land before or with it.
->
-> **Not regeneration-gated.** Nothing here touches a documentation template or moves a `promptSha256`.
-
-**Plan.**
-
-- Return errors from `RunE` instead of calling `os.Exit(1)` inline (the download and list commands exit in ~8
-  places today). Inline exits skip deferred cleanup, make the commands untestable end-to-end, and sidestep the
-  "return errors" rule. Exit codes stay what they are; the only `os.Exit` lives in `Execute`.
-- Fix the double-printed error while at it: Cobra prints a returned error and `Execute` prints it again (visible
-  on any flag-validation failure). Set `SilenceErrors` on root and keep exactly one print site.
-- Cancel on interrupt: wrap the run's context with `signal.NotifyContext` so Ctrl+C stops listing and fetching
-  cleanly. The pipeline already handles cancellation correctly — every request still produces a result, the run
-  is marked incomplete, and an incomplete run cannot mark anything absent or prune — so this delivers the
-  stated graceful-shutdown target without touching the pipeline.
-- Write `resources/metadata.yaml` atomically (temp file in the same directory, then rename), so a run killed
-  mid-write can never leave a truncated baseline. Extend the same pattern to other writes later if it proves
-  worth it; the metadata file is the one whose corruption is expensive.
-- Close the latent `viper.IsSet("workers")` trap: once flags are bound, `IsSet` is always true, so the worker
-  config builder unconditionally copies the flag default into its general default. Benign only while both
-  defaults are 5 — thread `cmd.Flags().Changed("workers")` through instead, as the worker-count decision already
-  does.
-- Tell the truth in `--workers`' usage string: the flag default is 5, but the effective default is per-API
-  (ARM 20, Microsoft Graph 5) when the flag is not set. One clause in the flag description.
-- Cover the changed behaviour: a test that an interrupted run yields an incomplete summary with every request
-  accounted for, a test that a failed metadata write leaves the previous file intact, and one that errors are
-  printed exactly once. Record the user-visible fixes in `CHANGELOG.md`.
-
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
@@ -375,3 +338,43 @@ shape is constrained — these are invariants that keep it safe, not open questi
 - **`config.example.yaml` stays inert** — the feature needs no new config key (it reuses `taxonomy:` labels as
   an optional hint), so loading the example unmodified still produces byte-identical output including every
   hash in `resources/metadata.yaml`.
+
+### Idea: review the sign-in surface — can a scoped `az login` replace the dedicated-app device-code path?
+
+The tool carries two sign-in paths. The default reuses the `az login` session; `--client-id`/`--tenant-id`
+starts a device-code sign-in against a dedicated app registration. The second path exists for exactly one
+reason: `az account get-access-token` always mints tokens for the Azure CLI *first-party* app — regardless of
+how the user logged in — and that app's Graph token has lacked the delegated scopes most Graph handlers
+declare (`DeviceManagementConfiguration.*`, `DeviceManagementApps.*`, `DeviceManagementScripts.*`,
+`Policy.Read.All`, …). But `az login` accepts `--scope`: signing in with
+`az login --scope https://graph.microsoft.com/.default` (or explicit scopes) asks Entra to add delegated
+Graph scopes to that same CLI session — the README's own troubleshooting hint already leans on it for the
+"required scopes are missing" failure. If a scoped login reliably lands every declared scope in the session's
+Graph token, the entire second path becomes removable: the device-code credential branch, the two flags and
+their env/config equivalents, the `PermissionScoped` probe (`RequiresDedicatedApp` /
+`DedicatedAppRequirements`), the interactive dedicated-app prompt, and the app-registration setup in
+`README.md` — collapsing authentication to one path and one instruction. Even a partial "yes" has value: the
+dedicated-app prompt could recommend the exact scoped re-login first and fall back to device code only when
+the CLI app genuinely cannot obtain a scope. **Not planned — parked deliberately**, for three reasons:
+
+- **The answer is not in this repository.** Whether a scope lands in the CLI token's `scp` claim depends on
+  the tenant's consent policy and on which scopes Microsoft lets its first-party app request — both outside
+  the tool's control and changeable by Microsoft without notice. Only a live-tenant experiment settles it:
+  perform a scoped `az login`, decode the token's `scp`, verify that azidentity's CLI credential (which
+  shells out to `az account get-access-token` per request) actually surfaces the scopes granted at login,
+  then run a full download of every dedicated-app-gated type — including `--resolve-secrets`, which needs
+  `DeviceManagementConfiguration.ReadWrite.All`.
+- **A positive result on one tenant does not generalize.** Consent policies differ per tenant, Microsoft has
+  been progressively hardening what the first-party CLI app may do, and some services may gate on the calling
+  application rather than the token's scopes alone — only a live call against each gated endpoint settles
+  that. The dedicated app registration is the escape hatch the operator controls; deleting it trades
+  resilience for a smaller surface.
+- **Removal is a breaking change to the auth surface** — the flags, their `AZURE_RD_*` variables and config
+  keys — so it should ride a major, not a hygiene pass.
+
+**Revisit when** an operator confirms on a representative tenant that a scoped `az login` yields every
+permission the handlers declare, or the next time the authentication surface is reworked anyway. If promoted,
+soften before deleting: first teach the dedicated-app prompt to recommend the exact `az login --scope …`
+command derived from the selected types' declared permissions, keeping device code as the fallback; only
+retire the flags once the CLI path has covered every `PermissionScoped` type against a live tenant, and
+record the removal under `Breaking`.

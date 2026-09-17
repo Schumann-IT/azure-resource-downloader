@@ -25,7 +25,9 @@ func TestInitConfigEnvKeyReplacer(t *testing.T) {
 	flagConfigFile = ""
 	t.Setenv("AZURE_RD_LOG_LEVEL", "warn")
 
-	initConfig()
+	if err := initConfig(); err != nil {
+		t.Fatalf("initConfig() = %v, want nil", err)
+	}
 
 	if got := viper.GetString("log-level"); got != "warn" {
 		t.Errorf("log-level = %q, want %q; the env-key replacer must map log-level -> AZURE_RD_LOG_LEVEL", got, "warn")
@@ -42,7 +44,9 @@ func TestInitConfigHyphenEnvNotDirectlyExportable(t *testing.T) {
 	flagConfigFile = ""
 	t.Setenv("AZURE_RD_OUTPUT", "/tmp/from-env")
 
-	initConfig()
+	if err := initConfig(); err != nil {
+		t.Fatalf("initConfig() = %v, want nil", err)
+	}
 
 	if got := viper.GetString("output"); got != "/tmp/from-env" {
 		t.Errorf("output = %q, want %q; AZURE_RD_OUTPUT must resolve via AutomaticEnv", got, "/tmp/from-env")
@@ -64,7 +68,9 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 	t.Cleanup(func() { flagConfigFile = prevConfig })
 
 	flagConfigFile = filepath.Join("..", "config.example.yaml")
-	initConfig()
+	if err := initConfig(); err != nil {
+		t.Fatalf("initConfig() = %v, want nil", err)
+	}
 
 	// flagDefault returns the built-in default of a flag that applies to
 	// `resource download` as its string form, so this test never re-hardcodes a
@@ -131,8 +137,8 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 
 	// Non-flag, config-only sections must resolve to the same values the
 	// download command builds when no config file is present.
-	if got, want := resource.BuildWorkerConfig(), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildWorkerConfig() from config.example.yaml = %+v, want default %+v", got, want)
+	if got, want := resource.BuildWorkerConfig(false), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
+		t.Errorf("BuildWorkerConfig(false) from config.example.yaml = %+v, want default %+v", got, want)
 	}
 
 	gotTransformers := resource.BuildTransformerConfigs()

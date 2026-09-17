@@ -1,8 +1,10 @@
 package docs
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -265,6 +267,53 @@ func TestMergeRetainsOutOfScopeEntries(t *testing.T) {
 	g := meta.Resources["Microsoft.Graph/groups/grp.yaml"]
 	if !g.PresentInTenant {
 		t.Error("out-of-scope groups entry must remain present")
+	}
+}
+
+// TestWriteMetadataFailureLeavesPreviousFileIntact guards the atomic write:
+// metadata.yaml is the baseline every later comparison trusts, so a write that
+// fails partway through must leave the previous file byte-identical — never a
+// truncated mix — and a successful write must leave no temp file behind.
+func TestWriteMetadataFailureLeavesPreviousFileIntact(t *testing.T) {
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	metaPath := filepath.Join(resourcesDir, MetadataFileName)
+
+	if err := writeMetadata(metaPath, resourcesDir, &Metadata{Tenant: "example.com"}); err != nil {
+		t.Fatalf("seed write: %v", err)
+	}
+	before, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("read seed: %v", err)
+	}
+
+	// A successful write must not leave its temp file behind.
+	entries, err := os.ReadDir(resourcesDir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".metadata-") {
+			t.Errorf("temp file %q left behind after a successful write", e.Name())
+		}
+	}
+
+	// Make the directory unwritable so the write fails before the rename.
+	if err := os.Chmod(resourcesDir, 0555); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(resourcesDir, 0755) })
+
+	if err := writeMetadata(metaPath, resourcesDir, &Metadata{Tenant: "changed.example.com"}); err == nil {
+		t.Fatal("writeMetadata into a read-only directory must fail")
+	}
+
+	after, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("read after failed write: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("a failed metadata write must leave the previous file byte-identical")
 	}
 }
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
@@ -53,18 +55,56 @@ tenant, subscription and output directory a download would use right now. It wri
 nothing and is safe to run at any time.`,
 	Version: version.Resolve(),
 	RunE:    runRoot,
+	// Errors are printed exactly once, in execute(); without this Cobra prints a
+	// returned error and execute() would print it again.
+	SilenceErrors: true,
+	// Config loading lives here rather than in cobra.OnInitialize because an
+	// initializer cannot return an error, and a mistyped --config path must fail
+	// loudly instead of calling os.Exit inline. EnableTraverseRunHooks (set in
+	// init) makes this run even when a command group declares its own hook.
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		// Flags parsed fine, so any later error is a runtime failure for which
+		// usage output would be noise. Flag and unknown-command errors happen
+		// before this hook and still print usage.
+		cmd.SilenceUsage = true
+		return initConfig()
+	},
 }
 
-// Execute runs the root command
+// Execute runs the root command and translates a returned error into the
+// process exit code. It is the only place in the program that calls os.Exit.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if code := execute(); code != 0 {
+		os.Exit(code)
 	}
 }
 
+// execute runs the root command under an interrupt-cancellable context and
+// returns the process exit code. It is the single error print site: Cobra's own
+// printing is silenced on root, and commands return errors instead of printing
+// and exiting inline.
+func execute() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// After the first signal has cancelled the context, restore the default
+	// signal behaviour so a second Ctrl+C force-quits a run stuck in a write.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		rootCmd.PrintErrln(rootCmd.ErrPrefix(), err.Error())
+		return cmdutil.ExitCode(err)
+	}
+	return 0
+}
+
 func init() {
-	cobra.OnInitialize(initConfig)
+	// Run every parent's PersistentPreRunE down the chain, not only the nearest
+	// one: root's hook loads the config for all commands, while a group like
+	// `resource` keeps its own hook for its flag-pair validation.
+	cobra.EnableTraverseRunHooks = true
 
 	// Global flags: every planned command needs the export root and benefits
 	// from a uniform dry-run safety switch, config loading and log verbosity.
@@ -104,8 +144,9 @@ func init() {
 // initConfig reads environment variables and, only when --config is given, the
 // specified configuration file. Without --config, no config file is loaded and
 // the built-in defaults apply (still overridable by flags and AZURE_RD_* env
-// vars). An explicitly requested config file that cannot be read is fatal.
-func initConfig() {
+// vars). An explicitly requested config file that cannot be read is an error,
+// so a mistyped --config path is never silently ignored.
+func initConfig() error {
 	// Read in environment variables that match. The key replacer maps hyphens
 	// to underscores so hyphenated keys like log-level resolve to a shell-
 	// exportable name (AZURE_RD_LOG_LEVEL) rather than AZURE_RD_LOG-LEVEL.
@@ -119,8 +160,7 @@ func initConfig() {
 		// mistyped path is never silently ignored.
 		viper.SetConfigFile(flagConfigFile)
 		if err := viper.ReadInConfig(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to read config file %q: %v\n", flagConfigFile, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to read config file %q: %w", flagConfigFile, err)
 		}
 		configFileUsed = viper.ConfigFileUsed()
 	}
@@ -136,6 +176,7 @@ func initConfig() {
 	if configFileUsed != "" {
 		logger.Default.Info("Using config file", "path", configFileUsed)
 	}
+	return nil
 }
 
 // runRoot handles a bare `azure-rd` invocation (no subcommand). With --debug it
@@ -156,7 +197,7 @@ func runDebugReport(cmd *cobra.Command) error {
 	// flag > env > config > default precedence holds.
 	cmdutil.BindFlags(cmd)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	log := logger.Default
 
 	sub := viper.GetString("subscription")
@@ -184,8 +225,7 @@ func runDebugReport(cmd *cobra.Command) error {
 	log.Info("Authenticating with Azure...")
 	azureClient, err := azure.NewClient(ctx, sub, clientID, tenantID)
 	if err != nil {
-		log.Error("Failed to create Azure client", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create Azure client: %w", err)
 	}
 
 	// Resolve the signed-in principal from the access token claims (best-effort:

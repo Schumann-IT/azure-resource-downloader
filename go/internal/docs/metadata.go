@@ -583,7 +583,10 @@ func pruneCovered(m *Metadata, run ExportRun, resourcesDir string) {
 }
 
 // writeMetadata marshals the metadata and writes it into the resources/
-// directory, creating that directory if necessary.
+// directory, creating that directory if necessary. The write is atomic (temp
+// file in the same directory, then rename): metadata.yaml is the baseline every
+// later comparison trusts, so a run killed mid-write must leave either the
+// previous file or the new one, never a truncated mix.
 func writeMetadata(metaPath, resourcesDir string, m *Metadata) error {
 	if err := os.MkdirAll(resourcesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create resources directory: %w", err)
@@ -592,8 +595,28 @@ func writeMetadata(metaPath, resourcesDir string, m *Metadata) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	if err := os.WriteFile(metaPath, data, 0644); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(metaPath), ".metadata-*.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary metadata file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	// CreateTemp creates 0600; match the 0644 every other export file uses.
+	if err := os.Chmod(tmpPath, 0644); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to set metadata permissions: %w", err)
+	}
+	if err := os.Rename(tmpPath, metaPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace metadata: %w", err)
 	}
 	return nil
 }

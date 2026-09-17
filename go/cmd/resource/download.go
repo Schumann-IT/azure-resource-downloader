@@ -6,7 +6,7 @@
 package resource
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -105,7 +105,10 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// command stealing the binding.
 	cmdutil.BindFlags(cmd)
 
-	ctx := context.Background()
+	// The command context is cancelled on interrupt (Ctrl+C), so listing and
+	// fetching stop cleanly: every request still produces a result and the run
+	// is recorded as incomplete rather than killed mid-write.
+	ctx := cmd.Context()
 
 	// Get configuration
 	sub := viper.GetString("subscription")
@@ -131,7 +134,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	resolveSecrets := viper.GetBool("resolve-secrets")
 
 	// Build worker configuration
-	workerConfig := BuildWorkerConfig()
+	workerConfig := BuildWorkerConfig(workersExplicit)
 
 	log := logger.Default
 
@@ -190,8 +193,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// credential is enough here regardless of the final sign-in method.
 	probeCred, err := azure.NewCredential("", "")
 	if err != nil {
-		log.Error("Failed to prepare Azure credentials", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to prepare Azure credentials: %w", err)
 	}
 
 	// With no --client-id, this run leans on the Azure CLI session — for the
@@ -206,10 +208,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// sign-in happens at the first token request and needs no CLI session.
 	if clientID == "" {
 		if err := azure.VerifySession(ctx, probeCred); err != nil {
-			log.Error("Not signed in to Azure; run 'az login' first (or pass --client-id/--tenant-id for device-code sign-in)",
-				"reason", azure.ErrorSummary(err))
 			log.Debug("Session verification failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("not signed in to Azure; run 'az login' first or pass --client-id/--tenant-id for device-code sign-in (%s)",
+				azure.ErrorSummary(err))
 		}
 	}
 
@@ -229,8 +230,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 		clientID, tenantID, err = cmdutil.PromptForDedicatedApp(requirements, os.Stdin, clientID, defaultTenantID)
 		if err != nil {
-			log.Error("Cannot download the selected resource types without a dedicated app registration", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("cannot download the selected resource types without a dedicated app registration: %w", err)
 		}
 	}
 
@@ -240,9 +240,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Authenticating with Azure...")
 	azureClient, err := azure.NewClient(ctx, sub, clientID, tenantID)
 	if err != nil {
-		// Runtime error - print and exit without showing help
-		log.Error("Failed to create Azure client", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create Azure client: %w", err)
 	}
 
 	// Get the actual subscription ID being used (may have been auto-detected)
@@ -279,15 +277,11 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// Build fetch requests
 	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub, listConcurrency)
 	if err != nil {
-		// Runtime error - print and exit without showing help
-		log.Error("Failed to build fetch requests", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to build fetch requests: %w", err)
 	}
 
 	if len(requests) == 0 {
-		// Runtime error - print and exit without showing help
-		log.Error("No resources to download")
-		os.Exit(1)
+		return errors.New("no resources to download")
 	}
 
 	log.Info("Preparing to download resources", "count", len(requests))
@@ -372,9 +366,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		log.Info("Starting pipeline execution...")
 		summary, err = p.Execute(ctx, requests)
 		if err != nil {
-			// Runtime error - print and exit without showing help
-			log.Error("Pipeline execution failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("pipeline execution failed: %w", err)
 		}
 	}
 
@@ -409,9 +401,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 
 	if summary.FailedResources > 0 {
-		// Runtime error - print and exit without showing help
-		log.Error("Pipeline completed with errors", "failed", summary.FailedResources)
-		os.Exit(1)
+		return fmt.Errorf("pipeline completed with errors (%d resources failed)", summary.FailedResources)
 	}
 
 	log.Info("Download completed successfully")
@@ -449,19 +439,25 @@ func selectedTypeNames(registry *handlers.Registry, selectedTypes []string, reso
 	}
 }
 
-// BuildWorkerConfig constructs worker configuration from config file. It is
-// exported so the config.example.yaml no-op guard in package cmd can assert
-// that loading the example produces the built-in defaults.
-func BuildWorkerConfig() *models.WorkerConfig {
+// BuildWorkerConfig constructs worker configuration from config file.
+// workersExplicit reports whether --workers was set on the command line
+// (cmd.Flags().Changed). It is exported so the config.example.yaml no-op guard
+// in package cmd can assert that loading the example produces the built-in
+// defaults.
+func BuildWorkerConfig(workersExplicit bool) *models.WorkerConfig {
 	config := models.DefaultWorkerConfig()
 
-	// Read general workers setting from config (overrides defaults)
-	if viper.IsSet("workers") {
-		generalWorkers := viper.GetInt("workers")
-		if generalWorkers > 0 {
-			config.Default = generalWorkers
-			// Don't override API-specific defaults yet - those come from workers-by-api
-		}
+	// Apply the general workers setting only when it was actually provided.
+	// viper.IsSet cannot decide that: once flags are bound it is always true (the
+	// flag default answers), which would copy the flag default over the general
+	// default unconditionally. An explicit flag always counts; otherwise a value
+	// differing from the flag default must come from env or config. A config
+	// value equal to the flag default is indistinguishable from no setting, and
+	// applying it would change nothing.
+	if generalWorkers := viper.GetInt("workers"); generalWorkers > 0 &&
+		(workersExplicit || generalWorkers != cmdutil.DefaultWorkerCount) {
+		config.Default = generalWorkers
+		// Don't override API-specific defaults yet - those come from workers-by-api
 	}
 
 	// Read API-specific worker configuration (highest priority from config)
