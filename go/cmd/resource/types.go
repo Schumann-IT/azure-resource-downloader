@@ -11,6 +11,7 @@ import (
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/runprep"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -90,7 +91,7 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	// --type is a reporting matter here, not a hard error as it would be for a
 	// download.
 	var types []string
-	for _, t := range selectedTypeNames(registry, selectedTypes, resourceGroup, resourceIDs) {
+	for _, t := range runprep.SelectedTypeNames(registry, selectedTypes, resourceGroup, resourceIDs) {
 		if !registry.HasHandler(t) {
 			log.Warn("Unsupported resource type, excluded from the map", "type", t)
 			continue
@@ -102,9 +103,9 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	// Enrich with tenant counts when — and only when — a session is available
 	// without interaction. Failing to obtain one is not an error: the offline
 	// map is complete and correct on its own terms.
-	workerConfig := BuildWorkerConfig(workersExplicit)
+	workerConfig := runprep.BuildWorkerConfig(workersExplicit)
 	counts, unknown, omitReason := tenantCounts(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"),
-		types, listingConcurrency(workerConfig, workersFlag, workersExplicit))
+		types, runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 
 	// State which of the two outputs this is: the same invocation prints
 	// different things on different machines, and an operator must never infer

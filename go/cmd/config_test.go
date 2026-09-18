@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"azure-resource-downloader/cmd/resource"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/runprep"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -137,18 +137,25 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 
 	// Non-flag, config-only sections must resolve to the same values the
 	// download command builds when no config file is present.
-	if got, want := resource.BuildWorkerConfig(false), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
+	if got, want := runprep.BuildWorkerConfig(false), models.DefaultWorkerConfig(); !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildWorkerConfig(false) from config.example.yaml = %+v, want default %+v", got, want)
 	}
 
-	gotTransformers := resource.BuildTransformerConfigs()
+	gotTransformers := runprep.BuildTransformerConfigs()
 	wantTransformers := models.DefaultTransformerConfigs()
 	if !reflect.DeepEqual(gotTransformers, wantTransformers) {
 		t.Errorf("BuildTransformerConfigs() from config.example.yaml = %+v, want default %+v", gotTransformers, wantTransformers)
 	}
 
-	if got := resource.BuildResourceFilters(); len(got) != 0 {
+	if got := runprep.BuildResourceFilters(); len(got) != 0 {
 		t.Errorf("BuildResourceFilters() from config.example.yaml = %+v, want none (filters must stay commented out)", got)
+	}
+
+	// The filter-config hash recorded in resources/metadata.yaml must likewise
+	// be identical, or a drift check against an example-loaded export would
+	// refuse to compare.
+	if got, want := docs.HashResourceFilters(runprep.BuildResourceFilters()), docs.HashResourceFilters(nil); got != want {
+		t.Errorf("filtersSha256 from config.example.yaml = %s, want default %s", got, want)
 	}
 
 	// The taxonomy section changes docs/index.yaml when active, so it must stay

@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Writer handles writing resources to disk
@@ -29,12 +26,11 @@ type Writer struct {
 	// per resource type, hashed over the exact bytes written to disk so a later
 	// comparison against the file matches.
 	promptSHAByType map[string]string
-	// usedNames tracks the file base names already claimed within each resource
-	// type (keyed "<type>/<name>") so two resources whose display names sanitize
-	// to the same string never overwrite each other on disk (or collapse into a
-	// single metadata entry). Guarded by mu.
-	usedNames map[string]bool
-	mu        sync.Mutex
+	// names reserves the file base names claimed within each resource type so
+	// two resources whose display names sanitize to the same string never
+	// overwrite each other on disk (or collapse into a single metadata entry).
+	names *NamePlanner
+	mu    sync.Mutex
 }
 
 // NewWriter creates a new writer. When writePrompts is true, a per-resource-type
@@ -47,7 +43,7 @@ func NewWriter(outputDir string, workerCount int, dryRun, writePrompts bool) *Wr
 		writePrompts:    writePrompts,
 		promptsByType:   make(map[string]string),
 		promptSHAByType: make(map[string]string),
-		usedNames:       make(map[string]bool),
+		names:           NewNamePlanner(),
 	}
 }
 
@@ -154,28 +150,18 @@ type plannedWrite struct {
 }
 
 // planFileNames reserves a unique file base name for every writable resource in
-// a deterministic order: resources are sorted by (type, sanitized name,
-// resource id) before names are assigned, so when several display names
-// sanitize to the same string the one that keeps the bare name is always the
-// lowest resource id — never whichever the concurrent upstream stages happened
-// to deliver first. Reservation itself is done by reserveFileName.
+// a deterministic order (SortForNaming), so when several display names sanitize
+// to the same string the one that keeps the bare name is always the lowest
+// resource id — never whichever the concurrent upstream stages happened to
+// deliver first. Reservation itself is done by the shared NamePlanner.
 func (w *Writer) planFileNames(writable []*models.TransformResult) []plannedWrite {
-	sort.Slice(writable, func(i, j int) bool {
-		a, b := writable[i], writable[j]
-		if a.ResourceType != b.ResourceType {
-			return a.ResourceType < b.ResourceType
-		}
-		if a.SanitizedName != b.SanitizedName {
-			return a.SanitizedName < b.SanitizedName
-		}
-		return a.ResourceID < b.ResourceID
-	})
+	SortForNaming(writable)
 
 	planned := make([]plannedWrite, len(writable))
 	for i, tr := range writable {
 		planned[i] = plannedWrite{
 			result:   tr,
-			fileName: w.reserveFileName(tr.ResourceType, tr.SanitizedName, tr.ResourceID),
+			fileName: w.names.Reserve(tr.ResourceType, tr.SanitizedName, tr.ResourceID),
 		}
 	}
 	return planned
@@ -214,7 +200,7 @@ func (w *Writer) writeResource(transformResult *models.TransformResult, fileName
 	yamlPath := filepath.Join(resourceTypeDir, fileName+".yaml")
 	var facts *models.ResourceFacts
 	if !w.dryRun {
-		yamlData, err := yaml.Marshal(transformResult.CleanedData)
+		yamlData, err := MarshalResourceYAML(transformResult.CleanedData)
 		if err != nil {
 			log.Error("Failed to marshal YAML",
 				"resource_id", transformResult.ResourceID,
@@ -291,51 +277,6 @@ func (w *Writer) writeResource(transformResult *models.TransformResult, fileName
 		Facts:        facts,
 		Error:        nil,
 	}
-}
-
-// reserveFileName returns a file base name (no extension) for a resource that
-// is unique within its resource type. The first resource to claim a sanitized
-// name keeps it; any later resource whose name sanitizes to the same string is
-// given a deterministic discriminator derived from its resource ID, so colliding
-// resources are written to distinct files instead of silently overwriting one
-// another. It never overwrites: the returned name is guaranteed unused so far.
-func (w *Writer) reserveFileName(resourceType, sanitizedName, resourceID string) string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	key := func(name string) string { return resourceType + "/" + name }
-
-	if !w.usedNames[key(sanitizedName)] {
-		w.usedNames[key(sanitizedName)] = true
-		return sanitizedName
-	}
-
-	// Collision: append a stable discriminator. A numeric counter guards the
-	// (astronomically unlikely) case that the discriminated name is also taken,
-	// e.g. two resources sharing both a sanitized name and a resource ID.
-	base := sanitizedName + "_" + nameDiscriminator(resourceID)
-	candidate := base
-	for i := 2; w.usedNames[key(candidate)]; i++ {
-		candidate = fmt.Sprintf("%s_%d", base, i)
-	}
-	w.usedNames[key(candidate)] = true
-
-	logger.Default.Warn("Resource file name collides with another resource of the same type; writing to a disambiguated name to avoid overwriting",
-		"type", resourceType,
-		"name", sanitizedName,
-		"resolved_name", candidate,
-		"resource_id", resourceID)
-
-	return candidate
-}
-
-// nameDiscriminator derives a short, stable, filesystem-safe token from a
-// resource ID, used to disambiguate colliding file names. It is a prefix of the
-// SHA-256 of the ID, so it is deterministic for a given resource and does not
-// depend on the (non-deterministic) order resources are written.
-func nameDiscriminator(resourceID string) string {
-	sum := sha256.Sum256([]byte(resourceID))
-	return hex.EncodeToString(sum[:])[:8]
 }
 
 // buildResourceFacts assembles the immutable facts recorded in metadata.yaml

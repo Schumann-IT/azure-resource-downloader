@@ -13,6 +13,7 @@ import (
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
+	"azure-resource-downloader/internal/runprep"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -112,9 +113,9 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Enumerate through the exact listing path a download uses to build its
 	// fetch requests: scope, filters and the treatment of unlistable types are
 	// shared code, not a parallel implementation.
-	workerConfig := BuildWorkerConfig(workersExplicit)
+	workerConfig := runprep.BuildWorkerConfig(workersExplicit)
 	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub,
-		listingConcurrency(workerConfig, workersFlag, workersExplicit))
+		runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 	if err != nil {
 		return fmt.Errorf("failed to list resources: %w", err)
 	}

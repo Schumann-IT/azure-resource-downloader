@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/models"
 )
 
@@ -34,25 +33,6 @@ func TestHandlerIdentity(t *testing.T) {
 	}
 	if got := handlerIdentity(&fakeHandler{}); got != "resource.fakeHandler" {
 		t.Errorf("handlerIdentity(pointer) = %q, want %q", got, "resource.fakeHandler")
-	}
-}
-
-// TestListingConcurrency guards the one shared derivation of listing
-// concurrency: an explicit --workers must mean the same thing in download, list
-// and types, and without it the Microsoft Graph worker count (the stricter rate
-// limit) bounds the per-type listing calls.
-func TestListingConcurrency(t *testing.T) {
-	wc := models.DefaultWorkerConfig()
-
-	if got := listingConcurrency(wc, 3, true); got != 3 {
-		t.Errorf("explicit --workers 3 yields %d, want 3", got)
-	}
-	if got := listingConcurrency(wc, cmdutil.DefaultWorkerCount, false); got != wc.MicrosoftGraph {
-		t.Errorf("no explicit flag yields %d, want the Graph worker count %d", got, wc.MicrosoftGraph)
-	}
-	sparse := &models.WorkerConfig{Default: 7}
-	if got := listingConcurrency(sparse, 0, false); got != 7 {
-		t.Errorf("no Graph count yields %d, want the general default 7", got)
 	}
 }
 
