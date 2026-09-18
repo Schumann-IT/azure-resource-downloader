@@ -31,7 +31,7 @@ func subcommand(t *testing.T, parent *cobra.Command, name string) *cobra.Command
 func TestResourceGroupSharesAuthFlags(t *testing.T) {
 	resourceCmd := newResourceCommand()
 
-	for _, name := range []string{"download", "types", "list"} {
+	for _, name := range []string{"download", "drift", "types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
 		for _, flag := range []string{"subscription", "client-id", "tenant-id", "type", "resource-id", "resource-group", "workers"} {
 			// InheritedFlags is what a subcommand gets from its parents, and
@@ -46,8 +46,9 @@ func TestResourceGroupSharesAuthFlags(t *testing.T) {
 		}
 	}
 
-	// --timeout wraps each resource fetch and the remaining switches are
-	// download-only concerns, so types and list must not offer them.
+	// --timeout wraps each resource fetch (download and drift only) and the
+	// remaining switches are download-only concerns, so types and list must not
+	// offer them.
 	for _, name := range []string{"types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
 		for _, flag := range []string{"timeout", "prune", "no-prompt", "resolve-secrets"} {
@@ -61,6 +62,21 @@ func TestResourceGroupSharesAuthFlags(t *testing.T) {
 	for _, flag := range []string{"type", "resource-id", "resource-group", "workers", "timeout", "prune", "no-prompt", "resolve-secrets"} {
 		if download.Flags().Lookup(flag) == nil {
 			t.Errorf("resource download is missing --%s", flag)
+		}
+	}
+
+	// Drift fetches and transforms like a download, so it honours --timeout and
+	// --resolve-secrets; its own switches are --domain and --exit-code. It must
+	// not offer the write-path switches it ignores (prune, no-prompt).
+	driftCmd := subcommand(t, resourceCmd, "drift")
+	for _, flag := range []string{"timeout", "resolve-secrets", "domain", "exit-code"} {
+		if driftCmd.Flags().Lookup(flag) == nil {
+			t.Errorf("resource drift is missing --%s", flag)
+		}
+	}
+	for _, flag := range []string{"prune", "no-prompt"} {
+		if driftCmd.Flags().Lookup(flag) != nil {
+			t.Errorf("resource drift offers --%s but ignores it", flag)
 		}
 	}
 }

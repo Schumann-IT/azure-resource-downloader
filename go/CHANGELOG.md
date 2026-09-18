@@ -46,15 +46,38 @@ This project is released independently of the documentation browser in `web/`: i
   yields ids; when an export for the tenant exists, display names recorded in its `resources/metadata.yaml` are
   joined in and resources the export does not know yet are marked new — nothing is fetched merely to prettify
   the listing. Unlistable types are reported as unknown, never as empty, and do not fail the command.
+- **`azure-rd resource drift` — has the tenant changed since the last download?** Fetches the tenant's current
+  state through the download's own listing, fetch and transform stages, compares it against the export on disk
+  and records what was added, changed, renamed or removed — without re-baselining anything. The export is the
+  baseline and stays untouched; the only output is the `<tenant>/drift/` tree (an observation record plus the
+  fetched bytes of drifted resources at paths mirroring `resources/`), cleared and rebuilt on every run.
+  Comparability is a precondition: the command refuses rather than report noise when the export's recorded
+  transform or filter configuration differs from the run's, reports entries written under another configuration
+  as unattested instead of drifted, and asserts removals only under the same complete-and-covered rule as
+  `--prune`. Changed resources additionally get dotted-path old → new field deltas, the report names how many
+  documents the drift will make stale once re-baselined, and an opt-in flag turns found drift into a distinct
+  exit code for CI. `--dry-run` still fetches and reports in full — nothing about drift is answerable offline —
+  and only withholds the `drift/` tree. See the README's `resource drift` section for usage.
+- **The export now attests the configuration that produced each resource's bytes.** Every entry in
+  `resources/metadata.yaml` records the transform-config hash of the run that wrote it, and the run records a
+  hash of its resource-filter configuration. Partial runs merge, so the run-level hash alone cannot attest a
+  mixed baseline; the per-entry fact is what lets a drift check trust exactly the comparable entries and report
+  the rest as unattested instead of drifted. **No re-download is required**: entries written by earlier versions
+  simply carry no attestation yet and backfill as resources are rewritten.
 
 ### Changed
 
 - **The selection flags (`--type`, `--resource-id`, `--resource-group`) and `--workers` moved from
   `resource download` onto the `resource` group**, now that every subcommand honours them: `types` narrows its
   map offline and its counts online, `list` selects what it enumerates, and `--workers` bounds the listing
-  concurrency they all share. `--timeout` stays on `download`, the only command that fetches individual
+  concurrency they all share. `--timeout` stays on `download` and `drift`, the commands that fetch individual
   resources. Invocations are unaffected — the flags follow the subcommand either way — as are configuration
   keys and `AZURE_RD_*` overrides.
+- **The run preparation is shared code, not download-private.** Everything a resource-fetching command does
+  before its real work — configuration reading, worker/transformer/filter construction, session verification,
+  the dedicated-app probe and prompt, authentication, tenant and output resolution, the registry and the fetch
+  requests — moved into one shared preparation that `download` and `drift` both run, so the two cannot diverge
+  in authentication or selection semantics. No user-visible behaviour changed in the move.
 - **An explicit `--workers` now also bounds the per-type listing concurrency.** Previously it only sized the
   per-resource fetch workers while listing always ran at the Microsoft Graph worker count; the one derivation
   is now shared by `download`, `list` and `types`, so the flag means the same thing wherever listing happens.

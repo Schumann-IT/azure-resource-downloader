@@ -23,6 +23,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Quick start](#quick-start)
 - [Commands](#commands)
   - [`resource download`](#resource-download)
+  - [`resource drift`](#resource-drift)
   - [`resource types`](#resource-types)
   - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
@@ -142,8 +143,8 @@ command or its group and must follow it: `azure-rd resource download --type X`, 
 `azure-rd --type X resource download`. The authentication flags (`--subscription`, `--client-id`,
 `--tenant-id`), the selection flags (`--type`, `--resource-id`, `--resource-group`) and `--workers` are
 declared once on the `resource` group, so every subcommand under it accepts them; `--timeout` stays on
-`download`, the only command that fetches individual resources. `--help` on any command lists its flags; this
-section explains what they do.
+`download` and `drift`, the two commands that fetch individual resources. `--help` on any command lists its
+flags; this section explains what they do.
 
 ### `resource download`
 
@@ -184,6 +185,50 @@ absent or feed `--prune`). A second Ctrl+C force-quits.
 **What a run prints:** per-type counts as listing finishes, progress every 10 %, then a summary with
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
 reason) and the types that listed empty, and finally whether the run is complete.
+
+### `resource drift`
+
+Answers **"has this tenant changed since the last download?"** — without re-baselining anything. It runs the
+download's own listing, fetch and transform stages, then **compares instead of writing**: each resource's
+freshly marshalled bytes are hashed exactly as a download would hash them and matched against the export's
+recorded `sourceSha256`, by resource id first, so a renamed resource is reported as a *rename* rather than an
+add plus a remove.
+
+```bash
+azure-rd resource drift                                   # compare the whole tenant against its export
+azure-rd resource drift --type Microsoft.Graph/groups    # one type only
+azure-rd resource drift --dry-run                         # report in full, write nothing
+azure-rd resource drift --exit-code                       # exit 3 when drift was found, for CI
+```
+
+| Flag | Meaning |
+|---|---|
+| `--domain` | Assert which export folder to compare against. Refused when it differs from the signed-in tenant — drift against another tenant's export is all noise. |
+| `--resolve-secrets`, `--timeout`, `--workers` | As on `download`. `--resolve-secrets` must match the setting the export was downloaded with, or the comparability preflight refuses. |
+| `--exit-code` | Exit `3` when drift was found (default: drift is a report, not a failure). |
+
+**The export is the baseline and stays untouched.** Drift writes nothing under `resources/` or `docs/` and
+never prunes; its only output is the `<tenant>/drift/` tree (see [Output layout](#output-layout)): an
+observation record `drift/metadata.yaml` plus the fetched bytes of every *added*, *changed* and *renamed*
+resource at paths mirroring `resources/` exactly, so a payload is byte-comparable with the baseline file it
+shadows. The tree is cleared and rebuilt on every run, so it always holds exactly the latest observation.
+Re-baselining is a normal `resource download`.
+
+**Comparability is a precondition.** The command refuses (exit `2`) when there is no baseline, when the
+export belongs to a different tenant, or when the export's recorded transform or filter configuration differs
+from this run's — comparing across a different configuration would report every resource as drifted.
+Individual entries written under an older configuration (or by a tool version predating the per-entry
+attestation) are reported as **unattested** and excluded from the verdict counts, never counted as drift.
+
+**Removals follow the prune rule.** A resource is only asserted *removed* when the run is complete and its
+type was actually covered; an incomplete run suppresses removals and says so. Types that could not be listed
+are reported as *unknown* and excluded from the totals. Verdict counts, per-finding lines and — for changed
+resources — dotted-path `old → new` field deltas are printed (full delta values at `--log-level debug`), plus
+how many documents the observed drift will make stale once re-baselined.
+
+**Exit codes:** `0` on success whether or not drift was found; `2` when the question cannot be answered (no
+baseline, wrong tenant, incomparable configuration); `1` only when resources failed to fetch; `3` with
+`--exit-code` when drift was found.
 
 ### `resource types`
 
@@ -465,11 +510,15 @@ AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd resource download
 
 ## Output layout
 
-Everything lives under `<output>/<tenant>/` in two sibling trees that mirror each other exactly:
+Everything lives under `<output>/<tenant>/` in sibling trees that mirror each other exactly (`drift/` exists
+only after a `resource drift` run):
 
 ```
 output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
+    ├── drift/                                    written by azure-rd resource drift — the latest observation only
+    │   ├── metadata.yaml                         what was compared, against which baseline, and the findings
+    │   └── Microsoft.Graph/…/….yaml              fetched bytes of added/changed/renamed resources, mirroring resources/
     ├── resources/                                written by azure-rd resource download — and only by it
     │   ├── metadata.yaml                         facts about this export (see below)
     │   ├── Microsoft.Graph/
@@ -524,6 +573,7 @@ run:
   incompleteReason: ""
   scope: { types: [], resourceIds: [], resourceGroup: "" }   # empty = full export
   transformConfigSha256: 7f…     # hash of the effective transformer config + resolve-secrets switch
+  filtersSha256: c41…            # hash of the effective resource-filter config (drift refuses across a change)
   resolveSecrets: false
   writePrompts: true
   pruned: false
@@ -546,6 +596,8 @@ resources:
     lastSeenAt: 2026-08-31T18:04:12Z
     assignmentTargets: [ … raw assignment targets … ]
     notificationTemplateRefs: [ 9a1e… ]   # compliance policies: templates named by noncompliance actions
+    transformConfigSha256: 7f…   # the config that produced THIS entry's bytes — partial runs merge, so the
+                                 # run-level hash attests only the last run; drift trusts entries per-entry
   Microsoft.Graph/groups/gbl_d_win_all.yaml:
     groupTypes: [DynamicMembership]       # group-only facts, so a referenced group's kind
     securityEnabled: true                 # can be rendered without reading its YAML
@@ -573,8 +625,9 @@ Rules the tool holds itself to, because `--prune` is built on them:
 
 ### Prune
 
-`--prune` is the **only** delete path in the codebase. After the merge it deletes the YAML (and sidecar
-artifacts) of every entry marked `presentInTenant: false` within a type this run covered, drops the entry, and
+`--prune` is the **only** delete path inside the export (`resources/`); the single other delete in the tool is
+a `resource drift` run clearing its own `drift/` tree before rebuilding it. After the merge, prune deletes the
+YAML (and sidecar artifacts) of every entry marked `presentInTenant: false` within a type this run covered, drops the entry, and
 sets `run.pruned: true`. It refuses to run — and says why — unless the run is complete and had no failed
 resources. It never leaves `resources/`, never deletes `metadata.yaml`, removes a type's `doc-prompt.md` only
 when the type emptied out entirely, and **never touches `docs/`**: a pruned resource leaves its document behind
@@ -888,6 +941,9 @@ channels. Type **listing** runs before it, concurrently across types.
   the types that listed empty, and whether that set is complete. No resource is fetched, transformed or
   written, and `metadata.yaml` is not updated. With `--prune` it lists exactly the files a real run would
   delete, from the same selection.
+- `resource drift --dry-run` still **fetches and compares in full** — nothing about drift is answerable
+  without the tenant's current bytes — but withholds the `drift/` tree entirely (clearing nothing): an
+  observation from an earlier run stays on disk and is reported as not refreshed.
 - `docs generate-prompt --dry-run` runs the full comparison and reports the work list without writing
   `generate.md`; `docs generate-index --dry-run` reports the index counts without writing `index.yaml`.
 

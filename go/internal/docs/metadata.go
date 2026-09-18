@@ -54,9 +54,14 @@ type ExportRun struct {
 	// TransformConfigSha256 explains mass hash movement: flip the transform
 	// config and every resource hash moves, which a later diff can attribute.
 	TransformConfigSha256 string
-	ResolveSecrets        bool
-	WritePrompts          bool
-	DryRun                bool
+	// FiltersSha256 records the effective resource-filter configuration.
+	// Filters never rewrite bytes, only presence, so a drift check must refuse
+	// to compare across a different filter configuration or resources appear
+	// and vanish for configuration reasons.
+	FiltersSha256  string
+	ResolveSecrets bool
+	WritePrompts   bool
+	DryRun         bool
 	// Prune requests deletion of files this run establishes are gone from the
 	// tenant. It is honoured only for a complete run with no failures.
 	Prune bool
@@ -85,9 +90,14 @@ type RunMeta struct {
 	IncompleteReason      string    `yaml:"incompleteReason"`
 	Scope                 ScopeMeta `yaml:"scope"`
 	TransformConfigSha256 string    `yaml:"transformConfigSha256"`
-	ResolveSecrets        bool      `yaml:"resolveSecrets"`
-	WritePrompts          bool      `yaml:"writePrompts"`
-	Pruned                bool      `yaml:"pruned"`
+	// FiltersSha256 is the hash of the effective resource-filter configuration
+	// of the run that wrote this file. Exports written before the field exists
+	// carry none; a drift check treats that as unattested (warn), never as a
+	// mismatch (refuse).
+	FiltersSha256  string `yaml:"filtersSha256,omitempty"`
+	ResolveSecrets bool   `yaml:"resolveSecrets"`
+	WritePrompts   bool   `yaml:"writePrompts"`
+	Pruned         bool   `yaml:"pruned"`
 }
 
 // ScopeMeta mirrors RunScope for serialisation.
@@ -136,6 +146,14 @@ type ResourceMeta struct {
 	// generate-prompt can build a template's reverse "Used by" index from
 	// metadata.yaml alone. Empty for resources with no such references.
 	NotificationTemplateRefs []string `yaml:"notificationTemplateRefs,omitempty"`
+	// TransformConfigSha256 is the transform-config hash of the run that wrote
+	// this entry's bytes — a fact ("the config that produced these bytes"), not
+	// a decision. It is what makes a later comparison attributable per entry:
+	// partial runs merge, so the run-level hash attests only the types the last
+	// run covered, while this field travels with the bytes it describes.
+	// Entries written before the field exists carry none and are treated as
+	// unattested by a drift check, never as drift.
+	TransformConfigSha256 string `yaml:"transformConfigSha256,omitempty"`
 }
 
 // NotListedMeta records this run's types that could not be listed (permissions)
@@ -161,6 +179,32 @@ func HashTransformConfig(configs []models.TransformerConfig, resolveSecrets bool
 	if err != nil {
 		// Marshalling a config of plain maps and strings cannot realistically
 		// fail; return empty rather than panicking.
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// HashResourceFilters returns a stable SHA-256 over the effective per-type
+// resource filters. Filters exclude whole resources rather than rewriting
+// bytes, so they are deliberately not part of HashTransformConfig — but a
+// comparison across a different filter configuration would read as resources
+// appearing and vanishing, so the export records this hash for a drift check
+// to compare against. The representation is canonical (sorted maps), so two
+// equivalent configurations always hash identically.
+func HashResourceFilters(filters []models.ResourceFilter) string {
+	canonical := make(map[string]map[string]string, len(filters))
+	for _, f := range filters {
+		props := make(map[string]string, len(f.Properties))
+		for _, p := range f.Properties {
+			props[p.Property] = p.Pattern.String()
+		}
+		canonical[f.ResourceType] = props
+	}
+	data, err := yaml.Marshal(canonical)
+	if err != nil {
+		// Marshalling a map of strings cannot realistically fail; return empty
+		// rather than panicking.
 		return ""
 	}
 	sum := sha256.Sum256(data)
@@ -317,6 +361,7 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 		IncompleteReason:      s.IncompleteReason,
 		Scope:                 scopeMeta(run.Scope),
 		TransformConfigSha256: run.TransformConfigSha256,
+		FiltersSha256:         run.FiltersSha256,
 		ResolveSecrets:        run.ResolveSecrets,
 		WritePrompts:          run.WritePrompts,
 		Pruned:                false,
@@ -390,6 +435,9 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 				GroupTypes:               sortedCopy(r.Facts.GroupTypes),
 				SecurityEnabled:          r.Facts.SecurityEnabled,
 				NotificationTemplateRefs: sortedCopy(r.Facts.NotificationTemplateRefs),
+				// The bytes were just written under this run's config, so the
+				// per-entry attestation is exactly the run's hash.
+				TransformConfigSha256: run.TransformConfigSha256,
 			}
 			presentKeys[key] = true
 

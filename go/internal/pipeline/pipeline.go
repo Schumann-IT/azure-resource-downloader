@@ -139,6 +139,32 @@ func (p *Pipeline) Execute(ctx context.Context, requests []*models.FetchRequest)
 	return summary, nil
 }
 
+// CollectTransforms runs only the fetch and transform stages for the given
+// requests and returns every transform result, drained. It is the pipeline a
+// consumer that compares instead of writing uses (the drift check): everything
+// upstream of the writer — the fetcher with its retries and permission skips,
+// the transformer with its configured transformers and resource filters — is
+// byte-for-byte the download's code path, so a comparison can never disagree
+// with what a download would have written.
+//
+// The accounting invariant holds here exactly as in Execute: every request
+// produces exactly one result (cancelled requests produce a Cancelled result),
+// and a mismatch is a pipeline bug, not a condition to tolerate.
+func (p *Pipeline) CollectTransforms(ctx context.Context, requests []*models.FetchRequest) ([]*models.TransformResult, error) {
+	fetchResults := p.fetcher.Fetch(ctx, requests)
+	transformResults := p.transformer.Transform(ctx, fetchResults)
+
+	results := make([]*models.TransformResult, 0, len(requests))
+	for tr := range transformResults {
+		results = append(results, tr)
+	}
+
+	if len(results) != len(requests) {
+		return results, fmt.Errorf("pipeline invariant violated: %d results produced for %d requests", len(results), len(requests))
+	}
+	return results, nil
+}
+
 // DryRunSummary builds the ExecutionSummary for a list-only dry run: one
 // would-download result per request, with no fetch, transform or write
 // performed. It exists so the completeness accounting and the one-result-per-
