@@ -5,7 +5,7 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
-## 1. Detect drift between the tenant and the export on disk
+## 1. ~~Detect drift between the tenant and the export on disk~~
 
 **Goal.** Answer "has this tenant changed since the last download?" without re-baselining it. A `resource drift`
 command fetches the tenant's current state, compares it against the export already on disk, and records what was
@@ -70,52 +70,52 @@ in the tenant.
 
 **Plan.**
 
-- Add `resource drift` beside `resource download`. It needs no flag registration of its own beyond the shared
+- ~~Add `resource drift` beside `resource download`. It needs no flag registration of its own beyond the shared
   parent-level groups and its own switches, and binds flags per-execution before reading any value, like every
-  other command.
-- Record the transform-config hash per resource entry in `resources/metadata.yaml` — a fact ("the config that
+  other command.~~
+- ~~Record the transform-config hash per resource entry in `resources/metadata.yaml` — a fact ("the config that
   produced these bytes"), written by the download alongside `sourceSha256` and merged like every other fact.
   Entries written before the field exists carry none and are treated as unattested. This download-path change
   ships with or before drift; it forces no re-download — the field backfills as resources are rewritten, and
-  until then unattested entries degrade to a report line, never to a false verdict.
-- Extract the run preparation the two commands share, currently inline in the download command, into its own
+  until then unattested entries degrade to a report line, never to a false verdict.~~
+- ~~Extract the run preparation the two commands share, currently inline in the download command, into its own
   package: config reading, worker/transformer/filter construction, the offline probe registry and dedicated-app
   prompt, authentication, export-directory and tenant resolution, the real registry and the fetch requests,
   returning a prepared run. Keep `internal/cmdutil` to flag groups and prompts. The extraction earns its keep
   here, with a second consumer: it is what makes the two commands incapable of diverging in auth or selection
-  semantics.
-- Keep `resource drift` read-only with respect to the export: it writes nothing under `resources/`, never
+  semantics.~~
+- ~~Keep `resource drift` read-only with respect to the export: it writes nothing under `resources/`, never
   updates the export's `metadata.yaml`, never touches `docs/` and never prunes. Its only output is the
-  `drift/` tree. Re-baselining is a normal `resource download`.
-- Resolve the export directory and cross-check it against `metadata.tenant` the way the `docs` subcommands do,
-  including the offline `--domain` escape, so drift cannot be reported against the wrong tenant.
-- Run a comparability preflight before fetching anything: refuse (distinct "cannot answer" exit code) when
+  `drift/` tree. Re-baselining is a normal `resource download`.~~
+- ~~Resolve the export directory and cross-check it against `metadata.tenant` the way the `docs` subcommands do,
+  including the offline `--domain` escape, so drift cannot be reported against the wrong tenant.~~
+- ~~Run a comparability preflight before fetching anything: refuse (distinct "cannot answer" exit code) when
   there is no baseline, or when the current transform-config hash or the effective resource-filter config
   differ from what the baseline attests (`resolveSecrets` rides the transform-config hash and needs no
   separate check). Judge comparability per covered type — `lastCoveredAt`/`lastCoveredBy` — never by run-scope
   equality, which also gives drift a natural `--type` scoping; an entry whose recorded config hash is missing
   or different is reported as unattested, excluded from the verdict counts, never counted as drift. Warn once
   when the effective config is `base64-decode` in `file` mode with `remove-source`, stating that artifact
-  content drift is not detected in that configuration.
-- Reuse the existing pipeline unchanged (list → fetch → transform) and compare instead of writing, hashing the
+  content drift is not detected in that configuration.~~
+- ~~Reuse the existing pipeline unchanged (list → fetch → transform) and compare instead of writing, hashing the
   same marshalled bytes the writer hashes so a verdict can never disagree with what a download would record.
   That marshalling and the sanitize/name-planning that assigns collision-free file names are private to the
   writer today; extract them for shared use rather than reimplementing — a second marshal path is exactly how
   the two commands would diverge. Preserve the accounting invariant: every request still produces exactly one
-  result.
-- Decide verdicts from `metadata.yaml` alone — unchanged / changed / added / removed / renamed — matching on
+  result.~~
+- ~~Decide verdicts from `metadata.yaml` alone — unchanged / changed / added / removed / renamed — matching on
   `resourceId` first so a renamed resource is reported as a rename rather than an add plus a remove, and
-  excluding entries that were filtered, permission-skipped or already known absent.
-- Gate removals on the same rule as `--prune`: only assert that a resource is gone when the run is `Complete`
+  excluding entries that were filtered, permission-skipped or already known absent.~~
+- ~~Gate removals on the same rule as `--prune`: only assert that a resource is gone when the run is `Complete`
   and its type was actually covered. Report types that could not be listed as *unknown*, excluded from the
-  totals, and state explicitly when removals were suppressed.
-- Persist one artifact per tenant, `<output>/<tenant>/drift/metadata.yaml` — at the root of its tree exactly
+  totals, and state explicitly when removals were suppressed.~~
+- ~~Persist one artifact per tenant, `<output>/<tenant>/drift/metadata.yaml` — at the root of its tree exactly
   as the export's own `metadata.yaml` sits at the root of `resources/` — overwritten on every run and withheld
   entirely under `--dry-run`. It records facts only — the verdicts and field deltas — never a severity,
   classification or other revisable judgement, so revising how drift is presented never requires re-running a
   check. A removed resource is a verdict here and nothing more: there are no bytes to persist for a deletion,
-  and the export's own `presentInTenant` stays untouched until a real re-download.
-- Persist the fetched bytes of every *added*, *changed* and *renamed* resource in the same tree, with paths
+  and the export's own `presentInTenant` stays untouched until a real re-download.~~
+- ~~Persist the fetched bytes of every *added*, *changed* and *renamed* resource in the same tree, with paths
   mirroring `resources/` exactly (`drift/<APIType>/<endpoint>/<name>.yaml`), so a payload joins to its
   baseline file, its finding and its document by the same key — and write the same marshalled bytes the
   writer would, so a payload is byte-comparable with the baseline file it shadows. A rename is a content
@@ -124,51 +124,51 @@ in the tenant.
   never collide with the tree's own `metadata.yaml`, mirroring the rule that keeps `generate.md` and
   `index.yaml` safe at the `docs/` root. When planning payload names, reserve every key the baseline already
   holds, so an *added* resource's mirrored path is the one a subsequent download would actually choose — not
-  a collision resolving differently in the two runs.
-- Make each observation own its tree: clear `drift/` before writing, so it holds exactly the current
+  a collision resolving differently in the two runs.~~
+- ~~Make each observation own its tree: clear `drift/` before writing, so it holds exactly the current
   observation, and list the written payload paths in `drift/metadata.yaml`, so a consumer never trusts a file
   the named observation did not produce. Under `--dry-run` nothing is written and nothing is cleared — the
-  previous observation stays intact and is reported as not refreshed.
-- Make the artifact self-describing about what it measured: the baseline it was compared against (the export's
+  previous observation stays intact and is reported as not refreshed.~~
+- ~~Make the artifact self-describing about what it measured: the baseline it was compared against (the export's
   `generatedAt`, tool version and transform-config hash), the tenant, run completeness, the verdict counts and
   the types whose drift is unknown. A consumer must be able to tell that a re-download has invalidated it
-  instead of silently trusting a record of a superseded baseline.
-- Key each finding the way `docs generate-index` keys a resource, and carry the derived document path, so a
-  drift finding joins to its document and to `index.yaml` with no extra wiring on the consuming side.
-- Give each finding the facts a consumer needs without opening any YAML: the display name (old and new when
+  instead of silently trusting a record of a superseded baseline.~~
+- ~~Key each finding the way `docs generate-index` keys a resource, and carry the derived document path, so a
+  drift finding joins to its document and to `index.yaml` with no extra wiring on the consuming side.~~
+- ~~Give each finding the facts a consumer needs without opening any YAML: the display name (old and new when
   renamed), the baseline's `sourceSha256` and the payload's sha256 — all read from the resource or computed
   from its bytes, never a judgement. The hashes give a per-file integrity check on top of the tree-level
   baseline gate: a consumer can verify the baseline file it is about to diff is the one the verdict was
-  decided against, and cache a computed diff under a stable key.
-- Keep the artifact deterministic apart from the moment of observation: hash the findings alone into a
+  decided against, and cache a computed diff under a stable key.~~
+- ~~Keep the artifact deterministic apart from the moment of observation: hash the findings alone into a
   `findingsSha256`, so re-running over an unchanged tenant produces identical bytes except the timestamp and
   "the same drift as last time" is a single comparison. This is also what would let an append-only history
-  deduplicate, if one is ever added.
-- Report the same information on the console — a summary (compared / unchanged / changed / added / removed /
+  deduplicate, if one is ever added.~~
+- ~~Report the same information on the console — a summary (compared / unchanged / changed / added / removed /
   renamed / unknown / failed) plus a verdict line — with exit codes mirroring the existing commands: success
   whether or not drift was found, an opt-in `--exit-code` for CI gating on drift, "cannot answer" for an
-  unanswerable run, and failure only when resources failed to fetch.
-- Read the on-disk resource YAML for changed resources only, to record and print dotted-path `old → new` field
+  unanswerable run, and failure only when resources failed to fetch.~~
+- ~~Read the on-disk resource YAML for changed resources only, to record and print dotted-path `old → new` field
   deltas — a detail tier layered on top of the metadata-only verdicts, so the cheap path needs no file reads.
-  Truncate long values; keep whole-document output behind `--log-level debug`.
-- Close the loop with the documentation pipeline by reporting how many documents the observed drift will make
-  stale once re-baselined, pointing at `docs generate-prompt`.
-- Deferred, deliberately: an append-only drift history (a timeline of checks rather than the latest one).
+  Truncate long values; keep whole-document output behind `--log-level debug`.~~
+- ~~Close the loop with the documentation pipeline by reporting how many documents the observed drift will make
+  stale once re-baselined, pointing at `docs generate-prompt`.~~
+- ~~Deferred, deliberately: an append-only drift history (a timeline of checks rather than the latest one).
   Unbounded growth needs a retention policy, and the only delete paths in the tool are `--prune` (inside the
   export) and a drift run clearing its own `drift/` tree — neither expires history — so it waits until a
-  consumer actually needs a timeline rather than "has it drifted since the export?".
-- Cover with unit tests over a fixture export: each verdict, rename matching (including that the payload
+  consumer actually needs a timeline rather than "has it drifted since the export?".~~
+- ~~Cover with unit tests over a fixture export: each verdict, rename matching (including that the payload
   lands at the new key with both keys on the finding), removal suppression on an incomplete run, the
   comparability refusals, that `--dry-run` writes nothing and clears nothing, that the payload tree is
   cleared and rebuilt to exactly the current findings (a reverted resource leaves no leftover), that a drift
   run never writes under `resources/` or `docs/`, that an unattested entry (missing or divergent per-entry
   config hash) is reported and excluded rather than counted as drift, and that the artifact is
   byte-identical over an unchanged tenant apart from its timestamp. Cover the extracted run preparation where
-  the moved code was covered before.
-- Document the command and its tree in `README.md` (usage, the drift metadata's shape and purpose, and the
+  the moved code was covered before.~~
+- ~~Document the command and its tree in `README.md` (usage, the drift metadata's shape and purpose, and the
   output layout gaining a `drift/` tree at the tenant root, shaped like `resources/`), name it in the rules'
   output-layout section — including the narrowed delete rule (`--prune` is the only delete path inside the
-  export; a drift run clears only its own `drift/` tree) — and record the capability in `CHANGELOG.md`.
+  export; a drift run clears only its own `drift/` tree) — and record the capability in `CHANGELOG.md`.~~
 
 ## Parked ideas
 
