@@ -31,6 +31,8 @@ This project is released independently of the documentation browser in `web/`: i
 
 ### Added
 
+#### Commands 
+
 - **`azure-rd resource types` — the map of what this build supports, with tenant counts when a session allows.**
   Prints every registered resource type with the handler that implements it and the API it speaks, grouped by
   API surface; this half is a property of the binary and works offline, with no subscription and no sign-in.
@@ -58,12 +60,34 @@ This project is released independently of the documentation browser in `web/`: i
   documents the drift will make stale once re-baselined, and an opt-in flag turns found drift into a distinct
   exit code for CI. `--dry-run` still fetches and reports in full — nothing about drift is answerable offline —
   and only withholds the `drift/` tree. See the README's `resource drift` section for usage.
-- **The export now attests the configuration that produced each resource's bytes.** Every entry in
-  `resources/metadata.yaml` records the transform-config hash of the run that wrote it, and the run records a
-  hash of its resource-filter configuration. Partial runs merge, so the run-level hash alone cannot attest a
-  mixed baseline; the per-entry fact is what lets a drift check trust exactly the comparable entries and report
-  the rest as unattested instead of drifted. **No re-download is required**: entries written by earlier versions
-  simply carry no attestation yet and backfill as resources are rewritten.
+
+#### Downloading a tenant's configuration
+
+- **Ctrl+C now stops a run cleanly, and the export metadata can never be left half-written.** An interrupt
+  cancels the run through the pipeline's normal cancellation path: every request is still accounted for, the
+  summary reports the cancellations and the run is recorded as incomplete — so an interrupted run can never
+  mark a resource absent or feed `--prune`. A second Ctrl+C force-quits. `resources/metadata.yaml` — the
+  baseline every later comparison trusts — is now replaced atomically (temp file, then rename), so a run
+  killed at any moment leaves either the previous file or the new one, never a truncated mix.
+
+#### Release Workflow
+
+- **The linter set is now committed, so the editor and the command line agree.** A `.golangci.yml` pins which
+  linters run instead of leaving it to whichever golangci-lint version happens to be installed, and GoLand can
+  be pointed at the same file, so an IDE warning and a `make lint-check` finding are the same thing. Beyond the
+  default set it enables only checks that mirror an inspection GoLand has on by default, each annotated with
+  the one it mirrors; checks that would be stricter than the IDE are deliberately left out. `make lint` and
+  `make lint-check` validate the file before linting, so a typo in it fails the run rather than silently
+  reverting to the defaults. How to point the IDE at it is documented in `README.md`.
+- **`make branch-ready` reports whether a feature or fix branch is ready to ship.** It runs `make ci`, then checks
+  that the work is recorded under `[Unreleased]` and that the `NEXT-ITERATIONS.md` entries the branch delivered
+  have been cleared out and the rest renumbered — struck-out entries now stay in place while a branch is in
+  progress and are deleted when it closes, so a reviewer can see what the branch set out to do beside what it
+  did. Like the release report it edits nothing, but it reports every check and exits non-zero if any of them
+  failed, so it can gate a merge. It refuses to run while this folder has uncommitted changes, so the verdict
+  describes the commit that will be merged; that read-only, folder-scoped check is the only git either report
+  runs. Also available as `make branch-ready-go` from the repository root; what it checks is documented in
+  `README.md`.
 
 ### Changed
 
@@ -86,6 +110,12 @@ This project is released independently of the documentation browser in `web/`: i
   all exported types are Entra ID / Intune configuration, not ARM resources, and downloading is one verb among
   several. `--help`, the README title and the example config header now lead with the Entra ID / Intune tenant
   and the documentation half; the `azure-rd` binary name, module path and `AZURE_RD_*` prefix are unchanged.
+- **The export now attests the configuration that produced each resource's bytes.** Every entry in
+  `resources/metadata.yaml` records the transform-config hash of the run that wrote it, and the run records a
+  hash of its resource-filter configuration. Partial runs merge, so the run-level hash alone cannot attest a
+  mixed baseline; the per-entry fact is what lets a drift check trust exactly the comparable entries and report
+  the rest as unattested instead of drifted. **No re-download is required**: entries written by earlier versions
+  simply carry no attestation yet and backfill as resources are rewritten.
 
 ### Fixed
 
@@ -120,36 +150,6 @@ This project is released independently of the documentation browser in `web/`: i
   `make lint` fix what they can (`lint` now runs `golangci-lint --fix`), while the new `make fmt-check` and
   `make lint-check` only report and fail. `check` — and therefore `ci` and `release-ready` — runs the `-check`
   variants, so it leaves the working tree exactly as it found it.
-
-### Added
-
-#### Downloading a tenant's configuration
-
-- **Ctrl+C now stops a run cleanly, and the export metadata can never be left half-written.** An interrupt
-  cancels the run through the pipeline's normal cancellation path: every request is still accounted for, the
-  summary reports the cancellations and the run is recorded as incomplete — so an interrupted run can never
-  mark a resource absent or feed `--prune`. A second Ctrl+C force-quits. `resources/metadata.yaml` — the
-  baseline every later comparison trusts — is now replaced atomically (temp file, then rename), so a run
-  killed at any moment leaves either the previous file or the new one, never a truncated mix.
-
-#### Release Workflow
-
-- **The linter set is now committed, so the editor and the command line agree.** A `.golangci.yml` pins which
-  linters run instead of leaving it to whichever golangci-lint version happens to be installed, and GoLand can
-  be pointed at the same file, so an IDE warning and a `make lint-check` finding are the same thing. Beyond the
-  default set it enables only checks that mirror an inspection GoLand has on by default, each annotated with
-  the one it mirrors; checks that would be stricter than the IDE are deliberately left out. `make lint` and
-  `make lint-check` validate the file before linting, so a typo in it fails the run rather than silently
-  reverting to the defaults. How to point the IDE at it is documented in `README.md`.
-- **`make branch-ready` reports whether a feature or fix branch is ready to ship.** It runs `make ci`, then checks
-  that the work is recorded under `[Unreleased]` and that the `NEXT-ITERATIONS.md` entries the branch delivered
-  have been cleared out and the rest renumbered — struck-out entries now stay in place while a branch is in
-  progress and are deleted when it closes, so a reviewer can see what the branch set out to do beside what it
-  did. Like the release report it edits nothing, but it reports every check and exits non-zero if any of them
-  failed, so it can gate a merge. It refuses to run while this folder has uncommitted changes, so the verdict
-  describes the commit that will be merged; that read-only, folder-scoped check is the only git either report
-  runs. Also available as `make branch-ready-go` from the repository root; what it checks is documented in
-  `README.md`.
 
 ## [0.1.0] - 2026-09-07
 
