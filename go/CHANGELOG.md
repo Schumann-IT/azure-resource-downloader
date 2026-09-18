@@ -11,6 +11,31 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+### Added
+
+#### Static analysis
+
+- **This project can be analysed by a local SonarQube server.** `sonar-project.properties` describes it as its
+  own Sonar project, analysed from this folder with the coverage report `make test-coverage` produces, and the
+  server, the scan and the findings download are driven from the repository root. A tenant export under
+  `output/` is excluded from the analysis: it is customer configuration and must never be uploaded to a
+  code-quality server. The whole setup is optional and gates nothing — see the **Static analysis** section of
+  the [repository README](../README.md).
+
+### Changed
+
+#### Static analysis
+
+- **`.golangci.yml` now also mirrors the Sonar quality profile, so a Sonar finding shows up in the editor
+  instead of waiting for a scan.** `gocognit` is enabled at the profile's own cognitive-complexity threshold
+  rather than the linter's default, which was measured to report every function the server reports plus a few
+  whose scores straddle the limit — the linter can no longer let a server finding through. golangci-lint's
+  output truncation is switched off for the same reason: with the defaults it showed a strict subset of what the
+  server reports, so the two could not be compared at all. `goconst` is deliberately **not** enabled; the file
+  records why it cannot agree with the corresponding Sonar rule. **Consequence: `make lint-check` now reports
+  the complexity findings that were previously only visible on the server, so `make check`, `make ci` and
+  `make branch-ready` fail until those functions are split up.** Nothing about what the tool does changed.
+
 ## [0.2.0] - 2026-09-18
 
 ### Breaking

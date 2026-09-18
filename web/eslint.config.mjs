@@ -6,8 +6,15 @@
 // overlap (unused symbols, unreachable code, `require` in an ES module) the rule
 // sets below cover it, and anything only the bundled inspections report stays an
 // editor hint rather than a merge gate.
+//
+// The second source this file mirrors is the SonarQube quality profile the
+// project is analysed with (`make sonarqube-analyze` at the repository root).
+// eslint-plugin-sonarjs is generated from the same analyzer the server runs, so
+// the rules it covers report locally exactly what the server would report, and a
+// finding no longer has to wait for a scan to be seen.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 
 export default tseslint.config(
@@ -20,7 +27,7 @@ export default tseslint.config(
 
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    extends: [js.configs.recommended, ...tseslint.configs.recommended, sonarjs.configs.recommended],
     // Server-side only — there is no client-side JavaScript in this project, so
     // no browser globals. Jest globals cover the specs in test/.
     languageOptions: { globals: { ...globals.node, ...globals.jest } },
@@ -48,7 +55,7 @@ export default tseslint.config(
   // enabled here.
   {
     files: ['scripts/**/*.js'],
-    extends: [js.configs.recommended],
+    extends: [js.configs.recommended, sonarjs.configs.recommended],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
   },
 

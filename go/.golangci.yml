@@ -5,10 +5,17 @@
 # Go | Linters | "Use config" points at it, so the editor cannot report a
 # different set of findings than the one that gates a merge.
 #
-# Every linter beyond the default set is enabled to mirror a GoLand inspection
-# that is on in the default profile, and says which one. That keeps this file a
-# parity statement rather than a taste statement: a stricter-than-the-IDE choice
-# is a separate decision, not something to slip in here.
+# Every linter beyond the default set is enabled to mirror a check that is
+# already reported somewhere else, and says which one:
+#   - a GoLand inspection that is on in the default profile, or
+#   - a rule in the SonarQube quality profile this project is analysed with
+#     (`make sonarqube-analyze` at the repository root).
+# That keeps this file a parity statement rather than a taste statement: a
+# stricter-than-both choice is a separate decision, not something to slip in
+# here. Where a Sonar rule is parameterised, the parameter is copied from the
+# quality profile and NOT taken from the linter's own default, so a finding
+# reported here is the finding Sonar reports; changing a threshold is a change
+# to make in both places at once, or the two stop agreeing.
 #
 # `golangci-lint config verify` validates this file against the v2 schema and
 # runs as part of `make lint-check`, so a typo fails loudly instead of silently
@@ -35,8 +42,30 @@ linters:
     # shape of a test helper. Excluded for tests below rather than disabled, so
     # the dead-parameter half still applies to the code that ships.
     - unparam
+    # Sonar go:S3776 "Cognitive Complexity of functions should not be too high".
+    # gocognit implements the same Campbell metric the Sonar rule is based on;
+    # measured against a full analysis, gocognit at Sonar's threshold reports
+    # every function Sonar reports plus a few whose scores straddle it (the two
+    # implementations differ by about one point, in both directions), so the
+    # linter can never let a Sonar finding through.
+    - gocognit
+    # Deliberately NOT enabled: goconst, for Sonar go:S1192 "String literals
+    # should not be duplicated". The two cannot be made to agree, and it is not
+    # a matter of thresholds: S1192 counts occurrences per FILE and ignores
+    # identifier-like literals, while goconst counts per PACKAGE and by default
+    # skips call arguments — which is where all of this project's S1192 findings
+    # live. Settings that equalise the counts still produce a different set
+    # (2 of 5 shared when measured), i.e. exactly the two-tools-disagree state
+    # this file exists to prevent. S1192 therefore stays a Sonar-only signal.
 
   settings:
+    gocognit:
+      # The quality profile's threshold, not gocognit's own default of 30:
+      # report a function whose cognitive complexity exceeds 15. Go's explicit
+      # error handling makes this metric climb fast, so expect the count to be
+      # high until the worst functions are split up.
+      min-complexity: 15
+
     govet:
       enable:
         # GoLand: "Nilness analyzer". Not in vet's default pass set, so it has
@@ -59,6 +88,14 @@ linters:
       - path: _test\.go$
         linters:
           - unparam
+
+# golangci-lint truncates its own output by default: at most 50 findings per
+# linter and 3 with the same message. Sonar truncates nothing, so with the
+# defaults `make lint-check` would show a strict subset of what the server
+# reports and the two could not be compared at all.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:

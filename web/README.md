@@ -431,6 +431,16 @@ web/
   built on (markdown-it tokens, parsed YAML, the dynamically imported highlighter) and WebStorm does not flag it
   by default either; `no-console` is on, which with the one directive in `src/main.ts` is what keeps `console`
   to that single startup line.
+- **`eslint-plugin-sonarjs` makes the SonarQube findings local.** It is generated from the same analyzer the
+  server runs, so on the rules it covers ESLint reports what a scan would, in the same places — measured, not
+  assumed. It applies to `src/`, `test/` and `scripts/`, which means it also covers the specs, where the server
+  deliberately applies a reduced rule set. Two gaps are known: rules that **require type information**
+  (a `sort()` without a compare function, and misleading array mutation) stay silent because this config does not
+  enable type-aware parsing, and the `node:`-protocol / `replaceAll` / optional-chaining family the server takes
+  from other plugins is not covered at all. Closing either gap is a separate decision — a dependency and a
+  slower lint, respectively — and until the reported findings are fixed, `npm run lint` fails and so do both
+  readiness gates. Analysis itself is described in the **Static analysis** section of the
+  [repository README](../README.md).
 - The architecture invariants and style/testing requirements live in `.windsurf/rules/` **in this folder**
   (`01-architecture.md`, `02-style-and-quality.md`, `06-next-iterations.md`); the Go rules in `../go` do not
   apply.

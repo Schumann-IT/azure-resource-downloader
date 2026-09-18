@@ -13,6 +13,28 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Added
+
+#### Release workflow
+
+- **This project can be analysed by a local SonarQube server.** `sonar-project.properties` describes it as its
+  own Sonar project, analysed from this folder with an lcov report from the test run; the server, the scan and
+  the findings download are driven from the repository root. The setup is optional, gates nothing and changes
+  nothing about the app — see the **Static analysis** section of the [repository README](../README.md).
+
+### Changed
+
+#### Release workflow
+
+- **ESLint now also mirrors the SonarQube quality profile, so a server finding is an editor squiggle instead of
+  something you learn after a scan.** `eslint-plugin-sonarjs` is generated from the same analyzer the server
+  runs, and on the rules it covers the two were measured to report the same findings in the same places —
+  including the reliability ones that matter here, a `sort()` without a compare function and regular expressions
+  that backtrack super-linearly. It also covers the test suite, which the server deliberately analyses with a
+  reduced rule set. The rules that stay uncovered, and what it would take to close the gap, are documented in
+  `README.md`. **Consequence: `npm run lint` now reports these findings, so both readiness gates fail until they
+  are fixed.**
+
 ## [0.2.0] - 2026-09-18
 
 ### Added

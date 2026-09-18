@@ -222,3 +222,59 @@ make release         # readiness, branch + tree, then stamp + commit + tag + pus
 Afterwards, `make build` in `go/` on the tagged commit reports `vX.Y.Z`; a later commit reports
 `vX.Y.Z-N-g<sha>` and an uncommitted tree adds `-dirty`, so a metadata file always names the build that
 produced it.
+
+## Static analysis
+
+A local SonarQube (Community Edition) can analyse both projects. It is **optional and gates nothing**: the
+readiness gates in the workflow above never call it, and no release depends on it. It runs on your machine only
+— nothing is sent anywhere.
+
+Each project is its own Sonar project (`azure-rd-go`, `azure-rd-web`), analysed from its own folder with its own
+`sonar-project.properties`, because the two have different toolchains, coverage formats and release lines. A
+tenant export is **never** analysed: `output/` is excluded, since it is customer configuration and has no place
+on a code-quality server.
+
+```bash
+make sonarqube-start          # server + database (waits until it reports UP; ~1 min on a cold start)
+make sonarqube-analyze        # coverage + scan for both projects (or -go / -web)
+make sonarqube-report         # download the findings to ./.sonar-reports (or -go / -web)
+make sonarqube-stop           # stop; sonarqube-clean also deletes ./.sonar and the scanner work dirs
+```
+
+The server URL comes from `SONAR_HOST_URL` (default `http://localhost:9000`); the first login is `admin`/`admin`
+and forces a password change. Two kinds of token are needed, because Community Edition distinguishes them:
+
+| Variable | Token | Used for |
+| -------- | ----- | -------- |
+| `SONAR_TOKEN` | analysis (`sqa_…`) | `sonarqube-analyze` |
+| `SONAR_REPORT_TOKEN` | user (`squ_…`), falls back to `SONAR_TOKEN` | `sonarqube-report` |
+
+An analysis token authenticates but grants *Execute Analysis* only, so it can list issues while project
+metadata and security hotspots come back `403`. The report is still written in that case, with the gap stated in
+it. Reports land in `.sonar-reports/` (gitignored) as raw JSON plus a Markdown breakdown grouped by rule —
+highest count first, which is the view that separates "encode this as a lint rule" from "fix these three
+places".
+
+**Because Community Edition cannot export a report, that Markdown breakdown is the deliverable**; there is no
+PDF or CSV to download from the UI.
+
+### Parity with the local linters
+
+Where a Sonar rule has an equivalent in a project's own linter, the linter is configured to **use Sonar's
+parameters rather than its own defaults**, so a finding is visible in the editor and on the command line instead
+of only after a scan. Both `go/.golangci.yml` and `web/eslint.config.mjs` name Sonar as a second source they
+mirror, and each project's README documents which rules that covers. Two limits are deliberate and recorded in
+those files:
+
+- **A rule pair that cannot be made to agree stays Sonar-only** rather than being approximated. Go's duplicated
+  string-literal rule is the example: Sonar counts per file and ignores identifier-like literals, the linter
+  counts per package and skips call arguments, and settings that equalise the counts still produce a different
+  set of findings.
+- **Some rules need type information** that `web/`'s ESLint setup does not currently produce, so they are
+  reported by the server only.
+
+Enabling these rules on code that has never been measured makes the findings visible immediately: **`make
+lint-check` and `npm run lint` currently fail**, and therefore so do `make check`, `make ci` and both
+`branch-ready` gates. That is the intended signal, not a regression — the findings are real and predate the
+configuration. Until they are fixed, use each project's own `make test` / `npm test` while working, and expect
+the lint step to be red.

@@ -1114,6 +1114,19 @@ proposed deprecating it, and here it reports only idiomatic `if err := f(); err 
 the normal shape of a test helper. What only GoLand's own bundled inspections report stays an editor hint, not
 a merge gate.
 
+GoLand is not the only source the file mirrors: `gocognit` is enabled for the SonarQube quality profile's
+cognitive-complexity rule, at **that profile's threshold rather than the linter's own default**, so a finding
+here is the finding the server reports and neither tool can be satisfied without satisfying the other — measured
+against a full analysis it covers every function the server flags, plus a few whose scores straddle the limit
+(the two implementations differ by about a point, in both directions). golangci-lint's output truncation is
+switched off (`max-issues-per-linter`, `max-same-issues`) because the server truncates nothing, and with the
+defaults `make lint-check` would report a strict subset of it. `goconst` is deliberately **not** enabled for the
+duplicated-string-literal rule: that pair cannot be made to agree — the server counts occurrences per file and
+ignores identifier-like literals, `goconst` counts per package and by default skips call arguments, which is
+where all of this project's findings are — so it stays a server-only signal rather than an approximation. This
+is why `make lint-check` currently reports the complexity findings and fails; see the **Static analysis** section
+of the [repository README](../README.md).
+
 Conventions that CI and review expect:
 
 - Every exported symbol has a doc comment; `context.Context` is the first parameter of anything that does I/O;

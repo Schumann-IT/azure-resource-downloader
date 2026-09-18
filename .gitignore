@@ -2,3 +2,11 @@
 .DS_Store
 output/
 output.bak/
+
+# Binary built from the repository root
+azure-rd
+
+# Local SonarQube server data, scanner work directories and downloaded reports
+.sonar/
+.scannerwork/
+.sonar-reports/
