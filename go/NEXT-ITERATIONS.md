@@ -13,12 +13,12 @@ added, changed, renamed or removed as a durable per-tenant artifact — so an op
 deciding to re-download, CI can gate on it, and the frontend can show which documented resources have moved on
 in the tenant.
 
-> **Prerequisite.** This assumes the resource-facing commands live under a `resource` parent (with the download
-> command as `resource download`), each subcommand its own package under `cmd/resource/`, and the flags they
-> share — authentication, selection, pipeline tuning — declared once on that parent. If that grouping is not in
-> place yet, doing it is part of this work: drift is a *sibling* of downloading, not a mode of it — the two do
-> the same list, fetch and transform work and differ only in what they do with the resulting bytes — so
-> `download drift` would misrepresent it.
+> **Prerequisite — satisfied.** The resource-facing commands already live under the `resource` parent (the
+> download command as `resource download`, each subcommand its own package under `cmd/resource/`, the flags
+> they share — authentication, selection, pipeline tuning — declared once on that parent), so drift joins an
+> existing group. It is a *sibling* of downloading, not a mode of it — the two do the same list, fetch and
+> transform work and differ only in what they do with the resulting bytes — so `download drift` would
+> misrepresent it.
 >
 > **Why not an output-path override or a second copy.** The export on disk *is* the baseline:
 > `resources/metadata.yaml` already records `sourceSha256` per resource, plus the `resourceId`,
@@ -30,8 +30,15 @@ in the tenant.
 >
 > **Comparability is a precondition, not a detail.** `run.transformConfigSha256` exists precisely so a mass
 > hash movement can be attributed to a config change rather than a mass edit. Comparing across a different
-> transformer configuration, a different `resolveSecrets` setting or a different run scope makes every resource
-> look drifted, so the command must refuse rather than report noise.
+> transformer configuration or run scope makes every resource look drifted, so the command must refuse rather
+> than report noise. But the recorded hash is run-level and partial runs merge: after a config change followed
+> by a `--type`-scoped download the baseline is *mixed*, and the run hash attests only the types the last run
+> covered. So the attestation must live where the bytes live — recorded per resource entry, as a fact about
+> what produced them — and the comparability *unit* is the covered type (`lastCoveredAt`/`lastCoveredBy`),
+> never run-scope equality: a full export refreshed by a later `--type` run has a narrow recorded scope but a
+> broad valid baseline. `resolveSecrets` needs no check of its own — it is already folded into the hash.
+> Resource filters are the complement: they never rewrite bytes, only presence, and are not part of the hash —
+> left out of the preflight, a filter difference reads as resources appearing and vanishing.
 >
 > **`--dry-run` governs writes, not fetches.** Unlike a download — which may skip the fetch under `--dry-run`
 > because part of its question is answerable offline — nothing about drift can be answered without the tenant's
@@ -66,6 +73,11 @@ in the tenant.
 - Add `resource drift` beside `resource download`. It needs no flag registration of its own beyond the shared
   parent-level groups and its own switches, and binds flags per-execution before reading any value, like every
   other command.
+- Record the transform-config hash per resource entry in `resources/metadata.yaml` — a fact ("the config that
+  produced these bytes"), written by the download alongside `sourceSha256` and merged like every other fact.
+  Entries written before the field exists carry none and are treated as unattested. This download-path change
+  ships with or before drift; it forces no re-download — the field backfills as resources are rewritten, and
+  until then unattested entries degrade to a report line, never to a false verdict.
 - Extract the run preparation the two commands share, currently inline in the download command, into its own
   package: config reading, worker/transformer/filter construction, the offline probe registry and dedicated-app
   prompt, authentication, export-directory and tenant resolution, the real registry and the fetch requests,
@@ -78,12 +90,19 @@ in the tenant.
 - Resolve the export directory and cross-check it against `metadata.tenant` the way the `docs` subcommands do,
   including the offline `--domain` escape, so drift cannot be reported against the wrong tenant.
 - Run a comparability preflight before fetching anything: refuse (distinct "cannot answer" exit code) when
-  there is no baseline, or when the baseline's transform-config hash, `resolveSecrets` or run scope differ from
-  the current run. Warn once when the effective config is `base64-decode` in `file` mode with `remove-source`,
-  stating that artifact content drift is not detected in that configuration.
+  there is no baseline, or when the current transform-config hash or the effective resource-filter config
+  differ from what the baseline attests (`resolveSecrets` rides the transform-config hash and needs no
+  separate check). Judge comparability per covered type — `lastCoveredAt`/`lastCoveredBy` — never by run-scope
+  equality, which also gives drift a natural `--type` scoping; an entry whose recorded config hash is missing
+  or different is reported as unattested, excluded from the verdict counts, never counted as drift. Warn once
+  when the effective config is `base64-decode` in `file` mode with `remove-source`, stating that artifact
+  content drift is not detected in that configuration.
 - Reuse the existing pipeline unchanged (list → fetch → transform) and compare instead of writing, hashing the
   same marshalled bytes the writer hashes so a verdict can never disagree with what a download would record.
-  Preserve the accounting invariant: every request still produces exactly one result.
+  That marshalling and the sanitize/name-planning that assigns collision-free file names are private to the
+  writer today; extract them for shared use rather than reimplementing — a second marshal path is exactly how
+  the two commands would diverge. Preserve the accounting invariant: every request still produces exactly one
+  result.
 - Decide verdicts from `metadata.yaml` alone — unchanged / changed / added / removed / renamed — matching on
   `resourceId` first so a renamed resource is reported as a rename rather than an add plus a remove, and
   excluding entries that were filtered, permission-skipped or already known absent.
@@ -103,7 +122,9 @@ in the tenant.
   change whose key moved: its payload lands at the *new* key and its finding carries both keys, baseline and
   payload, so old and new bytes stay joinable. Payloads are always at least two levels deep, so they can
   never collide with the tree's own `metadata.yaml`, mirroring the rule that keeps `generate.md` and
-  `index.yaml` safe at the `docs/` root.
+  `index.yaml` safe at the `docs/` root. When planning payload names, reserve every key the baseline already
+  holds, so an *added* resource's mirrored path is the one a subsequent download would actually choose — not
+  a collision resolving differently in the two runs.
 - Make each observation own its tree: clear `drift/` before writing, so it holds exactly the current
   observation, and list the written payload paths in `drift/metadata.yaml`, so a consumer never trusts a file
   the named observation did not produce. Under `--dry-run` nothing is written and nothing is cleared — the
@@ -140,7 +161,8 @@ in the tenant.
   lands at the new key with both keys on the finding), removal suppression on an incomplete run, the
   comparability refusals, that `--dry-run` writes nothing and clears nothing, that the payload tree is
   cleared and rebuilt to exactly the current findings (a reverted resource leaves no leftover), that a drift
-  run never writes under `resources/` or `docs/`, and that the artifact is
+  run never writes under `resources/` or `docs/`, that an unattested entry (missing or divergent per-entry
+  config hash) is reported and excluded rather than counted as drift, and that the artifact is
   byte-identical over an unchanged tenant apart from its timestamp. Cover the extracted run preparation where
   the moved code was covered before.
 - Document the command and its tree in `README.md` (usage, the drift metadata's shape and purpose, and the
