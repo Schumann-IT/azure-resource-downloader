@@ -13,6 +13,8 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 #### The browser

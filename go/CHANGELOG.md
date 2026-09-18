@@ -11,6 +11,8 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Breaking
 
 - **The resource-facing commands moved under one `resource` noun.** `azure-rd download` is now
