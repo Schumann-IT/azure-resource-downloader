@@ -188,19 +188,19 @@ func TestWriterCollisionIsLosslessUnderConcurrency(t *testing.T) {
 	}
 }
 
-// TestReserveFileName exercises the reservation logic directly: the first claim
-// keeps the sanitized name, later claims get a deterministic per-id suffix, and
-// distinct types never interfere.
-func TestReserveFileName(t *testing.T) {
-	w := NewWriter(t.TempDir(), 1, false, false)
+// TestNamePlannerReserve exercises the reservation logic directly: the first
+// claim keeps the sanitized name, later claims get a deterministic per-id
+// suffix, and distinct types never interfere.
+func TestNamePlannerReserve(t *testing.T) {
+	p := NewNamePlanner()
 
 	const typ = "Microsoft.Graph/groups"
-	first := w.reserveFileName(typ, "team", "id-1")
+	first := p.Reserve(typ, "team", "id-1")
 	if first != "team" {
 		t.Errorf("first reservation = %q, want %q", first, "team")
 	}
 
-	second := w.reserveFileName(typ, "team", "id-2")
+	second := p.Reserve(typ, "team", "id-2")
 	wantSecond := "team_" + nameDiscriminator("id-2")
 	if second != wantSecond {
 		t.Errorf("second reservation = %q, want %q", second, wantSecond)
@@ -209,15 +209,32 @@ func TestReserveFileName(t *testing.T) {
 	// A reservation is deterministic for a given id but never returns an
 	// already-used name, so re-reserving the same colliding id yields a
 	// counter-suffixed variant rather than overwriting.
-	third := w.reserveFileName(typ, "team", "id-2")
+	third := p.Reserve(typ, "team", "id-2")
 	if third == second {
 		t.Errorf("re-reserving the same id must not return an already-used name %q", third)
 	}
 
 	// The same sanitized name under a different type is independent.
-	other := w.reserveFileName("Microsoft.Graph/mobileApps", "team", "id-1")
+	other := p.Reserve("Microsoft.Graph/mobileApps", "team", "id-1")
 	if other != "team" {
 		t.Errorf("reservation under a different type = %q, want %q", other, "team")
+	}
+}
+
+// TestNamePlannerReserveExisting guards the drift check's use of the planner:
+// pre-reserving every name an export already holds means a later Reserve can
+// never claim one of them, so an added resource's predicted path is the one a
+// subsequent download would actually choose.
+func TestNamePlannerReserveExisting(t *testing.T) {
+	p := NewNamePlanner()
+
+	const typ = "Microsoft.Graph/groups"
+	p.ReserveExisting(typ, "team")
+
+	got := p.Reserve(typ, "team", "id-9")
+	want := "team_" + nameDiscriminator("id-9")
+	if got != want {
+		t.Errorf("reservation against an existing name = %q, want %q", got, want)
 	}
 }
 

@@ -218,4 +218,3 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	log.Info("Download completed successfully")
 	return nil
 }
-

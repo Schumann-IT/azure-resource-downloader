@@ -20,8 +20,9 @@ func newResourceCommand() *cobra.Command {
 		Use:   "resource",
 		Short: "Work with a tenant's Azure resources",
 		Long: `Commands that act on the Azure resources of a tenant: see which resource
-types this build supports (types), see what the tenant contains (list), and
-download it as clean YAML (download).
+types this build supports (types), see what the tenant contains (list),
+download it as clean YAML (download), and detect drift between the tenant and
+the export on disk (drift).
 
 The flags these commands share are declared here, on the group, so every
 subcommand resolves them identically. All are optional: with no selection, a
@@ -40,12 +41,13 @@ a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	}
 
 	// Shared flags live on the group, not on each subcommand. Only groups every
-	// subcommand honours belong here: the authentication flags serve download's
-	// and list's sign-in and types' (lazy, non-interactive) credential; the
-	// selection flags scope what download fetches, what list enumerates and
-	// what types shows and counts; --workers bounds the listing concurrency all
-	// three share. --timeout stays on download: it wraps each resource fetch,
-	// which only download performs, so a sibling advertising it would ignore it.
+	// subcommand honours belong here: the authentication flags serve download's,
+	// drift's and list's sign-in and types' (lazy, non-interactive) credential;
+	// the selection flags scope what download and drift fetch, what list
+	// enumerates and what types shows and counts; --workers bounds the listing
+	// concurrency all four share. --timeout stays on download and drift: it
+	// wraps each resource fetch, which only those two perform, so a sibling
+	// advertising it would ignore it.
 	//
 	// The auth group is deliberately a second registration: root declares the
 	// same flags locally for `azure-rd --debug` (see root.go's init). Both are
@@ -56,6 +58,7 @@ a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
 	cmdutil.AddPersistentWorkersFlag(cmd)
 
 	cmd.AddCommand(resource.NewDownloadCommand())
+	cmd.AddCommand(resource.NewDriftCommand())
 	cmd.AddCommand(resource.NewTypesCommand())
 	cmd.AddCommand(resource.NewListCommand())
 	return cmd
