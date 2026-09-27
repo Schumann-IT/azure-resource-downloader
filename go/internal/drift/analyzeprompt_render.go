@@ -19,7 +19,8 @@ func renderAnalyzeObservation(tenantDir string, obs *Observation) string {
 	fmt.Fprintf(&b, "- Tenant folder: `%s`\n", tenantDir)
 	fmt.Fprintf(&b, "- Baseline (read-only): `%s/`\n", path.Join(tenantDir, models.ResourcesDirName))
 	fmt.Fprintf(&b, "- Observed payloads (read-only): `%s/`\n", path.Join(tenantDir, DriftDirName))
-	fmt.Fprintf(&b, "- Your report (the only file you write): `%s`\n", path.Join(tenantDir, DriftDirName, ReportFileName))
+	fmt.Fprintf(&b, "- Your drift documents (one per finding; each worklist entry names its destination): `%s/<APIType>/<endpoint>/<name>.md`\n", path.Join(tenantDir, DriftDirName))
+	fmt.Fprintf(&b, "- Your index (the summary, written last): `%s`\n", path.Join(tenantDir, DriftDirName, IndexFileName))
 	fmt.Fprintf(&b, "- Observed at: `%s`\n", obs.ObservedAt)
 	fmt.Fprintf(&b, "- Baseline generated at: `%s`\n", obs.Baseline.GeneratedAt)
 	fmt.Fprintf(&b, "- Drift run complete: %s\n", completeCell(obs.Run.Complete, obs.Run.IncompleteReason))
@@ -136,7 +137,8 @@ func findingTitle(key string, f Finding) string {
 }
 
 // findingPaths renders the baseline, payload and document lines a finding's
-// verdict makes applicable.
+// verdict makes applicable, and the drift-document destination the agent
+// writes for it — derived from the same key, so the four files always join.
 func findingPaths(key string, f Finding) string {
 	var b strings.Builder
 	if f.BaselineKey != "" {
@@ -155,6 +157,7 @@ func findingPaths(key string, f Finding) string {
 	case f.DocPath != "":
 		fmt.Fprintf(&b, "- Document (describes the pre-change state): `%s`\n", f.DocPath)
 	}
+	fmt.Fprintf(&b, "- Your drift document (write it): `%s/%s`\n", DriftDirName, ReportPathForKey(key))
 	return b.String()
 }
 

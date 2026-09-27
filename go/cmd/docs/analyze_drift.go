@@ -27,8 +27,10 @@ func NewAnalyzeDriftCommand() *cobra.Command {
 		Long: `Render a drift-analysis prompt from the latest 'resource drift' observation
 (drift/metadata.yaml) and the export baseline (resources/metadata.yaml). The
 prompt directs an LLM to judge each finding's impact — security posture,
-compliance, lifecycle and who is affected — and to write a single impact report
-to drift/report.md.
+compliance, lifecycle and who is affected — and to write one drift document per
+finding (drift/<path>.md, beside the payload it judges, so a frontend can show
+the YAML diff and the judgment side by side) plus a summary index to
+drift/index.md.
 
 This command never fetches a resource and never writes into resources/ or
 docs/. It authenticates only to resolve the tenant's Entra default domain (the
@@ -36,11 +38,11 @@ export folder name), exactly as 'download' does. Pass --domain to skip
 authentication entirely and run offline against a named export folder.
 
 The prompt is written to output/<tenant>/drift/analyze.md (override with --out).
-Prompt and report live with the observation they belong to: the next 'resource
-drift' run — and a re-baselining 'resource download' — clears the drift/ tree,
-so archive the report manually if it must be kept. It refuses (exit 2) when
-there is no observation, or when the export was re-baselined after the
-observation was made; re-run 'resource drift' first in both cases.
+Prompt, drift documents and index live with the observation they belong to: the
+next 'resource drift' run — and a re-baselining 'resource download' — clears
+the drift/ tree, so archive them manually if they must be kept. It refuses
+(exit 2) when there is no observation, or when the export was re-baselined
+after the observation was made; re-run 'resource drift' first in both cases.
 
 Examples:
   # Resolve the tenant via 'az login', then write the analysis prompt
@@ -160,6 +162,6 @@ func reportAnalyzeDrift(res *drift.AnalyzeResult, dryRun bool) {
 		log.Info("Dry-run: analysis prompt not written", "would_write", res.OutPath)
 		return
 	}
-	log.Info("Drift-analysis prompt written", "path", res.OutPath, "report_destination", res.ReportPath)
-	log.Info("The prompt and the report live with the observation: the next 'resource drift' or re-baselining 'resource download' run deletes them")
+	log.Info("Drift-analysis prompt written", "path", res.OutPath, "index_destination", res.IndexPath)
+	log.Info("The prompt, the drift documents and the index live with the observation: the next 'resource drift' or re-baselining 'resource download' run deletes them")
 }

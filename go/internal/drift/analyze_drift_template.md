@@ -23,8 +23,9 @@ what failure it prevents — goes in the appendix at the bottom. Put explanation
 
 You are analyzing **configuration drift** in an Azure/Entra/Intune tenant: the differences between an
 export baseline produced by **azure-resource-downloader** and the tenant's current state as observed by
-`azure-rd resource drift`. Your output is a single **impact report** — what changed, who is affected, and
-what it means for security, compliance and lifecycle — for a human operator deciding what to do next.
+`azure-rd resource drift`. Your output is one **drift document per finding** — what changed in that
+resource, who is affected, and what it means for security, compliance and lifecycle — plus one summary
+**index**, for a human operator deciding what to do next.
 
 The change detection has already been done. The findings below are complete and closed: analyze exactly
 what they name — nothing more, nothing less. Do not walk the export looking for other differences, do not
@@ -36,7 +37,8 @@ hash or diff anything to decide *whether* something changed, and do not re-litig
 - Tenant folder: `output/<tenant>/`
 - Baseline (read-only): `output/<tenant>/resources/`
 - Observed payloads (read-only): `output/<tenant>/drift/`
-- Your report (the only file you write): `output/<tenant>/drift/report.md`
+- Your drift documents (one per finding; each worklist entry names its destination): `output/<tenant>/drift/<APIType>/<endpoint>/<name>.md`
+- Your index (the summary, written last): `output/<tenant>/drift/index.md`
 - Observed at: `<timestamp>`
 - Baseline generated at: `<timestamp>`
 - Drift run complete: `<true|false — reason>`
@@ -46,12 +48,14 @@ hash or diff anything to decide *whether* something changed, and do not re-litig
 - Entries not comparable (config attestation): none
 <!-- observation:end -->
 
-Every path below is relative to the tenant folder. Three trees matter, and they mirror each other exactly:
+Every path below is relative to the tenant folder. Three trees matter, and they mirror each other exactly —
+your drift document joins them at the same path, so per resource all four files carry the same key:
 
 ```
 resources/<APIType>/<endpoint>/<name>.yaml   the baseline (old bytes)
 drift/<APIType>/<endpoint>/<name>.yaml       the observed current state (new bytes)
 docs/<APIType>/<endpoint>/<name>.md          the document describing the pre-change state
+drift/<APIType>/<endpoint>/<name>.md         YOUR drift document for this resource (you write this)
 ```
 
 ---
@@ -67,8 +71,9 @@ docs/<APIType>/<endpoint>/<name>.md          the document describing the pre-cha
   say so, never guess plaintext, and never rate a masked value itself as a finding.
 - **The resource's own `description` field is authoritative context.** A change consistent with a
   documented, deliberate baseline deviation is intentional — describe it as such, not as a defect.
-- **Everything is read-only except your report.** You write exactly one file: `drift/report.md`. Never
-  modify anything under `resources/` or `docs/`, and never touch `drift/metadata.yaml` or the payloads.
+- **Everything is read-only except your drift documents and index.** You write exactly the per-finding
+  drift documents named by the worklist plus `drift/index.md` — nothing else. Never modify anything under
+  `resources/` or `docs/`, and never touch `drift/metadata.yaml`, `drift/analyze.md` or the payloads.
 - **Do not update documentation.** The documents under `docs/` describe the baseline and must keep doing
   so; they are refreshed by a separate documentation pass after the operator re-baselines (appendix A).
 
@@ -89,6 +94,7 @@ _Replaced by the tool. Shape:_
 - Baseline (old bytes): `resources/…/gbl_c_prd_d_win_os_validation.yaml`
 - Current (new bytes): `drift/…/gbl_c_prd_d_win_os_validation.yaml`
 - Document (describes the pre-change state): `docs/…/gbl_c_prd_d_win_os_validation.md`
+- Your drift document (write it): `drift/…/gbl_c_prd_d_win_os_validation.md`
 - Field deltas (values truncated; open both files when context is needed):
   - `scheduledActionsForRule[0].scheduledActionConfigurations[0].gracePeriodHours`: `24` → `0`
 
@@ -132,9 +138,32 @@ _Replaced by the tool: assignment target groups, assignment filters and notifica
 
 ---
 
-## 4. Write the report
+## 4. Write one drift document per finding
 
-Write `drift/report.md` — and nothing else — with this frontmatter, copied from the observation block:
+As you finish each finding's analysis (section 2), write its drift document at the destination its
+worklist entry names — the finding's own path under `drift/`, `.md` beside the payload's `.yaml` — with
+this frontmatter:
+
+```markdown
+---
+observedAt: <observed at>
+baselineGeneratedAt: <baseline generated at>
+verdict: <added|changed|renamed|removed>
+severity: <high|medium|low>
+---
+```
+
+Then four short parts, per document: *what changed* (facts, citing the delta paths), *who is affected*
+(resolved names, never bare GUIDs), *why it matters* (the 2d dimensions that apply), and *suggested
+follow-up* — accept and re-baseline, investigate with the owner, or revert in the tenant. One resource per
+document — a frontend renders it beside the resource's YAML diff, so never discuss another resource except
+by linking its drift document.
+
+---
+
+## 5. Write the index
+
+When every drift document exists, write `drift/index.md` — the summary — with this frontmatter:
 
 ```markdown
 ---
@@ -147,33 +176,40 @@ severities: high <n> · medium <n> · low <n>
 
 Then four parts, in order:
 
-1. **Executive summary** — 3–6 sentences: the overall shape of the drift, the highest-severity items, and
-   whether anything demands action before the next re-baseline.
-2. **Findings, ordered by severity** (high first, then by resource name). Per finding, a heading
-   `<severity> — <verdict>: <name>` and four short paragraphs or bullet groups: *what changed* (facts,
-   citing the delta paths), *who is affected* (resolved names, never bare GUIDs), *why it matters* (the 2d
-   dimensions that apply), and *suggested follow-up* — accept and re-baseline, investigate with the owner,
-   or revert in the tenant.
-3. **Not analyzed** — the observation block's caveats, restated: types whose drift is unknown, entries not
+1. **Executive summary** — 3–6 sentences of prose: the overall shape of the drift, the highest-severity
+   items, and whether anything demands action before the next re-baseline.
+2. **Findings, ordered by severity** (high first, then by resource name), each linking to its drift
+   document by relative path (`<APIType>/<endpoint>/<name>.md`) with a one-line judgment. A table
+   (severity · verdict · resource · one-liner) fits well; prose is fine too.
+3. **Security, compliance and lifecycle issues** — the cross-resource view: themes that only appear when
+   the findings are read together (the same protection weakened in several places, scope shifts that
+   compound, expiring credentials clustering). Prose or tables, whatever fits; skip axes with nothing to
+   say rather than padding them.
+4. **Not analyzed** — the observation block's caveats, restated: types whose drift is unknown, entries not
    comparable, suppressed removals, and findings whose type spec was missing. Absence from this report is
-   not evidence of no drift.
-4. **Ephemerality note** (the last line): this report describes the observation named in its frontmatter;
-   the next `resource drift` or `resource download` run deletes it. Archive a copy if it must be kept.
+   not evidence of no drift. End with the **ephemerality note** (the last line): these documents describe
+   the observation named in their frontmatter; the next `resource drift` or `resource download` run
+   deletes them. Archive copies if they must be kept.
 
 ---
 
 ## Appendix A — background (explanation, never instructions)
 
-- **Why the report is ephemeral.** The `drift/` tree holds exactly one observation — the latest — and is
-  cleared by the next drift run, and by a re-baselining download (a new baseline supersedes the
-  observation by definition). The report lives with the observation it analyzes, so it can never describe
-  a baseline that no longer exists. Deliberately, there is no drift history.
+- **Why one document per resource.** The drift document sits at the payload's path with the extension
+  swapped, so per resource the baseline YAML, the observed YAML, the documentation and your judgment all
+  share one key — a frontend can show the YAML diff and your document side by side without any lookup
+  table. That only works if each document confines itself to its own resource; the index carries
+  everything cross-cutting.
+- **Why the documents are ephemeral.** The `drift/` tree holds exactly one observation — the latest — and
+  is cleared by the next drift run, and by a re-baselining download (a new baseline supersedes the
+  observation by definition). Your documents live with the observation they analyze, so they can never
+  describe a baseline that no longer exists. Deliberately, there is no drift history.
 - **Why you never touch `docs/`.** The documents mirror the baseline and are regenerated incrementally by
-  `azure-rd docs generate-prompt` after the operator re-baselines with `resource download`. A report that
-  edited documents would make them disagree with the baseline their frontmatter hashes attest.
+  `azure-rd docs generate-prompt` after the operator re-baselines with `resource download`. A drift pass
+  that edited them would make them disagree with the baseline their frontmatter hashes attest.
 - **Severity is judgment; the rest is facts.** The verdicts, deltas and hashes were computed by the tool;
-  your contribution is the impact assessment and the severity. The report is advisory prose for a human —
-  nothing downstream parses it, so favour clarity over structure.
+  your contribution is the impact assessment and the severity. The documents and index are advisory prose
+  for a human — nothing downstream parses them, so favour clarity over structure.
 - **Renames.** A renamed resource is a content change whose payload landed at a new path; the finding
   carries both names and both files. Judge the rename itself (is the old name referenced anywhere? does
   naming encode policy?) as well as any other deltas it carries.

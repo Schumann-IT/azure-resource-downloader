@@ -353,7 +353,12 @@ the config file's `taxonomy:` section — see [Navigation index](#navigation-ind
 
 Renders `output/<tenant>/drift/analyze.md`: a prompt directing an LLM to analyze the **impact** of the latest
 [`resource drift`](#resource-drift) observation — what each finding means for security posture, compliance,
-lifecycle and who is affected — and to write a single impact report to `drift/report.md`. Fully offline: it
+lifecycle and who is affected — and to write **one drift document per finding** plus a summary index. Each
+drift document lands at the payload's path with the extension swapped (`drift/<APIType>/<endpoint>/<name>.md`
+beside `…/<name>.yaml`), so per resource the baseline YAML, the observed YAML, the documentation and the
+judgment all share one key — a frontend can show the YAML diff and the drift document side by side without any
+lookup. The index, `drift/index.md` at the tree root, carries the summary: findings ordered by severity with
+links, and the cross-resource security / compliance / lifecycle view. Fully offline: it
 reads the observation (`drift/metadata.yaml`) and the baseline (`resources/metadata.yaml`), and verifies every
 payload against its recorded hash before directing an agent at it. It never fetches a resource and never
 writes under `resources/` or `docs/`.
@@ -368,11 +373,12 @@ azure-rd docs analyze-drift --domain … --prompt my-template.md   # override th
 Same `--domain`/`--out`/auth flags as `generate-prompt`, plus `--prompt` for a template override. There is no
 `--exit-code`: `resource drift` already gates CI on drift being found.
 
-**Prompt and report live with the observation.** Both sit at the `drift/` tree root and are deleted with it —
-by the next `resource drift` run, and by a re-baselining `resource download`. There is deliberately **no
-drift history**; archive `drift/report.md` manually if it must be kept. The analysis agent writes exactly
-that one file and never touches `resources/` or `docs/`: updating the documentation remains the re-baseline →
-`docs generate-prompt` loop.
+**Prompt, drift documents and index live with the observation.** All of them sit inside the `drift/` tree and
+are deleted with it — by the next `resource drift` run, and by a re-baselining `resource download`. There is
+deliberately **no drift history**; archive them manually if they must be kept. The analysis agent writes
+exactly the per-finding drift documents named by the worklist plus `drift/index.md` — nothing else — and never
+touches `resources/` or `docs/`: updating the documentation remains the re-baseline → `docs generate-prompt`
+loop.
 
 There are no per-type drift templates. The prompt instructs the agent to read each finding type's
 `doc-prompt.md` as the type-specific lens for judging impact, and flags types whose spec is missing (an
@@ -556,8 +562,9 @@ output/
     ├── drift/                                    owned by azure-rd resource drift — the latest observation only
     │   ├── metadata.yaml                         what was compared, against which baseline, and the findings
     │   ├── analyze.md                            written by azure-rd docs analyze-drift (agent input)
-    │   ├── report.md                             written by the agent: the impact report for this observation
-    │   └── Microsoft.Graph/…/….yaml              fetched bytes of added/changed/renamed resources, mirroring resources/
+    │   ├── index.md                              written by the agent: the drift summary for this observation
+    │   ├── Microsoft.Graph/…/….yaml              fetched bytes of added/changed/renamed resources, mirroring resources/
+    │   └── Microsoft.Graph/…/….md                written by the agent: per-resource drift document, beside its payload
     ├── resources/                                written by azure-rd resource download — and only by it
     │   ├── metadata.yaml                         facts about this export (see below)
     │   ├── Microsoft.Graph/

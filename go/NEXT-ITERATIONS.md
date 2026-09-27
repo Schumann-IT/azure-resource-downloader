@@ -5,7 +5,7 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
-## 1. Generate a drift-impact analysis prompt from the latest drift observation
+## 1. ~~Generate a drift-impact analysis prompt from the latest drift observation~~
 
 **Goal.** After `resource drift` has found changes, one offline command — `azure-rd docs analyze-drift` —
 writes a ready-to-paste prompt that has an LLM analyze the differences between the export baseline and the
@@ -90,39 +90,41 @@ follow-up; history in `CHANGELOG.md`)*
 - ~~**Docs and rules**: README section, output layout, dry-run note; `CHANGELOG.md` under `[Unreleased]`;
   `.windsurf/rules/01-project.md` and `04-security-and-ops.md` updated; `config.example.yaml` untouched.~~
 
-**Follow-up — one drift document per resource, plus `drift/index.md` (not yet implemented).** The shipped
-single `drift/report.md` does not serve the intended frontend: a side-by-side view needs per-resource
-artifacts. The YAML side already works — `drift/<key>.yaml` mirrors `resources/<key>.yaml`, so a
-baseline-vs-payload diff is implementable from what is on disk today. The report side must mirror the
-documentation's one-file-per-resource shape instead of collapsing every finding into one file:
+**Follow-up — one drift document per resource, plus `drift/index.md`** *(shipped 2026-09-27, struck through
+like the plan above)*. ~~The shipped single `drift/report.md` does not serve the intended frontend: a
+side-by-side view needs per-resource artifacts. The YAML side already works — `drift/<key>.yaml` mirrors
+`resources/<key>.yaml`, so a baseline-vs-payload diff is implementable from what is on disk today. The
+report side must mirror the documentation's one-file-per-resource shape instead of collapsing every finding
+into one file:~~
 
-- **Per-finding drift document** `drift/<APIType>/<endpoint>/<name>.md`, beside the payload it judges — the
-  same join key as the baseline file (`resources/<key>.yaml`), the payload (`drift/<key>.yaml`) and the
+- ~~**Per-finding drift document** `drift/<APIType>/<endpoint>/<name>.md`, beside the payload it judges —
+  the same join key as the baseline file (`resources/<key>.yaml`), the payload (`drift/<key>.yaml`) and the
   document (`docs/<key>.md`), differing only in tree root and extension, exactly the derivation rule the
   other trees already follow. Each says **what changed and what the impact is** for that one resource: the
   facts (citing delta paths), who is affected (resolved names), why it matters (security / compliance /
   lifecycle / user-device), severity, and suggested follow-up. The frontend can then render YAML diff and
   drift document side by side per resource. No collision with the payload: same path, different extension.
   For *removed* resources there is no payload, but the drift document still lands at the mirrored path
-  (derived from the baseline key), so removals get a document too.
-- **`drift/index.md`** at the tree root (payloads are ≥ 2 levels deep — the same no-collision argument as
+  (derived from the baseline key), so removals get a document too.~~
+- ~~**`drift/index.md`** at the tree root (payloads are ≥ 2 levels deep — the same no-collision argument as
   `metadata.yaml` and `analyze.md`): the drift **summary** as prose — executive summary, findings ordered by
   severity with links to the per-finding documents, and the security / compliance / lifecycle issues as
   prose or tables, whatever fits; plus the not-analyzed caveats (unknown types, unattested entries,
   suppressed removals, missing specs) and the ephemerality note. It replaces `drift/report.md`; nothing
-  downstream parses any of it, so the shape inside stays advisory.
-- **Boundary restated, not relaxed**: the agent writes exactly the per-finding documents named by the
+  downstream parses any of it, so the shape inside stays advisory.~~
+- ~~**Boundary restated, not relaxed**: the agent writes exactly the per-finding documents named by the
   worklist plus `drift/index.md` — nothing else, still never under `resources/` or `docs/`, still never
   touching `metadata.yaml`, `analyze.md` or the payloads. Ephemerality is unchanged: everything is swept
-  with the observation by the next drift run or a re-baselining download.
-- **Touchpoints**: `analyze_drift_template.md` section 4 rewritten (per-finding destination derived from
+  with the observation by the next drift run or a re-baselining download.~~
+- ~~**Touchpoints**: `analyze_drift_template.md` section 4 rewritten (per-finding destination derived from
   each finding's key, per-file frontmatter carrying `observedAt`/`baselineGeneratedAt`/verdict/severity, the
   index written last from the per-finding results); `drift.ReportFileName` → index name plus a derived
   per-finding report path (exported the way `docPath` is derived, never stored); `AnalyzeResult.ReportPath`
   and the command's closing output updated; README (analyze-drift section, output layout) and
   `04-security-and-ops.md` ("the one file `azure-rd` never produces" becomes the set of agent-written drift
   documents + `drift/index.md`); tests asserting the worklist names each finding's report destination and
-  that the template directs the index to the tree root.
+  that the template directs the index to the tree root.~~ *(shipped as `drift.ReportPathForKey` +
+  `drift.IndexFileName`)*
 
 ## Parked ideas
 

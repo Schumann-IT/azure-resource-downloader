@@ -107,21 +107,23 @@ func TestGenerateAnalyzePromptWritesPrompt(t *testing.T) {
 	}
 	s := string(body)
 
-	// The worklist names the finding's three files and its delta.
+	// The worklist names the finding's three files, its drift-document
+	// destination (the payload path with the extension swapped) and its delta.
 	for _, want := range []string{
 		"#### changed: B",
 		"resources/" + testType + "/b.yaml",
 		"drift/" + testType + "/b.yaml",
 		"docs/" + testType + "/b.md",
+		"Your drift document (write it): `drift/" + testType + "/b.md`",
 		"`setting`: `old` → `new`",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("prompt must contain %q:\n%s", want, s)
 		}
 	}
-	// The observation block names the report destination.
-	if !strings.Contains(s, ReportFileName) {
-		t.Errorf("prompt must name the report destination %q", ReportFileName)
+	// The observation block names the index destination.
+	if !strings.Contains(s, IndexFileName) {
+		t.Errorf("prompt must name the index destination %q", IndexFileName)
 	}
 }
 
@@ -279,6 +281,14 @@ func TestGenerateAnalyzePromptFlagsMissingSpec(t *testing.T) {
 	}
 	if len(res.MissingSpecTypes) != 0 {
 		t.Errorf("MissingSpecTypes = %v, want none once the spec exists", res.MissingSpecTypes)
+	}
+}
+
+func TestReportPathForKey(t *testing.T) {
+	// The drift document sits at the payload's path with the extension swapped,
+	// so all four per-resource files share one key.
+	if got, want := ReportPathForKey(testType+"/b.yaml"), testType+"/b.md"; got != want {
+		t.Errorf("ReportPathForKey = %q, want %q", got, want)
 	}
 }
 

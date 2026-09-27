@@ -35,14 +35,27 @@ func DefaultAnalyzeTemplate() []byte {
 // observation metadata. Payloads are always at least two levels deep, so they
 // can never collide with either. Both are ephemeral: the next resource drift
 // run's clear-and-rebuild — and a re-baselining download's ClearTree — sweep
-// them with the observation they belong to.
+// them with the observation they belong to, along with the per-finding drift
+// documents (see ReportPathForKey) the analysis agent writes.
 const (
 	// AnalyzeFileName is the analysis prompt docs analyze-drift writes.
 	AnalyzeFileName = "analyze.md"
-	// ReportFileName is the impact report the analysis agent writes — the one
-	// file under drift/ that azure-rd itself never produces.
-	ReportFileName = "report.md"
+	// IndexFileName is the drift summary the analysis agent writes at the tree
+	// root — it and the per-finding drift documents are the only files under
+	// drift/ that azure-rd itself never produces.
+	IndexFileName = "index.md"
 )
+
+// ReportPathForKey derives a finding's drift-document path (relative to the
+// drift/ tree) from its key: the mirrored resource path with the extension
+// swapped, so the drift document sits beside the payload it judges and joins
+// to the baseline file, the payload and the documentation document by the same
+// key. It is derived — never stored — exactly like a document's docPath, and
+// works for every verdict: a removed resource has no payload, but its key
+// still names the mirrored path its drift document lands at.
+func ReportPathForKey(key string) string {
+	return strings.TrimSuffix(key, ".yaml") + ".md"
+}
 
 // requiredAnalyzeMarkers are the marked blocks GenerateAnalyzePrompt fills.
 var requiredAnalyzeMarkers = []string{"observation", "worklist", "refmap"}
@@ -85,9 +98,10 @@ type AnalyzeOptions struct {
 type AnalyzeResult struct {
 	OutPath string
 	Written bool
-	// ReportPath is where the template directs the agent's report — carried
-	// here so the command can name it in its output.
-	ReportPath string
+	// IndexPath is where the template directs the agent's summary index; the
+	// per-finding drift documents land beside their payloads (ReportPathForKey).
+	// Carried here so the command can name it in its output.
+	IndexPath string
 	// ObservedAt and BaselineGeneratedAt describe the observation under
 	// analysis and the baseline it was decided against.
 	ObservedAt          string
@@ -134,7 +148,7 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 
 	res := &AnalyzeResult{
 		OutPath:             opts.OutPath,
-		ReportPath:          filepath.Join(opts.TenantDir, DriftDirName, ReportFileName),
+		IndexPath:           filepath.Join(opts.TenantDir, DriftDirName, IndexFileName),
 		ObservedAt:          obs.ObservedAt,
 		BaselineGeneratedAt: meta.GeneratedAt,
 		Counts:              obs.Counts,
