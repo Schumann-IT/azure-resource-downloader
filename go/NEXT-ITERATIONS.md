@@ -166,3 +166,35 @@ soften before deleting: first teach the dedicated-app prompt to recommend the ex
 command derived from the selected types' declared permissions, keeping device code as the fallback; only
 retire the flags once the CLI path has covered every `PermissionScoped` type against a live tenant, and
 record the removal under `Breaking`.
+
+### Idea: clear the `gocognit` baseline
+
+Split up the 26 functions named in the baseline at the end of `.golangci.yml`'s `exclusions.rules` — the ones
+that already exceeded the Sonar cognitive-complexity threshold when `gocognit` was switched on, across 20 files —
+deleting each entry as its function is fixed, until the block and its explanation can go. The worst are
+`GeneratePrompt` (58), `GenerateIndex` (57), `findAndRemoveKeysWithPreserve` (47), `ParseCleaningConfig` (39),
+`drift.Compare` (38), `compileTaxonomy` (37) and `PrintSummary` (34); the rest sit between 16 and 30.
+**Not planned — parked deliberately**, for three reasons:
+
+- **The baseline already delivers what mattered.** The rule stays enabled at the server's threshold, the gates
+  are green, and every function written from now on has to comply — including new functions in the listed files,
+  because each entry names one function instead of excluding its file. Nothing is hidden either: Sonar keeps
+  reporting all 26, which is deliberately why the baseline is not mirrored in `sonar-project.properties`.
+- **A high score here is not a defect, and several of these functions are covered by invariants that a
+  refactor must not disturb.** `PrintSummary`, `mergeMetadata`, `pruneCovered` and `Compare` are exactly the
+  places where "an incomplete run may not mark anything absent", "covered means the listing succeeded" and the
+  prune guards live; `Writer.Write` and `transformResource` sit on the every-request-produces-one-result
+  accounting. Splitting them for a metric, without a reason a reader would recognise, risks a real regression in
+  return for a number.
+- **Go's explicit error handling inflates the metric**, so a mechanical fix — extracting each `if err != nil`
+  ladder into a helper — would move the score without making anything clearer, which is the outcome the rule is
+  supposed to prevent.
+
+**Revisit when** one of these functions is being changed for another reason (split it then and delete its entry
+in the same commit — that is how this shrinks without a campaign), when a function on the list becomes hard to
+change safely in practice rather than merely scoring high, or if the baseline ever stops shrinking, which would
+mean it has started collecting new debt instead of recording old. If picked up, work one function at a time with
+`make test-race` where the function touches the pipeline, keep the tests that pin the invariants above unchanged
+(a refactor that needs a test edited is a redesign, not a split), and remember that a stale entry is invisible —
+golangci-lint does not report an exclusion that matched nothing, so re-measure by commenting the block out. Each
+split is internal and needs no `CHANGELOG.md` entry; deleting the block at the end does.

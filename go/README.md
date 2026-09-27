@@ -1123,9 +1123,22 @@ switched off (`max-issues-per-linter`, `max-same-issues`) because the server tru
 defaults `make lint-check` would report a strict subset of it. `goconst` is deliberately **not** enabled for the
 duplicated-string-literal rule: that pair cannot be made to agree — the server counts occurrences per file and
 ignores identifier-like literals, `goconst` counts per package and by default skips call arguments, which is
-where all of this project's findings are — so it stays a server-only signal rather than an approximation. This
-is why `make lint-check` currently reports the complexity findings and fails; see the **Static analysis** section
-of the [repository README](../README.md).
+where all of this project's findings are — so it stays a server-only signal rather than an approximation. See the
+**Static analysis** section of the [repository README](../README.md).
+
+**The code that predates `gocognit` is baselined, not exempted.** The end of the file's `exclusions.rules` names
+the 26 functions (in 20 files) that already exceeded the threshold when the linter was switched on, so
+`make lint-check`, `make check`, `make ci` and `make branch-ready` pass while **every new function has to
+comply**. Each entry matches one function by name rather than excluding its file: add a second complex function
+to a listed file and it is reported, which a path exclusion would have hidden. Two properties follow from doing
+it this way — a listed function can still get *worse* unnoticed, since the match is on its name and not its
+score, and nothing detects a stale entry, because golangci-lint does not report an exclusion that matched
+nothing; an entry is therefore deleted in the same commit as the refactor that fixes its function, and the block
+can be commented out to re-measure. It is a debt ledger rather than a decision: nothing in it is a finding this
+project disagrees with, Sonar keeps reporting all 26 (which is why, unlike the two path-scoped `gocognit`
+exclusions, it is deliberately *not* mirrored in `sonar-project.properties`), and clearing it is a parked idea in
+`NEXT-ITERATIONS.md`. A finding you judge genuinely wrong is still silenced at its own site with a
+`//nolint:gocognit`, never by adding to the baseline.
 
 Conventions that CI and review expect:
 

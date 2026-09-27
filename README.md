@@ -273,8 +273,25 @@ those files:
 - **Some rules need type information** that `web/`'s ESLint setup does not currently produce, so they are
   reported by the server only.
 
-Enabling these rules on code that has never been measured makes the findings visible immediately: **`make
-lint-check` and `npm run lint` currently fail**, and therefore so do `make check`, `make ci` and both
-`branch-ready` gates. That is the intended signal, not a regression — the findings are real and predate the
-configuration. Until they are fixed, use each project's own `make test` / `npm test` while working, and expect
-the lint step to be red.
+Enabling these rules on code that has never been measured makes a backlog of findings visible at once, so **both
+projects baseline what predates the rules instead of weakening them**: every rule stays enabled at the server's
+parameters, the gates pass, and **new code is held to the full set**. Neither baseline switches a rule off for a
+file, which would also have blinded it for code written later; each pins the findings that existed. The server
+keeps reporting all of them, so the deferred work stays counted where it is visible. That is the line between the
+two kinds of exception these files contain: a **suppression** — a finding that should not be reported anywhere,
+because the rule misreads a shape — is mirrored in `sonar-project.properties` so the two tools cannot disagree,
+while a **baseline** is deferred work and is deliberately local. Clearing them is a parked idea in each project's
+`NEXT-ITERATIONS.md`, paid off as those files are touched for other reasons.
+
+The mechanisms differ because the toolchains do:
+
+- **`web/eslint-suppressions.json`** is ESLint's own bulk-suppressions file: a **count per file and per rule**,
+  so one more violation of a baselined rule in a baselined file exceeds the count and reports. `npm run lint:baseline`
+  regenerates it and `npm run lint:prune` drops what a refactor has paid off; both rewrite it, so neither is part
+  of a gate.
+- **`go/.golangci.yml`** has no such mechanism, so the baseline is expressed in the config as exclusion rules
+  that each match **one function by name**, listed at the end of `exclusions.rules`. A new complex function in a
+  listed file is reported. The trade-offs are stated there: a listed function can still get worse unnoticed
+  (the match is on its name, not its score), and a stale entry is invisible, because golangci-lint does not
+  report an exclusion that matched nothing — so an entry is deleted in the same commit as the refactor that
+  fixes its function.

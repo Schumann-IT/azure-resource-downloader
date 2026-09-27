@@ -411,6 +411,7 @@ web/
 │   └── lib/changelog.js                 # CHANGELOG.md / NEXT-ITERATIONS.md readers both reports share
 ├── .env.example                         # every variable at its default
 ├── eslint.config.mjs                    # the rule set `npm run lint` and WebStorm both run
+├── eslint-suppressions.json             # the pre-existing findings it exempts (npm run lint:baseline)
 ├── CHANGELOG.md                         # Keep a Changelog; released sections match web/vX.Y.Z tags
 └── NEXT-ITERATIONS.md                   # outstanding work, shipped-but-uncleared entries, parked ideas
 ```
@@ -418,8 +419,8 @@ web/
 ## Development conventions
 
 - Run everything through the npm scripts from this folder (`npm run build`, `npm run start:dev`,
-  `npm run start:prod`, `npm test`, `npm run lint`, `npm run lint:fix`). The Go `Makefile` in `../go` does not
-  apply here.
+  `npm run start:prod`, `npm test`, `npm run lint`, `npm run lint:fix`, `npm run lint:baseline`,
+  `npm run lint:prune`). The Go `Makefile` in `../go` does not apply here.
 - `eslint.config.mjs` is the single lint truth. `npm run lint` reports and is part of both readiness gates;
   `npm run lint:fix` rewrites files and is deliberately in neither, since a gate must not change the tree.
   **WebStorm needs no setup**: its default *Automatic ESLint configuration* runs the ESLint in this folder's
@@ -438,9 +439,18 @@ web/
   (a `sort()` without a compare function, and misleading array mutation) stay silent because this config does not
   enable type-aware parsing, and the `node:`-protocol / `replaceAll` / optional-chaining family the server takes
   from other plugins is not covered at all. Closing either gap is a separate decision — a dependency and a
-  slower lint, respectively — and until the reported findings are fixed, `npm run lint` fails and so do both
-  readiness gates. Analysis itself is described in the **Static analysis** section of the
+  slower lint, respectively. Analysis itself is described in the **Static analysis** section of the
   [repository README](../README.md).
+- **The code that predates those rules is baselined, not exempted.** `eslint-suppressions.json` records the 16
+  findings that existed when the rules were switched on as a count per file and per rule — ESLint's own bulk
+  suppressions — so `npm run lint` passes and both readiness gates are usable, while **new code is held to the
+  full rule set**: a second violation of a suppressed rule in a suppressed file exceeds the recorded count and
+  reports. That is why the baseline is a file of counts rather than `off` entries in `eslint.config.mjs`, which
+  would blind the rule for a whole file including code written tomorrow. Regenerate it with
+  `npm run lint:baseline` and drop entries a refactor has made unnecessary with `npm run lint:prune`; both
+  rewrite the file, so — like `lint:fix` — neither is part of a gate. Clearing it is a **parked idea** in
+  `NEXT-ITERATIONS.md` rather than scheduled work: the occasion to pay an entry off is a file being touched for
+  another reason. Growing it is a decision to take deliberately, not a routine.
 - The architecture invariants and style/testing requirements live in `.windsurf/rules/` **in this folder**
   (`01-architecture.md`, `02-style-and-quality.md`, `06-next-iterations.md`); the Go rules in `../go` do not
   apply.

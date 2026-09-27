@@ -17,6 +17,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:baseline": "eslint . --suppress-all",
+    "lint:prune": "eslint . --prune-suppressions",
     "branch-ready": "node scripts/working-tree-clean.js && npm run test && npm run lint && npm run build && node scripts/branch-ready.js",
     "release-ready": "npm run test && npm run lint && npm run build && node scripts/release-ready.js"
   },

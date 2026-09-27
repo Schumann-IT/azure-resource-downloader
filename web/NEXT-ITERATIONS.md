@@ -441,3 +441,35 @@ plus a `CHANGELOG.md` entry, because a page that needs script to work is operato
 changelog entries that boast *"still no client-side JavaScript"* are history and stay as written. Two invariants
 must be restated rather than dropped by accident: state belongs in the URL (so views stay addressable), and no
 route may mutate anything under the docs root, however the client is built.
+
+### Idea: Clear the ESLint suppressions baseline
+
+Pay off the 16 findings in `eslint-suppressions.json` — the ones that existed in 9 files when the sonarjs rules
+were switched on — a rule at a time, pruning after each, until the file, the `lint:baseline` / `lint:prune`
+scripts and the paragraphs describing them can be deleted. **Parked** because the baseline already delivers the
+property that mattered: every rule stays enabled, `npm run lint` and both readiness gates are usable, and new
+code — including new code in the baselined files — is held to the full set, since one more violation of a
+baselined rule there exceeds the recorded count and reports. What is left is latent, not broken: the regexes
+backtrack over the operator's own generated export tree in a read-only app, and the complex functions are the
+ones whose shape the score measures rather than their risk. **Revisit** when a baselined file is being touched
+for another reason (pay its entry off in the same edit, which is how this shrinks without a campaign), when a
+render actually turns out slow on a pathological document, or if the baseline ever stops shrinking — that would
+mean it has become a place where findings accumulate, which is the one thing it must not be.
+
+What is settled if it is picked up. It is a **debt ledger, not a policy**: nothing in it is a rule this project
+disagrees with, and none of it is exempted in `eslint.config.mjs` — the rules switched off there for `test/` are
+a separate, permanent parity decision and are not part of this. Work rule by rule and run `npm run lint:prune`
+after each, so the diff shows what was paid off. Only `sonarjs/super-linear-regex` (6: `page-name.ts` ×2,
+`findings-table.ts` ×2, `link-rewrite.ts`, `section-hooks.ts`) changes behaviour — these patterns run over
+generated documents, so each rewrite needs a spec case pinning the same accepted and rejected inputs. The rest
+are refactors the existing suite covers and are internal, carrying no `CHANGELOG.md` entry unless a reader sees
+a difference: `cognitive-complexity` (4: `confluence.ts`, `export/html-allowlist.ts`, `section-hooks.ts`,
+`tenant-index.ts`), split along the seams those functions already have and keeping the pure/Nest-free split
+intact; `misplaced-loop-counter` in `page-name.ts`, a `while` written as a `for`; `no-nested-template-literals`
+in `confluence.ts`; and `prefer-specific-assertions` in two specs. Two are decisions rather than fixes, and
+either way they move **out** of the baseline: `updated-loop-counter` in `findings-table.ts` (the scan assigns
+`i = close` to skip a matched table's body — deliberate and documented in place) and `no-os-command-from-path`
+in `scripts/working-tree-clean.js` (the preflight resolves `git` through `PATH`); if accepted, each becomes an
+`eslint-disable-next-line` at its site, because a baseline must not be where a standing choice hides. Deleting
+the file and the two scripts is the last step and is the only operator-visible part, so that one does get a
+`CHANGELOG.md` entry.

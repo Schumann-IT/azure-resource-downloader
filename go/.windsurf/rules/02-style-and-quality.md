@@ -7,11 +7,22 @@ globs: **/*.go
 # Style & Quality
 - Formatting: run `go fmt` and `goimports` on all generated code
 - Lint: write code that passes `make lint-check`, i.e. the linters configured in `.golangci.yml` (the default
-  set plus `unconvert`, `unparam` and govet's `nilness`). That file is the single lint truth and GoLand runs it
-  too, so the editor mirrors the config, never the other way round: fix a finding in the code, or silence it at
-  the one site with a `//nolint:<linter>` stating why — never by dropping a linter to go green. Adding or
-  removing a linter is a deliberate change to what every developer's editor reports, and belongs in
+  set plus `unconvert`, `unparam`, `gocognit` and govet's `nilness`). That file is the single lint truth and
+  GoLand runs it too, so the editor mirrors the config, never the other way round: fix a finding in the code, or
+  silence it at the one site with a `//nolint:<linter>` stating why — never by dropping a linter to go green.
+  Adding or removing a linter is a deliberate change to what every developer's editor reports, and belongs in
   `CHANGELOG.md`.
+- The **`gocognit` baseline** at the end of `.golangci.yml`'s `exclusions.rules` is a **debt ledger, not an
+  escape hatch**: it names, one by one, the 26 functions that already exceeded the Sonar threshold when the
+  linter was switched on, so the gates are usable while every new function has to comply. **Never add your own
+  function to it** — a new complex function is exactly the signal it exists to preserve; split the function, or
+  if a finding is genuinely wrong, silence it at its site with a `//nolint:gocognit` stating why. It only ever
+  shrinks, opportunistically: when you are editing a listed function anyway, split it up and delete its entry in
+  the same commit (nothing detects a stale entry — golangci-lint does not report an exclusion that matched
+  nothing). What is left is described by a parked idea in `NEXT-ITERATIONS.md`. Growing the ledger needs the
+  user's agreement and a `CHANGELOG.md` entry. The two path-scoped `gocognit` exclusions above it are a
+  different thing — permanent parity decisions, mirrored in `sonar-project.properties`; the baseline is
+  deliberately not mirrored, because Sonar is where the deferred work stays counted.
 - Errors:
     - Wrap with `%w` and `fmt.Errorf` (no `%v`).
     - Sentinel errors via `var ErrX = errors.New("x")` in package scope.

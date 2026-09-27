@@ -89,6 +89,164 @@ linters:
         linters:
           - unparam
 
+      # gocognit on test files. A table-driven Go test is a table plus a
+      # `for … t.Run(…)` loop plus the assertions each case needs, and that
+      # shape scores high for reasons that are not maintainability risk: the
+      # branching is the cases, not the logic. Sonar DOES report go:S3776 on
+      # this project's `_test.go` files (13 of them at the time of writing), so
+      # unlike the unparam exclusion above this one does not hold on its own —
+      # it is mirrored by an `sonar.issue.ignore.multicriteria` entry in
+      # sonar-project.properties. Change one and you must change the other.
+      - path: _test\.go$
+        linters:
+          - gocognit
+
+      # gocognit on the Microsoft Graph handlers. Each of these files is one
+      # `New<Type>Handler` constructor returning a GraphCollectionHandler
+      # literal whose `listIDs`, `fetchItem` and `transform` fields are
+      # closures. gocognit attributes a nested closure's score to the enclosing
+      # function, so the paging loop every handler needs (`for { Get; if resp ==
+      # nil; for _, item := range …; if next == nil }`) is counted against the
+      # constructor, and all 46 reported handlers land in a 27–34 band whatever
+      # they actually do. The score therefore measures the shared pattern, not
+      # the individual file, and satisfying it would mean 46 mechanical
+      # extractions that leave each handler harder to read than it is now.
+      #
+      # Scoped to graph/ deliberately, NOT to internal/handlers/: the wider path
+      # would also silence `requests.go` (`BuildFetchRequests`) and
+      # `internal/handlers/arm/`, which are real branching logic — flat nil-guard
+      # ladders in `Transform`, where a missed field is a real bug. Those three
+      # are named one by one in the baseline below instead, so they stay visible
+      # as debt and a *new* function in those files still reports.
+      #
+      # Mirrored in sonar-project.properties, same as the exclusion above.
+      - path: internal/handlers/graph/
+        linters:
+          - gocognit
+
+      # ----------------------------------------------------------------------
+      # gocognit baseline: the 26 functions that already exceeded the threshold
+      # when the rule was switched on, in 20 files.
+      #
+      # This is a DEBT LEDGER, not a set of exemptions. Nothing here is a finding
+      # this project disagrees with — unlike the two exclusions above, which are
+      # permanent decisions about a shape the metric misreads. Its only purpose is
+      # to make `make lint-check`, `make check`, `make ci` and `make branch-ready`
+      # usable while the rule guards everything written from now on, so that new
+      # code has to comply and the backlog can be paid off a function at a time.
+      # Clearing it is a parked idea in NEXT-ITERATIONS.md.
+      #
+      # Each entry names ONE function through `text`, not a file through `path`
+      # alone. That is the whole point: excluding a path would blind the rule for
+      # every function the file gains later, which is exactly the code the rule is
+      # meant to catch. A second complex function in `writer.go` reports; the
+      # three already listed do not.
+      #
+      # Two consequences to know. **A listed function can still get worse**
+      # unnoticed, because the match is on its name and not on its score — the
+      # same trade-off as a count-based baseline, and the reason splitting one up
+      # is worth more than tidying it. **Nothing detects a stale entry**:
+      # golangci-lint does not report an exclusion that matches nothing, so an
+      # entry has to be deleted in the same commit as the refactor that fixes its
+      # function. To re-measure from scratch, comment this block out and run
+      # `make lint-check`.
+      #
+      # Deliberately NOT mirrored in sonar-project.properties, unlike the two
+      # exclusions above. Those are suppressions — the finding should not be
+      # reported anywhere, so the two tools must agree. This is deferred work, and
+      # the server is where it stays counted: Sonar keeps reporting all 26 as
+      # go:S3776, which is the ledger view this file cannot give (its ignores are
+      # per file, so mirroring would also hide functions written tomorrow). The
+      # asymmetry is the point, and it is one-way — the server reports a superset,
+      # so it can never let something through that this file would have caught.
+      - path: cmd/docs/generate_prompt\.go$
+        text: 'func `reportGeneratePrompt` is high'
+        linters:
+          - gocognit
+      - path: cmd/resource/drift\.go$
+        text: 'func `runDrift` is high'
+        linters:
+          - gocognit
+      - path: cmd/resource/list\.go$
+        text: 'func `runList` is high'
+        linters:
+          - gocognit
+      - path: cmd/resource/types\.go$
+        text: 'func `runTypes` is high'
+        linters:
+          - gocognit
+      - path: internal/azure/client\.go$
+        text: 'func `(getDefaultSubscription|\(\*Client\)\.GetTenantDomain)` is high'
+        linters:
+          - gocognit
+      - path: internal/docs/generateindex\.go$
+        text: 'func `GenerateIndex` is high'
+        linters:
+          - gocognit
+      - path: internal/docs/generateprompt\.go$
+        text: 'func `GeneratePrompt` is high'
+        linters:
+          - gocognit
+      - path: internal/docs/generateprompt_render\.go$
+        text: 'func `renderSummaryFacts` is high'
+        linters:
+          - gocognit
+      - path: internal/docs/metadata\.go$
+        text: 'func `(mergeMetadata|pruneCovered)` is high'
+        linters:
+          - gocognit
+      - path: internal/docs/taxonomy\.go$
+        text: 'func `compileTaxonomy` is high'
+        linters:
+          - gocognit
+      - path: internal/drift/drift\.go$
+        text: 'func `Compare` is high'
+        linters:
+          - gocognit
+      # The two ARM `Transform` methods: flat nil-guard ladders over the SDK's
+      # pointer-heavy models. Named here rather than covered by a path exclusion
+      # precisely because a missed field is a real bug in this shape.
+      - path: internal/handlers/arm/storageaccount\.go$
+        text: 'func `\(\*StorageAccountHandler\)\.Transform` is high'
+        linters:
+          - gocognit
+      - path: internal/handlers/arm/virtualmachine\.go$
+        text: 'func `\(\*VirtualMachineHandler\)\.Transform` is high'
+        linters:
+          - gocognit
+      - path: internal/handlers/requests\.go$
+        text: 'func `\(\*Registry\)\.BuildFetchRequests` is high'
+        linters:
+          - gocognit
+      - path: internal/models/types\.go$
+        text: 'func `ParseCleaningConfig` is high'
+        linters:
+          - gocognit
+      - path: internal/pipeline/pipeline\.go$
+        text: 'func `\(\*ExecutionSummary\)\.PrintSummary` is high'
+        linters:
+          - gocognit
+      - path: internal/pipeline/transformer\.go$
+        text: 'func `\(\*Transformer\)\.transformResource` is high'
+        linters:
+          - gocognit
+      - path: internal/pipeline/writer\.go$
+        text: 'func `(\(\*Writer\)\.Write|\(\*Writer\)\.writeResource|notificationTemplateRefsFromData)` is high'
+        linters:
+          - gocognit
+      - path: internal/runprep/runprep\.go$
+        text: 'func `BuildTransformerConfigs` is high'
+        linters:
+          - gocognit
+      - path: internal/transform/base64\.go$
+        text: 'func `decodeOmaSettings` is high'
+        linters:
+          - gocognit
+      - path: internal/transform/cleaner\.go$
+        text: 'func `(findAndRemoveKeysWithPreserve|removeEmptyValuesWithPath)` is high'
+        linters:
+          - gocognit
+
 # golangci-lint truncates its own output by default: at most 50 findings per
 # linter and 3 with the same message. Sonar truncates nothing, so with the
 # defaults `make lint-check` would show a strict subset of what the server

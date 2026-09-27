@@ -32,9 +32,15 @@ This project is released independently of the documentation browser in `web/`: i
   whose scores straddle the limit — the linter can no longer let a server finding through. golangci-lint's
   output truncation is switched off for the same reason: with the defaults it showed a strict subset of what the
   server reports, so the two could not be compared at all. `goconst` is deliberately **not** enabled; the file
-  records why it cannot agree with the corresponding Sonar rule. **Consequence: `make lint-check` now reports
-  the complexity findings that were previously only visible on the server, so `make check`, `make ci` and
-  `make branch-ready` fail until those functions are split up.** Nothing about what the tool does changed.
+  records why it cannot agree with the corresponding Sonar rule. Two shapes the metric misreads are excluded and
+  mirrored on the server so the two tools keep agreeing: table-driven tests, and the Microsoft Graph handlers,
+  whose score belongs to the paging pattern all of them share rather than to the individual handler. **The code
+  that predates the rule is baselined rather than exempted**: the functions that already exceeded the threshold
+  are named one by one, so `make lint-check` — and with it `make check`, `make ci` and `make branch-ready` —
+  passes, while **every new function has to comply**; a second complex function in a listed file is still
+  reported, which excluding the file would have hidden. The server keeps reporting all of them, so the deferred
+  work stays counted where it is visible, and clearing it is tracked in `NEXT-ITERATIONS.md`. Nothing about what
+  the tool does changed.
 
 ## [0.2.0] - 2026-09-18
 

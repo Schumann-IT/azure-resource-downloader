@@ -31,9 +31,15 @@ section of the [repository README](../README.md) for the procedure.
   runs, and on the rules it covers the two were measured to report the same findings in the same places —
   including the reliability ones that matter here, a `sort()` without a compare function and regular expressions
   that backtrack super-linearly. It also covers the test suite, which the server deliberately analyses with a
-  reduced rule set. The rules that stay uncovered, and what it would take to close the gap, are documented in
-  `README.md`. **Consequence: `npm run lint` now reports these findings, so both readiness gates fail until they
-  are fixed.**
+  reduced rule set. A few rules the server does not report on the specs are switched off for `test/` only, so the
+  two tools agree there; the rules that stay uncovered, and what it would take to close the gap, are documented in
+  `README.md`. **The code that predates the rules is baselined rather than exempted**: the findings that existed
+  when they were switched on are recorded as a count per file and per rule in `eslint-suppressions.json`, so
+  `npm run lint` passes and both readiness gates are usable again, while new code is held to the full rule set —
+  one more violation of a baselined rule in a baselined file exceeds the count and reports. Switching the rules
+  off per file would have been the alternative and was rejected: it would have blinded them for code not yet
+  written. Two scripts maintain the baseline and, like `lint:fix`, are in neither gate because they rewrite it;
+  clearing it is tracked in `NEXT-ITERATIONS.md`.
 
 ## [0.2.0] - 2026-09-18
 

@@ -1,0 +1,64 @@
+{
+  "scripts/working-tree-clean.js": {
+    "sonarjs/no-os-command-from-path": {
+      "count": 1
+    }
+  },
+  "src/docs/export/confluence.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    },
+    "sonarjs/no-nested-template-literals": {
+      "count": 1
+    }
+  },
+  "src/docs/export/html-allowlist.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "src/docs/export/page-name.ts": {
+    "sonarjs/misplaced-loop-counter": {
+      "count": 1
+    },
+    "sonarjs/super-linear-regex": {
+      "count": 2
+    }
+  },
+  "src/docs/findings-table.ts": {
+    "sonarjs/super-linear-regex": {
+      "count": 2
+    },
+    "sonarjs/updated-loop-counter": {
+      "count": 1
+    }
+  },
+  "src/docs/link-rewrite.ts": {
+    "sonarjs/super-linear-regex": {
+      "count": 1
+    }
+  },
+  "src/docs/section-hooks.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    },
+    "sonarjs/super-linear-regex": {
+      "count": 1
+    }
+  },
+  "src/docs/tenant-index.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "test/docs.e2e.spec.ts": {
+    "sonarjs/prefer-specific-assertions": {
+      "count": 1
+    }
+  },
+  "test/export.spec.ts": {
+    "sonarjs/prefer-specific-assertions": {
+      "count": 1
+    }
+  }
+}

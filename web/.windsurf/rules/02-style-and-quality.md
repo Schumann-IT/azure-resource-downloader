@@ -15,6 +15,7 @@ Run everything from this folder (npm scripts, not raw binaries):
 - `npm test` — Jest (needs `--experimental-vm-modules`, already in the script)
 - `npm run lint` — ESLint, reports only; part of both readiness gates
 - `npm run lint:fix` — ESLint with `--fix`; rewrites files, so it is in neither gate
+- `npm run lint:baseline` / `npm run lint:prune` — rewrite `eslint-suppressions.json`; in neither gate either
 - `npm run branch-ready` — clean-tree preflight, tests + lint + build, then report whether this feature/fix
   branch is ready to ship
 
@@ -27,6 +28,16 @@ was written for. Adding or removing a rule changes what every developer's editor
 `CHANGELOG.md`. The IDE's **bundled** TypeScript inspections are a separate engine: what only they report is an
 editor hint, not a merge gate. There is still no Prettier config — do not reference `prettier` commands.
 **Never use the Go `Makefile` in the sibling `go/` folder** — it does not apply here.
+
+`eslint-suppressions.json` is the one sanctioned exception, and it is a **debt ledger, not an escape hatch**: it
+records the findings that already existed when the sonarjs rules were switched on, as a count per file and per
+rule, so the gates are usable while every rule stays enabled. **Never run `npm run lint:baseline` to make your
+own change go green** — a new violation exceeding a recorded count is exactly the signal the baseline exists to
+preserve. It only ever shrinks, opportunistically: when you are editing a baselined file anyway, pay its finding
+off and run `npm run lint:prune` (the standing parked idea in `NEXT-ITERATIONS.md` describes what is left).
+Growing it is a deliberate decision that needs the user's agreement and a `CHANGELOG.md`
+entry; a one-off finding you have judged acceptable is silenced at its site with an `eslint-disable-next-line`,
+not hidden in the ledger.
 
 ## TypeScript style
 - Match `tsconfig.json`: CommonJS modules, `strictNullChecks: true`, `noImplicitAny: false`.
