@@ -15,7 +15,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 ## Context
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
   Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`), `shiki`,
-  `gray-matter`, `js-yaml`, Jest + supertest.
+  `gray-matter`, `js-yaml`, `diff` (jsdiff), Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered.
 
 ## Layout
@@ -35,8 +35,12 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `markdown-renderer.service.ts` — the one `markdown-it` instance + render cache.
   - `yaml-highlighter.service.ts` — the one `shiki` highlighter + render cache.
   - `link-rewrite.ts` — pure functions (`rewriteHref`, `extractTitle`).
-  - `path-safety.ts` — `resolveWithinRoot` (+ the `resolveWithinTenant`/`resolveResource` wrappers),
-    the security boundary.
+  - `path-safety.ts` — `resolveWithinRoot` (+ the `resolveWithinTenant`/`resolveResource`/
+    `resolveDriftDocument`/`resolveDriftPayload` wrappers), the security boundary.
+  - `drift-observation.ts` — pure functions (`parseObservation`, `driftState`, `tenantDriftState`).
+  - `drift.service.ts` — observation, baseline timestamp and verified-hash reads, mtime-cached.
+  - `drift-view.ts` — pure view models for the drift pages and the Drift switcher entries.
+  - `yaml-diff.ts` — pure function (`diffYaml`) behind the drift YAML diff, over `diff` (jsdiff).
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
@@ -54,12 +58,16 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 
 ### Path safety
 - `resolveWithinRoot()` in `src/docs/path-safety.ts` is the **only** way a request-derived path may
-  become a filesystem path — through `resolveWithinTenant()` for documents and `resolveResource()`
-  for source YAML. Never `path.join` user input and read it directly.
+  become a filesystem path — through `resolveWithinTenant()` for documents, `resolveResource()`
+  for source YAML, and `resolveDriftDocument()` / `resolveDriftPayload()` for the drift tree. Never
+  `path.join` user input and read it directly.
 - Its guarantees must be preserved: reject null bytes / absolute paths / `..` segments up front,
-  serve exactly **one** extension per root (`.md` under `docs/`, `.yaml` under `resources/`; `.yml`
-  is not served), and re-verify containment **after** `realpath()` so symlinks cannot escape. One
-  extension per root is what keeps the two roots apart — never widen it to an extension list.
+  serve exactly **one** extension per resolver (`.md` under `docs/`, `.yaml` under `resources/`;
+  under `drift/`, `.md` for drift documents and `.yaml` for payloads; `.yml` is never served), and
+  re-verify containment **after** `realpath()` so symlinks cannot escape. One extension per resolver
+  is what keeps the representations apart — never widen one to an extension list.
+- Both drift resolvers require **at least two path segments**, so the drift tree's top level
+  (`metadata.yaml`, `analyze.md`, `index.md`) is unreachable through them by construction.
 - Every change to that file needs a matching case in `test/path-safety.spec.ts`.
 - Error responses must not leak absolute filesystem paths (asserted in the e2e suite).
 
@@ -72,6 +80,8 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - `resources/` is **not** a discovery marker: an export whose `docs/` were copied without it stays a
   valid tenant whose YAML views 404.
 - `docs/generate.md` is tool input, not documentation — it is never served.
+- `<export>/drift` is a **third** served root and **not** a discovery marker. It is ephemeral (the
+  CLI deletes it wholesale), so its absence is the normal *no observation* state, never an error.
 - A matched tenant owns its whole subtree — do not descend into it looking for more tenants.
 - Skip directories starting with `_` or `.` (housekeeping folders such as `_to_delete/`).
 - Depth is bounded (`MAX_DEPTH`); keep it bounded.
@@ -91,6 +101,20 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - Highlighted HTML is trusted only because it comes from the highlighter; every other value in
   `views/resource.hbs` stays escaped.
 
+### Drift view
+- The comparison is the CLI's job; the app only renders `drift/` and never acts on it.
+- The Drift button and the drift page read **one** decision (`driftState` / `tenantDriftState`) so
+  they cannot disagree. The button is always rendered; it is inert only when there is nothing to
+  land on (no observation, or compared and unchanged), with the reason as its `title`.
+- The validity gate compares the observation's baseline against `resources/metadata.yaml`'s
+  `generatedAt` (the index's only when `resources/` is absent). A superseded observation is never
+  shown as a comparison.
+- A comparison or payload is shown only after its files' hashes match the observation.
+- `_drift` is a *representation* prefix: out of the breadcrumb, routes declared before the
+  `:tenant/*path` catch-all. `raw`, `yaml` and `diff` are reserved query parameters, never taxonomy axes.
+- The YAML diff is computed only from two verified files and emitted as plain data, escaped by the
+  template — never as trusted HTML.
+
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in
   `onModuleInit`. Do not construct per request.
@@ -101,7 +125,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   body.
 - Only *relative* `.md` links are rewritten, resolved against the current document's directory and
   prefixed with the tenant segment. Anchors, absolute routes, schemes, protocol-relative URLs,
-  non-`.md` targets and links escaping the tenant root are returned unchanged (`null`).
+  non-`.md` targets and links escaping the tenant root are returned unchanged (`null`). Drift
+  documents render with the `_drift` route base, so their links stay in the drift view; a link
+  into the sibling `docs/` reaches the documentation route.
 
 ### Caching / freshness
 - Regenerated documents must appear **without a restart**. Renders are cached by `mtimeMs` + `size`

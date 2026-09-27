@@ -15,6 +15,27 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Added
 
+#### Drift view
+
+- **Every resource can now answer "has this changed in the tenant since the export was taken?" in one click.**
+  A **Drift** entry joins **Documentation | YAML** in the top bar, and the landing page gains **Summary |
+  Drift**, rendering what `azure-rd resource drift` observed and what the drift analysis wrote about it: the
+  verdict, the recorded field changes, the analysis and the observed configuration, plus the observation as a
+  whole with every caveat of a partial run. The entry is always shown and goes inert, saying why, only when
+  there is nothing to land on, so a missing finding is never mistaken for *unchanged*. An observation taken
+  against an older baseline is shown as outdated rather than as a comparison, and nothing is compared until
+  the files on disk still match the hashes the observation recorded. A change or rename links one **YAML diff**
+  of the baseline against the observed configuration instead of two separate views; it is built only from the
+  two verified files and escaped like every other value, using the `diff` package. The analysis summary's
+  Findings table draws each verdict as an icon, as the tenant summary does for severity, and sizes its columns
+  from their content. The tenant picker states each tenant's drift at a glance — how many resources drifted and
+  when it was observed — from the same decision as the landing page's switcher, so an outdated observation is
+  dated but never counted. The Confluence export is unchanged and carries nothing from the drift tree. The app
+  stays read-only and the drift tree is not a discovery marker; a regenerated or deleted tree is reflected on
+  the next request without a restart. The tree is a third served root behind two resolvers pinned to one
+  extension each, whose top-level files (the observation, the analysis prompt) are unreachable by
+  construction. Routes and the drift root contract are in `README.md`.
+
 #### Release workflow
 
 - **This project can be analysed by a local SonarQube server.** `sonar-project.properties` describes it as its
@@ -23,6 +44,15 @@ section of the [repository README](../README.md) for the procedure.
   nothing about the app — see the **Static analysis** section of the [repository README](../README.md).
 
 ### Changed
+
+#### Views and navigation
+
+- **The landing page opens with the export's facts, right under its title.** A header block states when the
+  export was taken, how many resources are documented, pending and excluded, and whether the download was
+  incomplete — the counterpart of the observation header on the tenant drift page, which likewise now follows
+  the analysis title instead of preceding it. The facts are read from the index, never derived by walking the
+  tree, so the summary no longer has to restate them in prose; a summary without an H1 still renders whole,
+  below the block.
 
 #### Release workflow
 

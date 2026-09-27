@@ -1,0 +1,27 @@
+{{!-- The export header of the tenant landing page, the counterpart of the
+      drift observation header: when the export was taken, what the index
+      counts, and whether the download was complete, so the summary does not
+      have to restate those facts in prose. --}}
+<section class="export-summary mb-6 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm">
+  <p class="text-slate-600 dark:text-slate-300">
+    {{#if generatedAt}}Exported <strong>{{generatedAt}}</strong>{{else}}Export time unknown{{/if}} <span class="text-slate-400 dark:text-slate-500">· describes the export, not the live tenant</span>
+  </p>
+  <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+    <span>{{documented}} documented</span>
+    <span>{{pending}} pending</span>
+    <span>{{excluded}} excluded</span>
+  </p>
+  {{#unless complete}}
+    <p class="export-incomplete mt-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200">
+      <strong>Incomplete export</strong>{{#if incompleteReason}}: {{incompleteReason}}{{/if}}. A resource missing from these pages may still exist in the tenant.
+    </p>
+  {{/unless}}
+  {{#if excludedTypes.length}}
+    <details class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <summary class="cursor-pointer">Excluded types ({{excludedTypes.length}})</summary>
+      <ul class="mt-1 ml-4 list-disc">
+        {{#each excludedTypes}}<li><span class="font-mono">{{this.type}}</span> — {{this.count}}</li>{{/each}}
+      </ul>
+    </details>
+  {{/if}}
+</section>

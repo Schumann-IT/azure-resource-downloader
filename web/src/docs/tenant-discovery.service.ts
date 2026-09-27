@@ -23,12 +23,24 @@ export interface TenantInfo {
   // existence is checked at render time, so a summary written after discovery
   // was cached still shows up on the next request.
   summaryPath: string;
+  // Absolute path to <export>/drift, the tree `azure-rd resource drift` owns: a
+  // third served root, read-only like the others. Not a discovery marker, and
+  // deleted wholesale by the next drift run or re-baselining download, so every
+  // read of it degrades to "no observation".
+  driftDir: string;
+  // The observation (drift/metadata.yaml), read as data and never served.
+  driftObservationPath: string;
+  // The analysis summary (drift/index.md), the body of the tenant drift page.
+  driftIndexPath: string;
 }
 
 export const DOCS_DIR = 'docs';
 export const RESOURCES_DIR = 'resources';
 export const INDEX_FILE = 'index.yaml';
 export const SUMMARY_FILE = 'summary.md';
+export const DRIFT_DIR = 'drift';
+export const DRIFT_OBSERVATION_FILE = 'metadata.yaml';
+export const DRIFT_INDEX_FILE = 'index.md';
 const MAX_DEPTH = 3;
 const TTL_MS = 30_000;
 
@@ -180,6 +192,9 @@ export class TenantDiscoveryService {
       indexPath,
       resourcesDir: path.join(dir, RESOURCES_DIR),
       summaryPath: path.join(docsDir, SUMMARY_FILE),
+      driftDir: path.join(dir, DRIFT_DIR),
+      driftObservationPath: path.join(dir, DRIFT_DIR, DRIFT_OBSERVATION_FILE),
+      driftIndexPath: path.join(dir, DRIFT_DIR, DRIFT_INDEX_FILE),
     };
   }
 }

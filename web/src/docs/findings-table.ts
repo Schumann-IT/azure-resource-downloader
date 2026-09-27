@@ -19,16 +19,38 @@ export type Severity = (typeof SEVERITIES)[number];
 
 export const FINDINGS_CLASS = 'findings';
 
+// The drift analysis report's Findings table leads with Severity too, but adds
+// a Verdict column whose values are the CLI's closed verdict set. Its other
+// columns (Resource, Judgment) have no fixed order the summary's widths could
+// assume, so each cell is tagged with its column name instead.
+export const VERDICTS = ['added', 'changed', 'renamed', 'removed'] as const;
+
+export type Verdict = (typeof VERDICTS)[number];
+
+export const DRIFT_FINDINGS_CLASS = 'findings-drift';
+
 const SEVERITY_HEADER = 'severity';
+const VERDICT_HEADER = 'verdict';
 const KNOWN: ReadonlySet<string> = new Set<string>(SEVERITIES);
+const KNOWN_VERDICTS: ReadonlySet<string> = new Set<string>(VERDICTS);
+
+function normalise(value: string): string {
+  return value.trim().replace(/^[*_`]+|[*_`]+$/g, '').toLowerCase();
+}
 
 // Normalises a Severity cell to the closed set, tolerating the emphasis or code
 // span a generator might wrap it in. Anything else returns null and is left
 // alone: an unexpected value must render as plain text, never as a silently
 // wrong icon.
 export function severityOf(value: string): Severity | null {
-  const normalised = value.trim().replace(/^[*_`]+|[*_`]+$/g, '').toLowerCase();
+  const normalised = normalise(value);
   return KNOWN.has(normalised) ? (normalised as Severity) : null;
+}
+
+// Same contract as `severityOf`, for the drift report's Verdict cells.
+export function verdictOf(value: string): Verdict | null {
+  const normalised = normalise(value);
+  return KNOWN_VERDICTS.has(normalised) ? (normalised as Verdict) : null;
 }
 
 // Tags every findings table in `tokens` with `.findings`, and each of its body
@@ -41,9 +63,14 @@ export function applyFindingsTable(tokens: any[]): void {
     const close = matchingClose(tokens, i);
     if (close < 0) return;
 
-    if (hasSeverityHeader(tokens, i, close)) {
+    const headers = headerCells(tokens, i, close);
+    if (headers[0] === SEVERITY_HEADER) {
       tokens[i].attrJoin('class', FINDINGS_CLASS);
       annotateRows(tokens, i, close);
+      if (headers.includes(VERDICT_HEADER)) {
+        tokens[i].attrJoin('class', DRIFT_FINDINGS_CLASS);
+        annotateColumns(tokens, i, close, headers);
+      }
     }
 
     // Tables do not nest in this corpus, but skipping the body keeps the scan
@@ -61,16 +88,37 @@ function matchingClose(tokens: any[], open: number): number {
   return -1;
 }
 
-function hasSeverityHeader(tokens: any[], open: number, close: number): boolean {
+// The normalised text of the header row's cells, in column order.
+function headerCells(tokens: any[], open: number, close: number): string[] {
+  const headers: string[] = [];
   for (let i = open + 1; i < close; i++) {
-    if (tokens[i].type === 'tr_close') return false;
-    if (tokens[i].type !== 'th_open') continue;
-    const text = cellText(tokens, i, close)
-      .replace(/^[*_`]+|[*_`]+$/g, '')
-      .toLowerCase();
-    return text === SEVERITY_HEADER;
+    if (tokens[i].type === 'tr_close') break;
+    if (tokens[i].type === 'th_open') headers.push(normalise(cellText(tokens, i, close)));
   }
-  return false;
+  return headers;
+}
+
+// Tags every cell of a drift findings table with `data-column`, and each
+// recognised Verdict cell with `data-verdict` and a tooltip, the way
+// `annotateRows` treats severity.
+function annotateColumns(tokens: any[], open: number, close: number, headers: string[]): void {
+  let column = 0;
+  for (let i = open + 1; i < close; i++) {
+    const type = tokens[i].type;
+    if (type === 'tr_open') {
+      column = 0;
+      continue;
+    }
+    if (type !== 'th_open' && type !== 'td_open') continue;
+    const name = headers[column++];
+    if (!name) continue;
+    tokens[i].attrSet('data-column', name);
+    if (type !== 'td_open' || name !== VERDICT_HEADER) continue;
+    const verdict = verdictOf(cellText(tokens, i, close));
+    if (!verdict) continue;
+    tokens[i].attrSet('data-verdict', verdict);
+    tokens[i].attrSet('title', verdict);
+  }
 }
 
 function annotateRows(tokens: any[], open: number, close: number): void {

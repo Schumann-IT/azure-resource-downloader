@@ -154,6 +154,7 @@ export class MarkdownRendererService implements OnModuleInit {
     const html = this.md.render(content, {
       tenant: env.tenant,
       docDir: env.docDir,
+      routeBase: env.routeBase,
     });
 
     this.cache.set(file, {

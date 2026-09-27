@@ -79,6 +79,14 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/text-indent:\s*-9999px/);
   });
 
+  it('includes the drift findings table rules (content-sized columns and verdict icons)', () => {
+    expect(css).toMatch(/table\.findings\.findings-drift\s*\{[^}]*table-layout:\s*auto/);
+    expect(css).toMatch(/mask:\s*var\(--verdict-icon\)/);
+    for (const verdict of ['added', 'changed', 'renamed', 'removed']) {
+      expect(css).toMatch(new RegExp(`\\[data-verdict=["']${verdict}["']\\]`));
+    }
+  });
+
   it('includes the section identity rules (icons, roles, dark lift)', () => {
     expect(css).toContain('.doc-section-heading');
     expect(css).toContain('--section-icon');

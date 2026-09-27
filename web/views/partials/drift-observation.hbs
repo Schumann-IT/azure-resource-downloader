@@ -1,0 +1,42 @@
+{{!-- The observation header both drift pages share: when, against which
+      baseline, how complete, and every caveat the CLI recorded, so an empty
+      finding list can be told apart from a run that could not look. --}}
+<section class="drift-observation mb-6 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm">
+  <p class="text-slate-600 dark:text-slate-300">
+    Observed <strong>{{observedAt}}</strong> against the baseline of <strong>{{baselineGeneratedAt}}</strong>{{#if toolVersion}} <span class="text-slate-400 dark:text-slate-500">· {{toolVersion}}</span>{{/if}}
+  </p>
+  <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+    <span>{{compared}} compared</span>
+    <span>{{unchanged}} unchanged</span>
+    {{#each verdicts}}<span>{{this.count}} {{this.label}}</span>{{/each}}
+    {{#if unattested}}<span>{{unattested}} not comparable</span>{{/if}}
+    {{#if excluded}}<span>{{excluded}} excluded</span>{{/if}}
+    {{#if failed}}<span>{{failed}} failed</span>{{/if}}
+  </p>
+  {{#unless complete}}
+    <p class="drift-incomplete mt-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200">
+      <strong>Incomplete run</strong>{{#if incompleteReason}}: {{incompleteReason}}{{/if}}. What was not observed is unknown, not unchanged.
+    </p>
+  {{/unless}}
+  {{#if removalsSuppressed}}
+    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      Removals were suppressed: a scoped or incomplete run cannot tell a deleted resource from one it did not look at.
+    </p>
+  {{/if}}
+  {{#if unknownTypes.length}}
+    <details class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <summary class="cursor-pointer">Types that could not be listed ({{unknownTypes.length}})</summary>
+      <ul class="mt-1 ml-4 list-disc font-mono">
+        {{#each unknownTypes}}<li>{{this}}</li>{{/each}}
+      </ul>
+    </details>
+  {{/if}}
+  {{#if notComparable.length}}
+    <details class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <summary class="cursor-pointer">Baseline entries that could not be compared ({{notComparable.length}})</summary>
+      <ul class="mt-1 ml-4 list-disc">
+        {{#each notComparable}}<li><a href="{{this.href}}" class="font-mono text-brand-600 dark:text-brand-400 hover:underline">{{this.key}}</a> — {{this.reason}}</li>{{/each}}
+      </ul>
+    </details>
+  {{/if}}
+</section>

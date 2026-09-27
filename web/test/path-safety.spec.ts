@@ -2,7 +2,12 @@ import { promises as fsp } from 'fs';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveResource, resolveWithinTenant } from '../src/docs/path-safety';
+import {
+  resolveDriftDocument,
+  resolveDriftPayload,
+  resolveResource,
+  resolveWithinTenant,
+} from '../src/docs/path-safety';
 
 describe('resolveWithinTenant', () => {
   let tenantDir: string;
@@ -129,5 +134,63 @@ describe('resolveResource', () => {
     expect(
       resolveWithinTenant(resourcesDir, 'Microsoft.Graph/type/foo.yaml'),
     ).toBeNull();
+  });
+});
+
+// drift/ holds both extensions, so it is served by two resolvers pinned to one
+// extension each, plus a depth guard that keeps the tree root unreachable.
+describe('resolveDriftDocument / resolveDriftPayload', () => {
+  let driftDir: string;
+  let exportDir: string;
+
+  beforeAll(async () => {
+    exportDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'export-'));
+    driftDir = path.join(exportDir, 'drift');
+    const typeDir = path.join(driftDir, 'Microsoft.Graph', 'type');
+    await fsp.mkdir(typeDir, { recursive: true });
+    await fsp.mkdir(path.join(exportDir, 'resources'), { recursive: true });
+    await fsp.writeFile(path.join(typeDir, 'foo.yaml'), 'id: foo\n');
+    await fsp.writeFile(path.join(typeDir, 'foo.md'), '# drift of foo');
+    await fsp.writeFile(path.join(driftDir, 'metadata.yaml'), 'observedAt: x\n');
+    await fsp.writeFile(path.join(driftDir, 'analyze.md'), '# prompt');
+    await fsp.writeFile(path.join(driftDir, 'index.md'), '# summary');
+    await fsp.writeFile(path.join(exportDir, 'resources', 'bar.yaml'), 'id: bar\n');
+  });
+
+  afterAll(async () => {
+    await fsp.rm(exportDir, { recursive: true, force: true });
+  });
+
+  it('resolves a document and a payload of the same key, each by its own extension', () => {
+    expect(resolveDriftDocument(driftDir, 'Microsoft.Graph/type/foo')).toBe(
+      fs.realpathSync(path.join(driftDir, 'Microsoft.Graph/type/foo.md')),
+    );
+    expect(resolveDriftPayload(driftDir, 'Microsoft.Graph/type/foo')).toBe(
+      fs.realpathSync(path.join(driftDir, 'Microsoft.Graph/type/foo.yaml')),
+    );
+  });
+
+  it('never serves a .md as a payload, nor a .yaml as a document', () => {
+    expect(resolveDriftPayload(driftDir, 'Microsoft.Graph/type/foo.md')).toBeNull();
+    expect(resolveDriftDocument(driftDir, 'Microsoft.Graph/type/foo.yaml')).toBeNull();
+  });
+
+  it('keeps everything at the tree root unreachable through either resolver', () => {
+    for (const name of ['metadata', 'metadata.yaml', 'analyze', 'analyze.md', 'index', 'index.md']) {
+      expect(resolveDriftDocument(driftDir, name)).toBeNull();
+      expect(resolveDriftPayload(driftDir, name)).toBeNull();
+    }
+    // The depth cannot be faked with empty or `.` segments.
+    for (const name of ['./metadata', './index', 'x//metadata', '/metadata']) {
+      expect(resolveDriftDocument(driftDir, name)).toBeNull();
+      expect(resolveDriftPayload(driftDir, name)).toBeNull();
+    }
+  });
+
+  it('rejects traversal out of the drift root', () => {
+    expect(resolveDriftPayload(driftDir, '../resources/bar')).toBeNull();
+    expect(resolveDriftPayload(driftDir, 'Microsoft.Graph/../../resources/bar')).toBeNull();
+    expect(resolveDriftDocument(driftDir, 'Microsoft.Graph/../index')).toBeNull();
+    expect(resolveDriftPayload(driftDir, 'a/b\u0000c')).toBeNull();
   });
 });

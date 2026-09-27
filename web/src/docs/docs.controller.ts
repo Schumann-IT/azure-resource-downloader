@@ -4,16 +4,47 @@ import * as path from 'path';
 import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
-import { resolveResource, resolveWithinTenant } from './path-safety';
+import {
+  resolveDriftDocument,
+  resolveResource,
+  resolveWithinTenant,
+} from './path-safety';
+import { DriftService, DriftFiles } from './drift.service';
+import {
+  DriftFinding,
+  DriftState,
+  driftState,
+  tenantDriftState,
+  typeOfKey,
+} from './drift-observation';
+import {
+  DRIFT_PREFIX,
+  driftHref,
+  driftPageState,
+  findingGroups,
+  findingHeader,
+  lastSegment,
+  observationSummary,
+  pickerDrift,
+  resourceDriftSwitch,
+  stateFlags,
+  supersededView,
+  tenantSwitch,
+  ViewSwitch,
+} from './drift-view';
+import { LinkEnv } from './link-rewrite';
 import {
   buildFacetFilters,
   buildNavigation,
   countMatching,
+  exportSummary,
   hasSelection,
   parseFacetSelection,
   TenantIndex,
 } from './tenant-index';
 import { ExportService } from './export/export.service';
+import { splitLeadingHeading } from './section-hooks';
+import { diffYaml } from './yaml-diff';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -37,13 +68,25 @@ const SUMMARY_ROUTE = 'summary';
 // What a 404 can be about, and the exact headline for each — asserted by the
 // e2e cases. Chosen in the controller because the template has no `eq`
 // helper to branch a string itself.
-type NotFoundKind = 'tenant' | 'document' | 'resource' | 'export';
+type NotFoundKind =
+  | 'tenant'
+  | 'document'
+  | 'resource'
+  | 'export'
+  | 'noDrift'
+  | 'drift'
+  | 'payload'
+  | 'diff';
 
 const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
   tenant: 'Tenant not found',
   document: 'Document not found',
   resource: 'Source YAML not found',
   export: 'Export format not found',
+  noDrift: 'No drift observation',
+  drift: 'Drift finding not found',
+  payload: 'Observed payload not found',
+  diff: 'YAML diff not available',
 };
 
 @Controller()
@@ -53,6 +96,7 @@ export class DocsController {
     private readonly renderer: MarkdownRendererService,
     private readonly highlighter: YamlHighlighterService,
     private readonly exporter: ExportService,
+    private readonly drift: DriftService,
   ) {}
 
   // Discovered tenants paired with their freshly read index, on every call —
@@ -79,14 +123,17 @@ export class DocsController {
   // GET / — tenant picker, which is also where a tenant's export is offered.
   @Get()
   async picker(@Res() res: Response): Promise<void> {
-    const tenants = (await this.withIndex()).map(({ info, index }) => ({
-      id: info.id,
-      name: info.name,
-      documented: index.counts.documented,
-      pending: index.counts.pending,
-      generatedAt: index.generatedAt,
-      exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
-    }));
+    const tenants = await Promise.all(
+      (await this.withIndex()).map(async ({ info, index }) => ({
+        id: info.id,
+        name: info.name,
+        documented: index.counts.documented,
+        pending: index.counts.pending,
+        generatedAt: index.generatedAt,
+        drift: pickerDrift(await this.tenantDrift(info, index)),
+        exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
+      })),
+    );
     res.render('picker', { title: 'Documentation', tenants });
   }
 
@@ -141,24 +188,116 @@ export class DocsController {
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, 'tenant', tenant, '');
 
-    let summary: string | null;
-    try {
-      const page = await this.renderer.render(info.summaryPath, {
-        tenant,
-        docDir: '',
-      });
-      summary = page.html;
-    } catch {
-      summary = null;
-    }
+    const summary = await this.renderSplit(info.summaryPath, {
+      tenant,
+      docDir: '',
+    });
 
     res.render('tenant', {
       title: info.name,
       tenant,
       breadcrumb: [],
       summary,
+      exportSummary: exportSummary(index),
+      views: tenantSwitch(await this.tenantDrift(info, index), tenant, 'summary'),
       nav: this.nav(info, index, '', `/${tenant}`, query),
     });
+  }
+
+  // GET /:tenant/_drift — the observation at tenant scope: its header, the
+  // analysis summary (drift/index.md) when the agent has written it, and every
+  // recorded finding from the observation itself. Declared before the document
+  // catch-all so the prefix wins. An outdated observation renders the gate
+  // instead, and none of its findings.
+  @Get(`:tenant/${DRIFT_PREFIX}`)
+  async driftTenant(
+    @Param('tenant') tenant: string,
+    @Query() query: Record<string, unknown>,
+    @Res() res: Response,
+  ): Promise<void> {
+    const info = await this.discovery.get(tenant);
+    if (!info) return this.notFound(res, 'tenant', tenant, DRIFT_PREFIX);
+    const index = await this.discovery.getIndex(info);
+    if (!index) return this.notFound(res, 'tenant', tenant, DRIFT_PREFIX);
+
+    const state = await this.tenantDrift(info, index);
+    const current = state.kind === 'current' ? state.observation : null;
+    res.render('drift-tenant', {
+      title: withTenant('Drift', info.name),
+      tenant,
+      breadcrumb: [],
+      views: tenantSwitch(state, tenant, 'drift'),
+      nav: this.nav(info, index, '', `/${tenant}/${DRIFT_PREFIX}`, query),
+      state: stateFlags(state.kind),
+      superseded:
+        state.kind === 'superseded'
+          ? supersededView(state.observation, state.baselineGeneratedAt)
+          : null,
+      observation: current ? observationSummary(current, tenant) : null,
+      groups: current ? findingGroups(current, tenant) : [],
+      analysis: current
+        ? await this.renderSplit(info.driftIndexPath, {
+            tenant,
+            docDir: '',
+            routeBase: DRIFT_PREFIX,
+          })
+        : null,
+    });
+  }
+
+  // GET /:tenant/_drift/*path — what the observation says about one resource,
+  // addressed by the same extensionless path as its documentation; `?yaml`
+  // highlights the observed payload, `?raw` serves it as plain text and
+  // `?diff` shows it as a line diff against the baseline, each only once the
+  // files are verified against the hashes the observation recorded.
+  // Declared before the document catch-all so the prefix wins. `index` is the
+  // tenant drift page; everything else at the drift tree root is unreachable.
+  @Get(`:tenant/${DRIFT_PREFIX}/*path`)
+  async driftResource(
+    @Param() params: any,
+    @Query('yaml') yamlView: string | undefined,
+    @Query('raw') raw: string | undefined,
+    @Query('diff') diffView: string | undefined,
+    @Query() query: Record<string, unknown>,
+    @Res() res: Response,
+  ): Promise<void> {
+    const tenant: string = params.tenant;
+    const relPath = joinPath(params.path ?? params['0'] ?? '');
+    // Keys mirror resources/, so only `.yaml` is an optional suffix here: a
+    // `.md` path never names a drift key, and so never reaches a payload.
+    const key = relPath.replace(/\.yaml$/i, '');
+
+    const info = await this.discovery.get(tenant);
+    if (!info) return this.notFound(res, 'tenant', tenant, relPath);
+    if (stripExtension(relPath).toLowerCase() === 'index') {
+      res.redirect(302, `/${tenant}/${DRIFT_PREFIX}`);
+      return;
+    }
+
+    const index = await this.discovery.getIndex(info);
+    const state = await this.resourceDrift(info, index, key);
+    if (state.kind === 'none') return this.notFound(res, 'noDrift', tenant, relPath);
+    if (state.kind === 'unknown') return this.notFound(res, 'drift', tenant, relPath);
+
+    const files =
+      state.kind === 'finding'
+        ? await this.drift.files(info, state.observation, state.finding)
+        : null;
+    if (diffView !== undefined) {
+      const sources = files ? await this.drift.diffSources(files) : null;
+      if (!sources || state.kind !== 'finding') {
+        return this.notFound(res, 'diff', tenant, relPath);
+      }
+      return this.serveDiff(res, info, index, state.finding, sources, query);
+    }
+    if (raw !== undefined || yamlView !== undefined) {
+      const payload = files?.intact ? files.payload : null;
+      if (!payload || state.kind !== 'finding') {
+        return this.notFound(res, 'payload', tenant, relPath);
+      }
+      return this.servePayload(res, info, index, state.finding.key, payload, raw !== undefined, query);
+    }
+    await this.renderDrift(res, info, index, key, state, files, query);
   }
 
   // GET /:tenant/_export/:format — the tenant's documentation as an importable
@@ -227,7 +366,17 @@ export class DocsController {
         highlighted: rendered.highlighted,
         lines: rendered.lines,
         size: rendered.size,
-        views: this.views(tenant, docPath, 'resource'),
+        views: this.views(
+          tenant,
+          docPath,
+          'resource',
+          resourceDriftSwitch(
+            await this.resourceDrift(info, index, docPath),
+            tenant,
+            docPath,
+            false,
+          ),
+        ),
         nav: index
           ? this.nav(
               info,
@@ -288,7 +437,19 @@ export class DocsController {
         sourceHref: hasSource
           ? `/${tenant}/${RESOURCE_PREFIX}/${docPath}`
           : null,
-        views: hasSource ? this.views(tenant, docPath, 'doc') : null,
+        views: hasSource
+          ? this.views(
+              tenant,
+              docPath,
+              'doc',
+              resourceDriftSwitch(
+                await this.resourceDrift(info, index, docPath),
+                tenant,
+                docPath,
+                false,
+              ),
+            )
+          : null,
         nav: index
           ? this.nav(info, index, relPath, `/${tenant}/${docPath}`, query)
           : null,
@@ -337,13 +498,15 @@ export class DocsController {
     };
   }
 
-  // The document/YAML switcher for the top bar. Both representations share the
-  // same extensionless path, so no extra lookup is needed.
+  // The Documentation | YAML | Drift switcher for the top bar. All three
+  // representations share the same extensionless path, so no extra lookup is
+  // needed; the Drift entry is decided by the caller from the observation.
   private views(
     tenant: string,
     docPath: string,
-    kind: 'doc' | 'resource',
-  ): Array<{ label: string; href: string; active: boolean }> {
+    kind: 'doc' | 'resource' | 'drift',
+    drift: ViewSwitch,
+  ): ViewSwitch[] {
     return [
       {
         label: 'Documentation',
@@ -355,7 +518,214 @@ export class DocsController {
         href: `/${tenant}/${RESOURCE_PREFIX}/${docPath}`,
         active: kind === 'resource',
       },
+      drift,
     ];
+  }
+
+  private async tenantDrift(info: TenantInfo, index: TenantIndex | undefined) {
+    return tenantDriftState(
+      await this.drift.observation(info),
+      await this.drift.baselineGeneratedAt(info, index),
+    );
+  }
+
+  // The one drift decision for a resource, read by both its Drift button and
+  // its drift page so the two cannot disagree.
+  private async resourceDrift(
+    info: TenantInfo,
+    index: TenantIndex | undefined,
+    key: string,
+  ): Promise<DriftState> {
+    return driftState(
+      await this.drift.observation(info),
+      await this.drift.baselineGeneratedAt(info, index),
+      index,
+      key,
+    );
+  }
+
+  private async renderDrift(
+    res: Response,
+    info: TenantInfo,
+    index: TenantIndex | undefined,
+    key: string,
+    state: Exclude<DriftState, { kind: 'none' | 'unknown' }>,
+    files: DriftFiles | null,
+    query: Record<string, unknown>,
+  ): Promise<void> {
+    const tenant = info.id;
+    const finding = state.kind === 'finding' ? state.finding : null;
+    // The documentation a finding belongs to sits at its baseline key; an
+    // addition has none and is reached from the tenant drift page only.
+    const docKey = finding ? finding.baselineKey || finding.key : key;
+    const documented = indexLists(index, docKey);
+
+    res.render('drift', {
+      title: withTenant(`Drift: ${finding?.displayName || lastSegment(key)}`, info.name),
+      tenant,
+      breadcrumb: this.breadcrumb(key),
+      views: documented
+        ? this.views(tenant, docKey, 'drift', resourceDriftSwitch(state, tenant, docKey, true))
+        : null,
+      nav: index ? this.nav(info, index, docKey, driftHref(tenant, key), query) : null,
+      tenantDriftHref: `/${tenant}/${DRIFT_PREFIX}`,
+      name: lastSegment(key),
+      ...driftPageState(state),
+      ...(finding ? await this.findingView(info, finding, files, documented) : {}),
+    });
+  }
+
+  // The finding-specific part of a drift page. The comparison (deltas, inline
+  // payload) is only filled in when every file it was decided on is intact.
+  private async findingView(
+    info: TenantInfo,
+    finding: DriftFinding,
+    files: DriftFiles | null,
+    documented: boolean,
+  ) {
+    const verified = files ?? { baseline: null, payload: null, intact: false };
+    const analysis = await this.renderAnalysis(info, finding.key);
+    const inline = finding.verdict === 'added' && verified.intact ? verified.payload : null;
+    return {
+      finding: findingHeader(finding, analysis?.meta.severity),
+      links: this.driftLinks(info.id, finding, verified, documented),
+      intact: verified.intact,
+      deltas: finding.deltas,
+      deltaNote: finding.deltaNote,
+      payload: inline ? (await this.highlighter.render(inline)).html : null,
+      analysis: analysis ? analysis.html : null,
+    };
+  }
+
+  // The finding's way out to its other representations, each offered only when
+  // it is there: the baseline once verified, the payload once the comparison
+  // is intact, the documentation when the index lists it.
+  private driftLinks(
+    tenant: string,
+    finding: DriftFinding,
+    files: DriftFiles,
+    documented: boolean,
+  ): Array<{ label: string; href: string }> {
+    const links: Array<{ label: string; href: string }> = [];
+    if (documented) {
+      links.push({ label: 'Documentation', href: `/${tenant}/${finding.baselineKey}` });
+    }
+    const href = driftHref(tenant, finding.key);
+    const observed = files.intact && files.payload;
+    // Both sides verified: one diff replaces the two separate views.
+    if (files.baseline && observed) {
+      links.push({ label: 'YAML diff', href: `${href}?diff` });
+      return links;
+    }
+    if (files.baseline) {
+      links.push({
+        label: 'Baseline YAML',
+        href: `/${tenant}/${RESOURCE_PREFIX}/${finding.baselineKey}`,
+      });
+    }
+    if (observed) {
+      links.push({ label: 'Observed YAML', href: `${href}?yaml` });
+      links.push({ label: 'Observed YAML (raw)', href: `${href}?raw` });
+    }
+    return links;
+  }
+
+  // The analysis agent's drift document for a finding, when it has written
+  // one. Its links resolve inside the drift view.
+  private async renderAnalysis(info: TenantInfo, key: string) {
+    const file = resolveDriftDocument(info.driftDir, key);
+    if (!file) return null;
+    try {
+      return await this.renderer.render(file, {
+        tenant: info.id,
+        docDir: typeOfKey(key),
+        routeBase: DRIFT_PREFIX,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  private async servePayload(
+    res: Response,
+    info: TenantInfo,
+    index: TenantIndex | undefined,
+    key: string,
+    file: string,
+    raw: boolean,
+    query: Record<string, unknown>,
+  ): Promise<void> {
+    if (raw) {
+      res.sendFile(file, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Disposition': 'inline',
+        },
+      });
+      return;
+    }
+    const tenant = info.id;
+    const rendered = await this.highlighter.render(file);
+    res.render('resource', {
+      title: withTenant(`${lastSegment(key)}.yaml`, info.name),
+      tenant,
+      breadcrumb: this.breadcrumb(key),
+      observed: true,
+      source: `${key}.yaml`,
+      rawHref: `${driftHref(tenant, key)}?raw`,
+      body: rendered.html,
+      highlighted: rendered.highlighted,
+      lines: rendered.lines,
+      size: rendered.size,
+      views: null,
+      nav: index ? this.nav(info, index, key, driftHref(tenant, key), query) : null,
+    });
+  }
+
+  // The baseline and the observed payload of a finding as one line diff. The
+  // raw links stay available for copying either side verbatim.
+  private serveDiff(
+    res: Response,
+    info: TenantInfo,
+    index: TenantIndex | undefined,
+    finding: DriftFinding,
+    sources: { baseline: string; observed: string },
+    query: Record<string, unknown>,
+  ): void {
+    const tenant = info.id;
+    const key = finding.key;
+    res.render('drift-diff', {
+      title: withTenant(`Diff: ${finding.displayName || lastSegment(key)}`, info.name),
+      tenant,
+      breadcrumb: this.breadcrumb(key),
+      baselineSource: `${finding.baselineKey}.yaml`,
+      observedSource: `${key}.yaml`,
+      findingHref: driftHref(tenant, key),
+      baselineRawHref: `/${tenant}/${RESOURCE_PREFIX}/${finding.baselineKey}?raw`,
+      observedRawHref: `${driftHref(tenant, key)}?raw`,
+      diff: diffYaml(sources.baseline, sources.observed),
+      views: null,
+      nav: index ? this.nav(info, index, key, driftHref(tenant, key), query) : null,
+    });
+  }
+
+  // An optional page with its H1 split off, so the view can put its facts
+  // block between the title and the prose.
+  private async renderSplit(
+    file: string,
+    env: LinkEnv,
+  ): Promise<{ heading: string; body: string } | null> {
+    const html = await this.renderOptional(file, env);
+    return html === null ? null : splitLeadingHeading(html);
+  }
+
+  private async renderOptional(file: string, env: LinkEnv): Promise<string | null> {
+    try {
+      return (await this.renderer.render(file, env)).html;
+    } catch {
+      return null;
+    }
   }
 
   private docDir(relPath: string): string {
@@ -381,6 +751,10 @@ export class DocsController {
       .status(404)
       .render('error', { title: headline, headline, tenant, requested });
   }
+}
+
+function indexLists(index: TenantIndex | undefined, key: string): boolean {
+  return !!index?.resources.some((r) => stripExtension(r.doc) === key);
 }
 
 function joinPath(value: any): string {

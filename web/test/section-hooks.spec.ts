@@ -8,6 +8,7 @@ import {
   applySectionHeadings,
   isKnownSection,
   slugifyHeading,
+  splitLeadingHeading,
   wrapSections,
 } from '../src/docs/section-hooks';
 
@@ -53,6 +54,31 @@ function heading(tag: string, text: string): FakeToken[] {
     new FakeToken('heading_close', tag),
   ];
 }
+
+describe('splitLeadingHeading', () => {
+  it('splits the leading H1 off the body', () => {
+    const html =
+      '<h1 id="t" tabindex="-1"><a class="header-anchor" href="#t">Title</a></h1>\n<p>Body</p>\n<h1>Second</h1>\n';
+    expect(splitLeadingHeading(html)).toEqual({
+      heading:
+        '<h1 id="t" tabindex="-1"><a class="header-anchor" href="#t">Title</a></h1>',
+      body: '\n<p>Body</p>\n<h1>Second</h1>\n',
+    });
+  });
+
+  it('leaves a page that does not open with an H1 whole', () => {
+    const html = '<p>Intro</p>\n<h1>Late</h1>\n';
+    expect(splitLeadingHeading(html)).toEqual({ heading: '', body: html });
+    expect(splitLeadingHeading('<h2>Sub</h2>')).toEqual({
+      heading: '',
+      body: '<h2>Sub</h2>',
+    });
+    expect(splitLeadingHeading('<h1x>no</h1x>')).toEqual({
+      heading: '',
+      body: '<h1x>no</h1x>',
+    });
+  });
+});
 
 describe('slugifyHeading', () => {
   it('produces plain slugs where the anchor plugin percent-encodes', () => {
