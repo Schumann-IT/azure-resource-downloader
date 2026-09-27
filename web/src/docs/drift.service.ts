@@ -96,6 +96,25 @@ export class DriftService {
     return { baseline, payload, intact: intact(finding, baseline, payload) };
   }
 
+  // The baseline and observed texts for the diff view — only for a finding
+  // whose comparison is intact and has both sides, so a diff is never shown
+  // against bytes the verdict was not decided on. Null when either is missing
+  // or vanished since it was verified.
+  async diffSources(
+    files: DriftFiles,
+  ): Promise<{ baseline: string; observed: string } | null> {
+    if (!files.intact || !files.baseline || !files.payload) return null;
+    try {
+      const [baseline, observed] = await Promise.all([
+        fs.readFile(files.baseline, 'utf8'),
+        fs.readFile(files.payload, 'utf8'),
+      ]);
+      return { baseline, observed };
+    } catch {
+      return null;
+    }
+  }
+
   private async verified(
     file: string | null,
     expected: string,

@@ -591,7 +591,14 @@ describe('groupByAxis', () => {
     expect(filterableAxes(parseTenantIndex(INDEX_YAML)!)).toEqual([]);
   });
 
-  it('never offers an axis named after a route parameter (?raw, ?yaml)', () => {
+  it('never offers an axis named after a route parameter (?raw, ?yaml, ?diff)', () => {
+    const diff = parseTenantIndex(
+      FACETS_YAML.replace('id: programme', 'id: diff')
+        .replace('        programme:', '        diff:')
+        .replace('        programme:', '        diff:'),
+    )!;
+    expect(filterableAxes(diff).map((a) => a.id)).not.toContain('diff');
+
     const reserved = parseTenantIndex(
       FACETS_YAML.replace('id: programme', 'id: yaml')
         .replace('        programme:', '        yaml:')

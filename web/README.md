@@ -178,11 +178,12 @@ Discovery and resolution rules:
 | `GET /:tenant/_drift/index` | `302` to `/:tenant/_drift`. |
 | `GET /:tenant/_drift/*path` | What the observation says about one resource, at the same path as its documentation; the `.yaml` suffix is optional. |
 | `GET /:tenant/_drift/*path?yaml` / `?raw` | The verified observed payload, highlighted or as `text/plain` (`nosniff`). 404 when there is none or it no longer matches the observation. |
+| `GET /:tenant/_drift/*path?diff` | A unified line diff of the verified baseline against the verified observed payload (changes and renames). 404 when either side is missing or no longer matches the observation. |
 | `GET /:tenant/*path` | A document inside the tenant's `docs/` folder; the `.md` suffix is optional. Filter parameters apply to its sidebar. |
 
 Anything that does not resolve to a Markdown file inside the tenant's `docs/` — or to a `.yaml` file inside
 its `resources/` — renders the 404 view, which never leaks a filesystem path. The view names what was
-missing — tenant, document, source YAML, export format, drift observation, drift finding or observed payload —
+missing — tenant, document, source YAML, export format, drift observation, drift finding, observed payload or YAML diff —
 rather than always saying *Document not found*.
 `docs/generate.md` is tool input, not documentation, and is never served.
 
@@ -293,6 +294,11 @@ CLI's job — this app only renders what is on disk, and never acts on it.
   *outdated* at both scopes, never as a comparison.
 - **Integrity.** Before a comparison or payload is shown, the baseline and observed files are hashed and
   checked against the observation; a mismatch withholds both and says so.
+- **YAML diff.** When both sides of a change or rename are verified, the finding links one **YAML diff**
+  instead of separate baseline and observed views: a unified diff with three lines of context, line numbers
+  for both sides, and raw links to either file. It is computed per request as plain data and escaped by the
+  template; above 1 MiB combined it is not computed and the raw files are offered instead. An addition, which
+  has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the
   documentation route.
 
@@ -416,6 +422,7 @@ built in a temp directory and removed afterwards.
 | `test/path-safety.spec.ts` | Traversal, symlink escape, null bytes, absolute paths, one extension per root for both roots, one extension per drift resolver and the drift depth guard. |
 | `test/drift-observation.spec.ts` | Observation parsing (malformed rejected, never a throw), the baseline timestamp read, and every drift state in evaluation order, including renames and the validity gate. |
 | `test/link-rewrite.spec.ts` | `.md` href rewriting for the documentation and drift route bases. |
+| `test/yaml-diff.spec.ts` | The drift diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap. |
 | `test/tenant-index.spec.ts` | `index.yaml` parsing (malformed file rejected, later schema accepted, `facets`/`programmes`/`groups`/vocabularies), navigation building, every taxonomy-filter rule listed above (OR/AND, selection-aware counts, uncategorised bucket, exempt active document, version-2 synthesis, no-taxonomy passthrough), and `filterableAxes`/`groupByAxis` — the rule the export shares. |
 | `test/section-hooks.spec.ts` | Heading slugs, declared vs undeclared headings, matched/unmatched marker pairs, section wrapping (an H2 inside a spliced block never opens one), metadata-table detection. |
 | `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, and the invariant that an export changes neither the rendered HTML nor a byte under the docs root. |
@@ -451,13 +458,14 @@ web/
 │       ├── drift-observation.ts         # drift/metadata.yaml parsing + the one drift decision
 │       ├── drift.service.ts             # observation / baseline / hash reads, mtime-cached
 │       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists
+│       ├── yaml-diff.ts                 # unified line diff of baseline vs observed payload
 │       └── export/
 │           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
 │           ├── confluence.ts            # the format: space, page plan, overview, provenance
 │           ├── export-index-mode.ts     # EXPORT_INDEX → by-type / axis / both overview index
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
-├── views/                               # page/tenant/resource/drift/drift-tenant/picker/error + partials/
+├── views/                               # page/tenant/resource/drift/drift-tenant/drift-diff/picker/error + partials/
 ├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
 ├── scripts/

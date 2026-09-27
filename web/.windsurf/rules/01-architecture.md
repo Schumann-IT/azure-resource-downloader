@@ -15,7 +15,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 ## Context
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
   Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`), `shiki`,
-  `gray-matter`, `js-yaml`, Jest + supertest.
+  `gray-matter`, `js-yaml`, `diff` (jsdiff), Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered.
 
 ## Layout
@@ -40,6 +40,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `drift-observation.ts` — pure functions (`parseObservation`, `driftState`, `tenantDriftState`).
   - `drift.service.ts` — observation, baseline timestamp and verified-hash reads, mtime-cached.
   - `drift-view.ts` — pure view models for the drift pages and the Drift switcher entries.
+  - `yaml-diff.ts` — pure function (`diffYaml`) behind the drift YAML diff, over `diff` (jsdiff).
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
@@ -110,7 +111,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   shown as a comparison.
 - A comparison or payload is shown only after its files' hashes match the observation.
 - `_drift` is a *representation* prefix: out of the breadcrumb, routes declared before the
-  `:tenant/*path` catch-all. `raw` and `yaml` are reserved query parameters, never taxonomy axes.
+  `:tenant/*path` catch-all. `raw`, `yaml` and `diff` are reserved query parameters, never taxonomy axes.
+- The YAML diff is computed only from two verified files and emitted as plain data, escaped by the
+  template — never as trusted HTML.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in

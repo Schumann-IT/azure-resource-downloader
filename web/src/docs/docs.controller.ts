@@ -43,6 +43,7 @@ import {
 } from './tenant-index';
 import { ExportService } from './export/export.service';
 import { splitLeadingHeading } from './section-hooks';
+import { diffYaml } from './yaml-diff';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -73,7 +74,8 @@ type NotFoundKind =
   | 'export'
   | 'noDrift'
   | 'drift'
-  | 'payload';
+  | 'payload'
+  | 'diff';
 
 const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
   tenant: 'Tenant not found',
@@ -83,6 +85,7 @@ const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
   noDrift: 'No drift observation',
   drift: 'Drift finding not found',
   payload: 'Observed payload not found',
+  diff: 'YAML diff not available',
 };
 
 @Controller()
@@ -240,8 +243,9 @@ export class DocsController {
 
   // GET /:tenant/_drift/*path — what the observation says about one resource,
   // addressed by the same extensionless path as its documentation; `?yaml`
-  // highlights the observed payload and `?raw` serves it as plain text, both
-  // only once it is verified against the hash the observation recorded.
+  // highlights the observed payload, `?raw` serves it as plain text and
+  // `?diff` shows it as a line diff against the baseline, each only once the
+  // files are verified against the hashes the observation recorded.
   // Declared before the document catch-all so the prefix wins. `index` is the
   // tenant drift page; everything else at the drift tree root is unreachable.
   @Get(`:tenant/${DRIFT_PREFIX}/*path`)
@@ -249,6 +253,7 @@ export class DocsController {
     @Param() params: any,
     @Query('yaml') yamlView: string | undefined,
     @Query('raw') raw: string | undefined,
+    @Query('diff') diffView: string | undefined,
     @Query() query: Record<string, unknown>,
     @Res() res: Response,
   ): Promise<void> {
@@ -274,6 +279,13 @@ export class DocsController {
       state.kind === 'finding'
         ? await this.drift.files(info, state.observation, state.finding)
         : null;
+    if (diffView !== undefined) {
+      const sources = files ? await this.drift.diffSources(files) : null;
+      if (!sources || state.kind !== 'finding') {
+        return this.notFound(res, 'diff', tenant, relPath);
+      }
+      return this.serveDiff(res, info, index, state.finding, sources, query);
+    }
     if (raw !== undefined || yamlView !== undefined) {
       const payload = files?.intact ? files.payload : null;
       if (!payload || state.kind !== 'finding') {
@@ -594,14 +606,20 @@ export class DocsController {
     if (documented) {
       links.push({ label: 'Documentation', href: `/${tenant}/${finding.baselineKey}` });
     }
+    const href = driftHref(tenant, finding.key);
+    const observed = files.intact && files.payload;
+    // Both sides verified: one diff replaces the two separate views.
+    if (files.baseline && observed) {
+      links.push({ label: 'YAML diff', href: `${href}?diff` });
+      return links;
+    }
     if (files.baseline) {
       links.push({
         label: 'Baseline YAML',
         href: `/${tenant}/${RESOURCE_PREFIX}/${finding.baselineKey}`,
       });
     }
-    if (files.intact && files.payload) {
-      const href = driftHref(tenant, finding.key);
+    if (observed) {
       links.push({ label: 'Observed YAML', href: `${href}?yaml` });
       links.push({ label: 'Observed YAML (raw)', href: `${href}?raw` });
     }
@@ -656,6 +674,33 @@ export class DocsController {
       highlighted: rendered.highlighted,
       lines: rendered.lines,
       size: rendered.size,
+      views: null,
+      nav: index ? this.nav(info, index, key, driftHref(tenant, key), query) : null,
+    });
+  }
+
+  // The baseline and the observed payload of a finding as one line diff. The
+  // raw links stay available for copying either side verbatim.
+  private serveDiff(
+    res: Response,
+    info: TenantInfo,
+    index: TenantIndex | undefined,
+    finding: DriftFinding,
+    sources: { baseline: string; observed: string },
+    query: Record<string, unknown>,
+  ): void {
+    const tenant = info.id;
+    const key = finding.key;
+    res.render('drift-diff', {
+      title: withTenant(`Diff: ${finding.displayName || lastSegment(key)}`, info.name),
+      tenant,
+      breadcrumb: this.breadcrumb(key),
+      baselineSource: `${finding.baselineKey}.yaml`,
+      observedSource: `${key}.yaml`,
+      findingHref: driftHref(tenant, key),
+      baselineRawHref: `/${tenant}/${RESOURCE_PREFIX}/${finding.baselineKey}?raw`,
+      observedRawHref: `${driftHref(tenant, key)}?raw`,
+      diff: diffYaml(sources.baseline, sources.observed),
       views: null,
       nav: index ? this.nav(info, index, key, driftHref(tenant, key), query) : null,
     });

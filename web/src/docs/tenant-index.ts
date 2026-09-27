@@ -139,7 +139,7 @@ export const UNCATEGORISED_LABEL = 'Uncategorised';
 // Query parameters that belong to a route rather than to a facet axis. An axis
 // whose id collides with one is not offered as a filter, so it can never shadow
 // the route's own parameter.
-const RESERVED_QUERY_PARAMS = new Set(['raw', 'yaml']);
+const RESERVED_QUERY_PARAMS = new Set(['raw', 'yaml', 'diff']);
 
 // The axis a version-2 index expresses through `programmes` + per-resource
 // `groups`. Naming it is confined to that compatibility shim: everything else

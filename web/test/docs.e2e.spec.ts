@@ -1574,8 +1574,10 @@ findings: 4
     expect(res.text).toContain('settings.enabled');
     expect(res.text).toMatch(/class="badge[^"]*">changed</);
     expect(res.text).toMatch(/class="badge[^"]*">high</);
-    expect(res.text).toContain(`href="/drifted/_resource/${T}/changed1"`);
-    expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?yaml"`);
+    // Both sides verified: one diff link instead of the two YAML views.
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?diff"`);
+    expect(res.text).not.toContain('>Baseline YAML</a>');
+    expect(res.text).not.toContain(`href="/drifted/_drift/${T}/changed1?yaml"`);
     // The analysis's links stay in the drift view, or reach the documentation.
     expect(res.text).toContain(`href="/drifted/_drift/${T}/new_name"`);
     expect(res.text).toContain(`href="/drifted/${T}/changed1"`);
@@ -1603,6 +1605,26 @@ findings: 4
     expect(raw.text).toBe(CHANGED_PAYLOAD);
   });
 
+  it('shows a changed finding as a line diff of baseline against observed', async () => {
+    const res = await get(`/drifted/_drift/${T}/changed1?diff`).expect(200);
+    expect(res.text).toContain(`resources/${T}/changed1.yaml`);
+    expect(res.text).toContain(`drift/${T}/changed1.yaml`);
+    expect(res.text).toContain('@@ -1,3 +1,3 @@');
+    expect(res.text).toMatch(/class="diff-removed[\s\S]*? {2}enabled: true</);
+    expect(res.text).toMatch(/class="diff-added[\s\S]*? {2}enabled: false</);
+    expect(res.text).toMatch(/class="diff-context[\s\S]*?id: changed1</);
+    expect(res.text).toContain(`href="/drifted/_resource/${T}/changed1?raw"`);
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?raw"`);
+  });
+
+  it('withholds the diff when either side is missing or no longer verified', async () => {
+    await get(`/drifted/_drift/${T}/tampered1?diff`).expect(404);
+    // An addition has no baseline to diff against.
+    const added = await get('/drifted/_drift/Microsoft.Graph/namedLocations/new_loc?diff').expect(404);
+    expect(added.text).toContain('YAML diff not available');
+    expect(added.text).not.toContain(root);
+  });
+
   it("reaches a rename from the old name's page and renders it", async () => {
     const doc = await get(`/drifted/${T}/old_name`).expect(200);
     expect(doc.text).toContain(`href="/drifted/_drift/${T}/old_name"`);
@@ -1610,8 +1632,11 @@ findings: 4
     const res = await get(`/drifted/_drift/${T}/old_name`).expect(200);
     expect(res.text).toContain('New name');
     expect(res.text).toContain('was <strong>Old name</strong>');
-    expect(res.text).toContain(`href="/drifted/_drift/${T}/new_name?yaml"`);
-    expect(res.text).toContain(`href="/drifted/_resource/${T}/old_name"`);
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/new_name?diff"`);
+    const diff = await get(`/drifted/_drift/${T}/old_name?diff`).expect(200);
+    expect(diff.text).toContain(`resources/${T}/old_name.yaml`);
+    expect(diff.text).toContain(`drift/${T}/new_name.yaml`);
+    expect(diff.text).toMatch(/class="diff-added[\s\S]*?displayName: New name</);
   });
 
   it('renders an addition with its payload, and no documentation link', async () => {
@@ -1620,6 +1645,9 @@ findings: 4
     expect(res.text).toContain('Observed payload');
     expect(res.text).toContain('kali-vpn-location');
     expect(res.text).not.toContain('>Documentation</a>');
+    // No baseline, so no diff: the observed YAML is linked on its own.
+    expect(res.text).toContain('href="/drifted/_drift/Microsoft.Graph/namedLocations/new_loc?yaml"');
+    expect(res.text).not.toContain('?diff"');
   });
 
   it('withholds the comparison and the payload when a file no longer matches', async () => {
