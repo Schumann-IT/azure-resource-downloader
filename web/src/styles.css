@@ -291,14 +291,92 @@ html {
   --sev-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
 }
 
+/* -------------------------------------------------------------------------
+   Drift report Findings table: Severity | Verdict | Resource | Judgment, cells
+   tagged `data-column` and verdict cells `data-verdict` from the closed set.
+
+   The summary's fixed widths assume its own column order and squeezed the
+   Resource column into a character-per-line stack, so this table sizes its
+   columns from their content instead and never breaks inside a word: a column
+   wraps only when the row does not fit. A resource's name and its type code
+   are each kept whole. The verdict is drawn as an icon, like the severity.
+   ------------------------------------------------------------------------- */
+.prose table.findings.findings-drift {
+  table-layout: auto;
+}
+
+/* Doubled class: outranks the summary's `td:nth-child(n)` widths. */
+.prose table.findings.findings-drift th,
+.prose table.findings.findings-drift td {
+  overflow-wrap: normal;
+  width: auto;
+  text-align: left;
+}
+
+.prose table.findings.findings-drift th:first-child,
+.prose table.findings.findings-drift td:first-child,
+.prose table.findings.findings-drift [data-column="verdict"] {
+  width: 2.75rem;
+}
+
+.prose table.findings-drift [data-column="resource"] a,
+.prose table.findings-drift [data-column="resource"] code {
+  white-space: nowrap;
+}
+
+.findings-drift th[data-column="verdict"],
+.findings-drift td[data-verdict] {
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.findings-drift td[data-verdict] {
+  position: relative;
+}
+
+.findings-drift td[data-verdict]::before {
+  content: "";
+  position: absolute;
+  top: 0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.125rem;
+  height: 1.125rem;
+  text-indent: 0;
+  background-color: var(--verdict-color);
+  -webkit-mask: var(--verdict-icon) center / contain no-repeat;
+  mask: var(--verdict-icon) center / contain no-repeat;
+}
+
+.findings-drift [data-verdict="added"] {
+  --verdict-color: oklch(0.6 0.14 155);
+  --verdict-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 12h8'/%3E%3Cpath d='M12 8v8'/%3E%3C/svg%3E");
+}
+
+.findings-drift [data-verdict="changed"] {
+  --verdict-color: oklch(0.63 0.16 60);
+  --verdict-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3Cpath d='m15 5 4 4'/%3E%3C/svg%3E");
+}
+
+.findings-drift [data-verdict="renamed"] {
+  --verdict-color: oklch(0.6 0.11 250);
+  --verdict-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 3 4 4-4 4'/%3E%3Cpath d='M20 7H4'/%3E%3Cpath d='m8 21-4-4 4-4'/%3E%3Cpath d='M4 17h16'/%3E%3C/svg%3E");
+}
+
+.findings-drift [data-verdict="removed"] {
+  --verdict-color: oklch(0.55 0.2 25);
+  --verdict-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
+
 /* Narrow viewports: the Documents column is the first thing to give way. */
 @media (max-width: 40rem) {
-  .prose table.findings th:nth-child(3),
-  .prose table.findings td:nth-child(3) {
+  .prose table.findings:not(.findings-drift) th:nth-child(3),
+  .prose table.findings:not(.findings-drift) td:nth-child(3) {
     width: 3.5rem;
   }
-  .prose table.findings th:nth-child(4),
-  .prose table.findings td:nth-child(4) {
+  .prose table.findings:not(.findings-drift) th:nth-child(4),
+  .prose table.findings:not(.findings-drift) td:nth-child(4) {
     width: 24%;
   }
 }

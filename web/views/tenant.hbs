@@ -8,10 +8,13 @@
       <main class="doc-main min-w-0 flex-1">
       {{#if summary}}
         <article class="doc-body prose prose-slate dark:prose-invert max-w-none">
-          {{{summary}}}
+          {{{summary.heading}}}
+          <div class="not-prose">{{> export_summary exportSummary}}</div>
+          {{{summary.body}}}
         </article>
       {{else}}
-      <h1 class="text-2xl font-bold mb-1">{{nav.name}}</h1>
+      <h1 class="text-2xl font-bold mb-4">{{nav.name}}</h1>
+      {{> export_summary exportSummary}}
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">
         No <code class="font-mono">docs/summary.md</code> in this export — listing the index instead.
       </p>

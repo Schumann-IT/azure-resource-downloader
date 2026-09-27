@@ -493,6 +493,18 @@ describe('Docs browser (e2e)', () => {
     );
     // The summary owns the page heading — the view adds none of its own.
     expect(res.text).not.toContain('listing the index instead');
+    // Title first, then the export facts, then the summary's prose.
+    const title = res.text.indexOf('My Tenant — Intune and Entra configuration</a></h1>');
+    const facts = res.text.indexOf('class="export-summary');
+    const body = res.text.indexOf('A large, consistently named Intune estate.');
+    expect(title).toBeGreaterThan(-1);
+    expect(facts).toBeGreaterThan(title);
+    expect(body).toBeGreaterThan(facts);
+    expect(res.text).toContain('Exported <strong>2026-01-01T00:00:00Z</strong>');
+    expect(res.text).toContain('<span>2 documented</span>');
+    expect(res.text).toContain('<span>1 pending</span>');
+    expect(res.text).toContain('<span>4 excluded</span>');
+    expect(res.text).not.toContain('Incomplete export');
   });
 
   it('GET /:tenant falls back to the index listing when there is no summary.md', async () => {
@@ -500,6 +512,7 @@ describe('Docs browser (e2e)', () => {
       .get('/nosummary')
       .expect(200);
     expect(res.text).toContain('listing the index instead');
+    expect(res.text).toContain('class="export-summary');
     expect(res.text).toContain('A firewall policy.');
     expect(res.text).toContain(
       'href="/nosummary/Microsoft.Graph/deviceManagementConfigurationPolicies/p1"',
@@ -1472,9 +1485,10 @@ findings: 4
 
 # Drift analysis summary
 
-| Severity | Resource |
-|---|---|
-| high | [Changed one](${T}/changed1.md) |
+| Severity | Verdict | Resource | Judgment |
+|---|---|---|---|
+| high | changed | [Changed one](${T}/changed1.md) | Tightened. |
+| medium | shifted | [Changed one](${T}/changed1.md) | Unknown verdict. |
 `;
 
   let app: NestExpressApplication;
@@ -1641,10 +1655,24 @@ findings: 4
     expect(res.text).toContain('Removals were suppressed');
     expect(res.text).toContain('Microsoft.Graph/organizationalBranding');
     expect(res.text).toContain('Drift analysis summary');
+    // The analysis title comes first, then the observation header.
+    expect(res.text.indexOf('Drift analysis summary</a></h1>')).toBeGreaterThan(-1);
+    expect(res.text.indexOf('class="drift-observation')).toBeGreaterThan(
+      res.text.indexOf('Drift analysis summary</a></h1>'),
+    );
     expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1"`);
     // A finding with no document of its own is still reachable here.
     expect(res.text).toContain('href="/drifted/_drift/Microsoft.Graph/namedLocations/new_loc"');
     expect(res.text).not.toContain('findings: 4');
+    // The report's Findings table: verdicts from the closed set become icons,
+    // every cell names its column, anything else stays plain text.
+    expect(res.text).toContain('<table class="findings findings-drift">');
+    expect(res.text).toContain(
+      '<td data-column="verdict" data-verdict="changed" title="changed">changed</td>',
+    );
+    expect(res.text).toContain('<td data-column="verdict">shifted</td>');
+    expect(res.text).toContain('<th data-column="resource">Resource</th>');
+    expect(res.text).not.toContain('data-verdict="shifted"');
 
     const landing = await get('/drifted').expect(200);
     expect(landing.text).toContain('href="/drifted/_drift"');

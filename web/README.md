@@ -34,7 +34,9 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   readable `docs/index.yaml` as a tenant. That file is the navigation index written by
   `azure-rd docs generate-index`; documents are resolved against the tenant's `docs/` folder.
 - **Tenant landing page** — `GET /:tenant` renders `docs/summary.md`, the tenant-wide management summary the
-  generation agent writes (posture, severity-ranked findings, coverage caveats). It is optional: an export
+  generation agent writes (posture, severity-ranked findings, coverage caveats), with an export header between
+  its H1 and its prose: the index's `generatedAt`, its documented/pending/excluded counts and its
+  completeness. The tenant drift page places the observation header the same way. The summary is optional: an export
   with no summary falls back to listing the index — resources grouped by type, with the LLM-authored one-line
   summary, a *pending* marker for resources with no document yet, and count-only assignment badges.
 - **Sidebar navigation on every page** — one collapsible `<details>` per resource type, the section of the

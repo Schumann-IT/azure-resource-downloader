@@ -36,11 +36,13 @@ import {
   buildFacetFilters,
   buildNavigation,
   countMatching,
+  exportSummary,
   hasSelection,
   parseFacetSelection,
   TenantIndex,
 } from './tenant-index';
 import { ExportService } from './export/export.service';
+import { splitLeadingHeading } from './section-hooks';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -179,22 +181,17 @@ export class DocsController {
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, 'tenant', tenant, '');
 
-    let summary: string | null;
-    try {
-      const page = await this.renderer.render(info.summaryPath, {
-        tenant,
-        docDir: '',
-      });
-      summary = page.html;
-    } catch {
-      summary = null;
-    }
+    const summary = await this.renderSplit(info.summaryPath, {
+      tenant,
+      docDir: '',
+    });
 
     res.render('tenant', {
       title: info.name,
       tenant,
       breadcrumb: [],
       summary,
+      exportSummary: exportSummary(index),
       views: tenantSwitch(await this.tenantDrift(info, index), tenant, 'summary'),
       nav: this.nav(info, index, '', `/${tenant}`, query),
     });
@@ -232,7 +229,7 @@ export class DocsController {
       observation: current ? observationSummary(current, tenant) : null,
       groups: current ? findingGroups(current, tenant) : [],
       analysis: current
-        ? await this.renderOptional(info.driftIndexPath, {
+        ? await this.renderSplit(info.driftIndexPath, {
             tenant,
             docDir: '',
             routeBase: DRIFT_PREFIX,
@@ -662,6 +659,16 @@ export class DocsController {
       views: null,
       nav: index ? this.nav(info, index, key, driftHref(tenant, key), query) : null,
     });
+  }
+
+  // An optional page with its H1 split off, so the view can put its facts
+  // block between the title and the prose.
+  private async renderSplit(
+    file: string,
+    env: LinkEnv,
+  ): Promise<{ heading: string; body: string } | null> {
+    const html = await this.renderOptional(file, env);
+    return html === null ? null : splitLeadingHeading(html);
   }
 
   private async renderOptional(file: string, env: LinkEnv): Promise<string | null> {

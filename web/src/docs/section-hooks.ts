@@ -100,6 +100,19 @@ export function isKnownSection(slug: string): boolean {
   return KNOWN.has(slug);
 }
 
+// Splits a rendered page's leading H1 off its body, so a view can place its
+// own facts block (the export or the drift observation) between the title and
+// the prose without the document having to know about it. A page that does not
+// open with an H1 comes back whole, with an empty heading.
+export function splitLeadingHeading(html: string): {
+  heading: string;
+  body: string;
+} {
+  const match = /^\s*<h1[\s>][\s\S]*?<\/h1>/.exec(html);
+  if (!match) return { heading: '', body: html };
+  return { heading: match[0].trim(), body: html.slice(match[0].length) };
+}
+
 // Puts `data-section="<slug>"` on every H2/H3, and the styling class on the
 // ones whose heading is in the declared vocabulary. Both are needed: the slug
 // makes any section addressable, the class is what says "this heading is a

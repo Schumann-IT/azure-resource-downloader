@@ -2,6 +2,7 @@ import {
   buildFacetFilters,
   buildNavigation,
   countMatching,
+  exportSummary,
   filterableAxes,
   groupByAxis,
   hasSelection,
@@ -40,6 +41,36 @@ resources:
       displayName: macOS validation
       documented: false
 `;
+
+describe('exportSummary', () => {
+  it('reads the export header facts from the index', () => {
+    expect(exportSummary(parseTenantIndex(INDEX_YAML)!)).toEqual({
+      generatedAt: '2026-01-01T00:00:00Z',
+      complete: false,
+      incompleteReason: '4 resource types could not be listed',
+      documented: 2,
+      pending: 1,
+      excluded: 33,
+      excludedTypes: [
+        { type: 'Microsoft.Graph/groups', count: 29 },
+        {
+          type: 'Microsoft.Graph/windowsAutopilotDeviceIdentities',
+          count: 4,
+        },
+      ],
+    });
+  });
+
+  it('reports a complete export with nothing excluded', () => {
+    const summary = exportSummary(
+      parseTenantIndex('version: 1\ntenant: t\n')!,
+    );
+    expect(summary.complete).toBe(true);
+    expect(summary.generatedAt).toBeNull();
+    expect(summary.excluded).toBe(0);
+    expect(summary.excludedTypes).toEqual([]);
+  });
+});
 
 describe('parseTenantIndex', () => {
   it('parses the index emitted by `azure-rd docs generate-index`', () => {

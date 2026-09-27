@@ -27,7 +27,7 @@
   },
   "src/docs/findings-table.ts": {
     "sonarjs/super-linear-regex": {
-      "count": 2
+      "count": 1
     },
     "sonarjs/updated-loop-counter": {
       "count": 1

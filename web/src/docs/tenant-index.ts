@@ -209,6 +209,33 @@ export function parseTenantIndex(raw: string): TenantIndex | undefined {
   };
 }
 
+// The export header of the tenant landing page, the counterpart of the drift
+// observation header: when the export was taken, what the index counts and
+// whether the download was complete. Read from the index header only — counts
+// are never derived by walking the tree.
+export interface ExportSummary {
+  generatedAt: string | null;
+  complete: boolean;
+  incompleteReason: string | null;
+  documented: number;
+  pending: number;
+  excluded: number;
+  excludedTypes: Array<{ type: string; count: number }>;
+}
+
+export function exportSummary(index: TenantIndex): ExportSummary {
+  const excludedTypes = index.counts.excluded.filter((e) => e.count > 0);
+  return {
+    generatedAt: index.generatedAt,
+    complete: index.complete,
+    incompleteReason: index.incompleteReason,
+    documented: index.counts.documented,
+    pending: index.counts.pending,
+    excluded: excludedTypes.reduce((sum, e) => sum + e.count, 0),
+    excludedTypes,
+  };
+}
+
 // Groups the index into the navigation tree. Grouping is by resource type:
 // `platformGroup`/`functionGroup` are optional enrichment the documents do not
 // carry yet, so they are surfaced as per-item badges instead of driving the

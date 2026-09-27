@@ -17,13 +17,15 @@
           {{> drift_superseded superseded}}
         {{/if}}
         {{#if state.current}}
-          {{> drift_observation observation}}
           {{#if analysis}}
             <article class="doc-body prose prose-slate dark:prose-invert max-w-none">
-              {{{analysis}}}
+              {{{analysis.heading}}}
+              <div class="not-prose">{{> drift_observation observation}}</div>
+              {{{analysis.body}}}
             </article>
           {{else}}
             <h1 class="text-2xl font-bold mb-4">Drift</h1>
+            {{> drift_observation observation}}
           {{/if}}
           {{#if observation.empty}}
             <p class="drift-empty mt-6 text-slate-500 dark:text-slate-400">

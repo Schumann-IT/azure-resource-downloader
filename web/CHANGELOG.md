@@ -39,6 +39,15 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Changed
 
+#### Views and navigation
+
+- **The landing page opens with the export's facts, right under its title.** A header block states when the
+  export was taken, how many resources are documented, pending and excluded, and whether the download was
+  incomplete — the counterpart of the observation header on the tenant drift page, which likewise now follows
+  the analysis title instead of preceding it. The facts are read from the index, never derived by walking the
+  tree, so the summary no longer has to restate them in prose; a summary without an H1 still renders whole,
+  below the block.
+
 #### Release workflow
 
 - **ESLint now also mirrors the SonarQube quality profile, so a server finding is an editor squiggle instead of
