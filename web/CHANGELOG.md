@@ -13,6 +13,8 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+## [0.3.0]
+
 ### Added
 
 #### Drift view
