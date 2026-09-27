@@ -8,10 +8,12 @@ package resource
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/docs"
+	"azure-resource-downloader/internal/drift"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
@@ -209,6 +211,13 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 	if err := docs.WriteExportMetadata(exportRun); err != nil {
 		log.Warn("Export metadata not written", "error", err)
+	} else {
+		// The metadata write moved the baseline's generatedAt (partial runs
+		// included), which supersedes any drift observation by definition —
+		// drift is always relative to the baseline. Clear the drift/ tree so a
+		// stale observation (and its analysis artifacts) cannot outlive the
+		// baseline it was decided against.
+		rebaselineClearDrift(prep.Output, prep.DryRun)
 	}
 
 	if summary.FailedResources > 0 {
@@ -217,4 +226,26 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Download completed successfully")
 	return nil
+}
+
+// rebaselineClearDrift removes the tenant's drift/ tree after a run that
+// updated the export baseline. Never under dry-run: a dry run writes nothing,
+// so it deletes nothing. The delete goes through drift.ClearTree, whose path is
+// constructed — never derived from input — so it cannot reach into resources/
+// or docs/. A failure only warns: the download's own output is already safe,
+// and the stale observation remains self-describing (docs analyze-drift
+// refuses it as superseded).
+func rebaselineClearDrift(tenantDir string, dryRun bool) {
+	log := logger.Default
+	if dryRun {
+		return
+	}
+	removed, err := drift.ClearTree(tenantDir)
+	switch {
+	case err != nil:
+		log.Warn("Superseded drift observation not cleared", "error", err)
+	case removed:
+		log.Info("Cleared the drift observation: this run re-baselined the export it was compared against",
+			"dir", filepath.Join(tenantDir, drift.DriftDirName))
+	}
 }

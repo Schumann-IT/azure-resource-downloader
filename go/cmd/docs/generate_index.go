@@ -55,14 +55,7 @@ Examples:
 		RunE: runGenerateIndex,
 	}
 
-	// It needs nothing beyond the tenant domain, so the plain CLI credential is
-	// enough — but reuse the shared auth group for --subscription/--client-id/
-	// --tenant-id parity with the other commands.
-	cmdutil.AddAzureAuthFlags(cmd)
-
-	f := cmd.Flags()
-	f.String("domain", "", "export tenant domain (folder name under --output); skips authentication and runs offline")
-	f.String("out", "", "path to write the index to (default: <output>/<tenant>/docs/index.yaml)")
+	addExportFlags(cmd, "path to write the index to (default: <output>/<tenant>/docs/index.yaml)")
 
 	return cmd
 }

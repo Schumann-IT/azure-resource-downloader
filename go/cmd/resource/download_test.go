@@ -2,6 +2,8 @@ package resource
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -200,6 +202,52 @@ func TestBuildFetchRequestsValidation(t *testing.T) {
 	if req.Subscription != subscriptionID {
 		t.Errorf("BuildFetchRequests() Subscription = %q, want %q", req.Subscription, subscriptionID)
 	}
+}
+
+// TestRebaselineClearDrift guards the re-baseline invalidation: a run that
+// updated the export baseline clears the tenant's drift/ tree (a new baseline
+// supersedes the observation by definition), a dry run clears nothing, and the
+// sibling trees are never touched.
+func TestRebaselineClearDrift(t *testing.T) {
+	makeTenant := func(t *testing.T) string {
+		t.Helper()
+		tenantDir := t.TempDir()
+		for _, dir := range []string{"resources", "docs", "drift"} {
+			if err := os.MkdirAll(filepath.Join(tenantDir, dir), 0755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(tenantDir, "drift", "metadata.yaml"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		return tenantDir
+	}
+
+	t.Run("dry run clears nothing", func(t *testing.T) {
+		tenantDir := makeTenant(t)
+		rebaselineClearDrift(tenantDir, true)
+		if _, err := os.Stat(filepath.Join(tenantDir, "drift")); err != nil {
+			t.Errorf("dry run must leave the drift tree alone: %v", err)
+		}
+	})
+
+	t.Run("real run clears the drift tree and only it", func(t *testing.T) {
+		tenantDir := makeTenant(t)
+		rebaselineClearDrift(tenantDir, false)
+		if _, err := os.Stat(filepath.Join(tenantDir, "drift")); !os.IsNotExist(err) {
+			t.Error("re-baseline must clear the drift tree")
+		}
+		for _, dir := range []string{"resources", "docs"} {
+			if _, err := os.Stat(filepath.Join(tenantDir, dir)); err != nil {
+				t.Errorf("sibling %s must survive: %v", dir, err)
+			}
+		}
+	})
+
+	t.Run("no drift tree is a no-op", func(t *testing.T) {
+		tenantDir := t.TempDir()
+		rebaselineClearDrift(tenantDir, false)
+	})
 }
 
 func TestBuildFetchRequestsResourceGroup(t *testing.T) {

@@ -205,7 +205,7 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		return nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", ErrTenantMismatch, m.Tenant, opts.ExpectDomain)
 	}
 
-	if err := validateMarkers(opts.Template, requiredMarkers); err != nil {
+	if err := ValidateMarkers(opts.Template, requiredMarkers); err != nil {
 		return nil, err
 	}
 
@@ -413,11 +413,12 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		{"summary-facts", renderSummaryFacts(&m, groups)},
 	}
 	for _, b := range blocks {
-		out, err = spliceMarker(out, b.name, b.content)
+		out, err = SpliceMarker(out, b.name, b.content)
 		if err != nil {
 			return nil, err
 		}
 	}
+	out = StripTemplateHeader(out)
 
 	res.OutPath = opts.OutPath
 	if res.OutPath == "" {
@@ -439,11 +440,19 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 // inScope reports whether a resource entry should be considered for
 // documentation: excluded types are dropped, groups only when referenced.
 func inScope(rtype string, entry ResourceMeta, referenced map[string]bool) bool {
+	return scopeDecision(rtype, entry.ResourceId, referenced)
+}
+
+// scopeDecision is the single documentation-scope rule, shared by the docs
+// engines (via inScope) and the drift analysis (via ReferenceIndex.InScope):
+// autopilot identities never, groups only when referenced by an assignment,
+// everything else always. There is deliberately exactly one copy.
+func scopeDecision(rtype, resourceID string, referenced map[string]bool) bool {
 	switch rtype {
 	case autopilotIdentitiesType:
 		return false
 	case groupsType:
-		return referenced[entry.ResourceId]
+		return referenced[resourceID]
 	default:
 		return true
 	}
@@ -583,7 +592,7 @@ func referencedGroups(m *Metadata) (map[string]bool, []string) {
 		if typeOfKey(key) == autopilotIdentitiesType {
 			continue
 		}
-		for _, id := range assignmentGroupIDs(entry.AssignmentTargets) {
+		for _, id := range AssignmentGroupIDs(entry.AssignmentTargets) {
 			groupIDs[id] = true
 		}
 	}
@@ -606,10 +615,11 @@ func referencedGroups(m *Metadata) (map[string]bool, []string) {
 	return groupIDs, danglingSet
 }
 
-// assignmentGroupIDs extracts the group target GUIDs from a resource's raw
+// AssignmentGroupIDs extracts the group target GUIDs from a resource's raw
 // assignment targets, ignoring built-in targets (all users / all devices) that
-// carry no groupId.
-func assignmentGroupIDs(targets []interface{}) []string {
+// carry no groupId. It is exported so the drift analysis harvests payload
+// assignments through the same extraction the referenced-groups set uses.
+func AssignmentGroupIDs(targets []interface{}) []string {
 	var ids []string
 	for _, raw := range targets {
 		entry, ok := raw.(map[string]interface{})

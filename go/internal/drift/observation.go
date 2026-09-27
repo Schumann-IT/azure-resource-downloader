@@ -14,6 +14,27 @@ func ObservationPath(tenantDir string) string {
 	return filepath.Join(tenantDir, DriftDirName, ObservationFileName)
 }
 
+// ClearTree removes a tenant's drift/ tree entirely, reporting whether it
+// existed. A re-baselining resource download calls it after updating
+// resources/metadata.yaml: the new baseline supersedes the observation (and the
+// analysis artifacts at the tree root) by definition, so keeping them would
+// preserve an answer to a question nobody can ask any more. The path is
+// constructed here — never derived from any input — so this cannot reach into
+// resources/ or docs/.
+func ClearTree(tenantDir string) (bool, error) {
+	driftDir := filepath.Join(tenantDir, DriftDirName)
+	if _, err := os.Stat(driftDir); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to stat drift tree: %w", err)
+	}
+	if err := os.RemoveAll(driftDir); err != nil {
+		return false, fmt.Errorf("failed to clear drift tree: %w", err)
+	}
+	return true, nil
+}
+
 // WriteObservation persists a drift observation: it clears the tenant's
 // drift/ tree (a drift run owns its observation space, so the tree holds
 // exactly the latest observation and can never accumulate stale leftovers),
@@ -38,11 +59,10 @@ func WriteObservation(tenantDir string, rep *Report, observedAt time.Time, toolV
 		return metaPath, nil
 	}
 
-	// Clear the observation space. The path is constructed here, always
-	// <tenantDir>/drift — never derived from any input — so this cannot reach
-	// into resources/ or docs/.
-	if err := os.RemoveAll(driftDir); err != nil {
-		return metaPath, fmt.Errorf("failed to clear drift tree: %w", err)
+	// Clear the observation space through the single clear implementation, so
+	// this delete can never reach into resources/ or docs/.
+	if _, err := ClearTree(tenantDir); err != nil {
+		return metaPath, err
 	}
 	if err := os.MkdirAll(driftDir, 0755); err != nil {
 		return metaPath, fmt.Errorf("failed to create drift tree: %w", err)
