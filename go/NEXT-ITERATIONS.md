@@ -126,6 +126,87 @@ into one file:~~
   that the template directs the index to the tree root.~~ *(shipped as `drift.ReportPathForKey` +
   `drift.IndexFileName`)*
 
+## 2. Scope the drift analysis like the documentation, and strip template headers from generated prompts
+
+**Goal.** `docs analyze-drift` applies the same documentation scope as `docs generate-prompt`:
+`Microsoft.Graph/windowsAutopilotDeviceIdentities` findings are never analyzed, and group findings are
+analyzed only when the group is referenced by an assignment. Added and removed resources of the excluded
+types still surface in `drift/index.md`'s findings-by-severity table — as tool-fed **inventory rows** with a
+fixed `info` severity, no per-finding drift document. Separately, the generated prompts (`docs/generate.md`
+and `drift/analyze.md`) no longer carry their templates' explanatory headers.
+
+> **The exclusion mechanism already exists and is engine-side, never template-side.** `inScope` plus the
+> `groupsType`/`autopilotIdentitiesType` constants in `internal/docs/generateprompt.go` decide documentation
+> scope for both `generate-prompt` and `generate-index`. The drift engine must consume the same decision
+> through the exported `docs.ReferenceIndex` facade (a new `InScope(rtype, resourceID)` method backed by the
+> same constants and referenced set) — never duplicate the constants in `internal/drift`.
+>
+> **Scope is a decision, not a fact.** It is applied when the analysis prompt is rendered, never in
+> `resource drift` itself: `drift/metadata.yaml` and the payloads keep recording every finding, excluded
+> types included, so revising the scope rule never requires re-running drift.
+>
+> **The referenced-groups set is payload-aware for drift** (user decision): the baseline `referencedGroups`
+> set has a blind spot — a drifted policy whose payload newly assigns a group the baseline never referenced.
+> Drift unions the baseline set with group IDs harvested from the verified payloads' assignment targets
+> (payloads are hash-checked in preflight before rendering, so they are trusted input by then). Verified:
+> payloads carry the `assignments` key — they are the same cleaned bytes `AssignmentTargets` facts are
+> extracted from in the writer — so the harvest parses `assignments[].target.groupId` from payload YAML.
+>
+> **`info` is a new severity, reserved for the tool.** The template's severity scale (section 2e) and the
+> index frontmatter line (`severities: high n · medium n · low n`) gain `info`; only tool-fed inventory rows
+> carry it — the agent never assigns it to an analyzed finding.
+>
+> **Requiring the `inventory` marker is a behavior change for `--prompt` overrides**: a custom analyze
+> template written before this entry fails marker validation (exit 2) until the marker is added. Acceptable
+> — the failure is loud and the fix is one marked block — but the `CHANGELOG.md` entry must say so.
+>
+> **Changed/renamed findings on excluded types are counted, not listed** (user decision): they appear as a
+> count under the index's "Not analyzed" caveats, with no table row and no drift document. Only added and
+> removed excluded findings become inventory rows. Severity for inventory rows is fixed `info` — the agent
+> never analyzed them, so it may not judge them ("never invent").
+>
+> **An all-excluded observation still writes the prompt** (empty worklist plus inventory), otherwise the
+> inventory would be lost: `NothingToAnalyze` keeps meaning zero findings in the observation, not zero
+> in-scope findings.
+>
+> **Header stripping is not regeneration-gated**: neither `generate.md` nor `analyze.md` is hashed. Strip at
+> render time — the leading HTML comment block and the literal ` (template)` suffix of the first H1 — via a
+> shared helper in `internal/docs`, applied by both engines; a `--prompt` override without a header is a
+> no-op.
+
+**Plan.**
+
+- **Facade**: add `InScope(rtype, resourceID string) bool` to `docs.ReferenceIndex`, implemented on the
+  existing constants and referenced set; rebase the docs engines' `inScope` calls on the same decision so
+  docs and drift can never diverge. Add a constructor variant taking extra referenced group IDs (e.g.
+  `NewReferenceIndexWithExtraGroups(m, ids)`) — the plain constructor keeps the docs engines' behaviour —
+  and export the assignment-target group-ID extractor (`assignmentGroupIDs` is unexported today) so the
+  harvest never re-derives it in `internal/drift`.
+- **Payload harvest**: in the drift analysis engine, parse assignment group IDs from the verified payloads
+  of added/changed/renamed findings and union them into the referenced set via the facade's extra-IDs
+  constructor.
+- **Refmap wording**: `renderAnalyzeRefmap` labels groups "referenced by an assignment in the baseline" and
+  renders absent ones as dangling — both wrong for a group referenced only by a drifted payload. Relabel the
+  list, and render an extra-referenced group with no baseline entry as "new in this observation" (its
+  payload, if the group itself drifted, is on disk), never as dangling.
+- **Engine scoping**: excluded findings leave the worklist (and get no drift-document destination); their
+  added/removed subset feeds a new tool-rendered `inventory` marked block (name, type, verdict, fixed
+  `info` severity); their changed/renamed subset becomes counts surfaced in the observation block's caveats.
+  `AnalyzeResult` reports both, and the command prints them.
+- **Template**: new `inventory` marker (grows `requiredAnalyzeMarkers`); section 5 (index) instructs the
+  agent to copy inventory rows into the findings table verbatim — severity `info`, one-liner "inventory
+  change — not analyzed", no document link — and the "Not analyzed" part restates the excluded
+  changed/renamed count. Section 2e's severity scale and the index frontmatter's severities line gain
+  `info` (tool-fed only). Ground rules updated: inventory resources are never analyzed, never get documents.
+- **Header stripping**: shared `internal/docs` helper stripping the leading HTML comment and the H1's
+  ` (template)` suffix; applied in `GeneratePrompt` and `GenerateAnalyzePrompt` after splicing.
+- **Tests**: facade `InScope` parity with the docs engines; payload-union harvest; excluded findings absent
+  from the worklist but present as inventory/caveats; all-excluded observation still writes the prompt;
+  headers stripped from both generated prompts and `--prompt` override without a header unaffected.
+- **Docs**: README (`docs analyze-drift` scope and inventory behaviour; note that generated prompts carry no
+  template header), `CHANGELOG.md` under `[Unreleased]` — including the `--prompt` override behavior change
+  (new required `inventory` marker); `config.example.yaml` untouched (no new config).
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
