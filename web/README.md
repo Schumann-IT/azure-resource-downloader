@@ -285,6 +285,9 @@ CLI's job — this app only renders what is on disk, and never acts on it.
   unchanged. The button and the page it leads to read one decision, so they cannot disagree.
 - **Summary | Drift** on the landing page links to the tenant drift page whenever an observation exists —
   including one with no findings, or not analysed yet — and is inert only without one.
+- **Tenant picker.** Each tenant's line adds its drift state after the export time: *drift detected on N
+  resources* with the observation time, *no drift detected*, or *drift observation outdated* — dated but never
+  counted — read from the same decision as the **Summary | Drift** switcher. Without an observation nothing is added.
 - **Renames** are reached from the old name's page: the finding is matched by its baseline key as well.
 - **Partial runs** are the normal case: the tenant drift page states when the run was incomplete, which types
   could not be listed, which entries could not be compared and whether removals were suppressed, so a missing

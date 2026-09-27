@@ -26,7 +26,9 @@ section of the [repository README](../README.md) for the procedure.
   against an older baseline is shown as outdated rather than as a comparison, and nothing is compared until
   the files on disk still match the hashes the observation recorded. A change or rename links one **YAML diff**
   of the baseline against the observed configuration instead of two separate views; it is built only from the
-  two verified files and escaped like every other value, using the `diff` package. The app stays read-only and the drift
+  two verified files and escaped like every other value, using the `diff` package. The tenant picker states each
+  tenant's drift at a glance — how many resources drifted and when it was observed — from the same decision as
+  the landing page's switcher, so an outdated observation is dated but never counted. The app stays read-only and the drift
   tree is not a discovery marker; a regenerated or deleted tree is reflected on the next request without a
   restart. The tree is a third served root behind two resolvers pinned to one extension each, whose top-level
   files (the observation, the analysis prompt) are unreachable by construction. Routes and the drift root

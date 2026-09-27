@@ -116,6 +116,21 @@ export function tenantSwitch(
   return [{ label: 'Summary', href: `/${tenant}`, active: active === 'summary' }, drift];
 }
 
+// The drift part of a tenant's line on the picker, read from the same
+// tenant-scope decision as the Summary | Drift switcher so the two cannot
+// disagree. An outdated observation is dated but never counted: its findings
+// describe a baseline the export no longer holds.
+export function pickerDrift(state: TenantDriftState) {
+  if (state.kind === 'none') return null;
+  const findings = state.kind === 'current' ? state.observation.findings.length : 0;
+  return {
+    observedAt: state.observation.observedAt,
+    outdated: state.kind === 'superseded',
+    findings,
+    resources: `${findings} resource${findings === 1 ? '' : 's'}`,
+  };
+}
+
 // The observation header shown on both drift pages: when, against what, how
 // complete, and every caveat the CLI recorded — so the reader can tell an
 // empty finding list from a run that could not look.

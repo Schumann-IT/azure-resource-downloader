@@ -1676,6 +1676,13 @@ findings: 4
     expect(unattestedDrift.text).toContain('per-entry config attestation');
   });
 
+  it('adds the drift finding count and observation time to the picker line', async () => {
+    const res = await get('/').expect(200);
+    expect(res.text).toMatch(
+      new RegExp(`exported ${BASELINE} · <span class="picker-drift[^"]*">drift detected on 4 resources ${OBSERVED}</span>`),
+    );
+  });
+
   it('renders the tenant drift page: header, analysis summary and every finding', async () => {
     const res = await get('/drifted/_drift').expect(200);
     expect(res.text).toContain(`Observed <strong>${OBSERVED}</strong>`);
@@ -1748,6 +1755,10 @@ findings: 4
       const tenantPage = await get('/drifted/_drift').expect(200);
       expect(tenantPage.text).toContain('This drift observation is outdated');
       expect(tenantPage.text).not.toContain(`/drifted/_drift/${T}/changed1"`);
+      // The picker dates an outdated observation but never counts it.
+      const picker = await get('/').expect(200);
+      expect(picker.text).toContain(`drift observation outdated ${OBSERVED}`);
+      expect(picker.text).not.toContain('drift detected on');
       const page = await get(`/drifted/_drift/${T}/changed1`).expect(200);
       expect(page.text).toContain('This drift observation is outdated');
       expect(page.text).not.toContain('What changed');
@@ -1782,6 +1793,8 @@ findings: 4
       expect(landing.text).toContain('href="/drifted/_drift"');
       const tenantPage = await get('/drifted/_drift').expect(200);
       expect(tenantPage.text).toContain('recorded no findings');
+      const picker = await get('/').expect(200);
+      expect(picker.text).toContain('no drift detected 2026-02-02T00:00:00Z');
 
       // The next drift run or download deletes the tree wholesale.
       await fsp.rm(driftDir, { recursive: true, force: true });
@@ -1789,6 +1802,8 @@ findings: 4
       expect(gone.text).toContain('<span aria-disabled="true" title="No drift observation.');
       const goneLanding = await get('/drifted').expect(200);
       expect(goneLanding.text).not.toContain('href="/drifted/_drift"');
+      const gonePicker = await get('/').expect(200);
+      expect(gonePicker.text).not.toMatch(/drift detected|no drift|drift observation/);
     } finally {
       await writeDrift();
     }

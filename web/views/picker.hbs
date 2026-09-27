@@ -13,7 +13,7 @@
               <a href="/{{this.id}}" class="block">
                 <span class="text-lg font-semibold text-brand-600 dark:text-brand-400">{{this.id}}</span>
                 <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {{this.documented}} documented{{#if this.pending}} · {{this.pending}} pending{{/if}}{{#if this.generatedAt}} · exported {{this.generatedAt}}{{/if}}
+                  {{this.documented}} documented{{#if this.pending}} · {{this.pending}} pending{{/if}}{{#if this.generatedAt}} · exported {{this.generatedAt}}{{/if}}{{#if this.drift}} · {{#if this.drift.outdated}}drift observation outdated {{this.drift.observedAt}}{{else if this.drift.findings}}<span class="picker-drift text-amber-700 dark:text-amber-300">drift detected on {{this.drift.resources}} {{this.drift.observedAt}}</span>{{else}}no drift detected {{this.drift.observedAt}}{{/if}}{{/if}}
                 </span>
               </a>
               <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">

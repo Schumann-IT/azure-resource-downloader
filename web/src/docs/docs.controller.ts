@@ -25,6 +25,7 @@ import {
   findingHeader,
   lastSegment,
   observationSummary,
+  pickerDrift,
   resourceDriftSwitch,
   stateFlags,
   supersededView,
@@ -122,14 +123,17 @@ export class DocsController {
   // GET / — tenant picker, which is also where a tenant's export is offered.
   @Get()
   async picker(@Res() res: Response): Promise<void> {
-    const tenants = (await this.withIndex()).map(({ info, index }) => ({
-      id: info.id,
-      name: info.name,
-      documented: index.counts.documented,
-      pending: index.counts.pending,
-      generatedAt: index.generatedAt,
-      exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
-    }));
+    const tenants = await Promise.all(
+      (await this.withIndex()).map(async ({ info, index }) => ({
+        id: info.id,
+        name: info.name,
+        documented: index.counts.documented,
+        pending: index.counts.pending,
+        generatedAt: index.generatedAt,
+        drift: pickerDrift(await this.tenantDrift(info, index)),
+        exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
+      })),
+    );
     res.render('picker', { title: 'Documentation', tenants });
   }
 
