@@ -3,10 +3,216 @@
 Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it does
 today and `CHANGELOG.md` records what shipped; neither is repeated here.
 
-The *Fixes* below are scheduled: small, self-contained corrections that need no design work, listed so they
-are not forgotten between features. Every idea in *Parked ideas* is deliberately unscheduled: picking one up
-means promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling its rationale
-against what is true at that point rather than copying it across.
+The *Features* below are scheduled design work, promoted from *Parked ideas* and refined against what is true
+now. The *Fixes* below are scheduled too, but smaller: self-contained corrections that need no design work,
+listed so they are not forgotten between features. Every idea in *Parked ideas* is deliberately unscheduled:
+picking one up means promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling
+its rationale against what is true at that point rather than copying it across.
+
+## Features
+
+### 1. A drift view: what changed in the tenant since the export was taken
+
+**Goal.** A reader of any resource's documentation can ask *"has this changed in the tenant since this export
+was taken?"* and get the answer in one click — a **Drift** button beside **Documentation | YAML**, leading to
+that resource's recorded field changes, the analysis written about them, and the observed configuration itself.
+At tenant scope the same switcher appears on the landing page as **Summary | Drift**, so the observation as a
+whole sits beside the tenant summary rather than hidden behind a URL. The button is **always rendered and goes
+inert** when there is nothing to land on, so the question is visibly asked and answered on every page rather
+than the control appearing and disappearing. The comparison stays the CLI's job; this app only renders what
+`azure-rd resource drift` observed and what `azure-rd docs analyze-drift` had analysed.
+
+> **What is on disk, and it is all already there.** `resource drift` writes `<export>/drift/`, mirroring
+> `resources/` exactly. `drift/metadata.yaml` is the observation: `observedAt`, `tenant`, `toolVersion`,
+> `baseline` (`generatedAt`, `toolVersion`, `transformConfigSha256`), `run` (`complete`, `incompleteReason`,
+> `scope`), `counts` (`compared`, `unchanged`, `changed`, `renamed`, `added`, `removed`, `unattested`,
+> `excluded`, `failed`), `unknownTypes`, `removalsSuppressed`, `notComparable`, `findingsSha256`, `payloads`,
+> and a `findings` map keyed by `<APIType>/<endpoint>/<name>.yaml` whose entries carry `verdict`,
+> `resourceId`, `displayName`, `previousDisplayName`, `baselineKey`, `baselineSha256`, `payloadSha256`,
+> `docPath` and dotted-path `deltas` (`path`, `old`, `new`) or a `deltaNote`. The observed bytes sit at
+> `drift/<key>`, marshalled exactly as the export marshals them. An analysis pass adds one **drift document**
+> per in-scope finding at `drift/<key-without-.yaml>.md` (frontmatter `observedAt`, `baselineGeneratedAt`,
+> `verdict`, `severity`) plus the summary `drift/index.md` (frontmatter `observedAt`,
+> `baselineGeneratedAt`, `findings`, `severities`). `drift/analyze.md` is tool input, like `docs/generate.md`,
+> and `drift/metadata.yaml` belongs to the CLI: neither is ever served.
+>
+> **The join key is free — with one rename caveat.** A finding's key minus `.yaml` is exactly the
+> extensionless path the top-bar switcher already builds **Documentation** and **YAML** from, so the three
+> become three renderings of one path and the button's `href` needs no lookup. Its *state* is one lookup on
+> the observation, indexed at parse time by finding key **and by `baselineKey`**: a *renamed* resource's
+> finding is keyed by its **new** name while its document and baseline still sit at the old one, so a lookup by
+> key alone would classify that page as unchanged and render a lying inert button. For the same reason
+> `docPath` is never used: the CLI derives it from the finding key, so for a rename (and an addition) it names
+> a document that does not exist yet — the documentation link derives from `baselineKey`, offered only when
+> the index lists that document. Nothing is walked; the counts-and-listings-derive-from-the-index
+> non-negotiable holds with the observation playing the role `index.yaml` plays for `docs/`.
+>
+> **The validity gate is mandatory, and it compares against what the CLI compares against.** The observation
+> names its baseline as `baseline.generatedAt`; `azure-rd docs analyze-drift` declares it superseded when that
+> differs from `resources/metadata.yaml`'s `generatedAt`, and this app applies the **same** test so the two
+> tools never disagree about one export. That is a new, small read: only the top-level `generatedAt` of
+> `resources/metadata.yaml`, cached by mtime + size like the index. The index's own `generatedAt` is the same
+> timestamp on a consistent export (verified identical in the reference export) but is **not** the gate:
+> `generate-index` runs after a re-download, so between the two the index is stale and a gate built on it
+> would tell the operator to re-run drift when the real remedy is to regenerate the index. It is used only as
+> the fallback when `resources/` is absent altogether (an export copied without it). A superseded observation
+> renders the whole drift surface as *outdated — re-run `azure-rd resource drift`*, never as a comparison
+> against the wrong baseline. Per resource, `baselineSha256` and `payloadSha256` are re-checked before anything
+> is shown as a comparison; a mismatch withholds it and says so.
+>
+> **Path safety: `drift/` stays where it is, served by two pinned resolvers.** The tree holds **both**
+> extensions — agent-written `.md` beside CLI-written `.yaml` — while the rule says one extension per served
+> root. The answer is two resolvers pinned to one extension each over the same root (`.md` for drift documents,
+> `.yaml` for payloads), never an extension list and never a widened `resolveWithinRoot`, plus a **depth
+> guard**: a drift path needs at least two segments, so everything at the tree root (`metadata.yaml`,
+> `analyze.md`, `index.md`) is unreachable through them by construction rather than by a name list — a stronger
+> guarantee than `resources/` has today, where `_resource/metadata` serves the export's own metadata. Every
+> guarantee of `resolveWithinRoot` is kept unchanged (no null bytes, no absolute paths, no `..`, realpath
+> containment, exactly one extension per call), so the rule wording moves from one extension per *root* to one
+> extension per *resolver* — a clarification of the same principle, in
+> `.windsurf/rules/01-architecture.md` in the same edit. It is no new class of exposure either: the **YAML**
+> view already serves exported source bytes from the same trust boundary.
+>
+> **Rejected: relocating the tree into `resources/drift/` and `docs/drift/`.** It would let the two existing
+> resolvers serve everything and need no rule change here at all — and it is the wrong trade, because it buys a
+> wording clarification on this side by breaking three stronger invariants on the CLI side. `drift.ClearTree`
+> is a single constructed path today, provably unable to reach `resources/` or `docs/`; after the move the
+> ephemeral tree is *inside* both, so every drift run and every re-baselining download would delete a subtree
+> of the source of truth. `--prune` walks `resources/` and deletes what the export metadata does not describe,
+> which is every drift payload. And the `docs/<key>.md` ↔ `resources/<key>.yaml` bijection — relied on by the
+> CLI, this app and the documentation agent — would gain a namespace that is not a resource type, with
+> `generate-prompt`'s orphan and migration logic to teach about it. A third sibling tree that nothing else
+> writes to or walks is the cheaper boundary; keep it.
+>
+> **If even the clarified wording is unwanted**, the fallback is to serve **`.md` only** from `drift/` — one
+> root, one extension, no amendment whatsoever, with the observation read as data exactly as `docs/index.yaml`
+> is read and never served. The cost is precise: *changed* and *renamed* resources still read well from the
+> recorded deltas, but an **addition has no deltas and no baseline**, so its observed payload is the only
+> description of it that exists, and without it the view can offer nothing but a display name and the analysis
+> prose. That case is why the payload is in scope.
+>
+> **The tree is deleted wholesale, and that is normal.** The next `resource drift` run and any re-baselining
+> `resource download` remove `drift/` entirely. So it is **not** a discovery marker (a tenant without it stays
+> a tenant, exactly as one without `resources/` does), every read degrades to *no observation*, and the
+> no-restart freshness invariant has to hold in the delete direction too: a cache entry whose `stat()` fails
+> is dropped, and the drift surface disappears on the next request without a restart.
+>
+> **Partial coverage is the normal case, so "no finding" is not "unchanged" — and that decides when the button
+> is inert.** The reference observation is `complete: false` with four types unlisted and
+> `removalsSuppressed: true`. A resource has no finding either because it is unchanged, or because its type
+> could not be listed (`unknownTypes`), or because its baseline entry could not be compared (`notComparable`) —
+> so the inert state may never stand for all three. It is reserved for the one case that is a real answer:
+> **the observation compared this resource and it had not changed**, said so in the button's own tooltip with
+> the observation date. Anything the observation has something to *say* about — a verdict, a reason it could
+> not compare, or that it is stale — stays clickable, because an inert control there would silently deny what
+> the page could state. The full state list is in *One decision, two consumers* below.
+>
+> **Only "nothing to land on" is inert**, at either scope: no observation on disk for the tenant. An
+> observation that exists but has **no findings** is still worth a page (*observed at X, nothing had changed*),
+> and so is one whose analysis has not run yet — `drift/index.md` missing means the agent has not written the
+> summary, not that there is nothing to show, because the findings list is rendered from the observation
+> itself. Inertness tracks the observation, never the analysis.
+>
+> **Not every finding has neighbours.** Analysis scope is applied when the prompt is rendered, not in the
+> observation, so findings exist for types that have no document and get no drift document (Autopilot
+> identities, unreferenced groups) and are reachable only from the tenant drift page — which also means the
+> index cannot be the sole oracle for "does this export know this key"; an addition has no baseline; a removal
+> has no payload and its baseline file may since have been pruned.
+>
+> **One decision, two consumers.** The button and the page it leads to must never disagree, so both read one
+> pure function over `(observation, baselineGeneratedAt, index, key)` — the same discipline the CLI applies to
+> prune, where preview and deletion share one eligibility decision. Its states, in evaluation order:
+> *no observation* (button inert), *superseded* (clickable, plain label, page is the gate, findings not
+> consulted), *finding by key or by `baselineKey`* (clickable, verdict in the label), *type in `unknownTypes`*
+> and *key in `notComparable`* (clickable, plain label, page states why it was not compared), *known to the
+> index* (inert, *unchanged as of `observedAt`*; page states the same when the URL is typed), otherwise
+> *unknown* (404). `parseObservation()` indexes `findings` by both keys and turns `unknownTypes` and
+> `notComparable` into sets, so the decision is constant-time on every render.
+>
+> **No diff algorithm in this entry.** The CLI already recorded the dotted-path `old → new` changes (values
+> truncated, one-sided keys rendered `(absent)`), which is the readable answer for the common case and needs
+> no dependency and no script. Both full versions stay one click away through the existing highlighter. A
+> computed unified diff — the thing the no-client-side-JavaScript rule actually makes awkward — is a separate,
+> later question.
+>
+> **Out of scope, deliberately.** A computed line diff; drift markers on sidebar tree items; drift in the
+> Confluence export; and anything that acts on drift (accepting a change, triggering a re-baseline) — that
+> would need a write path and a mutating route, both forbidden. This entry is not regeneration-gated: it
+> renders artifacts the CLI and an analysis run already produce.
+
+**Plan.**
+
+- **Observation reader.** `parseObservation()` in `src/docs/drift-observation.ts` — pure, synchronous,
+  Nest-free, mirroring `parseTenantIndex()`: version-free but shape-validated, malformed or unreadable ⇒
+  `undefined`, never a throw. A service method beside `getIndex()` reads it cached by mtime + size and drops
+  the entry when the file is gone. `TenantInfo` gains `driftDir`, `driftObservationPath` and `driftIndexPath`;
+  discovery keeps keying on `docs/index.yaml` only.
+- **Path safety.** `resolveDriftDocument()` (`.md`) and `resolveDriftPayload()` (`.yaml`) over `driftDir`,
+  both through the unchanged `resolveWithinRoot()`, plus the ≥ 2-segment guard. New cases in
+  `test/path-safety.spec.ts`: a `.md` is not servable as a payload and a `.yaml` not as a document, traversal
+  out of the drift root 404s, and nothing at the tree root (`metadata.yaml`, `analyze.md`, `index.md`) is
+  reachable through either resolver.
+- **Drift state.** `driftState()` beside `parseObservation()` in `src/docs/drift-observation.ts`, pure and
+  Nest-free, returning the states above with the data each needs (verdict, `observedAt`, reason); a unit spec
+  covers every state, the rename-by-`baselineKey` case and the evaluation order.
+- **Link rewriting.** `LinkEnv` gains an optional route base so relative `.md` links inside `drift/index.md`
+  and the drift documents (the analysis template has them link each other by relative path) resolve to
+  `/:tenant/_drift/…` instead of the documentation route; documents pass no base, so their behaviour is
+  byte-identical. `rewriteHref` has no unit spec today — it is covered by the e2e cross-type link case — so
+  this adds `test/link-rewrite.spec.ts` for both bases plus an e2e case for a link inside a drift document.
+- **Routes**, behind a `_drift` representation prefix declared before the document catch-all, like
+  `_resource` and `_export`:
+  - `GET /:tenant/_drift` — the observation as a whole, and the **tenant-scope counterpart of the landing
+    page**: header (observed at, baseline, verdict counts, completeness, unknown types, not-comparable
+    entries, suppressed removals), `drift/index.md` as the body when the analysis has written it, otherwise a
+    findings list grouped by resource type, built from the observation alone. Same layout as the landing page —
+    sidebar, prose column — so the two read as two views of one tenant.
+  - `GET /:tenant/_drift/index` redirects to `/:tenant/_drift`, mirroring `summary` → `/:tenant`: the drift
+    index has one address, and the depth guard already keeps it out of the per-resource route.
+  - `GET /:tenant/_drift/*path` — one resource, rendered from its drift state: the verdict, the recorded
+    deltas as a table (values verbatim as the CLI rendered them, escaped, in code cells), the drift document
+    when one exists, and links to the baseline YAML (`_resource`, from `baselineKey`), the observed payload
+    and the documentation (when the index lists it). Before a *changed*/*renamed* comparison is shown, the
+    baseline file and the payload are hashed and checked against `baselineSha256`/`payloadSha256` (hashes
+    cached by mtime + size); a mismatch renders a warning instead of the comparison and offers no payload. The
+    *not compared* states and the *superseded* gate render as pages, a key the observation compared without a
+    finding renders *unchanged as of `observedAt`*, and only the *unknown* state is a 404.
+  - `?yaml` renders the observed payload highlighted (reusing `YamlHighlighterService`); `?raw` serves it as
+    `text/plain` with `nosniff`, exactly as `_resource?raw` does. Both exist only for states with a payload.
+- **The buttons**, both extending the view model `partials/header.hbs` renders to
+  `{ label, href, active, reason }`, where a **missing `href` is the inert state** — the one template change,
+  shared by both scopes, and the only logic the partial gains: an `<a>` when there is an `href`, otherwise a
+  muted `<span>` carrying `reason` as its `title` (and `aria-disabled`), which keeps it out of the tab order
+  without a `disabled` attribute no anchor honours.
+  - **Resource scope**: `views()` gains a third entry, **Drift**, always present wherever the switcher is
+    shown today, with `kind: 'doc' | 'resource' | 'drift'`, its label, `href` and `reason` taken from the drift
+    state and nowhere else. The observation and the baseline timestamp are therefore read on every document
+    and YAML render — two cached reads, degrading to the inert *no drift observation* state when missing.
+  - **Tenant scope**: the landing page gains its first switcher, **Summary | Drift**, from a sibling helper.
+    **Drift** is inert only when no observation exists (*run `azure-rd resource drift`*); an empty or
+    not-yet-analysed observation and a superseded one are all clickable, the last because an operator who
+    re-downloaded needs to be told their observation is stale, not left with a dead control. No sidebar line
+    and no picker link: one entry point per scope, beside the noun it applies to.
+- **Views.** `drift.hbs` for a resource and a tenant-scope view that reuses the landing page's shape, verdict
+  and severity as plain badges, every state with a dark variant; `{{{ }}}` only for renderer- and
+  highlighter-produced HTML. The inert button gets its own muted treatment with `cursor-not-allowed` and no
+  hover state, while the visible `:focus-visible` outline stays on the anchor variant, which is the only
+  focusable one. The sidebar marks the resource's own item active on its drift page, as the YAML view does.
+  `_drift` never appears in a breadcrumb, exactly like `_resource`.
+- **Docs and rules.** README: the two routes, the drift root contract, the ephemerality note, and that
+  `analyze.md` and `metadata.yaml` are never served. `.windsurf/rules/01-architecture.md`: the amended
+  one-extension-per-*resolver* wording, drift as a third served root that is not a discovery marker.
+  `CHANGELOG.md` under `[Unreleased]`.
+- **Tests.** `test/docs.e2e.spec.ts`: the button is present on the documentation and YAML views of every
+  resource, as a **link** for a finding, an unlisted type and a not-comparable entry, and as an **inert span
+  stating why** for an unchanged one and for a tenant with no observation; a renamed resource's page at its
+  old name gets the link, not the inert span; a changed resource renders its deltas and its drift document; an
+  addition renders its payload; a tampered payload renders the warning and no comparison; the landing page
+  always offers **Summary | Drift**, inert without an observation and a link with an observation that has no
+  findings and no `index.md`; `_drift/index` redirects; a superseded observation renders the gate at both
+  scopes and never a comparison, and a stale index alone does not trigger it; `analyze.md` and `metadata.yaml`
+  are not served; a rewritten observation and a deleted tree are both reflected on the next request without a
+  restart.
 
 ## Fixes
 
@@ -264,41 +470,6 @@ a read-only browser that stores no state. **Revisit** once one-way HTML publishi
 re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
-
-### Idea: A drift view — render the CLI's drift observation as configuration diffs
-
-*As an operator I would like to see what changed in the tenant since its export was taken — as a readable
-per-resource diff — so I can decide whether to re-download and regenerate.* The comparison engine is not this
-app's job: the CLI plans a `resource drift` command that writes a `drift/` tree beside `resources/` and
-`docs/`, shaped exactly like `resources/` — `drift/metadata.yaml` at its root records the verdicts (added /
-changed / removed / renamed) with per-finding display names, the baseline's and payload's hashes, the index
-key and the derived document path, plus the baseline it measured against (export `generatedAt`,
-transform-config hash) and a payload listing; the fetched bytes of added, changed and renamed resources sit
-at `drift/<type>/<name>.yaml`, marshalled exactly as the export marshals, so they are byte-comparable with
-the baseline. The browser would only render: a findings list from `drift/metadata.yaml` alone, and a diff
-per finding — *changed*: `resources/<key>` vs `drift/<key>`; *added*: payload only; *removed*: the last-known
-configuration from the untouched baseline; *renamed*: old key vs new key, both named on the finding.
-**Parked** because the CLI command has not shipped, so there is no drift tree to render, and because a
-readable diff of a 317-setting document wants interaction the no-client-side-JavaScript rule forbids — the
-same obstacle the tenant diff idea below records; a server-rendered unified diff with the existing line-anchor
-machinery is the honest script-free first version. **Revisit** when the CLI's drift command ships and a real
-observation exists in a docs root someone wants to read.
-
-What is settled if it is picked up. **The validity gate is mandatory**: the observation names its baseline,
-and a mismatch against the live export's `resources/metadata.yaml` renders as "drift data outdated — re-run
-`azure-rd resource drift`", never as a diff against the wrong baseline; the per-finding hashes allow the same
-check per file before diffing. **Serving `drift/` is a third root** under the `resolveWithinRoot()` pattern,
-`.yaml` as its single extension, exactly like `resources/` — and it is no new class of exposure, because the
-**Documentation | YAML** switcher already serves raw source YAML (including resolved secrets when the export
-was made that way); a diff view merely highlights what changed within the same trust boundary as the docs
-root. **The listing derives from `drift/metadata.yaml`, never from walking the tree**, keeping the
-counts-from-the-index non-negotiable intact — the observation's metadata is to `drift/` what `index.yaml` is
-to `docs/`. The route belongs behind a `_drift` representation prefix (a findings page at `GET
-/:tenant/_drift`, a per-finding diff below it), declared before the document catch-all like its siblings, and
-the document path each finding carries links a diff to its documentation with no extra wiring. This idea is
-**disjoint from the tenant diff below**: one tenant across time, identity trivially preserved (same GUIDs on
-both sides), and the comparison already decided by the CLI — none of the cross-tenant identity problem that
-parks the other.
 
 ### Idea: Tenant diff
 
