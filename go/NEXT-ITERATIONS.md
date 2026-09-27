@@ -5,6 +5,123 @@ plan ships in full, the entry is removed** and its history lives in `CHANGELOG.m
 deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
 ship. `README.md` stays the single source of truth for what the tool *does today*.
 
+## 1. Generate a drift-impact analysis prompt from the latest drift observation
+
+**Goal.** After `resource drift` has found changes, one offline command — `azure-rd docs analyze-drift` —
+writes a ready-to-paste prompt that has an LLM analyze the differences between the export baseline and the
+observed tenant state and report their **impact**: security posture, compliance, lifecycle, and who is
+affected (assignments). The operator reads that report to understand what the drift *means* before deciding
+to re-baseline (`resource download`) and let `docs generate-prompt` catch the documentation up.
+
+> **Everything the analysis needs is already on disk — the command never fetches.** `drift/metadata.yaml`
+> is self-describing (verdicts, dotted-path deltas, baseline/payload hashes, derived `docPath`, completeness,
+> `notComparable`); `drift/<type>/<name>.yaml` holds the current bytes of every added/changed/renamed
+> resource; `resources/<baselineKey>.yaml` holds the old bytes; `docs/<key>.md` describes the pre-change
+> state; and each type's `resources/<type>/doc-prompt.md` already carries the type's purpose, key settings
+> and security relevance. The command is the drift analogue of `docs generate-prompt`: load, preflight,
+> splice a template, write one file.
+>
+> **No per-type drift templates — one generic analysis template, with `doc-prompt.md` as the per-type
+> lens.** The comparative procedure (read baseline, read payload, read deltas, judge impact) is
+> type-independent; only the judgment lens is type-specific, and that lens already exists per type in
+> `doc-prompt.md`, which the template instructs the agent to read for each finding's type (degrading with an
+> explicit caveat when the export was run with `--no-prompt`). A dedicated drift template per type would be
+> ~60 files of pure maintenance carrying no new information, and folding drift guidance into `doc-prompt.md`
+> instead would move every type's `promptSha256` — a full documentation regeneration for a feature that
+> never touches the documents. This entry is therefore **not regeneration-gated**: it adds no `.tmpl` edits
+> and moves no hash.
+>
+> **Per-finding severity is safe here**, unlike the parked "per-finding severity in document Security
+> sections" idea: a drift report judges a handful of findings once, in one disposable report an operator
+> eyeballs — tiny blast radius, no regeneration to fix a bad batch. Same trade-off that allowed the
+> tenant-summary findings severity.
+>
+> **Boundaries.** The analysis agent writes exactly one file — the report at `drift/report.md` — and never
+> edits anything else: not `resources/`, not `docs/`, not the rest of `drift/`. Documentation catch-up
+> remains the existing loop (re-baseline, then `docs generate-prompt`). The report is advisory prose for
+> humans; nothing downstream ever parses it, so it records judgments, not facts, and revising the template
+> never invalidates an export.
+>
+> **Output placement — everything lives and dies with the observation; no drift history.** The prompt lands
+> at `drift/analyze.md` and the LLM's report at `drift/report.md`, both at the drift-tree root beside
+> `metadata.yaml` (payloads are always ≥ 2 levels deep, so no collision — the same argument that puts
+> `generate.md` at the docs root; the report's name is deterministic because only one can exist at a time —
+> its `observedAt` and the baseline's `generatedAt` live in its frontmatter, not the filename). The next
+> `resource drift` run's existing clear-and-rebuild sweeps prompt and report with the observation they
+> belong to — zero new code for that path — and a **re-baselining `resource download` clears the `drift/`
+> tree too**: a new baseline supersedes the observation by definition (drift is always relative to the
+> baseline), so leaving it on disk would preserve an answer to a question nobody can ask any more.
+> Deliberately **no history**: an operator who wants to keep a report archives it before the next drift or
+> download run, and the template and README say so explicitly.
+
+**Plan.**
+
+- **Command** `cmd/docs/analyze_drift.go` (package `docs`, exported `NewAnalyzeDriftCommand`, attached in
+  `cmd/docs.go`). Flags: the shared auth group plus `--domain` (offline), `--out`, `--prompt` (template
+  override) — reusing `resolveExportDir` from the same package. `cmdutil.BindFlags(cmd)` first in `RunE`.
+  Exit codes: 0 success (prompt written, or nothing to analyze); 2 cannot-answer, via
+  `cmdutil.WithExitCode`. With this command, `--domain` and `--out` are declared by **three** sibling
+  subcommands (`generate-prompt`, `generate-index`, this one), so extract a package-local helper in
+  `cmd/docs` (all three files share the package) that declares them with a parameterised `--out` usage
+  string — the flag-placement rule's "more than one command needs it" threshold is met; promotion to the
+  `docs` parent's persistent flags stays off the table while `--out`'s default differs per command.
+- **Preflight** (all exit 2 with a remediation message): `drift/metadata.yaml` missing → "run
+  `azure-rd resource drift` first"; observation **superseded** (its `baseline.generatedAt` differs from the
+  export's current `resources/metadata.yaml` `generatedAt` — a re-download happened after the observation) →
+  re-run `resource drift`; tenant cross-check against the resolved domain, as `generate-prompt` does; every
+  payload the observation names must exist and match its recorded `payloadSha256` (never trust a file the
+  named observation did not produce). Zero findings → report "no drift to analyze", write nothing, exit 0.
+- **Re-baseline invalidation.** `resource download` clears the tenant's `drift/` tree whenever it writes
+  (or updates) `resources/metadata.yaml` — any metadata write moves `generatedAt`, which is exactly what
+  supersedes the observation, partial `--type`-scoped runs included. Never under `--dry-run` (a dry run
+  writes nothing, so it deletes nothing); the path is constructed (`<tenantDir>/drift`), never derived from
+  input, mirroring `WriteObservation`'s own clear; log the removal when the tree existed. The delete-path
+  enumeration in the rules grows from two to three (prune; drift's clear-and-rebuild; download's re-baseline
+  clear of `drift/`) — still never touching `resources/` except via `--prune`, and never `docs/`.
+- **Engine placement.** The engine needs the `drift.Observation` types and `internal/drift` already imports
+  `internal/docs`, so it lives in `internal/drift` (e.g. `analyzeprompt.go` + `analyzeprompt_render.go`),
+  not in `internal/docs`. Two exports from `internal/docs` make that possible without duplication:
+  the splice helpers (`validateMarkers`, `spliceMarker`), and a small **reference-index facade** over the
+  currently-unexported fact-derivation helpers the refmap needs (`referencedGroups`, `buildGroupInfo`,
+  `buildFilterInfo`, `templateNames`, `parseAssignments`, `docRel`) — one exported type + builder exposing
+  GUID → name/kind/document resolution, not six exported functions. Rebuilding any of them in
+  `internal/drift` is off the table: two renderers deriving the same facts independently is exactly the
+  divergence the shared indexes exist to prevent. New engine functions comply with `gocognit`'s threshold
+  from the start (small render functions, like `generateprompt_render.go`) — the baseline is a debt ledger
+  and never grows.
+- **Template** `internal/drift/analyze_drift_template.md` (go:embed, `--prompt` override, marker validation
+  before any write; the embedded file is the single source of truth, edited directly — same as
+  `generate_prompt_template.md`). Marked blocks the tool splices: **observation** (observedAt, baseline generatedAt,
+  completeness, unknown types, `removalsSuppressed`, `notComparable` caveats), **worklist** (findings
+  grouped by type and verdict, each row naming baseline file, payload file, existing document, display
+  names, and the recorded deltas), **refmap** (group/filter/notification-template GUID → name/document,
+  resolved from the baseline `resources/metadata.yaml`, so "who is affected" renders from facts). Prose
+  around the markers: ground rules (never invent, masked values are not findings, everything is read-only),
+  per-finding procedure (what changed — facts from deltas and both files; who is affected — assignments via
+  the refmap; impact — security, compliance, lifecycle, user/device; a severity tag per finding), per-verdict
+  guidance (added: payload + spec; changed/renamed: deltas + both files; removed: baseline + existing doc,
+  which becomes an orphan), an executive summary, and the report destination `drift/report.md` with
+  self-describing frontmatter (`observedAt`, baseline `generatedAt`) and an explicit ephemerality note
+  (swept by the next drift or download run; archive manually to keep it).
+- **`--dry-run`**: the analysis is fully answerable offline, so a dry run performs the whole comparison and
+  report, withholds only the write, and warns when an `analyze.md` from an earlier run is still on disk
+  (same pattern as `generate-prompt`'s stale-prompt note).
+- **Tests**: preflight refusals (no observation, superseded baseline, tenant mismatch, payload hash
+  mismatch, broken template markers), zero-findings short-circuit, worklist/refmap rendering, determinism of
+  the spliced output over an unchanged observation; download-side clearing (clears `drift/` on a metadata
+  write, leaves it alone under `--dry-run` and when no metadata was written, never touches `resources/` or
+  `docs/`) — plus a **new** docs-group flag-surface test (none exists today; mirror `cmd/resource_test.go`,
+  asserting both directions: every subcommand sees the shared flags, none offers a flag it ignores).
+- **Docs and rules**: README — new "Analyzing drift" section and the workflow line (download →
+  generate-prompt → … → drift → analyze-drift → re-baseline); output-layout section gains `drift/analyze.md`
+  and `drift/report.md` with their ephemerality (swept by the next drift run, and by a re-baselining
+  download). `CHANGELOG.md` under `[Unreleased]` in the same edit as the code.
+  `.windsurf/rules/01-project.md` (layout: the analyze-prompt engine in `internal/drift/`) and
+  `04-security-and-ops.md` (drift-tree lifecycle: `resource drift` owns and rebuilds the tree, a
+  re-baselining `resource download` clears it, `docs analyze-drift` writes `analyze.md` and the analysis
+  agent writes `report.md` at its root; delete-path enumeration updated to three). `config.example.yaml`
+  untouched — the command adds no config option beyond its local flags.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
