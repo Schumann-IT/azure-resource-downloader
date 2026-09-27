@@ -220,3 +220,114 @@ missing verification tool.
 - The **no-JS rule** stays the pivotal web decision; the CSP hardens it and roughly a third of parked web ideas
   wait on relaxing it. The drift YAML diff shipped server-side within the rule, which slightly strengthens the
   "keep it" tier. Its full blast radius is stated in the web backlog and is not repeated here.
+
+## 3. Development workflow — draft and review
+
+Recorded 2026-09-28. The draft is the user's, verbatim; the review and the enforcement proposal follow it. To be
+done **after** the 0.3.0 releases are out, as its own branch — and dogfooded: written as `## 1.` in both
+`NEXT-ITERATIONS.md` files before any script is touched.
+
+### The draft (as stated)
+
+Sync the dev workflows on both web and go:
+
+1. When wanting to implement an existing plan item or promoting an idea, make sure the worktree is on an
+   appropriate branch (not main).
+2. Let the user work on an idea promotion and plan refinements.
+3. Make sure that NEXT-ITERATIONS has been committed, before starting to implement.
+4. When implementation is done, never remove a planned item, only strike them through and give the user a chance
+   to define follow-ups.
+5. Never implement stuff that is not in NEXT-ITERATIONS. The user can only say "implement item N" to start
+   implementation; all other requests open a new idea, update an item, or add a follow-up to an item.
+6. The user says "item N is done", then the changelog must be updated. But the item should not be removed, but
+   archived, so that other sessions can review what has been implemented.
+7. Assess branch readiness through `make branch-ready` / `npm run branch-ready`.
+8. Commit.
+9. Branch is done and can be pushed and merged.
+
+### Review
+
+The workflow is sound as a state machine — *idea → planned entry → committed → in progress → struck →
+done/archived → released* — and it closes the gap section 2 keeps catching (work shipping without ever being
+written down). Four things must be decided first, because they contradict what the tooling does today.
+
+**Where it conflicts with the current gates**
+
+- **Steps 4 and 6 break `branch-ready` and `release-ready`.** Both currently *fail* on any `~~` in
+  `NEXT-ITERATIONS.md` (`go/scripts/branch-ready.sh`, `web/scripts/branch-ready.js`, and the release-time
+  backstop in both `release-ready` scripts). "Archive instead of delete" means strikeouts must become *legal in
+  one place* and illegal everywhere else. Concretely: add a trailing `## Archive` section; the gate then fails on
+  a strikeout **outside** it (work done but not archived) and on an archive entry whose title is **not** struck.
+- **Steps 7 and 8 are in the wrong order.** Both gates refuse to run on a dirty tree (`working-tree-clean.*`), so
+  the real order is: commit → `branch-ready` → fix → commit → rerun. That is deliberate: the verdict describes
+  the commit that gets merged.
+- **Numbering vs archive.** Archived entries cannot keep numbers if active ones must stay `1..N`. Cheapest:
+  archived entries lose their number and gain a stamp — `### ~~Title~~ — done 2026-09-28` — so
+  `readEntryNumbers` / `entry_numbers` keep working unchanged.
+- **The archive grows forever** (the Go file is already ~400 lines with parked ideas alone). Two options: keep
+  archived entries only until the release that ships them (`release-ready` then reports them as clearable — the
+  changelog is the permanent record, and "other sessions can review" is satisfied for the whole unreleased
+  window), or keep the archive as title + goal + pointer to the changelog entry and drop the struck plan bullets.
+  Recommendation: the first.
+
+**Points to push back on**
+
+- **Step 6 moves the changelog to "item N is done".** Today the rule is *changelog in the same edit as the
+  strikeout*, which is what makes forgetting hard. If the changelog waits for a verbal "done", the only thing
+  catching an omission is a gate check — doable (below), but better: keep writing the changelog at strikeout
+  time and treat "done" as *archive + user reviews the entry*. Follow-ups amend the changelog entry.
+- **Step 5 has no exemption for trivial fixes.** A one-line bug still needs an entry. That is right — `web/`
+  already has the *Fixes* section for exactly this, and the ceremony is the point — but the fix-entry format
+  should be deliberately tiny (title + one-line goal + one plan bullet) so the rule is not bypassed out of
+  irritation.
+- **"Never remove" needs one exception:** a planned entry the user *abandons*. Delete, or archive with
+  `— dropped`? Decide.
+- **Step 1 vs the release flow.** Root README step 4 commits the changelog close directly on `main`. Fine — that
+  is the release, not a branch — but the rule must say "no *implementation* on `main`", not "no commits on
+  `main`".
+
+### Enforcement — four layers, soft to hard
+
+**1. One shared rules file, not two.** `go/.windsurf/rules/06-next-iterations.md` and
+`web/.windsurf/rules/06-next-iterations.md` already disagree (strikeouts cleared at *branch close* vs at
+*release time*). Put the workflow once at the repository root (`.windsurf/rules/`), keeping only the
+`make`/`npm` spellings per project. State the protocol as *trigger phrases → allowed actions*:
+
+- **Any request that is not `implement item N`** → the assistant may only edit `NEXT-ITERATIONS.md` (new idea,
+  promotion, refinement, follow-up). No code.
+- **`implement item N`** → run the start gate first (layer 2); refuse if it fails.
+- **Implementation complete** → strike plan items in place, write the changelog, *stop and ask for follow-ups*.
+- **`item N is done`** → move the entry to the archive.
+
+This layer is the only one that can enforce the conversational part (steps 2, 4, 5, 6); it is soft by nature,
+so it is backed by the next three.
+
+**2. A start gate — the missing piece.** `make start-item N` / `npm run start-item -- N`, both delegating to a
+script mirroring `branch-ready`: current branch ≠ `RELEASE_BRANCH`; tree clean; entry `N` exists in **`HEAD`'s**
+`NEXT-ITERATIONS.md` (`git show HEAD:NEXT-ITERATIONS.md`, not the working copy — that is what makes step 3
+checkable); the entry has a `**Plan.**` with at least one unstruck bullet. Prints the plan. The rule says the
+assistant runs it before the first code edit, which turns steps 1 and 3 into a yes/no.
+
+**3. Extend `branch-ready`** (the hard gate; both projects, same checks):
+
+- current branch ≠ `RELEASE_BRANCH` (the one git call the gate already makes can grow this);
+- `git diff <base>...HEAD -- NEXT-ITERATIONS.md` non-empty — under step 5 *every* branch touches the backlog, so
+  a code branch that did not is exactly the violation;
+- strikeouts only inside `## Archive`; every archive entry struck;
+- if the archive grew vs base, `## [Unreleased]` grew vs base (catches a "done" without a changelog);
+- keep: numbering `1..N`, `version` untouched (web).
+
+`release-ready` keeps its strikeout backstop, scoped to "outside Archive".
+
+**4. Make it unbypassable: GitHub.** Nothing local is enforcement — `git commit` by hand always works. Branch
+protection on `main` requiring a PR plus a status check that runs `make branch-ready` is what actually gates
+steps 7–9. A local `pre-commit` hook refusing commits on `main` is possible but fights the release flow, which
+commits on `main`; skip it.
+
+### Open decisions before implementing
+
+- Archive lifetime: until the shipping release, or forever?
+- Changelog at strikeout time (current rule) or at "done" (draft step 6)?
+- Abandoned entries: delete or `— dropped`?
+- Where `todo.md` itself lives under the new rule: it is covered by neither gate. Either a sanctioned root file
+  with its own refresh trigger (e.g. at every release), or it goes.
