@@ -14,12 +14,12 @@ import (
 // involved, the baseline it was decided against, its completeness and the
 // verdict counts — everything the report's frontmatter and caveats section are
 // copied from.
-func renderAnalyzeObservation(tenantDir string, obs *Observation) string {
+func renderAnalyzeObservation(tenantDir string, obs *Observation, scope *analyzeScope) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- Tenant folder: `%s`\n", tenantDir)
 	fmt.Fprintf(&b, "- Baseline (read-only): `%s/`\n", path.Join(tenantDir, models.ResourcesDirName))
 	fmt.Fprintf(&b, "- Observed payloads (read-only): `%s/`\n", path.Join(tenantDir, DriftDirName))
-	fmt.Fprintf(&b, "- Your drift documents (one per finding; each worklist entry names its destination): `%s/<APIType>/<endpoint>/<name>.md`\n", path.Join(tenantDir, DriftDirName))
+	fmt.Fprintf(&b, "- Your drift documents (one per in-scope finding; each worklist entry names its destination): `%s/<APIType>/<endpoint>/<name>.md`\n", path.Join(tenantDir, DriftDirName))
 	fmt.Fprintf(&b, "- Your index (the summary, written last): `%s`\n", path.Join(tenantDir, DriftDirName, IndexFileName))
 	fmt.Fprintf(&b, "- Observed at: `%s`\n", obs.ObservedAt)
 	fmt.Fprintf(&b, "- Baseline generated at: `%s`\n", obs.Baseline.GeneratedAt)
@@ -27,6 +27,8 @@ func renderAnalyzeObservation(tenantDir string, obs *Observation) string {
 	c := obs.Counts
 	fmt.Fprintf(&b, "- Verdicts: changed %d · added %d · removed %d · renamed %d (unchanged %d of %d compared)\n",
 		c.Changed, c.Added, c.Removed, c.Renamed, c.Unchanged, c.Compared)
+	fmt.Fprintf(&b, "- Out-of-scope findings (unreferenced groups, autopilot identities): %d inventory row(s) (added/removed) · %d changed/renamed (counted only, not analyzed)\n",
+		len(scope.inventory), scope.countedOnly)
 	fmt.Fprintf(&b, "- Types whose drift is unknown (listing failed): %s\n", listOrNone(obs.UnknownTypes))
 	fmt.Fprintf(&b, "- Removals suppressed (incomplete run could not assert absence): %v\n", obs.RemovalsSuppressed)
 	b.WriteString(renderNotComparable(obs.NotComparable))
@@ -71,12 +73,16 @@ func renderNotComparable(entries []NotComparableEntry) string {
 	return b.String()
 }
 
-// renderAnalyzeWorklist renders the findings grouped by type, each with the
-// files to read and the recorded field deltas. Output is deterministic: types
-// and findings are sorted by key.
-func renderAnalyzeWorklist(obs *Observation, specPresent map[string]bool) string {
+// renderAnalyzeWorklist renders the in-scope findings grouped by type, each
+// with the files to read and the recorded field deltas. Output is
+// deterministic: types and findings are sorted by key.
+func renderAnalyzeWorklist(findings map[string]Finding, specPresent map[string]bool) string {
+	if len(findings) == 0 {
+		return "_No findings in scope: write no drift documents — the index (section 5) still carries the inventory._"
+	}
+
 	byType := map[string][]string{}
-	for key := range obs.Findings {
+	for key := range findings {
 		rtype := typeOfKey(key)
 		byType[rtype] = append(byType[rtype], key)
 	}
@@ -93,13 +99,27 @@ func renderAnalyzeWorklist(obs *Observation, specPresent map[string]bool) string
 		keys := byType[t]
 		sort.Strings(keys)
 		for _, key := range keys {
-			f := obs.Findings[key]
-			b.WriteString(renderFinding(key, f))
+			b.WriteString(renderFinding(key, findings[key]))
 			total++
 		}
 	}
 	fmt.Fprintf(&b, "_%d finding(s) across %d type(s)._", total, len(types))
 	return b.String()
+}
+
+// renderInventory renders the out-of-scope added/removed findings as the rows
+// the agent copies into the index verbatim: fixed info severity, never
+// analyzed, no drift document. A list, not a table — display names may contain
+// any character.
+func renderInventory(rows []inventoryRow) string {
+	if len(rows) == 0 {
+		return "_None._"
+	}
+	var b strings.Builder
+	for _, r := range rows {
+		fmt.Fprintf(&b, "- `info` · %s: %s (`%s`)\n", r.f.Verdict, findingTitle(r.key, r.f), typeOfKey(r.key))
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // specHeading renders a type's section heading with its spec path, or the
@@ -186,7 +206,7 @@ func findingDeltas(f Finding) string {
 // "who is affected" resolves from the same facts the docs engines hash.
 func renderAnalyzeRefmap(ri *docs.ReferenceIndex) string {
 	var b strings.Builder
-	b.WriteString("**Assignment target groups (referenced by an assignment in the baseline):**\n\n")
+	b.WriteString("**Assignment target groups (referenced by an assignment in the baseline or by an observed payload):**\n\n")
 	b.WriteString(refEntries(ri.Groups()))
 	b.WriteString("\n**Assignment filters:**\n\n")
 	b.WriteString(refEntries(ri.Filters()))
@@ -202,6 +222,10 @@ func refEntries(entries []docs.ReferenceEntry) string {
 	}
 	var b strings.Builder
 	for _, e := range entries {
+		if e.ExtraOnly {
+			fmt.Fprintf(&b, "- `%s` → 🆕 new in this observation (referenced only by an observed payload, not in the baseline)\n", e.ID)
+			continue
+		}
 		if !e.Present {
 			fmt.Fprintf(&b, "- `%s` → ⚠️ not in export (dangling)\n", e.ID)
 			continue

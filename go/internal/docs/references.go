@@ -20,6 +20,11 @@ type ReferenceEntry struct {
 	// with no entry is dangling: usually deleted from the tenant while still
 	// referenced.
 	Present bool
+	// ExtraOnly reports a group referenced only by the caller-supplied extra
+	// IDs (e.g. an observed drift payload) with no entry in the export. It is
+	// not dangling — the baseline never referenced it — the object is simply
+	// newer than the export.
+	ExtraOnly bool
 }
 
 // ReferenceIndex is the exported facade over the reference-resolution indexes
@@ -31,17 +36,48 @@ type ReferenceIndex struct {
 	groups    []ReferenceEntry
 	filters   []ReferenceEntry
 	templates []ReferenceEntry
+	// referenced is the group IDs backing InScope: the baseline's
+	// assignment-referenced set, unioned with any caller-supplied extras.
+	referenced map[string]bool
 }
 
 // NewReferenceIndex builds the index from a loaded export metadata. All three
 // lists are sorted by ID and include dangling references (Present false), so
 // rendering them is deterministic and never hides a broken reference.
 func NewReferenceIndex(m *Metadata) *ReferenceIndex {
-	return &ReferenceIndex{
-		groups:    referencedGroupEntries(m),
-		filters:   filterEntries(m),
-		templates: templateEntries(m),
+	return NewReferenceIndexWithExtraGroups(m, nil)
+}
+
+// NewReferenceIndexWithExtraGroups builds the index with additional referenced
+// group IDs beyond the baseline's assignment targets — the drift analysis
+// passes group IDs harvested from observed payloads, so a group a drifted
+// policy newly assigns counts as referenced. With no extras it is exactly
+// NewReferenceIndex.
+func NewReferenceIndexWithExtraGroups(m *Metadata, extraGroupIDs []string) *ReferenceIndex {
+	baselineRef, _ := referencedGroups(m)
+	referenced := make(map[string]bool, len(baselineRef)+len(extraGroupIDs))
+	for id := range baselineRef {
+		referenced[id] = true
 	}
+	for _, id := range extraGroupIDs {
+		if id != "" {
+			referenced[id] = true
+		}
+	}
+	return &ReferenceIndex{
+		groups:     referencedGroupEntries(m, referenced, baselineRef),
+		filters:    filterEntries(m),
+		templates:  templateEntries(m),
+		referenced: referenced,
+	}
+}
+
+// InScope reports whether a resource of the given type and ID falls inside the
+// documentation scope shared by the docs engines and the drift analysis:
+// autopilot identities never, groups only when referenced by an assignment
+// (baseline or extras), everything else always.
+func (ri *ReferenceIndex) InScope(rtype, resourceID string) bool {
+	return scopeDecision(rtype, resourceID, ri.referenced)
 }
 
 // Groups returns the assignment target groups referenced by any assignment in
@@ -57,10 +93,11 @@ func (ri *ReferenceIndex) Filters() []ReferenceEntry { return ri.filters }
 // modify it.
 func (ri *ReferenceIndex) Templates() []ReferenceEntry { return ri.templates }
 
-// referencedGroupEntries resolves every group GUID referenced by an assignment
-// target, in the same way renderRefmap does for the documentation prompt.
-func referencedGroupEntries(m *Metadata) []ReferenceEntry {
-	referenced, _ := referencedGroups(m)
+// referencedGroupEntries resolves every group GUID in the referenced set, in
+// the same way renderRefmap does for the documentation prompt. An unresolved
+// GUID the baseline referenced is dangling; one only the extras referenced is
+// marked ExtraOnly instead — the export never promised it.
+func referencedGroupEntries(m *Metadata, referenced, baselineRef map[string]bool) []ReferenceEntry {
 	infos := buildGroupInfo(m)
 	keyByID := groupKeyByID(m)
 
@@ -73,6 +110,8 @@ func referencedGroupEntries(m *Metadata) []ReferenceEntry {
 			e.Kind = groupKindLabel(gi)
 			e.DocPath = docRel(key)
 			e.Present = true
+		} else if !baselineRef[id] {
+			e.ExtraOnly = true
 		}
 		entries = append(entries, e)
 	}

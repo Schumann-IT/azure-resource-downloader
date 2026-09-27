@@ -353,7 +353,7 @@ the config file's `taxonomy:` section — see [Navigation index](#navigation-ind
 
 Renders `output/<tenant>/drift/analyze.md`: a prompt directing an LLM to analyze the **impact** of the latest
 [`resource drift`](#resource-drift) observation — what each finding means for security posture, compliance,
-lifecycle and who is affected — and to write **one drift document per finding** plus a summary index. Each
+lifecycle and who is affected — and to write **one drift document per in-scope finding** plus a summary index. Each
 drift document lands at the payload's path with the extension swapped (`drift/<APIType>/<endpoint>/<name>.md`
 beside `…/<name>.yaml`), so per resource the baseline YAML, the observed YAML, the documentation and the
 judgment all share one key — a frontend can show the YAML diff and the drift document side by side without any
@@ -380,9 +380,20 @@ exactly the per-finding drift documents named by the worklist plus `drift/index.
 touches `resources/` or `docs/`: updating the documentation remains the re-baseline → `docs generate-prompt`
 loop.
 
+**Scope.** The analysis applies the same documentation scope as `generate-prompt`:
+`Microsoft.Graph/windowsAutopilotDeviceIdentities` findings are never analyzed, and group findings only when
+the group is referenced by an assignment — in the baseline **or in an observed payload**, so a group a
+drifted policy newly assigns is analyzed too. Out-of-scope **added/removed** findings are not lost: the
+tool feeds them to the agent as **inventory rows**, listed in `drift/index.md`'s findings table with a fixed
+`info` severity, no analysis and no drift document. Out-of-scope **changed/renamed** findings are only
+counted, under the index's "Not analyzed" caveats. The observation itself (`drift/metadata.yaml`) always
+records every finding — scope is applied when the prompt is rendered, never by `resource drift`.
+
 There are no per-type drift templates. The prompt instructs the agent to read each finding type's
 `doc-prompt.md` as the type-specific lens for judging impact, and flags types whose spec is missing (an
-export run with `--no-prompt`) so reduced confidence is stated rather than hidden.
+export run with `--no-prompt`) so reduced confidence is stated rather than hidden. The finished prompt —
+like `docs/generate.md` — no longer carries the template's explanatory header comment or the ` (template)`
+H1 suffix; a `--prompt` override template must now also carry the `inventory` marked block.
 
 **Exit codes:** `0` on success — including a clean observation (nothing to analyze, no prompt written); `2`
 when the question cannot be answered: no observation (run `resource drift` first), the export was
@@ -731,7 +742,9 @@ template and writes `docs/generate.md`.
 `Microsoft.Graph/windowsAutopilotDeviceIdentities` (never documented) and `Microsoft.Graph/groups`, which are
 documented **only when referenced by an assignment**. A type whose `doc-prompt.md` is missing (a `--no-prompt`
 export) is reported and skipped — no document of that type can be produced. Resources marked
-`presentInTenant: false` are reported as orphans and never regenerated or deleted.
+`presentInTenant: false` are reported as orphans and never regenerated or deleted. The finished
+`docs/generate.md` carries none of the template's self-description: the explanatory header comment and the
+` (template)` H1 suffix are stripped at render time (marker comments stay).
 
 **What is decided, per resource:**
 

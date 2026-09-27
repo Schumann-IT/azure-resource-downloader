@@ -18,19 +18,32 @@ This project is released independently of the documentation browser in `web/`: i
 - **`docs analyze-drift` turns a drift observation into an impact analysis.** After `resource drift` has
   found changes, the new command renders a ready-to-paste prompt (`drift/analyze.md`) directing an LLM to
   judge each finding's impact — security posture, compliance, lifecycle and who is affected — and to write
-  **one drift document per finding** beside the payload it judges (the payload's path with the extension
-  swapped, so per resource the baseline YAML, observed YAML, documentation and judgment share one key and a
-  frontend can render the YAML diff and the drift document side by side) plus a summary index at
-  `drift/index.md` (findings ordered by severity with links, and the cross-resource security / compliance /
-  lifecycle view). It is fully offline, verifies every payload against the observation's recorded hashes
-  before directing an agent at it, and refuses when there is no observation or when the export was
-  re-baselined after it (re-run `resource drift` in both cases). There are no per-type drift templates: the
-  prompt uses each type's existing `doc-prompt.md` as the type-specific lens, so the feature moves no hash
-  and forces no documentation regeneration. Prompt, drift documents and index live and die with the
-  observation — the next drift run sweeps them, and a **re-baselining `resource download` now clears the
-  `drift/` tree too**, since a new baseline supersedes the observation by definition. There is deliberately
-  no drift history; archive them before re-baselining if they must be kept. See the **`docs analyze-drift`**
-  section of `README.md`.
+  **one drift document per in-scope finding** (next bullet) beside the payload it judges (the payload's
+  path with the extension swapped, so per resource the baseline YAML, observed YAML, documentation and
+  judgment share one key and a frontend can render the YAML diff and the drift document side by side) plus
+  a summary index at `drift/index.md` (findings ordered by severity with links, and the cross-resource
+  security / compliance / lifecycle view). It is fully offline, verifies every payload against the
+  observation's recorded hashes before directing an agent at it, and refuses when there is no observation
+  or when the export was re-baselined after it (re-run `resource drift` in both cases). There are no
+  per-type drift templates: the prompt uses each type's existing `doc-prompt.md` as the type-specific lens,
+  so the feature moves no hash and forces no documentation regeneration. Prompt, drift documents and index
+  live and die with the observation — the next drift run sweeps them, and a **re-baselining
+  `resource download` now clears the `drift/` tree too**, since a new baseline supersedes the observation by
+  definition. There is deliberately no drift history; archive them before re-baselining if they must be
+  kept. See the **`docs analyze-drift`** section of `README.md`.
+- **The drift analysis applies the documentation's scope, with an inventory for what it skips.** Findings on
+  the two bulk directory types the documentation already excludes — autopilot device identities always,
+  groups unless referenced by an assignment — are no longer analyzed per resource. The referenced-groups set
+  is payload-aware: a group a drifted policy newly assigns counts as referenced and is analyzed in full.
+  Out-of-scope added/removed findings become tool-fed inventory rows in the drift index (fixed `info`
+  severity, no drift document); out-of-scope changed/renamed findings are only counted under the index's
+  caveats. The observation itself keeps recording every finding — scope is a render-time decision, so
+  revising it never requires re-running drift. **A custom `--prompt` template for `analyze-drift` must now
+  carry the `inventory` marked block**; a template without it fails loudly (exit 2).
+- **Generated prompts no longer carry their template headers.** `docs/generate.md` and `drift/analyze.md` are
+  finished prompts, not templates: the explanatory header comment and the ` (template)` heading suffix are
+  stripped at render time, so an agent never reads template-editing instructions. Marker comments stay, and a
+  custom `--prompt` template without a header passes through unchanged.
 
 #### Static analysis
 

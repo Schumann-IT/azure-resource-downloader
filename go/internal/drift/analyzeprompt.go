@@ -58,7 +58,7 @@ func ReportPathForKey(key string) string {
 }
 
 // requiredAnalyzeMarkers are the marked blocks GenerateAnalyzePrompt fills.
-var requiredAnalyzeMarkers = []string{"observation", "worklist", "refmap"}
+var requiredAnalyzeMarkers = []string{"observation", "worklist", "inventory", "refmap"}
 
 // Sentinel errors let the command map a failure to a distinct exit code.
 var (
@@ -113,6 +113,13 @@ type AnalyzeResult struct {
 	// export (e.g. a download run with --no-prompt), so the analysis loses its
 	// type-specific lens for them.
 	MissingSpecTypes []string
+	// InventoryFindings counts the out-of-scope added/removed findings rendered
+	// as inventory rows: listed in the index with fixed info severity, never
+	// analyzed, no drift document.
+	InventoryFindings int
+	// ExcludedChangedRenamed counts the out-of-scope changed/renamed findings
+	// that are only counted in the caveats, never analyzed and never listed.
+	ExcludedChangedRenamed int
 }
 
 // LoadObservation reads a tenant's drift observation (drift/metadata.yaml). It
@@ -141,7 +148,7 @@ func LoadObservation(tenantDir string) (Observation, error) {
 func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 	log := logger.Default
 
-	obs, meta, err := analyzePreflight(opts)
+	obs, meta, extraGroupIDs, err := analyzePreflight(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +169,14 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 		return res, nil
 	}
 
-	specPresent := specPresence(opts.TenantDir, &obs)
+	// The documentation scope, payload-aware: a group a drifted payload newly
+	// assigns counts as referenced even though the baseline never named it.
+	ri := docs.NewReferenceIndexWithExtraGroups(&meta, extraGroupIDs)
+	scope := partitionFindings(&obs, ri)
+	res.InventoryFindings = len(scope.inventory)
+	res.ExcludedChangedRenamed = scope.countedOnly
+
+	specPresent := specPresence(opts.TenantDir, scope.inScope)
 	res.MissingSpecTypes = missingSpecTypes(specPresent)
 
 	out := opts.Template
@@ -170,9 +184,10 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 		name    string
 		content string
 	}{
-		{"observation", renderAnalyzeObservation(opts.TenantDir, &obs)},
-		{"worklist", renderAnalyzeWorklist(&obs, specPresent)},
-		{"refmap", renderAnalyzeRefmap(docs.NewReferenceIndex(&meta))},
+		{"observation", renderAnalyzeObservation(opts.TenantDir, &obs, &scope)},
+		{"worklist", renderAnalyzeWorklist(scope.inScope, specPresent)},
+		{"inventory", renderInventory(scope.inventory)},
+		{"refmap", renderAnalyzeRefmap(ri)},
 	}
 	for _, b := range blocks {
 		out, err = docs.SpliceMarker(out, b.name, b.content)
@@ -180,6 +195,7 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 			return nil, err
 		}
 	}
+	out = docs.StripTemplateHeader(out)
 
 	if opts.DryRun {
 		log.Info("Dry-run: not writing analysis prompt", "path", res.OutPath, "findings", len(obs.Findings))
@@ -198,67 +214,131 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 // superseded baseline, belongs to a different tenant, or names payloads that do
 // not match their recorded hashes — every refusal is a "cannot answer", never a
 // degraded answer.
-func analyzePreflight(opts AnalyzeOptions) (Observation, docs.Metadata, error) {
+func analyzePreflight(opts AnalyzeOptions) (Observation, docs.Metadata, []string, error) {
 	obs, err := LoadObservation(opts.TenantDir)
 	if err != nil {
-		return Observation{}, docs.Metadata{}, err
+		return Observation{}, docs.Metadata{}, nil, err
 	}
 	meta, err := docs.LoadExportMetadata(opts.TenantDir)
 	if err != nil {
-		return Observation{}, docs.Metadata{}, err
+		return Observation{}, docs.Metadata{}, nil, err
 	}
 
 	if opts.ExpectDomain != "" && obs.Tenant != "" && !strings.EqualFold(obs.Tenant, opts.ExpectDomain) {
-		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (observation tenant %q, resolved %q)", docs.ErrTenantMismatch, obs.Tenant, opts.ExpectDomain)
+		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (observation tenant %q, resolved %q)", docs.ErrTenantMismatch, obs.Tenant, opts.ExpectDomain)
 	}
 	if opts.ExpectDomain != "" && meta.Tenant != "" && !strings.EqualFold(meta.Tenant, opts.ExpectDomain) {
-		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (metadata tenant %q, resolved %q)", docs.ErrTenantMismatch, meta.Tenant, opts.ExpectDomain)
+		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", docs.ErrTenantMismatch, meta.Tenant, opts.ExpectDomain)
 	}
 
 	// A re-download moves the baseline's generatedAt (partial runs included),
 	// which is exactly what makes the observation's verdicts unanswerable.
 	if obs.Baseline.GeneratedAt != meta.GeneratedAt {
-		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (observation compared against %q, baseline now %q)",
+		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (observation compared against %q, baseline now %q)",
 			ErrObservationSuperseded, obs.Baseline.GeneratedAt, meta.GeneratedAt)
 	}
 
 	if err := docs.ValidateMarkers(opts.Template, requiredAnalyzeMarkers); err != nil {
-		return Observation{}, docs.Metadata{}, err
+		return Observation{}, docs.Metadata{}, nil, err
 	}
 
-	if err := verifyPayloads(opts.TenantDir, &obs); err != nil {
-		return Observation{}, docs.Metadata{}, err
+	extraGroupIDs, err := verifyPayloads(opts.TenantDir, &obs)
+	if err != nil {
+		return Observation{}, docs.Metadata{}, nil, err
 	}
-	return obs, meta, nil
+	return obs, meta, extraGroupIDs, nil
 }
 
 // verifyPayloads checks every payload the observation names against its
 // recorded hash, so the prompt never directs an agent at bytes the observation
-// did not produce.
-func verifyPayloads(tenantDir string, obs *Observation) error {
+// did not produce. It also harvests the assignment-target group IDs the
+// verified payloads reference, making the referenced-groups set payload-aware:
+// a drifted policy may assign a group the baseline never referenced. Only
+// verified bytes contribute, so the set stays trustworthy.
+func verifyPayloads(tenantDir string, obs *Observation) ([]string, error) {
 	driftDir := filepath.Join(tenantDir, DriftDirName)
+	var groupIDs []string
 	for _, key := range obs.Payloads {
 		f, ok := obs.Findings[key]
 		if !ok {
-			return fmt.Errorf("%w: %s is not named by any finding", ErrPayloadMismatch, key)
+			return nil, fmt.Errorf("%w: %s is not named by any finding", ErrPayloadMismatch, key)
 		}
 		raw, err := os.ReadFile(filepath.Join(driftDir, filepath.FromSlash(key)))
 		if err != nil {
-			return fmt.Errorf("%w: %s is not readable (%v)", ErrPayloadMismatch, key, err)
+			return nil, fmt.Errorf("%w: %s is not readable (%v)", ErrPayloadMismatch, key, err)
 		}
 		if sha256Hex(raw) != f.PayloadSha256 {
-			return fmt.Errorf("%w: %s does not hash to its recorded payloadSha256", ErrPayloadMismatch, key)
+			return nil, fmt.Errorf("%w: %s does not hash to its recorded payloadSha256", ErrPayloadMismatch, key)
 		}
+		groupIDs = append(groupIDs, payloadGroupIDs(raw)...)
 	}
-	return nil
+	return groupIDs, nil
 }
 
-// specPresence reports, per finding type, whether the export carries the type's
-// doc-prompt.md — the type-specific lens the analysis reads.
-func specPresence(tenantDir string, obs *Observation) map[string]bool {
+// payloadGroupIDs extracts assignment-target group IDs from a verified payload
+// through the same extraction the baseline referenced-groups set uses. A
+// payload that does not parse or carries no assignments contributes nothing —
+// verification already proved the bytes are the observation's.
+func payloadGroupIDs(raw []byte) []string {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(raw, &data); err != nil {
+		return nil
+	}
+	targets, ok := data["assignments"].([]interface{})
+	if !ok {
+		return nil
+	}
+	return docs.AssignmentGroupIDs(targets)
+}
+
+// analyzeScope partitions an observation's findings by the shared
+// documentation scope: in-scope findings are analyzed per resource,
+// out-of-scope added/removed findings become index-only inventory rows, and
+// out-of-scope changed/renamed findings are only counted.
+type analyzeScope struct {
+	inScope     map[string]Finding
+	inventory   []inventoryRow
+	countedOnly int
+}
+
+// inventoryRow is one out-of-scope added/removed finding: listed in the index
+// with fixed info severity, never analyzed, no drift document.
+type inventoryRow struct {
+	key string
+	f   Finding
+}
+
+// partitionFindings applies the documentation scope to every finding. The
+// inventory is sorted by key, so rendering it is deterministic.
+func partitionFindings(obs *Observation, ri *docs.ReferenceIndex) analyzeScope {
+	keys := make([]string, 0, len(obs.Findings))
+	for key := range obs.Findings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	sc := analyzeScope{inScope: map[string]Finding{}}
+	for _, key := range keys {
+		f := obs.Findings[key]
+		switch {
+		case ri.InScope(typeOfKey(key), f.ResourceID):
+			sc.inScope[key] = f
+		case f.Verdict == VerdictAdded || f.Verdict == VerdictRemoved:
+			sc.inventory = append(sc.inventory, inventoryRow{key: key, f: f})
+		default:
+			sc.countedOnly++
+		}
+	}
+	return sc
+}
+
+// specPresence reports, per in-scope finding type, whether the export carries
+// the type's doc-prompt.md — the type-specific lens the analysis reads.
+// Out-of-scope findings are never analyzed, so their types raise no warning.
+func specPresence(tenantDir string, findings map[string]Finding) map[string]bool {
 	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
 	present := map[string]bool{}
-	for key := range obs.Findings {
+	for key := range findings {
 		rtype := typeOfKey(key)
 		if _, known := present[rtype]; known {
 			continue

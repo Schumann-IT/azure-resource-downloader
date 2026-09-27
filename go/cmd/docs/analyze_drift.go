@@ -154,6 +154,12 @@ func reportAnalyzeDrift(res *drift.AnalyzeResult, dryRun bool) {
 		log.Warn("Type has no doc-prompt.md; the analysis loses its type-specific lens (was the export run with --no-prompt?)", "type", t)
 	}
 
+	if res.InventoryFindings > 0 || res.ExcludedChangedRenamed > 0 {
+		log.Info("Out-of-scope findings (unreferenced groups, autopilot identities) are not analyzed",
+			"inventory_rows", res.InventoryFindings,
+			"counted_only", res.ExcludedChangedRenamed)
+	}
+
 	if res.NothingToAnalyze {
 		log.Info("The observation recorded no drift; nothing to analyze and no prompt written")
 		return
