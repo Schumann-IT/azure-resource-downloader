@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  {{> head}}
+  <body id="drift-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <div class="doc-layout mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
+      {{#if nav}}{{> sidebar nav}}{{/if}}
+      <main class="doc-main min-w-0 flex-1">
+        <p class="doc-source mb-4 text-xs text-slate-500 dark:text-slate-400">
+          drift observed {{observedAt}}{{#unless complete}} · <span class="text-amber-700 dark:text-amber-300">incomplete run</span>{{/unless}}
+          · <a href="{{tenantDriftHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">all findings</a>
+        </p>
+
+        {{#if state.superseded}}
+          {{> drift_superseded superseded}}
+        {{/if}}
+
+        {{#if state.unknownType}}
+          <h1 class="text-2xl font-bold mb-2">{{name}}</h1>
+          <p class="drift-not-compared text-slate-600 dark:text-slate-300">
+            <strong>Not compared.</strong> The drift run could not list <code class="font-mono">{{type}}</code>,
+            so whether this resource changed is unknown.
+          </p>
+        {{/if}}
+
+        {{#if state.notComparable}}
+          <h1 class="text-2xl font-bold mb-2">{{name}}</h1>
+          <p class="drift-not-compared text-slate-600 dark:text-slate-300">
+            <strong>Not compared.</strong> {{reason}}. Whether this resource changed is unknown.
+          </p>
+        {{/if}}
+
+        {{#if state.unchanged}}
+          <h1 class="text-2xl font-bold mb-2">{{name}}</h1>
+          <p class="text-slate-600 dark:text-slate-300">Unchanged as of {{observedAt}}.</p>
+        {{/if}}
+
+        {{#if state.finding}}
+          <header class="mb-6">
+            <p class="flex flex-wrap items-center gap-2 mb-2">
+              {{> badge finding.verdictBadge}}
+              {{#if finding.severityBadge}}{{> badge finding.severityBadge}}{{/if}}
+            </p>
+            <h1 class="text-2xl font-bold">{{finding.label}}</h1>
+            {{#if finding.previous}}
+              <p class="text-sm text-slate-500 dark:text-slate-400">was <strong>{{finding.previous}}</strong></p>
+            {{/if}}
+            {{#if links.length}}
+              <p class="drift-links mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {{#each links}}<a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.label}}</a>{{/each}}
+              </p>
+            {{/if}}
+          </header>
+
+          {{#if intact}}
+            {{#if deltas.length}}
+              <section class="drift-deltas mb-8">
+                <h2 class="text-lg font-semibold mb-2">What changed</h2>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm border-collapse">
+                    <thead>
+                      <tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                        <th class="py-1 pr-4 font-medium">Field</th>
+                        <th class="py-1 pr-4 font-medium">Baseline</th>
+                        <th class="py-1 font-medium">Observed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {{#each deltas}}
+                        <tr class="align-top border-b border-slate-100 dark:border-slate-800">
+                          <td class="py-1 pr-4 font-mono text-xs">{{this.path}}</td>
+                          <td class="py-1 pr-4 font-mono text-xs break-all text-red-800 dark:text-red-300">{{this.old}}</td>
+                          <td class="py-1 font-mono text-xs break-all text-emerald-800 dark:text-emerald-300">{{this.new}}</td>
+                        </tr>
+                      {{/each}}
+                    </tbody>
+                  </table>
+                </div>
+                {{#if deltaNote}}<p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{deltaNote}}</p>{{/if}}
+              </section>
+            {{else}}
+              {{#if deltaNote}}<p class="mb-6 text-sm text-slate-500 dark:text-slate-400">{{deltaNote}}</p>{{/if}}
+            {{/if}}
+            {{#if payload}}
+              <section class="drift-payload mb-8">
+                <h2 class="text-lg font-semibold mb-2">Observed payload</h2>
+                <div class="yaml-view min-w-0">
+                  {{{payload}}}
+                </div>
+              </section>
+            {{/if}}
+          {{else}}
+            <p class="drift-mismatch mb-6 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-900 dark:text-red-200">
+              <strong>The files on disk no longer match this observation.</strong>
+              The baseline or the observed payload is missing or has changed since the drift run, so the comparison
+              is not shown. Re-run <code class="font-mono">azure-rd resource drift</code>.
+            </p>
+          {{/if}}
+
+          {{#if analysis}}
+            <article class="doc-body prose prose-slate dark:prose-invert max-w-none">
+              {{{analysis}}}
+            </article>
+          {{/if}}
+        {{/if}}
+      </main>
+    </div>
+  </body>
+</html>

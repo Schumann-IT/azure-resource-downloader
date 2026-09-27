@@ -11,7 +11,7 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
-### 1. A drift view: what changed in the tenant since the export was taken
+### 1. ~~A drift view: what changed in the tenant since the export was taken~~
 
 **Goal.** A reader of any resource's documentation can ask *"has this changed in the tenant since this export
 was taken?"* and get the answer in one click — a **Drift** button beside **Documentation | YAML**, leading to
@@ -142,68 +142,68 @@ than the control appearing and disappearing. The comparison stays the CLI's job;
 
 **Plan.**
 
-- **Observation reader.** `parseObservation()` in `src/docs/drift-observation.ts` — pure, synchronous,
+- ~~**Observation reader.** `parseObservation()` in `src/docs/drift-observation.ts` — pure, synchronous,
   Nest-free, mirroring `parseTenantIndex()`: version-free but shape-validated, malformed or unreadable ⇒
   `undefined`, never a throw. A service method beside `getIndex()` reads it cached by mtime + size and drops
   the entry when the file is gone. `TenantInfo` gains `driftDir`, `driftObservationPath` and `driftIndexPath`;
-  discovery keeps keying on `docs/index.yaml` only.
-- **Path safety.** `resolveDriftDocument()` (`.md`) and `resolveDriftPayload()` (`.yaml`) over `driftDir`,
+  discovery keeps keying on `docs/index.yaml` only.~~
+- ~~**Path safety.** `resolveDriftDocument()` (`.md`) and `resolveDriftPayload()` (`.yaml`) over `driftDir`,
   both through the unchanged `resolveWithinRoot()`, plus the ≥ 2-segment guard. New cases in
   `test/path-safety.spec.ts`: a `.md` is not servable as a payload and a `.yaml` not as a document, traversal
   out of the drift root 404s, and nothing at the tree root (`metadata.yaml`, `analyze.md`, `index.md`) is
-  reachable through either resolver.
-- **Drift state.** `driftState()` beside `parseObservation()` in `src/docs/drift-observation.ts`, pure and
+  reachable through either resolver.~~
+- ~~**Drift state.** `driftState()` beside `parseObservation()` in `src/docs/drift-observation.ts`, pure and
   Nest-free, returning the states above with the data each needs (verdict, `observedAt`, reason); a unit spec
-  covers every state, the rename-by-`baselineKey` case and the evaluation order.
-- **Link rewriting.** `LinkEnv` gains an optional route base so relative `.md` links inside `drift/index.md`
+  covers every state, the rename-by-`baselineKey` case and the evaluation order.~~
+- ~~**Link rewriting.** `LinkEnv` gains an optional route base so relative `.md` links inside `drift/index.md`
   and the drift documents (the analysis template has them link each other by relative path) resolve to
   `/:tenant/_drift/…` instead of the documentation route; documents pass no base, so their behaviour is
   byte-identical. `rewriteHref` has no unit spec today — it is covered by the e2e cross-type link case — so
-  this adds `test/link-rewrite.spec.ts` for both bases plus an e2e case for a link inside a drift document.
-- **Routes**, behind a `_drift` representation prefix declared before the document catch-all, like
-  `_resource` and `_export`:
-  - `GET /:tenant/_drift` — the observation as a whole, and the **tenant-scope counterpart of the landing
+  this adds `test/link-rewrite.spec.ts` for both bases plus an e2e case for a link inside a drift document.~~
+- ~~**Routes**, behind a `_drift` representation prefix declared before the document catch-all, like
+  `_resource` and `_export`:~~
+  - ~~`GET /:tenant/_drift` — the observation as a whole, and the **tenant-scope counterpart of the landing
     page**: header (observed at, baseline, verdict counts, completeness, unknown types, not-comparable
     entries, suppressed removals), `drift/index.md` as the body when the analysis has written it, otherwise a
     findings list grouped by resource type, built from the observation alone. Same layout as the landing page —
-    sidebar, prose column — so the two read as two views of one tenant.
-  - `GET /:tenant/_drift/index` redirects to `/:tenant/_drift`, mirroring `summary` → `/:tenant`: the drift
-    index has one address, and the depth guard already keeps it out of the per-resource route.
-  - `GET /:tenant/_drift/*path` — one resource, rendered from its drift state: the verdict, the recorded
+    sidebar, prose column — so the two read as two views of one tenant.~~
+  - ~~`GET /:tenant/_drift/index` redirects to `/:tenant/_drift`, mirroring `summary` → `/:tenant`: the drift
+    index has one address, and the depth guard already keeps it out of the per-resource route.~~
+  - ~~`GET /:tenant/_drift/*path` — one resource, rendered from its drift state: the verdict, the recorded
     deltas as a table (values verbatim as the CLI rendered them, escaped, in code cells), the drift document
     when one exists, and links to the baseline YAML (`_resource`, from `baselineKey`), the observed payload
     and the documentation (when the index lists it). Before a *changed*/*renamed* comparison is shown, the
     baseline file and the payload are hashed and checked against `baselineSha256`/`payloadSha256` (hashes
     cached by mtime + size); a mismatch renders a warning instead of the comparison and offers no payload. The
     *not compared* states and the *superseded* gate render as pages, a key the observation compared without a
-    finding renders *unchanged as of `observedAt`*, and only the *unknown* state is a 404.
-  - `?yaml` renders the observed payload highlighted (reusing `YamlHighlighterService`); `?raw` serves it as
-    `text/plain` with `nosniff`, exactly as `_resource?raw` does. Both exist only for states with a payload.
-- **The buttons**, both extending the view model `partials/header.hbs` renders to
+    finding renders *unchanged as of `observedAt`*, and only the *unknown* state is a 404.~~
+  - ~~`?yaml` renders the observed payload highlighted (reusing `YamlHighlighterService`); `?raw` serves it as
+    `text/plain` with `nosniff`, exactly as `_resource?raw` does. Both exist only for states with a payload.~~
+- ~~**The buttons**, both extending the view model `partials/header.hbs` renders to
   `{ label, href, active, reason }`, where a **missing `href` is the inert state** — the one template change,
   shared by both scopes, and the only logic the partial gains: an `<a>` when there is an `href`, otherwise a
   muted `<span>` carrying `reason` as its `title` (and `aria-disabled`), which keeps it out of the tab order
-  without a `disabled` attribute no anchor honours.
-  - **Resource scope**: `views()` gains a third entry, **Drift**, always present wherever the switcher is
+  without a `disabled` attribute no anchor honours.~~
+  - ~~**Resource scope**: `views()` gains a third entry, **Drift**, always present wherever the switcher is
     shown today, with `kind: 'doc' | 'resource' | 'drift'`, its label, `href` and `reason` taken from the drift
     state and nowhere else. The observation and the baseline timestamp are therefore read on every document
-    and YAML render — two cached reads, degrading to the inert *no drift observation* state when missing.
-  - **Tenant scope**: the landing page gains its first switcher, **Summary | Drift**, from a sibling helper.
+    and YAML render — two cached reads, degrading to the inert *no drift observation* state when missing.~~
+  - ~~**Tenant scope**: the landing page gains its first switcher, **Summary | Drift**, from a sibling helper.
     **Drift** is inert only when no observation exists (*run `azure-rd resource drift`*); an empty or
     not-yet-analysed observation and a superseded one are all clickable, the last because an operator who
     re-downloaded needs to be told their observation is stale, not left with a dead control. No sidebar line
-    and no picker link: one entry point per scope, beside the noun it applies to.
-- **Views.** `drift.hbs` for a resource and a tenant-scope view that reuses the landing page's shape, verdict
+    and no picker link: one entry point per scope, beside the noun it applies to.~~
+- ~~**Views.** `drift.hbs` for a resource and a tenant-scope view that reuses the landing page's shape, verdict
   and severity as plain badges, every state with a dark variant; `{{{ }}}` only for renderer- and
   highlighter-produced HTML. The inert button gets its own muted treatment with `cursor-not-allowed` and no
   hover state, while the visible `:focus-visible` outline stays on the anchor variant, which is the only
   focusable one. The sidebar marks the resource's own item active on its drift page, as the YAML view does.
-  `_drift` never appears in a breadcrumb, exactly like `_resource`.
-- **Docs and rules.** README: the two routes, the drift root contract, the ephemerality note, and that
+  `_drift` never appears in a breadcrumb, exactly like `_resource`.~~
+- ~~**Docs and rules.** README: the two routes, the drift root contract, the ephemerality note, and that
   `analyze.md` and `metadata.yaml` are never served. `.windsurf/rules/01-architecture.md`: the amended
   one-extension-per-*resolver* wording, drift as a third served root that is not a discovery marker.
-  `CHANGELOG.md` under `[Unreleased]`.
-- **Tests.** `test/docs.e2e.spec.ts`: the button is present on the documentation and YAML views of every
+  `CHANGELOG.md` under `[Unreleased]`.~~
+- ~~**Tests.** `test/docs.e2e.spec.ts`: the button is present on the documentation and YAML views of every
   resource, as a **link** for a finding, an unlisted type and a not-comparable entry, and as an **inert span
   stating why** for an unchanged one and for a tenant with no observation; a renamed resource's page at its
   old name gets the link, not the inert span; a changed resource renders its deltas and its drift document; an
@@ -212,7 +212,7 @@ than the control appearing and disappearing. The comparison stays the CLI's job;
   findings and no `index.md`; `_drift/index` redirects; a superseded observation renders the gate at both
   scopes and never a comparison, and a stale index alone does not trigger it; `analyze.md` and `metadata.yaml`
   are not served; a rewritten observation and a deleted tree are both reflected on the next request without a
-  restart.
+  restart.~~
 
 ## Fixes
 

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  {{> head}}
+  <body id="drift-tenant-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <div class="doc-layout mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
+      {{#if nav}}{{> sidebar nav}}{{/if}}
+      <main class="doc-main min-w-0 flex-1">
+        {{#if state.none}}
+          <h1 class="text-2xl font-bold mb-2">Drift</h1>
+          <p class="text-slate-500 dark:text-slate-400">
+            No drift observation for this export. Run <code class="font-mono">azure-rd resource drift</code> to compare the tenant against it.
+          </p>
+        {{/if}}
+        {{#if state.superseded}}
+          <h1 class="text-2xl font-bold mb-4">Drift</h1>
+          {{> drift_superseded superseded}}
+        {{/if}}
+        {{#if state.current}}
+          {{> drift_observation observation}}
+          {{#if analysis}}
+            <article class="doc-body prose prose-slate dark:prose-invert max-w-none">
+              {{{analysis}}}
+            </article>
+          {{else}}
+            <h1 class="text-2xl font-bold mb-4">Drift</h1>
+          {{/if}}
+          {{#if observation.empty}}
+            <p class="drift-empty mt-6 text-slate-500 dark:text-slate-400">
+              The observation recorded no findings: everything it compared matched the baseline.
+            </p>
+          {{else}}
+            <details class="drift-findings mt-8" {{#unless analysis}}open{{/unless}}>
+              <summary class="cursor-pointer text-lg font-semibold">All recorded findings</summary>
+              <div class="mt-4 space-y-6">
+                {{#each groups}}
+                  <section>
+                    <h2 class="text-sm font-semibold font-mono text-slate-600 dark:text-slate-300 mb-2">
+                      {{this.type}}
+                      <span class="ml-2 font-sans font-normal text-slate-400 dark:text-slate-500">{{this.items.length}}</span>
+                    </h2>
+                    <ul class="space-y-1">
+                      {{#each this.items}}
+                        <li class="flex flex-wrap items-center gap-2">
+                          {{> badge this.badge}}
+                          <a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.label}}</a>
+                          {{#if this.previous}}<span class="text-xs text-slate-500 dark:text-slate-400">was {{this.previous}}</span>{{/if}}
+                        </li>
+                      {{/each}}
+                    </ul>
+                  </section>
+                {{/each}}
+              </div>
+            </details>
+          {{/if}}
+        {{/if}}
+      </main>
+    </div>
+  </body>
+</html>

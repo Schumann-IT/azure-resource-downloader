@@ -14,12 +14,19 @@
     {{/each}}
     {{#if views}}
       <nav class="view-switcher ml-auto flex items-center gap-1 text-xs" aria-label="Representation">
+        {{!-- An entry without an href is inert: it is shown, so its absence is
+              never ambiguous, and its title says why there is nothing behind it. --}}
         {{#each views}}
+          {{#if this.href}}
           <a
             href="{{this.href}}"
             {{#if this.active}}aria-current="page"{{/if}}
+            {{#if this.reason}}title="{{this.reason}}"{{/if}}
             class="rounded px-2 py-1 {{#if this.active}}bg-slate-100 dark:bg-slate-800 font-medium text-slate-900 dark:text-slate-100{{else}}text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400{{/if}}"
           >{{this.label}}</a>
+          {{else}}
+          <span aria-disabled="true" title="{{this.reason}}" class="rounded px-2 py-1 cursor-not-allowed text-slate-300 dark:text-slate-600">{{this.label}}</span>
+          {{/if}}
         {{/each}}
       </nav>
     {{/if}}

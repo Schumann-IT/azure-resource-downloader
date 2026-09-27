@@ -15,6 +15,21 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Added
 
+#### Drift view
+
+- **Every resource can now answer "has this changed in the tenant since the export was taken?" in one click.**
+  A **Drift** entry joins **Documentation | YAML** in the top bar, and the landing page gains **Summary |
+  Drift**, rendering what `azure-rd resource drift` observed and what the drift analysis wrote about it: the
+  verdict, the recorded field changes, the analysis and the observed configuration, plus the observation as a
+  whole with every caveat of a partial run. The entry is always shown and goes inert, saying why, only when
+  there is nothing to land on, so a missing finding is never mistaken for *unchanged*. An observation taken
+  against an older baseline is shown as outdated rather than as a comparison, and nothing is compared until
+  the files on disk still match the hashes the observation recorded. The app stays read-only and the drift
+  tree is not a discovery marker; a regenerated or deleted tree is reflected on the next request without a
+  restart. The tree is a third served root behind two resolvers pinned to one extension each, whose top-level
+  files (the observation, the analysis prompt) are unreachable by construction. Routes and the drift root
+  contract are in `README.md`.
+
 #### Release workflow
 
 - **This project can be analysed by a local SonarQube server.** `sonar-project.properties` describes it as its

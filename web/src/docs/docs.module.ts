@@ -4,6 +4,7 @@ import { TenantDiscoveryService } from './tenant-discovery.service';
 import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { ExportService } from './export/export.service';
+import { DriftService } from './drift.service';
 
 @Module({
   controllers: [DocsController],
@@ -12,6 +13,7 @@ import { ExportService } from './export/export.service';
     MarkdownRendererService,
     YamlHighlighterService,
     ExportService,
+    DriftService,
   ],
 })
 export class DocsModule {}

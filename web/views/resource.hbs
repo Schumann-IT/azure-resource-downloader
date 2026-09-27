@@ -7,7 +7,11 @@
       {{#if nav}}{{> sidebar nav}}{{/if}}
       <main class="doc-main min-w-0 flex-1">
         <p class="doc-source mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          {{#if observed}}
+          <span>observed payload <code class="font-mono">drift/{{source}}</code></span>
+          {{else}}
           <span>exported source <code class="font-mono">resources/{{source}}</code></span>
+          {{/if}}
           <span>·</span>
           <span>{{lines}} lines</span>
           <span>·</span>

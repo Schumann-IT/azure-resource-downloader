@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { promises as fsp } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -1106,6 +1107,38 @@ describe('Docs browser (e2e)', () => {
     );
   });
 
+  it('shows an inert Drift entry, stating why, for an export with no drift observation', async () => {
+    const inert =
+      '<span aria-disabled="true" title="No drift observation. Run azure-rd resource drift."';
+    const doc = await request(app.getHttpServer())
+      .get('/mytenant/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    expect(doc.text).toContain(inert);
+    expect(doc.text).not.toContain('/mytenant/_drift/');
+
+    const yaml = await request(app.getHttpServer())
+      .get('/mytenant/_resource/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(200);
+    expect(yaml.text).toContain(inert);
+
+    // The landing page gains Summary | Drift, with Drift inert for the same reason.
+    const landing = await request(app.getHttpServer()).get('/mytenant').expect(200);
+    expect(landing.text).toMatch(/href="\/mytenant"[^>]*aria-current="page"/);
+    expect(landing.text).toContain(inert);
+  });
+
+  it('says so on the drift routes of an export with no drift observation', async () => {
+    const tenantPage = await request(app.getHttpServer())
+      .get('/mytenant/_drift')
+      .expect(200);
+    expect(tenantPage.text).toContain('No drift observation for this export');
+    const res = await request(app.getHttpServer())
+      .get('/mytenant/_drift/Microsoft.Graph/deviceManagementConfigurationPolicies/p1')
+      .expect(404);
+    expect(res.text).toContain('No drift observation');
+    expect(res.text).not.toContain(root);
+  });
+
   it('404s for a missing resource, without leaking a filesystem path', async () => {
     const res = await request(app.getHttpServer())
       .get('/mytenant/_resource/Microsoft.Graph/groups/g1')
@@ -1315,6 +1348,394 @@ describe('Docs browser with a missing docs root (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/').expect(200);
     expect(res.text).toContain('No tenants found');
     expect(res.text).not.toContain(missingRoot);
+  });
+});
+
+// An export with a drift/ tree beside docs/ and resources/, as
+// `azure-rd resource drift` and the analysis agent leave it. Its own app and
+// docs root, so the main suite's counts are untouched.
+describe('Docs browser drift view (e2e)', () => {
+  const BASELINE = '2026-01-01T00:00:00Z';
+  const OBSERVED = '2026-02-01T10:00:00Z';
+  const T = 'Microsoft.Graph/deviceConfigurations';
+
+  const BASE: Record<string, string> = {
+    changed1: 'id: changed1\nsettings:\n  enabled: true\n',
+    same1: 'id: same1\n',
+    old_name: 'id: renamed1\ndisplayName: Old name\n',
+    unattested1: 'id: unattested1\n',
+    tampered1: 'id: tampered1\nsecret: a\n',
+  };
+  const CHANGED_PAYLOAD = 'id: changed1\nsettings:\n  enabled: false\n';
+  const RENAMED_PAYLOAD = 'id: renamed1\ndisplayName: New name\n';
+  const TAMPERED_PAYLOAD = 'id: tampered1\nsecret: b\n';
+  const ADDED_PAYLOAD = 'id: loc1\ndisplayName: kali-vpn-location\n';
+
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+
+  const INDEX = `version: 3
+tenant: drifted.example
+generatedAt: "${BASELINE}"
+complete: true
+resources:
+${[...Object.keys(BASE)]
+  .map(
+    (n) =>
+      `    - type: ${T}\n      doc: ${T}/${n}.md\n      displayName: ${n}\n      documented: true\n`,
+  )
+  .join('')}    - type: Microsoft.Graph/organizationalBranding
+      doc: Microsoft.Graph/organizationalBranding/brand1.md
+      displayName: brand1
+      documented: true
+`;
+
+  const OBSERVATION = `observedAt: "${OBSERVED}"
+tenant: drifted.example
+toolVersion: azure-rd test
+baseline:
+    generatedAt: "${BASELINE}"
+    toolVersion: azure-rd test
+run:
+    complete: false
+    incompleteReason: 1 resource types could not be listed
+counts:
+    compared: 5
+    unchanged: 1
+    changed: 2
+    renamed: 1
+    added: 1
+    removed: 0
+    unattested: 1
+unknownTypes:
+    - Microsoft.Graph/organizationalBranding
+removalsSuppressed: true
+notComparable:
+    - key: ${T}/unattested1.yaml
+      reason: baseline entry predates per-entry config attestation
+findings:
+    ${T}/changed1.yaml:
+        verdict: changed
+        displayName: Changed one
+        baselineKey: ${T}/changed1.yaml
+        baselineSha256: ${sha(BASE.changed1)}
+        payloadSha256: ${sha(CHANGED_PAYLOAD)}
+        deltas:
+            - path: settings.enabled
+              old: "true"
+              new: "false"
+    ${T}/new_name.yaml:
+        verdict: renamed
+        displayName: New name
+        previousDisplayName: Old name
+        baselineKey: ${T}/old_name.yaml
+        baselineSha256: ${sha(BASE.old_name)}
+        payloadSha256: ${sha(RENAMED_PAYLOAD)}
+        deltas:
+            - path: displayName
+              old: Old name
+              new: New name
+    ${T}/tampered1.yaml:
+        verdict: changed
+        displayName: Tampered one
+        baselineKey: ${T}/tampered1.yaml
+        baselineSha256: ${sha(BASE.tampered1)}
+        payloadSha256: ${sha(TAMPERED_PAYLOAD)}
+        deltas:
+            - path: secretDelta
+              old: a
+              new: b
+    Microsoft.Graph/namedLocations/new_loc.yaml:
+        verdict: added
+        displayName: Kali VPN location
+        payloadSha256: ${sha(ADDED_PAYLOAD)}
+payloads:
+    - ${T}/changed1.yaml
+    - ${T}/new_name.yaml
+    - ${T}/tampered1.yaml
+    - Microsoft.Graph/namedLocations/new_loc.yaml
+`;
+
+  const ANALYSIS = `---
+observedAt: ${OBSERVED}
+verdict: changed
+severity: high
+---
+
+# Drift: Changed one
+
+See [the rename](new_name.md) and [its documentation](../../../docs/${T}/changed1.md).
+`;
+
+  const DRIFT_INDEX = `---
+findings: 4
+---
+
+# Drift analysis summary
+
+| Severity | Resource |
+|---|---|
+| high | [Changed one](${T}/changed1.md) |
+`;
+
+  let app: NestExpressApplication;
+  let root: string;
+  let exportDir: string;
+  let driftDir: string;
+
+  const write = async (rel: string, content: string) => {
+    const file = path.join(exportDir, rel);
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await fsp.writeFile(file, content);
+  };
+
+  // The drift tree exactly as the tests expect it, so a case that rewrites or
+  // deletes it can put it back.
+  const writeDrift = async () => {
+    await fsp.rm(driftDir, { recursive: true, force: true });
+    await write('drift/metadata.yaml', OBSERVATION);
+    await write('drift/index.md', DRIFT_INDEX);
+    await write('drift/analyze.md', '# The analysis prompt, never served\n');
+    await write(`drift/${T}/changed1.yaml`, CHANGED_PAYLOAD);
+    await write(`drift/${T}/changed1.md`, ANALYSIS);
+    await write(`drift/${T}/new_name.yaml`, RENAMED_PAYLOAD);
+    // Not what the observation recorded: the file was edited after the run.
+    await write(`drift/${T}/tampered1.yaml`, 'id: tampered1\nsecret: edited later\n');
+    await write('drift/Microsoft.Graph/namedLocations/new_loc.yaml', ADDED_PAYLOAD);
+  };
+
+  const get = (url: string) => request(app.getHttpServer()).get(url);
+
+  beforeAll(async () => {
+    root = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-drift-'));
+    exportDir = path.join(root, 'drifted');
+    driftDir = path.join(exportDir, 'drift');
+    await write('docs/index.yaml', INDEX);
+    for (const [name, yaml] of Object.entries(BASE)) {
+      await write(`docs/${T}/${name}.md`, `---\nsource: ${T}/${name}.yaml\n---\n\n# ${name}\n`);
+      await write(`resources/${T}/${name}.yaml`, yaml);
+    }
+    await write(
+      'docs/Microsoft.Graph/organizationalBranding/brand1.md',
+      '---\nsource: Microsoft.Graph/organizationalBranding/brand1.yaml\n---\n\n# brand1\n',
+    );
+    await write('resources/Microsoft.Graph/organizationalBranding/brand1.yaml', 'id: brand1\n');
+    await write('resources/metadata.yaml', `generatedAt: "${BASELINE}"\ntenant: drifted.example\n`);
+    await writeDrift();
+
+    process.env.DOCS_ROOT = root;
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureViews(app);
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await fsp.rm(root, { recursive: true, force: true });
+  });
+
+  it('links a finding from the documentation and YAML views, verdict in the label', async () => {
+    const href = `href="/drifted/_drift/${T}/changed1"`;
+    const doc = await get(`/drifted/${T}/changed1`).expect(200);
+    expect(doc.text).toContain(href);
+    expect(doc.text).toContain('Drift · changed</a>');
+    const yaml = await get(`/drifted/_resource/${T}/changed1`).expect(200);
+    expect(yaml.text).toContain(href);
+  });
+
+  it('shows the Drift entry inert with its reason for an unchanged resource', async () => {
+    const doc = await get(`/drifted/${T}/same1`).expect(200);
+    expect(doc.text).toContain(
+      `<span aria-disabled="true" title="Unchanged as of ${OBSERVED}"`,
+    );
+    expect(doc.text).not.toContain(`/drifted/_drift/${T}/same1`);
+  });
+
+  it('renders a changed finding: deltas, severity, links and the analysis', async () => {
+    const res = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+    expect(res.text).toContain('Changed one');
+    expect(res.text).toContain('What changed');
+    expect(res.text).toContain('settings.enabled');
+    expect(res.text).toMatch(/class="badge[^"]*">changed</);
+    expect(res.text).toMatch(/class="badge[^"]*">high</);
+    expect(res.text).toContain(`href="/drifted/_resource/${T}/changed1"`);
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?yaml"`);
+    // The analysis's links stay in the drift view, or reach the documentation.
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/new_name"`);
+    expect(res.text).toContain(`href="/drifted/${T}/changed1"`);
+    // The frontmatter is not in the body.
+    expect(res.text).not.toContain('severity: high');
+    // `_drift` is a representation, not a breadcrumb segment.
+    expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_drift<\/span>/);
+    // The sidebar marks the resource's own item.
+    expect(res.text).toMatch(
+      new RegExp(`href="/drifted/${T}/changed1"[^>]*aria-current="page"`),
+    );
+    // The switcher's Drift entry is the current page.
+    expect(res.text).toMatch(
+      new RegExp(`href="/drifted/_drift/${T}/changed1"[^>]*aria-current="page"`),
+    );
+  });
+
+  it('serves the verified payload highlighted and raw', async () => {
+    const yaml = await get(`/drifted/_drift/${T}/changed1?yaml`).expect(200);
+    expect(yaml.text).toContain('observed payload');
+    const raw = await get(`/drifted/_drift/${T}/changed1?raw`)
+      .expect(200)
+      .expect('Content-Type', 'text/plain; charset=utf-8')
+      .expect('X-Content-Type-Options', 'nosniff');
+    expect(raw.text).toBe(CHANGED_PAYLOAD);
+  });
+
+  it("reaches a rename from the old name's page and renders it", async () => {
+    const doc = await get(`/drifted/${T}/old_name`).expect(200);
+    expect(doc.text).toContain(`href="/drifted/_drift/${T}/old_name"`);
+    expect(doc.text).toContain('Drift · renamed</a>');
+    const res = await get(`/drifted/_drift/${T}/old_name`).expect(200);
+    expect(res.text).toContain('New name');
+    expect(res.text).toContain('was <strong>Old name</strong>');
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/new_name?yaml"`);
+    expect(res.text).toContain(`href="/drifted/_resource/${T}/old_name"`);
+  });
+
+  it('renders an addition with its payload, and no documentation link', async () => {
+    const res = await get('/drifted/_drift/Microsoft.Graph/namedLocations/new_loc').expect(200);
+    expect(res.text).toContain('Kali VPN location');
+    expect(res.text).toContain('Observed payload');
+    expect(res.text).toContain('kali-vpn-location');
+    expect(res.text).not.toContain('>Documentation</a>');
+  });
+
+  it('withholds the comparison and the payload when a file no longer matches', async () => {
+    const res = await get(`/drifted/_drift/${T}/tampered1`).expect(200);
+    expect(res.text).toContain('The files on disk no longer match this observation');
+    expect(res.text).not.toContain('What changed');
+    expect(res.text).not.toContain('secretDelta');
+    expect(res.text).not.toContain(`/drifted/_drift/${T}/tampered1?yaml`);
+    await get(`/drifted/_drift/${T}/tampered1?raw`).expect(404);
+    await get(`/drifted/_drift/${T}/tampered1?yaml`).expect(404);
+  });
+
+  it('links a type the run could not list and an entry it could not compare', async () => {
+    const brand = await get('/drifted/Microsoft.Graph/organizationalBranding/brand1').expect(200);
+    expect(brand.text).toContain(
+      'href="/drifted/_drift/Microsoft.Graph/organizationalBranding/brand1"',
+    );
+    const brandDrift = await get(
+      '/drifted/_drift/Microsoft.Graph/organizationalBranding/brand1',
+    ).expect(200);
+    expect(brandDrift.text).toContain('could not list');
+
+    const unattested = await get(`/drifted/_resource/${T}/unattested1`).expect(200);
+    expect(unattested.text).toContain(`href="/drifted/_drift/${T}/unattested1"`);
+    const unattestedDrift = await get(`/drifted/_drift/${T}/unattested1`).expect(200);
+    expect(unattestedDrift.text).toContain('per-entry config attestation');
+  });
+
+  it('renders the tenant drift page: header, analysis summary and every finding', async () => {
+    const res = await get('/drifted/_drift').expect(200);
+    expect(res.text).toContain(`Observed <strong>${OBSERVED}</strong>`);
+    expect(res.text).toContain('Incomplete run');
+    expect(res.text).toContain('Removals were suppressed');
+    expect(res.text).toContain('Microsoft.Graph/organizationalBranding');
+    expect(res.text).toContain('Drift analysis summary');
+    expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1"`);
+    // A finding with no document of its own is still reachable here.
+    expect(res.text).toContain('href="/drifted/_drift/Microsoft.Graph/namedLocations/new_loc"');
+    expect(res.text).not.toContain('findings: 4');
+
+    const landing = await get('/drifted').expect(200);
+    expect(landing.text).toContain('href="/drifted/_drift"');
+  });
+
+  it('keeps the drift tree root unreachable, and redirects index to the tenant page', async () => {
+    for (const url of [
+      '/drifted/_drift/metadata',
+      '/drifted/_drift/metadata.yaml',
+      '/drifted/_drift/metadata?raw',
+      '/drifted/_drift/analyze',
+      '/drifted/_drift/analyze.md',
+    ]) {
+      const res = await get(url).expect(404);
+      expect(res.text).not.toContain(root);
+    }
+    await get('/drifted/_drift/index').expect(302).expect('Location', '/drifted/_drift');
+    await get('/drifted/_drift/index.md').expect(302).expect('Location', '/drifted/_drift');
+  });
+
+  it('never serves a .md as a payload, and rejects traversal out of the drift root', async () => {
+    for (const url of [
+      `/drifted/_drift/${T}/changed1.md?raw`,
+      '/drifted/_drift/..%2fresources%2fmetadata?raw',
+      `/drifted/_drift/${T}/..%2f..%2f..%2fresources%2f${encodeURIComponent(T)}%2fchanged1?raw`,
+    ]) {
+      const res = await get(url).expect(404);
+      expect(res.text).not.toContain(CHANGED_PAYLOAD);
+      expect(res.text).not.toContain(root);
+    }
+  });
+
+  it('writes nothing under the export while serving the drift views', async () => {
+    const before = await snapshot(exportDir);
+    await get('/drifted/_drift').expect(200);
+    await get(`/drifted/_drift/${T}/changed1`).expect(200);
+    await get(`/drifted/_drift/${T}/changed1?raw`).expect(200);
+    expect(await snapshot(exportDir)).toEqual(before);
+  });
+
+  it('gates an observation whose baseline the export no longer holds, at both scopes', async () => {
+    const metadata = path.join(exportDir, 'resources', 'metadata.yaml');
+    await fsp.writeFile(metadata, 'generatedAt: 2026-03-03T00:00:00.5Z\n');
+    try {
+      const tenantPage = await get('/drifted/_drift').expect(200);
+      expect(tenantPage.text).toContain('This drift observation is outdated');
+      expect(tenantPage.text).not.toContain(`/drifted/_drift/${T}/changed1"`);
+      const page = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+      expect(page.text).toContain('This drift observation is outdated');
+      expect(page.text).not.toContain('What changed');
+      await get(`/drifted/_drift/${T}/changed1?raw`).expect(404);
+    } finally {
+      await fsp.writeFile(metadata, `generatedAt: "${BASELINE}"\ntenant: drifted.example\n`);
+    }
+    const restored = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+    expect(restored.text).toContain('What changed');
+  });
+
+  it('does not gate on a stale index alone', async () => {
+    const indexFile = path.join(exportDir, 'docs', 'index.yaml');
+    await fsp.writeFile(indexFile, INDEX.replace(`"${BASELINE}"`, '"2026-05-05T00:00:00.5Z"'));
+    try {
+      const page = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+      expect(page.text).toContain('What changed');
+    } finally {
+      await fsp.writeFile(indexFile, INDEX);
+    }
+  });
+
+  it('reflects a rewritten or deleted drift tree on the next request', async () => {
+    try {
+      // An empty observation, no analysis yet: the page still links, and says so.
+      await fsp.writeFile(
+        path.join(driftDir, 'metadata.yaml'),
+        `observedAt: "2026-02-02T00:00:00Z"\nbaseline:\n    generatedAt: "${BASELINE}"\nrun:\n    complete: true\n`,
+      );
+      await fsp.rm(path.join(driftDir, 'index.md'));
+      const landing = await get('/drifted').expect(200);
+      expect(landing.text).toContain('href="/drifted/_drift"');
+      const tenantPage = await get('/drifted/_drift').expect(200);
+      expect(tenantPage.text).toContain('recorded no findings');
+
+      // The next drift run or download deletes the tree wholesale.
+      await fsp.rm(driftDir, { recursive: true, force: true });
+      const gone = await get(`/drifted/${T}/changed1`).expect(200);
+      expect(gone.text).toContain('<span aria-disabled="true" title="No drift observation.');
+      const goneLanding = await get('/drifted').expect(200);
+      expect(goneLanding.text).not.toContain('href="/drifted/_drift"');
+    } finally {
+      await writeDrift();
+    }
   });
 });
 

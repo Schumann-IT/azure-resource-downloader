@@ -560,6 +560,19 @@ describe('groupByAxis', () => {
     expect(filterableAxes(parseTenantIndex(INDEX_YAML)!)).toEqual([]);
   });
 
+  it('never offers an axis named after a route parameter (?raw, ?yaml)', () => {
+    const reserved = parseTenantIndex(
+      FACETS_YAML.replace('id: programme', 'id: yaml')
+        .replace('        programme:', '        yaml:')
+        .replace('        programme:', '        yaml:')
+        .replace('id: platform', 'id: raw')
+        .replace('        platform:', '        raw:')
+        .replace('        platform:', '        raw:'),
+    )!;
+    expect(reserved.facets.map((a) => a.id)).toEqual(['yaml', 'raw']);
+    expect(filterableAxes(reserved)).toEqual([]);
+  });
+
   it('buckets the values in header order, with uncategorised last', () => {
     expect(groupByAxis(index, 'programme').map((g) => [g.id, g.label])).toEqual([
       ['cis-hardening', 'CIS hardening'],

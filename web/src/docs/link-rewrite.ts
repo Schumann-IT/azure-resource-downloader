@@ -4,7 +4,16 @@ export interface LinkEnv {
   tenant?: string;
   // Directory of the current document relative to the tenant root ('' = root).
   docDir?: string;
+  // Route prefix the links of this document resolve under, for a document that
+  // lives in a served root other than docs/ (the drift documents, `_drift`).
+  // Unset for documentation, whose links are therefore byte-identical.
+  routeBase?: string;
 }
+
+// The documentation root, as seen from a sibling root such as drift/. The drift
+// documents link the resource's documentation as `../../../docs/<type>/<name>.md`,
+// which escapes their own root by exactly this prefix.
+const SIBLING_DOCS_PREFIX = '../docs/';
 
 // Rewrites a Markdown link href into an application route.
 //
@@ -15,6 +24,10 @@ export interface LinkEnv {
 // relative resolution) so that `../groups/x.md` from a policy page and
 // `Microsoft.Graph/type/x.md` from a docs-root document both land on the right route
 // regardless of trailing slashes.
+//
+// With a `routeBase`, the resolved path is prefixed with it, so drift documents
+// link each other inside the drift view, and a link that escapes into the
+// sibling docs/ tree becomes the documentation route.
 //
 // Returns null when the link should be left untouched (anchors, absolute URLs,
 // external schemes, protocol-relative, non-`.md` targets, or links that escape
@@ -36,11 +49,22 @@ export function rewriteHref(href: string, env: LinkEnv): string | null {
   const dir = env.docDir || '';
   const resolved = path.posix.normalize(path.posix.join(dir, noExt));
 
-  // The link escaped the tenant root — do not turn it into a route.
-  if (resolved === '..' || resolved.startsWith('../')) return null;
+  const route = routeFor(resolved, env);
+  return route === null ? null : `/${env.tenant || ''}/${route}${anchor}`;
+}
 
-  const tenant = env.tenant || '';
-  return `/${tenant}/${resolved}${anchor}`;
+// The tenant-relative route for a resolved link path, or null when it escaped
+// its root. Escaping is final for documentation; from a sibling root only the
+// docs/ tree is still a route.
+function routeFor(resolved: string, env: LinkEnv): string | null {
+  const base = env.routeBase ? `${env.routeBase}/` : '';
+  if (resolved !== '..' && !resolved.startsWith('../')) {
+    return `${base}${resolved}`;
+  }
+  const doc = resolved.startsWith(SIBLING_DOCS_PREFIX)
+    ? resolved.slice(SIBLING_DOCS_PREFIX.length)
+    : '';
+  return base !== '' && doc !== '' ? doc : null;
 }
 
 // Extracts the first ATX H1 (`# Title`) outside of fenced code blocks. Embedded
