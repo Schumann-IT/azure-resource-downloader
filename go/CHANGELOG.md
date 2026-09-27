@@ -13,6 +13,21 @@ This project is released independently of the documentation browser in `web/`: i
 
 ### Added
 
+#### Drift analysis
+
+- **`docs analyze-drift` turns a drift observation into an impact analysis.** After `resource drift` has
+  found changes, the new command renders a ready-to-paste prompt (`drift/analyze.md`) directing an LLM to
+  judge each finding's impact — security posture, compliance, lifecycle and who is affected — and to write a
+  single report to `drift/report.md`. It is fully offline, verifies every payload against the observation's
+  recorded hashes before directing an agent at it, and refuses when there is no observation or when the
+  export was re-baselined after it (re-run `resource drift` in both cases). There are no per-type drift
+  templates: the prompt uses each type's existing `doc-prompt.md` as the type-specific lens, so the feature
+  moves no hash and forces no documentation regeneration. Prompt and report live and die with the
+  observation — the next drift run sweeps them, and a **re-baselining `resource download` now clears the
+  `drift/` tree too**, since a new baseline supersedes the observation by definition. There is deliberately
+  no drift history; archive `drift/report.md` before re-baselining if it must be kept. See the
+  **`docs analyze-drift`** section of `README.md`.
+
 #### Static analysis
 
 - **This project can be analysed by a local SonarQube server.** `sonar-project.properties` describes it as its

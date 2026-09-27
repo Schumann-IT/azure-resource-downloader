@@ -28,6 +28,7 @@ reads. Every run after the first regenerates only what actually changed in the t
   - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
   - [`docs generate-index`](#docs-generate-index)
+  - [`docs analyze-drift`](#docs-analyze-drift)
   - [`--debug`](#--debug)
 - [Authentication](#authentication)
   - [Create the app registration](#create-the-app-registration)
@@ -211,8 +212,10 @@ azure-rd resource drift --exit-code                       # exit 3 when drift wa
 never prunes; its only output is the `<tenant>/drift/` tree (see [Output layout](#output-layout)): an
 observation record `drift/metadata.yaml` plus the fetched bytes of every *added*, *changed* and *renamed*
 resource at paths mirroring `resources/` exactly, so a payload is byte-comparable with the baseline file it
-shadows. The tree is cleared and rebuilt on every run, so it always holds exactly the latest observation.
-Re-baselining is a normal `resource download`.
+shadows. The tree is cleared and rebuilt on every run, so it always holds exactly the latest observation —
+and a re-baselining `resource download` clears it too, because a new baseline supersedes the observation by
+definition. Re-baselining is a normal `resource download`. To have an LLM judge what the findings mean,
+follow up with [`docs analyze-drift`](#docs-analyze-drift) before re-baselining.
 
 **Comparability is a precondition.** The command refuses (exit `2`) when there is no baseline, when the
 export belongs to a different tenant, or when the export's recorded transform or filter configuration differs
@@ -345,6 +348,40 @@ azure-rd docs generate-index --domain … --dry-run
 Same `--domain`/`--out`/auth flags as `generate-prompt` (no `--prompt`, no `--exit-code`); exit `2` when it
 cannot answer, including an invalid `taxonomy:` section. Classification along operator-defined axes comes from
 the config file's `taxonomy:` section — see [Navigation index](#navigation-index-docsindexyaml).
+
+### `docs analyze-drift`
+
+Renders `output/<tenant>/drift/analyze.md`: a prompt directing an LLM to analyze the **impact** of the latest
+[`resource drift`](#resource-drift) observation — what each finding means for security posture, compliance,
+lifecycle and who is affected — and to write a single impact report to `drift/report.md`. Fully offline: it
+reads the observation (`drift/metadata.yaml`) and the baseline (`resources/metadata.yaml`), and verifies every
+payload against its recorded hash before directing an agent at it. It never fetches a resource and never
+writes under `resources/` or `docs/`.
+
+```bash
+azure-rd docs analyze-drift --domain contoso.onmicrosoft.com     # offline
+azure-rd docs analyze-drift                                      # resolve tenant via az login
+azure-rd docs analyze-drift --domain … --dry-run                 # report only, write nothing
+azure-rd docs analyze-drift --domain … --prompt my-template.md   # override the built-in template
+```
+
+Same `--domain`/`--out`/auth flags as `generate-prompt`, plus `--prompt` for a template override. There is no
+`--exit-code`: `resource drift` already gates CI on drift being found.
+
+**Prompt and report live with the observation.** Both sit at the `drift/` tree root and are deleted with it —
+by the next `resource drift` run, and by a re-baselining `resource download`. There is deliberately **no
+drift history**; archive `drift/report.md` manually if it must be kept. The analysis agent writes exactly
+that one file and never touches `resources/` or `docs/`: updating the documentation remains the re-baseline →
+`docs generate-prompt` loop.
+
+There are no per-type drift templates. The prompt instructs the agent to read each finding type's
+`doc-prompt.md` as the type-specific lens for judging impact, and flags types whose spec is missing (an
+export run with `--no-prompt`) so reduced confidence is stated rather than hidden.
+
+**Exit codes:** `0` on success — including a clean observation (nothing to analyze, no prompt written); `2`
+when the question cannot be answered: no observation (run `resource drift` first), the export was
+re-baselined after the observation (run `resource drift` again), tenant mismatch, a payload not matching the
+observation, or an unreadable `--prompt` template.
 
 ### `--debug`
 
@@ -511,13 +548,15 @@ AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd resource download
 ## Output layout
 
 Everything lives under `<output>/<tenant>/` in sibling trees that mirror each other exactly (`drift/` exists
-only after a `resource drift` run):
+only after a `resource drift` run, and is cleared by the next drift run or a re-baselining download):
 
 ```
 output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
-    ├── drift/                                    written by azure-rd resource drift — the latest observation only
+    ├── drift/                                    owned by azure-rd resource drift — the latest observation only
     │   ├── metadata.yaml                         what was compared, against which baseline, and the findings
+    │   ├── analyze.md                            written by azure-rd docs analyze-drift (agent input)
+    │   ├── report.md                             written by the agent: the impact report for this observation
     │   └── Microsoft.Graph/…/….yaml              fetched bytes of added/changed/renamed resources, mirroring resources/
     ├── resources/                                written by azure-rd resource download — and only by it
     │   ├── metadata.yaml                         facts about this export (see below)
@@ -945,7 +984,9 @@ channels. Type **listing** runs before it, concurrently across types.
   without the tenant's current bytes — but withholds the `drift/` tree entirely (clearing nothing): an
   observation from an earlier run stays on disk and is reported as not refreshed.
 - `docs generate-prompt --dry-run` runs the full comparison and reports the work list without writing
-  `generate.md`; `docs generate-index --dry-run` reports the index counts without writing `index.yaml`.
+  `generate.md`; `docs generate-index --dry-run` reports the index counts without writing `index.yaml`;
+  `docs analyze-drift --dry-run` runs the full preflight and reports the observation's findings without
+  writing `analyze.md` (an `analyze.md` from an earlier run stays on disk and is reported as not refreshed).
 
 ## Logging
 

@@ -205,7 +205,7 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		return nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", ErrTenantMismatch, m.Tenant, opts.ExpectDomain)
 	}
 
-	if err := validateMarkers(opts.Template, requiredMarkers); err != nil {
+	if err := ValidateMarkers(opts.Template, requiredMarkers); err != nil {
 		return nil, err
 	}
 
@@ -413,7 +413,7 @@ func GeneratePrompt(opts GeneratePromptOptions) (*GeneratePromptResult, error) {
 		{"summary-facts", renderSummaryFacts(&m, groups)},
 	}
 	for _, b := range blocks {
-		out, err = spliceMarker(out, b.name, b.content)
+		out, err = SpliceMarker(out, b.name, b.content)
 		if err != nil {
 			return nil, err
 		}

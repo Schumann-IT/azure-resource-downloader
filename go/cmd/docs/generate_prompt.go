@@ -63,14 +63,9 @@ Examples:
 		RunE: runGeneratePrompt,
 	}
 
-	// It needs nothing beyond the tenant domain, so the plain CLI credential is
-	// enough — but reuse the shared auth group for --subscription/--client-id/
-	// --tenant-id parity with the other commands.
-	cmdutil.AddAzureAuthFlags(cmd)
+	addExportFlags(cmd, "path to write the prompt to (default: <output>/<tenant>/docs/generate.md)")
 
 	f := cmd.Flags()
-	f.String("domain", "", "export tenant domain (folder name under --output); skips authentication and runs offline")
-	f.String("out", "", "path to write the prompt to (default: <output>/<tenant>/docs/generate.md)")
 	f.String("prompt", "", "path to a template file overriding the built-in documentation-prompt template")
 	f.Bool("exit-code", false, "exit non-zero (3) when stale documents were found, for CI gating")
 

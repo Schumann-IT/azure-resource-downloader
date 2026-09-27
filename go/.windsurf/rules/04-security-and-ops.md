@@ -1,5 +1,7 @@
 ---
 trigger: always_on
+description: 
+globs: 
 ---
 
 # Security & Ops
@@ -52,12 +54,12 @@ trigger: always_on
 - **Output layout**: everything lives under `<output>/<tenant>/`, where `<tenant>` is the tenant's Entra default domain (falls back to the base output dir with a warning if it cannot be resolved), in sibling trees:
   - `resources/` — **the tree `download` writes to exclusively.** Holds `metadata.yaml` at its root and `<APIType>/<endpoint>/` directories containing each resource YAML, its sidecar artifacts and the type's `doc-prompt.md`
   - `docs/` — generated documentation, written by the documentation run and NOT by this tool, **with one exception**: `docs generate-prompt` writes `docs/generate.md` (the incremental documentation prompt) at the tree root, where no document can ever be (documents are always `<APIType>/<endpoint>/<name>.md`, at least two levels deep). That single file is the only thing `azure-rd` writes under `docs/`. It mirrors `resources/` exactly, so a document's path is its resource's path with the tree root and extension swapped (`resources/Microsoft.Graph/x/y.yaml` → `docs/Microsoft.Graph/x/y.md`). Do not add a `doc:` field to `metadata.yaml` — the path is derived
-  - `drift/` — **the tree `resource drift` writes to exclusively**: an observation *about* the export (neither a resource nor a document). `drift/metadata.yaml` sits at its root and the payloads of added/changed/renamed resources mirror `resources/` exactly (`drift/<APIType>/<endpoint>/<name>.yaml`), so a payload joins to its baseline file, finding and document by the same key. Each run clears and rebuilds the tree, so it holds exactly the latest observation. Drift never writes under `resources/` or `docs/`, never updates the export's `metadata.yaml` and never prunes; re-baselining is a normal `resource download`
+  - `drift/` — **the tree `resource drift` owns**: an observation *about* the export (neither a resource nor a document). `drift/metadata.yaml` sits at its root and the payloads of added/changed/renamed resources mirror `resources/` exactly (`drift/<APIType>/<endpoint>/<name>.yaml`), so a payload joins to its baseline file, finding and document by the same key. Two more files live at the tree root, where no payload can be (payloads are at least two levels deep): `drift/analyze.md`, the drift-analysis prompt `docs analyze-drift` writes, and `drift/report.md`, the impact report the analysis agent writes — the one file under `drift/` that `azure-rd` itself never produces. Each drift run clears and rebuilds the tree, and a **re-baselining `resource download` clears it too** (`drift.ClearTree`, after a successful metadata write, never under dry-run): the tree holds exactly the latest observation and its analysis artifacts, deliberately no history. `docs analyze-drift` refuses (exit 2, `ErrObservationSuperseded`) when the observation predates the current baseline, and verifies every payload against its recorded hash before directing an agent at it. Drift never writes under `resources/` or `docs/`, never updates the export's `metadata.yaml` and never prunes; re-baselining is a normal `resource download`
   - `--prune` must never reach into `docs/` or `drift/`. A pruned resource leaves its document behind as an orphan: report it, never delete it
 
 ## Export Metadata and Prune
 
-`--prune` is the ONLY delete path inside the export (`resources/`); the single other delete in the codebase is a `resource drift` run clearing its own `drift/` tree before rebuilding it. These rules are what make it safe; do not relax them.
+`--prune` is the ONLY delete path inside the export (`resources/`); the only other deletes in the codebase both go through `drift.ClearTree` and touch only the `drift/` tree: a `resource drift` run clearing it before rebuilding, and a re-baselining `resource download` clearing it after a successful metadata write (a new baseline supersedes the observation by definition). These rules are what make them safe; do not relax them.
 
 - **`resources/metadata.yaml` describes the export directory, not the tenant.** Never remove an entry for a file that still exists on disk — a resource gone from the tenant is recorded as `presentInTenant: false` with its facts and hash retained. Removing the entry instead makes the next run find an undescribed YAML and treat it as new, forever. Only `--prune`, having actually deleted the file, removes an entry.
 - **An incomplete run may not mark anything `presentInTenant: false`** — it cannot tell a deleted resource from one it never reached.

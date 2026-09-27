@@ -12,10 +12,12 @@ import (
 // present, matched and non-nested in the template before anything is written.
 var requiredMarkers = []string{"export", "worklist", "refmap", "usedbymap", "resplice", "migrate", "expected", "summary-facts"}
 
-// validateMarkers checks that each named block appears exactly once as a
+// ValidateMarkers checks that each named block appears exactly once as a
 // matched, correctly ordered start/end pair. It fails naming the offending
-// marker so a broken --prompt template never splices into nothing.
-func validateMarkers(template []byte, names []string) error {
+// marker so a broken --prompt template never splices into nothing. It is
+// exported so the drift analysis prompt (internal/drift) validates its template
+// through the same rules as the docs engines.
+func ValidateMarkers(template []byte, names []string) error {
 	s := string(template)
 	for _, name := range names {
 		start := fmt.Sprintf("<!-- %s:start -->", name)
@@ -34,10 +36,11 @@ func validateMarkers(template []byte, names []string) error {
 	return nil
 }
 
-// spliceMarker replaces the content between a block's start and end markers
+// SpliceMarker replaces the content between a block's start and end markers
 // (the markers themselves stay), returning the rewritten template. The block is
-// assumed validated by validateMarkers.
-func spliceMarker(template []byte, name, content string) ([]byte, error) {
+// assumed validated by ValidateMarkers. Exported for the same reason as
+// ValidateMarkers.
+func SpliceMarker(template []byte, name, content string) ([]byte, error) {
 	s := string(template)
 	start := fmt.Sprintf("<!-- %s:start -->", name)
 	end := fmt.Sprintf("<!-- %s:end -->", name)

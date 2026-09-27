@@ -686,12 +686,12 @@ func TestGeneratePromptWritesSummaryFacts(t *testing.T) {
 }
 
 func TestValidateMarkers(t *testing.T) {
-	if err := validateMarkers(DefaultGeneratePromptTemplate(), requiredMarkers); err != nil {
+	if err := ValidateMarkers(DefaultGeneratePromptTemplate(), requiredMarkers); err != nil {
 		t.Fatalf("default template must validate: %v", err)
 	}
 
 	broken := []byte("no markers here")
-	err := validateMarkers(broken, []string{"worklist"})
+	err := ValidateMarkers(broken, []string{"worklist"})
 	if err == nil || !strings.Contains(err.Error(), "worklist") {
 		t.Fatalf("expected error naming worklist, got %v", err)
 	}
@@ -699,7 +699,7 @@ func TestValidateMarkers(t *testing.T) {
 
 func TestSpliceMarker(t *testing.T) {
 	tmpl := []byte("before\n<!-- x:start -->\nOLD\n<!-- x:end -->\nafter\n")
-	out, err := spliceMarker(tmpl, "x", "NEW")
+	out, err := SpliceMarker(tmpl, "x", "NEW")
 	if err != nil {
 		t.Fatalf("splice: %v", err)
 	}
