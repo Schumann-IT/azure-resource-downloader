@@ -11,7 +11,125 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
-*None outstanding.*
+### 1. Tenant compare — a proof of concept, web-only
+
+**Goal.** Put two exports side by side and answer, per resource, *is this configured the same in both tenants,
+and if not, where exactly does it differ* — without the noise that makes every cross-tenant diff read as
+"everything is different". The administrator picks two tenants on the picker, gets a three-way listing of
+their resources (only in A, only in B, in both), and opens any paired resource as one line diff of the two
+YAML files with tenant-local identity normalised away. Promoted from the parked idea *Tenant diff* (use case
+**a**, stage against prod); use case **b** — what the differences *mean* — is the Go-side follow-up below, not
+this entry.
+
+> **The data is already on disk; only the identity rule is missing.** Every export uses the same
+> `<APIType>/<endpoint>/<name>` key under `resources/`, and `resources/metadata.yaml` lists **every** written
+> resource — including the types `index.yaml` only counts under `counts.excluded` — with `displayName`,
+> `resourceId`, `odataType` and `presentInTenant`. That file, not the index, is the listing's source: read as
+> data, the way the drift view reads `drift/metadata.yaml`, never by walking the tree. The two reference
+> exports already in the docs root are the stage/prod pair the parked idea waited for: 1029 against 181
+> resources, **114 keys pairing by filename** (42 settings-catalog policies, 19 groups, 11 device
+> configurations, 9 compliance policies, …), so exact-key pairing yields a useful subset without any
+> heuristic. What no export carries is a notion of cross-tenant identity — that is the one thing this entry
+> adds, and it adds it provisionally (next note).
+>
+> **The normalisation rule is provisional and must move to the Go side.** Before diffing, both documents are
+> rewritten identically: **drop** the fields that are pure per-tenant noise — `id`, `createdDateTime`,
+> `lastModifiedDateTime`, `version`, `@odata.context`, `assignments[].id` (a `<policyId>_<groupId>`
+> composite), `assignments[].sourceId` (the policy's own id) — and **resolve, never drop,** the fields that are
+> references: `assignments[].target.groupId` becomes the group's display name from that tenant's own
+> `metadata.yaml` (`Microsoft.Graph/groups/*` entries, `resourceId` → `displayName`), so the same audience
+> compares equal and a different audience is a real finding; an id that does not resolve stays a GUID and is
+> flagged. Settings-catalog `settingDefinitionId`s and template references are Microsoft-global and stay as
+> they are, which is why the settings-catalog pairs are the most valuable part of the PoC. Two rules the
+> normaliser obeys: it is applied to both sides identically, and it is **announced** — the diff page states
+> exactly which keys were dropped and how many references were resolved, and `?raw` shows the unnormalised
+> diff. This rule is a *judgment*, not a fact, and the browser's own principle applies to it as it does to
+> taxonomy: a rule derived here can disagree with what any other consumer derives. **It lives in the web only
+> to find out what the rule is.** Once it is stable it belongs to the CLI (a `resource compare` that reads two
+> exports offline, reuses the drift engine's verdicts and dotted-path deltas, and writes a comparison tree the
+> browser renders like `drift/`), and the browser reads the result instead of computing it. That migration is
+> the follow-up; this entry states it so it is planned, not rediscovered.
+>
+> **Selection is two clicks of plain links, not a widget.** Each picker card that has a `resources/` tree
+> gets a *Compare with…* link → `GET /_compare?a=<tenant>` re-renders the picker with `a` marked and every
+> *other* card offering *Compare* → `GET /_compare?a=<a>&b=<b>`. Nothing appears client-side and no form is
+> introduced; a `<form method="get">` with checkboxes and an always-visible button would be legal under the
+> no-client-side-JavaScript rule but would be the app's first form, and the export-page idea already debates
+> that precedent — links first. Cards without `resources/` (docs-only copies) get no link rather than a 404
+> later.
+>
+> **Pairing by key is a heuristic and the page says so.** Two tenants can each hold a
+> `gbl_c_prd_d_win_integrity_validation` that are different policies, and a renamed policy shows as
+> only-A plus only-B. Acceptable for the PoC; the fix — manual pairing of an only-A row with an only-B row
+> (`?left=<key>&right=<key>`, two-step via links) — is the "select files on both sides" of the original
+> request and a natural second step, listed under follow-ups.
+>
+> **Non-negotiables, preserved.** Read-only (only reads). Path safety: both tenants must be discovered tenants
+> and distinct, both keys go through `resolveResource(tenant, key)` — the existing boundary, called twice; no
+> new resolver. `_compare` is a root-level representation prefix, declared before `:tenant`; it cannot collide
+> with a tenant because discovery skips `_`-prefixed folders, and it stays out of the breadcrumb like
+> `_resource` and `_drift`. No client-side JavaScript. One `markdown-it` instance, untouched. Freshness: the
+> metadata reader and any pair cache are keyed by mtime + size. The rule "counts and listings derive from the
+> index, never by walking the tree" is **not** violated — `metadata.yaml` is read as data — but its wording
+> names the index only, so the rules file is reworded, not amended. Line numbers in the diff are those of the
+> *normalised* text, so they cannot anchor into the YAML view; the page says so.
+
+**Plan.**
+
+- **Metadata reader.** `src/docs/resources-metadata.ts`: a pure, Nest-free parser for `resources/metadata.yaml`
+  returning, per key, `displayName`, `resourceId`, `odataType`, `presentInTenant` — shape-validated, degrading
+  to "no metadata" on anything malformed. Only `presentInTenant: true` entries are listed: the export retains
+  entries for resources gone from the tenant, and a comparison is about what *is* configured. A service owns
+  the per-tenant cache (mtime + size, bounded) and exposes the group-name lookup the normaliser needs.
+- **Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's group
+  lookup, applies the drop list and the reference resolution from the design note, serialises canonically
+  (sorted keys, one style) and returns the text **and a report** (keys dropped, references resolved,
+  references left unresolved). The drop list is one exported constant, so the second iteration after first
+  real use is a data change. Marked in its header comment as provisional and destined for the CLI.
+- **Routes.** `GET /_compare` (`a` only → picker in selecting state; `a` and `b` → listing;
+  `a === b`, an unknown tenant, or a tenant without `resources/` → the 404 view with its own headline) and
+  `GET /_compare/*path?a=&b=` (the diff). Declared before `:tenant`; controller does HTTP concerns only.
+- **Picker.** *Compare with…* per eligible card; in selecting state, `a` is marked and the other eligible
+  cards offer *Compare*; a *cancel* link returns to `GET /`. Consistent with the standing decision that
+  whole-tenant actions live on the card.
+- **Listing.** Three-way split — only in A, only in B, in both — grouped by type with per-group and total
+  counts, each *both* row linking to its diff, each single-side row linking to that tenant's YAML view. **No
+  same/different state in this pass**: it needs both files read and normalised for every pair (228 reads for
+  the reference pair), while the three-way split is computed from the two metadata files alone. *Other
+  option, for a later pass:* compute same/different eagerly on the listing by comparing the two normalised
+  texts, cached per pair by both files' mtimes, and show the count of genuinely differing pairs — the number
+  a stage-to-prod reviewer actually wants first.
+- **Diff page.** Resolve both keys via `resolveResource`, normalise both, `diffYaml` (the drift view's
+  function, unchanged), rendered through the drift diff partial. Above it: which tenant is left/right, the
+  normalisation report as a caption, a `?raw` link for the unnormalised diff, and links to each side's YAML
+  view. An identical pair renders "no differences after normalisation" plus the report, never an empty page.
+- **Tests.** `test/path-safety.spec.ts`: nothing new in the resolver, but an e2e case that a traversal in
+  either key and a `_`-prefixed or unknown tenant in `a`/`b` 404 without leaking a path.
+  `test/compare-normalise.spec.ts`: each dropped field, group-id resolution, the unresolved-id flag, identical
+  output for identical configuration under different ids, report counts. `test/docs.e2e.spec.ts`: picker
+  link only on cards with `resources/`; selecting state; `a === b` refused; three-way counts from two
+  fixtures; diff ignores ids and timestamps, resolves a group id, `?raw` shows them again; an edited YAML or
+  metadata file is reflected on the next request. `test/styles-build.spec.ts` if any new rule lands in
+  `src/styles.css`.
+- **Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list,
+  the provisional status), `_compare` as a reserved prefix. `CHANGELOG.md` under `[Unreleased]`, stating that
+  the normalisation is provisional and where it is going. `.windsurf/rules/01-architecture.md`: the new
+  files, `_compare` beside `_resource`/`_drift`, and the reworded listing rule.
+
+**Follow-ups (not in this entry).**
+
+- **Eager same/different on the listing** — the other option above, once the pair count and read cost are
+  known from real use.
+- **Manual pairing** (`?left=&right=`) and a **rename heuristic** (pair an only-A with an only-B whose
+  normalised texts are identical).
+- **Move the normalisation to the CLI** — the condition this entry was accepted under. A `resource compare
+  <a> <b>` in `go/` that reads two exports offline, applies the (by then stable and tested) identity rule,
+  emits verdicts, dotted-path deltas and payloads, and writes an `analyze.md` so the drift-analysis agent can
+  judge the *impact* of each difference — use case **b** of the original idea. The browser then renders that
+  tree the way it renders `drift/` and stops normalising itself. Two open questions travel with it: **where
+  the comparison tree lives** (everything today is under `<output>/<tenant>/`, and a comparison belongs to
+  neither tenant), and that the rule must be *statable and testable* before it is frozen — which is what
+  this PoC exists to find out. Needs its own parked idea in `go/NEXT-ITERATIONS.md` so the Go side sees it.
 
 ## Fixes
 
@@ -270,25 +388,6 @@ re-import cost is felt. Note that it cannot reuse the export link's shape at all
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
 
-### Idea: Tenant diff
-
-*As an administrator I would like to diff the configuration of two tenants, so I can detect and understand
-drift.* Two use cases: **a)** diff a staging tenant against production, so a reviewed change can be moved
-from stage to prod quickly and nothing else moves with it; **b)** compare configuration *and* documentation
-across several tenants and see what the differences actually mean, not just that bytes differ. The pairing
-key already exists — every export uses the same `<type>/<name>` layout under `docs/` and `resources/`, and
-`docs/index.yaml` gives per-tenant type, scope and counts without walking the tree — so a first version could
-be a three-way listing (only in A, only in B, in both but different) over the index, refined to a per-document
-comparison. **Parked** because it is a comparison *engine*, not a view: identity does not survive across
-tenants (GUIDs, assignment group ids and display names all differ, so equal configuration reads as different
-and the interesting drift hides in the noise), a readable diff of a 317-setting document needs interaction
-the no-client-side-JavaScript rule forbids (relaxing it has its own idea below, and would remove only this one of
-the four obstacles), every route today is scoped to one `:tenant`, and it is not settled whether the comparison
-belongs here at all rather than in the CLI, which holds the facts (`resources/metadata.yaml`, the per-resource
-hashes) that make a semantic diff cheap. **Revisit** when a stage/prod tenant pair is actually exported side by
-side into one docs root, and once there is an answer for cross-tenant identity — a normalisation of tenant-local
-ids that can be stated and tested, not guessed per resource type.
-
 ### Idea: Further export formats and partial exports
 
 Single-file HTML, DOCX, PDF via a print stylesheet, a Markdown bundle; and exporting one type, one document
@@ -386,14 +485,16 @@ re-renders server-side on each click; the `exempt` flag plus the `matched`/`tota
 filter cannot hide the page you are on; `NavSection.active` exists to render one `<details open>`; `lineAnchors()`
 plus `.line:target` deliver `#L42`; `shiki` emits dual-theme output so dark mode can stay
 `prefers-color-scheme`; and `findings-table.ts` already tags rows with `data-severity` for a filter that cannot
-be built yet. Six parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
+be built yet. Five parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
 item on this list, parked squarely on it), **a name filter and per-item context in the sidebar** (no type-ahead
 without script, and remembering which sections were open is excluded on purpose), **an actionable findings
 block** (expressible only as sibling anchors plus `:target`, which spends the URL fragment `#findings` already
 owns and needs a *Show all* reset as part of the feature), **clickable breadcrumb segments** (CSS cannot open a
-collapsed `<details>` from an anchor, so it needs a whole new route and view), **an explicit dark-mode toggle**,
-and **tenant diff** (a readable diff of a 317-setting document needs interaction). The export standing decision
-inherits it too: *no dropdown, no picker widget*.
+collapsed `<details>` from an anchor, so it needs a whole new route and view), and **an explicit dark-mode
+toggle**. *Tenant diff* used to be the sixth, on the claim that a readable diff of a 317-setting document needs
+interaction — the drift view's server-rendered YAML diff disproved that for the per-resource case, and the idea
+is now scheduled as entry 1 with two-click link selection. The export standing decision inherits it too: *no
+dropdown, no picker widget*.
 
 **Not a binary decision, if it is picked up.** Three tiers, all open. **(a) Keep it** and pay the workaround
 cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a small dependency-free script
