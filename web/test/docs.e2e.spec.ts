@@ -1748,6 +1748,36 @@ findings: 4
     expect(await snapshot(exportDir)).toEqual(before);
   });
 
+  it('keeps the drift tree out of the Confluence export', async () => {
+    // A summary that links into both drift routes and the drift tree itself.
+    const summary = path.join(exportDir, 'docs', 'summary.md');
+    await fsp.writeFile(
+      summary,
+      `# Summary\n\nSee [drift](/drifted/_drift), [the diff](/drifted/_drift/${T}/changed1?diff) and [the analysis](../drift/${T}/changed1.md).\n`,
+    );
+    try {
+      const res = await get('/drifted/_export/confluence')
+        .buffer()
+        .parse(binaryParser)
+        .expect(200);
+      const entries = await readAllZipEntries(res.body as Buffer);
+      // One page per indexed document plus the overview, nothing else.
+      const indexed = INDEX.split('- type:').length - 1;
+      expect(entries.size).toBe(indexed + 1);
+      const all = [...entries.values()].join('\n');
+      expect(all).toContain('See drift, the diff and the analysis.');
+      expect(all).not.toContain('_drift');
+      expect(all).not.toContain('drift/');
+      expect(all).not.toContain('Drift analysis summary');
+      expect(all).not.toContain('Drift: Changed one');
+      expect(all).not.toContain('The analysis prompt');
+      expect(all).not.toContain('enabled: false');
+      expect(all).not.toContain('Kali VPN location');
+    } finally {
+      await fsp.rm(summary, { force: true });
+    }
+  });
+
   it('gates an observation whose baseline the export no longer holds, at both scopes', async () => {
     const metadata = path.join(exportDir, 'resources', 'metadata.yaml');
     await fsp.writeFile(metadata, 'generatedAt: 2026-03-03T00:00:00.5Z\n');
@@ -1830,6 +1860,32 @@ function readZipEntry(zip: Buffer, suffix: string): Promise<string> {
         });
       });
       file.on('end', () => reject(new Error(`no ${suffix} in the archive`)));
+      file.readEntry();
+    });
+  });
+}
+
+// Every entry of a zip in memory, by name.
+function readAllZipEntries(zip: Buffer): Promise<Map<string, string>> {
+  return new Promise((resolve, reject) => {
+    const out = new Map<string, string>();
+    yauzl.fromBuffer(zip, { lazyEntries: true }, (err, file) => {
+      if (err || !file) return reject(err ?? new Error('unreadable zip'));
+      file.on('entry', (entry) => {
+        file.openReadStream(entry, (streamErr, stream) => {
+          if (streamErr || !stream) {
+            return reject(streamErr ?? new Error('unreadable entry'));
+          }
+          const chunks: Buffer[] = [];
+          stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          stream.on('end', () => {
+            out.set(entry.fileName, Buffer.concat(chunks).toString('utf8'));
+            file.readEntry();
+          });
+          stream.on('error', reject);
+        });
+      });
+      file.on('end', () => resolve(out));
       file.readEntry();
     });
   });
