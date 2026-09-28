@@ -100,18 +100,23 @@ No Azure call: both inputs are export trees, so the command is offline like `doc
 this comparison (`web/NEXT-ITERATIONS.md`, entry 1: two-click tenant selection on the picker, a three-way
 listing from the two `resources/metadata.yaml` files, and a per-resource YAML diff). To make equal
 configuration compare equal across tenants, that PoC **normalises tenant-local identity in the browser**:
-drops every `id` and every `*@odata.context` key at any depth, `assignments[].sourceId`, `createdDateTime`,
-`lastModifiedDateTime`, `version` and the group identity fields (`mail`, `mailNickname`, `proxyAddresses`,
-`securityIdentifier`, `renewedDateTime`), and resolves `assignments[].target.groupId`,
-`assignments[].target.deviceAndAppManagementAssignmentFilterId` and `notificationTemplateId` to the display
-name of the matching `resourceId` in the same tenant's `metadata.yaml` (unresolved ids stay and are flagged).
-Measured against the two reference exports, that rule leaves 25 of 114 paired resources identical and the
-rest genuinely different. That rule is a **judgment, not a fact**, and it was accepted on the web side under
-one condition, recorded there: it is provisional and **moves to the CLI once it is stable**. The PoC's job is
-to find out what the rule is against real pairs; this idea's job is to receive it. Until then the browser
-computes what the CLI should be emitting — the same disagreement risk the taxonomy rules exist to prevent (a
-rule derived in one consumer can disagree with every other), tolerated here only because there is no other
-consumer yet.
+drops every `id` or `sourceId` at any depth whose value contains a GUID (ids without one — settings
+ordinals, `all_users`, authentication method names, the all-zero sentinels — are content and stay), every
+`*@odata.context` key at any depth, `createdDateTime`, `lastModifiedDateTime`, `version` and the group
+identity fields (`mail`, `mailNickname`, `proxyAddresses`, `securityIdentifier`, `renewedDateTime`), and
+resolves `assignments[].target.groupId`, `assignments[].target.deviceAndAppManagementAssignmentFilterId` and
+`notificationTemplateId` to the display name of the matching `resourceId` in the same tenant's
+`metadata.yaml` — a set-valued lookup, since neither `resourceId` nor `displayName` is unique in real exports:
+a reference resolves only when every entry with that id agrees on the name, otherwise the GUID stays and is
+flagged ambiguous or unresolved, and a zero-sentinel reference means *none* and passes through. Measured
+against the two reference exports, that rule leaves 19 of 114 paired resources identical, 27 once
+`assignments` is removed as well — the difference being the same policy targeting a differently named group
+in each tenant, which the web diff page reports as *differs only in audience*. That rule is a **judgment,
+not a fact**, and it was accepted on the web side under one condition, recorded there: it is provisional and
+**moves to the CLI once it is stable**. The PoC's job is to find out what the rule is against real pairs;
+this idea's job is to receive it. Until then the browser computes what the CLI should be emitting — the same
+disagreement risk the taxonomy rules exist to prevent (a rule derived in one consumer can disagree with every
+other), tolerated here only because there is no other consumer yet.
 
 **Not planned — parked deliberately**, until the PoC has produced a rule that can be *stated and tested* —
 a fixed drop list plus a reference-resolution table per field, with fixtures from a real stage/prod pair —

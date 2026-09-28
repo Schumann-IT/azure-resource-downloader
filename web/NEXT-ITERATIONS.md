@@ -34,26 +34,39 @@ this entry.
 >
 > **The normalisation rule is provisional and must move to the Go side.** Before diffing, both documents are
 > rewritten identically. **Drop** the fields that are pure per-tenant noise — measured against the 114
-> reference pairs, not guessed: every key named `id` at **any** depth (the resource's own; `assignments[].id`,
-> a `<policyId>_<groupId>` composite; the `scheduledActionsForRule[].id` and
-> `scheduledActionConfigurations[].id` GUIDs inside compliance policies — 81 of the 114 paired files carry a
-> nested id), every key ending in `@odata.context` at any depth (`settings@odata.context`,
-> `scheduledActionsForRule@odata.context`, `includeTargets@odata.context`, … — each embeds the resource's own
-> GUID and every one of the 114 pairs carries at least one), `assignments[].sourceId` (the policy's own id),
-> `createdDateTime`, `lastModifiedDateTime`, `version`, and the group identity fields `mail`, `mailNickname`,
-> `proxyAddresses`, `securityIdentifier`, `renewedDateTime`, without which all 19 paired groups differ on
-> noise alone. **Resolve, never drop,** the fields that reference another exported resource:
-> `assignments[].target.groupId`, `assignments[].target.deviceAndAppManagementAssignmentFilterId` and
-> `notificationTemplateId` each become the `displayName` of the entry in that tenant's own `metadata.yaml`
-> whose `resourceId` matches — **one lookup over every entry**, not a groups-only table — so the same
-> audience, filter or template compares equal and a different one is a real finding; an id that does not
-> resolve stays a GUID and is flagged. Settings-catalog `settingDefinitionId`s and template references are
-> Microsoft-global and stay as they are, which is why the settings-catalog pairs are the most valuable part
-> of the PoC. **Measured baseline:** with this rule 25 of the 114 pairs are identical and the rest show
-> genuine differences (a passcode setting `1` against `15`, a different audience); with only the top-level
-> fields dropped it is 8 of 114. The first real run is judged against that number. Two rules the normaliser
-> obeys: it is applied to both sides identically, and it is **announced** — the diff page states exactly
-> which keys were dropped and how many references were resolved, and `?raw` shows the unnormalised diff.
+> reference pairs, not guessed. An `id` or `sourceId` at **any** depth whose value **contains a GUID**: the
+> resource's own, the `<policyId>_<groupId>` and `<scriptId>:<groupId>` assignment composites, the
+> `<templateId>_<locale>` message ids, the `scheduledActionsForRule[].id` GUIDs inside compliance policies —
+> 81 of the 114 paired files carry a nested id. An `id` **without** a GUID is content and stays: the settings
+> ordinals (`"0"`, `"1"`, …), `all_users`, the method names `Fido2`, `MicrosoftAuthenticator`, … in the
+> authentication methods policy, the singleton names, and the well-known all-zero sentinels
+> (`00000000-0000-0000-0000-00000000000x`), which are values, not identities. Every key ending in
+> `@odata.context` at any depth (`settings@odata.context`, `scheduledActionsForRule@odata.context`,
+> `includeTargets@odata.context`, … — each embeds the resource's own GUID and every one of the 114 pairs
+> carries at least one). `createdDateTime`, `lastModifiedDateTime`, `version`, and the group identity fields
+> `mail`, `mailNickname`, `proxyAddresses`, `securityIdentifier`, `renewedDateTime`, without which all 19
+> paired groups differ on noise alone. **Resolve, never drop,** the fields that reference another exported
+> resource: `assignments[].target.groupId`, `assignments[].target.deviceAndAppManagementAssignmentFilterId`
+> and `notificationTemplateId` each become the `displayName` of the entry in that tenant's own
+> `metadata.yaml` whose `resourceId` matches — **one lookup over every entry**, not a groups-only table — so
+> the same audience, filter or template compares equal and a different one is a real finding. The lookup is
+> set-valued because neither side of it is unique in real exports: one `resourceId` in the reference export
+> names two different resources, five enrollment configurations share one, and 48 group display names occur
+> twice. A reference resolves only when every entry with that `resourceId` agrees on the name; otherwise the
+> GUID stays and is flagged *ambiguous*, an id with no entry at all stays and is flagged *unresolved* (six
+> real ones in the reference pair, groups the export never listed), and a name shared by several entries is
+> counted in the report. A zero-sentinel reference means *none* and passes through unflagged (46 of them in
+> the reference pair). Settings-catalog `settingDefinitionId`s and template references are Microsoft-global
+> and stay as they are, which is why the settings-catalog pairs are the most valuable part of the PoC.
+> **Measured baseline**, from a script applying exactly this rule with `js-yaml` over the 114 pairs: **19 are
+> identical**; **27** are identical once `assignments` is removed as well; with only the original top-level
+> drop list it was 8. The 8 in between are the same policy targeting a group with a different name in each
+> tenant (`M365-CO-STA-…` against `M365-CO-DYN-…`) — a real finding by the rule, and a systematic one in this
+> pair, so the diff page says **"differs only in audience"** when the two documents are identical after
+> removing `assignments` too: two normalisations and a text comparison, no structural diff. The first real
+> run is judged against those numbers. Two rules the normaliser obeys: it is applied to both sides
+> identically, and it is **announced** — the diff page states exactly which keys were dropped, how many
+> references were resolved, ambiguous or unresolved, and `?raw` shows the unnormalised diff.
 > This rule is a *judgment*, not a fact, and the browser's own principle applies to it as it does to
 > taxonomy: a rule derived here can disagree with what any other consumer derives. **It lives in the web only
 > to find out what the rule is.** Once it is stable it belongs to the CLI (a `resource compare` that reads two
@@ -61,13 +74,13 @@ this entry.
 > browser renders like `drift/`), and the browser reads the result instead of computing it. That migration is
 > the follow-up; this entry states it so it is planned, not rediscovered.
 >
-> **Selection is two clicks of plain links, not a widget.** Each picker card that has a `resources/` tree
-> gets a *Compare with…* link → `GET /_compare?a=<tenant>` re-renders the picker with `a` marked and every
-> *other* card offering *Compare* → `GET /_compare?a=<a>&b=<b>`. Nothing appears client-side and no form is
-> introduced; a `<form method="get">` with checkboxes and an always-visible button would be legal under the
-> no-client-side-JavaScript rule but would be the app's first form, and the export-page idea already debates
-> that precedent — links first. Cards without `resources/` (docs-only copies) get no link rather than a 404
-> later.
+> **Selection is two clicks of plain links, not a widget.** Each picker card whose export has a
+> `resources/metadata.yaml` gets a *Compare with…* link → `GET /_compare?a=<tenant>` re-renders the picker
+> with `a` marked and every *other* card offering *Compare* → `GET /_compare?a=<a>&b=<b>`. Nothing appears
+> client-side and no form is introduced; a `<form method="get">` with checkboxes and an always-visible button
+> would be legal under the no-client-side-JavaScript rule but would be the app's first form, and the
+> export-page idea already debates that precedent — links first. Cards without that file (docs-only copies)
+> get no link rather than a 404 later.
 >
 > **Pairing by key is a heuristic and the page says so.** Two tenants can each hold a
 > `gbl_c_prd_d_win_integrity_validation` that are different policies, and a renamed policy shows as
@@ -107,15 +120,17 @@ this entry.
   has a `false` entry, so the fixture must supply one). The reader is loaded with a schema that keeps scalars
   as text. The per-tenant cache reuses the mtime + size `cached()` helper and the metadata file constant that
   `DriftService` already has for this very file, moved to a shared place rather than duplicated; it exposes the
-  all-types `resourceId → displayName` lookup the normaliser needs.
+  all-types `resourceId → Set<displayName>` lookup the normaliser needs.
 - **Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's reference
-  lookup, applies the rule from the design note — any-depth `id`, any-depth `*@odata.context`, the named
-  top-level and group fields, the three reference fields resolved — serialises canonically (sorted keys, one
-  style, `CORE_SCHEMA` on both load and dump so an unquoted date-like scalar is not turned into a `Date` and
-  re-serialised differently) and returns the text **and a report** (keys dropped, references resolved,
-  references left unresolved). The drop list and the reference-field list are two exported constants, so the
-  next iteration after real use is a data change. Marked in its header comment as provisional and destined
-  for the CLI.
+  lookup (`resourceId → Set<displayName>`), applies the rule from the design note — GUID-containing `id` and
+  `sourceId` at any depth, any-depth `*@odata.context`, the named top-level and group fields, the three
+  reference fields resolved with the ambiguous / unresolved / sentinel outcomes — serialises canonically
+  (sorted keys, one style, `CORE_SCHEMA` on both load and dump so an unquoted date-like scalar is not turned
+  into a `Date` and re-serialised differently; verified stable on the reference files) and returns the text
+  **and a report** (keys dropped; references resolved, ambiguous, unresolved; names shared by several
+  entries). An option removes `assignments` as well, for the audience-only check. The drop list, the
+  reference-field list and the GUID test are exported constants, so the next iteration after real use is a
+  data change. Marked in its header comment as provisional and destined for the CLI.
 - **Routes.** `GET /_compare` (`a` only → picker in selecting state; `a` and `b` → listing;
   `a === b`, an unknown tenant, or a tenant without `resources/metadata.yaml` → the 404 view with a new
   `NotFoundKind` and its own headline; `notFound()` learns to render without a single tenant in the header)
@@ -141,17 +156,23 @@ this entry.
 - **Diff page.** Resolve both keys via `resolveResource`, normalise both, `diffYaml` (the drift view's
   function, unchanged), rendered through that partial. Above it: which tenant is left/right, the
   normalisation report as a caption, a `?raw` link for the unnormalised diff, and links to each side's YAML
-  view. An identical pair renders "no differences after normalisation" plus the report, never an empty page.
+  view. An identical pair renders "no differences after normalisation" plus the report, never an empty page;
+  a pair that is identical only once `assignments` is removed as well says "differs only in audience" above
+  the diff, so the reviewer's first question is answered before the first hunk.
 - **Tests.** `test/path-safety.spec.ts`: nothing new in the resolver, but an e2e case that a traversal in
   either key and a `_`-prefixed or unknown tenant in `a`/`b` 404 without leaking a path.
   `test/compare-normalise.spec.ts`: each dropped field including a nested `id` and a nested
-  `*@odata.context`, resolution of a group id, a filter id and a notification template id, the unresolved-id
-  flag, the group identity fields, identical output for identical configuration under different ids, report
-  counts, and a date-like unquoted scalar surviving load/dump unchanged. `test/docs.e2e.spec.ts`: picker link
-  only on cards with `resources/metadata.yaml`; selecting state; `a === b` refused; three-way counts from two
-  fixtures with a `presentInTenant: false` entry left out and an excluded type rendered last; diff ignores
-  ids and timestamps, resolves a group id, `?raw` shows them again; an edited YAML or metadata file is
-  reflected on the next request. `test/styles-build.spec.ts` if any new rule lands in `src/styles.css`.
+  `*@odata.context`; the id shapes — `GUID`, `GUID_GUID`, `GUID:GUID`, `GUID_en-us` dropped, `"0"`,
+  `all_users`, `Fido2` and the zero sentinel kept; resolution of a group id, a filter id and a notification
+  template id; the ambiguous flag for a `resourceId` with two names and the unresolved flag for none; a
+  zero-sentinel reference passing unflagged; the group identity fields; identical output for identical
+  configuration under different ids; the audience-only outcome; report counts; and a date-like unquoted
+  scalar surviving load/dump unchanged. `test/docs.e2e.spec.ts`: picker link only on cards with
+  `resources/metadata.yaml`; selecting state; `a === b` refused; three-way counts from two fixtures with a
+  `presentInTenant: false` entry left out and an excluded type rendered last; diff ignores ids and
+  timestamps, resolves a group id, `?raw` shows them again; "differs only in audience" for a pair that
+  differs in its target group alone; an edited YAML or metadata file is reflected on the next request.
+  `test/styles-build.spec.ts` if any new rule lands in `src/styles.css`.
 - **Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list
   and reference fields, the measured baseline, the provisional status), `_compare` as a reserved prefix.
   `CHANGELOG.md` under `[Unreleased]`, stating that the normalisation is provisional and where it is going.
