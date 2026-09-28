@@ -603,14 +603,29 @@ its types in collapsed groups; the diff is a second page.
 >
 > **Status is computed eagerly: entry 1's follow-up, promoted.** For each pair both files are read through
 > `resolveResource`, normalised with the same rule as the diff, and compared as text: equal → `=`; equal once
-> `assignments` is removed → `≠` marked *audience only*; otherwise `≠`. A pair that cannot be read, does not
-> parse or is over `MAX_DIFF_BYTES` shows `?` with the reason as its `title`, never a guess. The result is
-> cached per pair and validated by the mtime + size of **both** files **and** of both `metadata.yaml` files,
-> since the reference lookup comes from those: an edited resource or a re-downloaded export flips the status on
-> the next request, with no restart. Bounded like every cache. The cost is what entry 1 measured — about 228
-> pairs, so 456 reads and normalisations on a cold cache for the reference exports, then two `stat()` calls per
-> pair per request — and is checked against the reference exports before this ships; if the cold load is too
-> slow, reads run with a small concurrency bound, and there is no fallback that would show a stale status.
+> `assignments` is removed → `≠` with the hidden label *differs only in audience* and a lighter tint, counted
+> under *different*; otherwise `≠`. A pair that cannot be read or does not parse shows `?`, never a guess. Over
+> `MAX_DIFF_BYTES` the two files are still compared **as exported** — one string comparison — so equal files are
+> `=` and only an unequal, too-large pair is `?` (*too large to normalise*). What is cached is **per file, not
+> per pair**: for each resource file, three hashes — the text as exported, the normalised text, and the
+> normalised text without `assignments` — plus its size, or the reason it could not be normalised; never a
+> text. The entry is validated by that file's mtime + size **and** its own `metadata.yaml`'s, since the
+> reference lookup comes from there. A pair's status is then two lookups and a hash comparison, so a tenant
+> compared against several others normalises each of its files once, *swap sides* costs nothing, and there is
+> no ordered pair key. An edited resource or a re-downloaded export flips the status on the next request, with
+> no restart. Bounded like every cache, at a few dozen bytes per file.
+>
+> **What it costs, honestly.** The status must **not** run `diffYaml`: today `pairComparison` normalises *and*
+> diffs, so the per-file normalisation step (the normalised text and the text without `assignments`, or the
+> reason there is none) is extracted into one shared function that the digest calls and `pairComparison`
+> builds the diff on — one rule, and no whole-file diff per row. Cold, the reference pair is about 228 pairs,
+> so 456 reads and 456 `yaml.load` + `yaml.dump` passes; that work is CPU on one thread, so a concurrency
+> bound only spreads the I/O and is not a remedy. Warm, every compare page — the pair diff included, since it
+> renders the pane — pays 228 × `resolveResource` (two synchronous `realpathSync` each; the re-verification
+> after `realpath()` is the security boundary and is not cached) plus 456 async `stat()` and two more for the
+> metadata files. Pass criteria on the reference exports before this ships: cold listing under about 1.5 s,
+> warm under about 200 ms. If cold misses, the answer is to say so on the page, not a stale or partial status;
+> nothing in this design falls back to one.
 >
 > **Rows still come from the metadata alone.** Which rows exist and where they sit is unchanged: the two
 > `resources/metadata.yaml` files, no directory walked. Only the *status of a pair* reads resource files,
@@ -619,37 +634,50 @@ its types in collapsed groups; the diff is a second page.
 >
 > **One page shape for both routes.** `GET /_compare?a=&b=` and `GET /_compare/<key>?a=&b=` render the same
 > layout: header, the pane, then the diff area. Without a selected pair the diff area says so and points at
-> the first difference; with one, it is the pair diff (entry 6's whole-file view once that lands, today's
-> hunks until then). No new route. Each row is one link to its pair URL (or, one-sided, to that tenant's YAML
-> view, as today), the selected one is `aria-current` and highlighted, and there are no nested anchors.
-> Links carry `#row-<n>`, so after the page load the browser brings the selected row into view inside the
-> pane. A fragment scrolls the page as well as the pane, so the row gets a `scroll-margin-top` that keeps
-> the page itself from moving. This is the one layout detail the manual check has to confirm.
+> the first difference; with one, it is the pair diff as entry 6 shipped it — the whole file, marked
+> characters, the difference links. No new route. Each row is **one** link to its pair URL (or, one-sided, to
+> that tenant's YAML view, as today), the selected one is `aria-current` and highlighted, and there are no
+> nested anchors. That rules out a `<table>`, since an `<a>` cannot wrap a `<tr>`: the pane is a CSS **grid**
+> whose rows are `<a>` elements holding the five cells, with a header row and one group-header row per type —
+> the same shape the tenant listing uses, and the reference look exactly. Every row link carries the page's
+> current query (`a`, `b`, `same`, and entry 4's filters once they land) minus the key, so the view does not
+> reset on each click. Links carry `#row-<n>`, so after the page load the browser brings the selected row into
+> view inside the pane. A fragment scrolls the page as well as the pane, so the row gets a `scroll-margin-top`
+> that keeps the page itself from moving. This is the one layout detail the manual check has to confirm. A
+> one-sided row still leaves the page for the YAML view; showing that one file in the diff area is a follow-up
+> below, not this entry.
 >
-> **The pane.** A flat table like the reference, not collapsed groups: one header row per type (labelled as
+> **The pane.** A flat list like the reference, not collapsed groups: one header row per type (labelled as
 > in the sidebar, the excluded bulk types last and marked *not documented*), then its rows. Columns: left
 > name, left size, status, right size, right name. Sizes come from the `stat()` the cache makes anyway. The
 > reference's date column is left out, because every file of an export carries the same download time,
 > which the header already shows. By default the pane shows **what needs attention**: different, one-sided
 > and unknown rows. Identical pairs are counted in the header and shown with a `&same` link, a GET parameter
-> that is added to the compare routes' reserved set. The totals become the four counts (*N different · N only
-> in a · N only in b · N identical*), plus *swap sides*. Max height about 40% of the viewport, and vertically
-> resizable. Below `lg` the size columns drop, and the pane stays above the diff.
+> that is added to the compare routes' reserved set. The **selected pair is always shown**, whatever its
+> status and whether or not `same` is set — the exemption entry 4 gives the viewed pair — so the row that is
+> marked and scrolled to exists on every pair page. A type whose rows are all hidden is hidden with them, not
+> shown as an empty header. Rows are numbered over the full list, so `#row-<n>` is the same anchor in both
+> views. The totals become the four counts (*N different · N only in a · N only in b · N identical*), plus
+> *swap sides*. The pane opens at about 40% of the viewport and is vertically resizable both ways: an initial
+> `height` with a larger `max-height`, since `resize` cannot grow past `max-height`. Below `lg` the size
+> columns drop, and the pane stays above the diff.
 >
 > **Decision: the pane replaces the compare sidebar's tree.** Entry 3 gave the compare pages the tenant
 > sidebar's tree so a reviewer could move between pairs. The pane does that better and in the reference's
 > place, and keeping both would show the same list twice beside a diff that needs the width. So the compare
-> pages drop back to full width, with no `<aside>`. `compareNavigation` and the compare sidebar partial are
-> removed. The shared `sidebar_tree` / `sidebar_facets` split stays, because the tenant sidebar uses it and
-> entry 4's chips can sit above the pane through `sidebar_facets`. Entry 3 is unreleased, so this amends its
-> part of the tenant compare changelog entry rather than adding a *Changed* one. *Other option:* keep the
-> sidebar and add the pane. Not recommended, for the duplication.
+> pages drop back to full width, with no `<aside>`: the `doc-layout` wrapper and its `max-w-7xl` stay, the
+> `<main>` simply fills it. `compareNavigation` and the compare sidebar partial are removed. The shared
+> `sidebar_tree` / `sidebar_facets` split stays, because the tenant sidebar uses it and entry 4's chips can sit
+> above the pane through `sidebar_facets`. Entry 3 is unreleased, so this amends its part of the tenant
+> compare changelog entry rather than adding a *Changed* one. *Other option:* keep the sidebar and add the
+> pane. Not recommended, for the duplication.
 >
-> **Markers and colour.** `≠` is the change hue of entry 6, `=` neutral, `←` / `→` the one-side green of the
-> diff, `?` amber. The arrows point from the side that has the resource towards the side that lacks it, as in
-> the reference, and every marker carries a visually hidden label (*identical*, *different*, *only in stage*,
-> *could not compare*) so it is not meaning by glyph and colour alone. Every marker has a dark-mode variant
-> and a visible `:focus-visible` outline on its row link.
+> **Markers and colour.** `≠` is the change hue of entry 6 (lighter for *audience only*), `=` neutral, `←` /
+> `→` the one-side green of the diff, `?` amber. The arrows point from the side that has the resource towards
+> the side that lacks it, as in the reference, and every marker carries a visually hidden label (*identical*,
+> *different*, *differs only in audience*, *only in stage*, *could not compare: …* with the reason in the
+> label itself, since a `title` is not read out) so it is not meaning by glyph and colour alone. Every marker
+> has a dark-mode variant and a visible `:focus-visible` outline on its row link.
 >
 > **Non-negotiables, preserved.** Read-only; no client-side JavaScript; no new route or resolver; the pair
 > files are only ever located through `resolveResource`; rows are still data from the two metadata files;
@@ -659,40 +687,62 @@ its types in collapsed groups; the diff is a second page.
 
 **Plan.**
 
-- **Pair status.** A pure `pairStatus(left, right, a, b)` in `compare-view.ts` built on `pairComparison`'s
-  normalisation (one rule, not a second): `identical` / `audience` / `different` / `unknown` + reason. In
-  `compare.service.ts`, a bounded status cache keyed by `a`, `b` and the key, validated by the four
-  mtime + size pairs, and a `statuses(a, b, keys)` that stats and reads with a small concurrency bound.
-  Sizes come back with it.
-- **Listing model.** `compareListing` rows gain `status` and the two sizes. A pure step splits the default view
-  (non-identical) from `&same`, and computes the four totals. Rows get a stable `n` for `#row-<n>`, and the
-  selected key is marked. `same` joins the reserved query parameters.
-- **Views.** A `compare_pane` partial (the table, header rows per type, markers with hidden labels, the resize
-  container). `compare.hbs` and `compare-diff.hbs` become one layout, pane then diff area, with no sidebar.
-  `compare-diff.hbs` keeps the diff, and the listing page shows the *select a pair* state. Remove
-  `compare-sidebar.hbs` and `compareNavigation`, with its spec cases, since their purpose moves to the pane.
+- **Pair status.** Extract the per-file normalisation step out of `pairComparison` in `compare-view.ts` into
+  one pure function returning a file's normalised text and its text without `assignments` (or the reason
+  there is none); `pairComparison` calls it for both sides and adds the diff. On the same function, a pure
+  `fileDigest(raw, metadata)` yields the file's three `sha256` hashes (`crypto`, as the drift verification
+  already uses) — as exported, normalised, normalised without `assignments` — or the raw hash plus a reason.
+  A pure `pairStatus(leftDigest, rightDigest)` compares two digests — never texts, never `pairComparison`, so
+  no diff is computed per row — and yields `identical` / `audience` / `different` / `unknown` + reason, with
+  the raw-equality shortcut when either side has only its raw hash. In `compare.service.ts`, a bounded
+  digest cache keyed by file path, validated by the file's mtime + size and its metadata file's, and a
+  `digests(tenant, keys)` that stats and reads with a small concurrency bound, called once per side; sizes
+  come back with it. `FileCache` validates by one file's stat, so the digest cache is a sibling of it that
+  also checks the metadata stat, not a change to `FileCache` — the drift readers keep theirs as is.
+- **Listing model.** `compareListing` rows gain `status` and the two sizes. A pure step numbers every row over
+  the full list, then splits the default view (non-identical, plus the selected key whatever its status) from
+  `&same`, and computes the four totals; a group left without rows is dropped from the view. `same` joins the
+  reserved query parameters, and one helper builds a row href from the current query minus the key.
+- **Views.** A `compare_pane` partial: a CSS grid, one `<a>` per row holding the five cells, a header row and a
+  group-header row per type, markers with hidden labels, the resize container. `compare.hbs` and
+  `compare-diff.hbs` become one layout, pane then diff area, with no sidebar. `compare-diff.hbs` keeps the diff,
+  and the listing page shows the *select a pair* state. Remove `compare-sidebar.hbs` and `compareNavigation`,
+  with its spec cases, since their purpose moves to the pane.
 - **Controller.** Both compare routes build the listing with statuses through the existing `listingOf`
   helper, then pass the selected key and `same`. No filesystem logic in the controller.
-- **Tests.** Spec: `pairStatus` for identical, audience-only, different, unparsable and too-large; the default
-  / `&same` split and the totals; row numbering stable across both views. `test/docs.e2e.spec.ts`: the
-  markers and hidden labels for each state, identical pairs hidden by default and counted, `&same` showing
-  them, the selected row marked on the pair page and its link carrying `#row-<n>`, one-sided rows linking to
-  the YAML view, excluded types last, no `<aside>` on either compare page, and no nested anchors. Freshness:
-  an edited resource flips `=` to `≠`, and an edited `metadata.yaml` re-evaluates a pair whose reference
-  resolution changes, each on the next request. Plus writes-nothing and no-path-leak for an unreadable pair. The
-  existing compare cases are updated where they asserted the collapsed groups or the sidebar. That is the
-  behaviour this entry changes, stated in the entry, not a weakened assertion.
-- **Manual check in a browser.** The reference exports: cold and warm load time of the listing; the pane
-  scroll landing on the selected row without the page jumping; the divider dragging; light and dark; 900
-  and 1440px.
+- **Tests.** Spec: `fileDigest` for a parsable file, an unparsable one and one over the size cap (raw hash
+  only), and that two files equal after normalisation digest equal; `pairStatus` for identical, audience-only,
+  different, unparsable, too-large-but-equal and too-large-and-different; `pairComparison` unchanged through
+  the extraction (its existing cases pass as they are); the default / `&same` split, the selected identical
+  pair kept in the default view, the empty group dropped, and the totals; row numbering stable across both
+  views. `test/docs.e2e.spec.ts`: the markers and hidden labels for each state, identical pairs hidden by
+  default and counted, `&same` showing them and carried by every row link, the selected row marked on the
+  pair page and its link carrying `#row-<n>` — also when the selected pair is identical and `same` is absent
+  — one-sided rows linking to the YAML view, excluded types last, no `<aside>` on either compare page, and no
+  nested anchors. Freshness: an edited resource flips `=` to `≠`, and an edited `metadata.yaml` re-evaluates a
+  pair whose reference resolution changes, each on the next request. Plus writes-nothing and no-path-leak for
+  an unreadable pair. The existing compare cases are updated where they asserted the collapsed groups or the
+  sidebar. That is the behaviour this entry changes, stated in the entry, not a weakened assertion.
+- **Manual check in a browser.** The reference exports: cold and warm load time of the listing against the
+  pass criteria above (about 1.5 s cold, about 200 ms warm); the pane scroll landing on the selected row
+  without the page jumping; the divider dragging both ways; light and dark; 900 and 1440px.
 - **Docs.** `README.md` (Tenant compare: the pane, the status and what it costs, `&same`, one page shape;
   routes table). `.windsurf/rules/01-architecture.md`: in Tenant compare, the rows-from-metadata /
-  status-from-`resolveResource` split, the bounded validated status cache, `same` reserved, and the compare
-  sidebar rule replaced by the pane. `CHANGELOG.md`: amend the tenant compare entry under `[Unreleased]`
-  (the sidebar sentence becomes the pane, and the *same/different column is a follow-up* sentence goes).
+  status-from-`resolveResource` split, the per-file digest cache (hashes only, validated by file and metadata
+  stat), `same` reserved, and the compare sidebar rule replaced by the pane. `CHANGELOG.md`: amend the tenant
+  compare entry under `[Unreleased]` (the sidebar sentence becomes the pane, and the *same/different column is
+  a follow-up* sentence goes).
   Here, entry 1's *Eager same/different* follow-up is marked as promoted into this entry, and *Idea: Drop the
   no-client-side-JavaScript rule* gets one sentence saying this pane was checked against the rule and needed
-  no script.
+  no script. Entry 4 is rewritten where it names what this entry removes: its *Narrowing* item's
+  `compareNavigation` exemption becomes the pane's always-shown selected pair, and its *Views* item puts
+  `sidebar_facets` above the pane instead of inside `compare_sidebar.hbs`, so entry 4 stays self-contained.
+
+**Follow-ups (not in this entry).**
+
+- **A one-sided resource in the diff area.** Selecting a `←` / `→` row shows that tenant's YAML in the area
+  under the pane instead of leaving for the YAML view — the reference does this. It needs the highlighter on
+  the compare page and a way to say *this side only* in the URL, so it is its own entry.
 
 ## Fixes
 
