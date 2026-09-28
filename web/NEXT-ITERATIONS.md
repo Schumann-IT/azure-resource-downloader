@@ -33,17 +33,28 @@ this entry.
 > adds, and it adds it provisionally (next note).
 >
 > **The normalisation rule is provisional and must move to the Go side.** Before diffing, both documents are
-> rewritten identically: **drop** the fields that are pure per-tenant noise — `id`, `createdDateTime`,
-> `lastModifiedDateTime`, `version`, `@odata.context`, `assignments[].id` (a `<policyId>_<groupId>`
-> composite), `assignments[].sourceId` (the policy's own id) — and **resolve, never drop,** the fields that are
-> references: `assignments[].target.groupId` becomes the group's display name from that tenant's own
-> `metadata.yaml` (`Microsoft.Graph/groups/*` entries, `resourceId` → `displayName`), so the same audience
-> compares equal and a different audience is a real finding; an id that does not resolve stays a GUID and is
-> flagged. Settings-catalog `settingDefinitionId`s and template references are Microsoft-global and stay as
-> they are, which is why the settings-catalog pairs are the most valuable part of the PoC. Two rules the
-> normaliser obeys: it is applied to both sides identically, and it is **announced** — the diff page states
-> exactly which keys were dropped and how many references were resolved, and `?raw` shows the unnormalised
-> diff. This rule is a *judgment*, not a fact, and the browser's own principle applies to it as it does to
+> rewritten identically. **Drop** the fields that are pure per-tenant noise — measured against the 114
+> reference pairs, not guessed: every key named `id` at **any** depth (the resource's own; `assignments[].id`,
+> a `<policyId>_<groupId>` composite; the `scheduledActionsForRule[].id` and
+> `scheduledActionConfigurations[].id` GUIDs inside compliance policies — 81 of the 114 paired files carry a
+> nested id), every key ending in `@odata.context` at any depth (`settings@odata.context`,
+> `scheduledActionsForRule@odata.context`, `includeTargets@odata.context`, … — each embeds the resource's own
+> GUID and every one of the 114 pairs carries at least one), `assignments[].sourceId` (the policy's own id),
+> `createdDateTime`, `lastModifiedDateTime`, `version`, and the group identity fields `mail`, `mailNickname`,
+> `proxyAddresses`, `securityIdentifier`, `renewedDateTime`, without which all 19 paired groups differ on
+> noise alone. **Resolve, never drop,** the fields that reference another exported resource:
+> `assignments[].target.groupId`, `assignments[].target.deviceAndAppManagementAssignmentFilterId` and
+> `notificationTemplateId` each become the `displayName` of the entry in that tenant's own `metadata.yaml`
+> whose `resourceId` matches — **one lookup over every entry**, not a groups-only table — so the same
+> audience, filter or template compares equal and a different one is a real finding; an id that does not
+> resolve stays a GUID and is flagged. Settings-catalog `settingDefinitionId`s and template references are
+> Microsoft-global and stay as they are, which is why the settings-catalog pairs are the most valuable part
+> of the PoC. **Measured baseline:** with this rule 25 of the 114 pairs are identical and the rest show
+> genuine differences (a passcode setting `1` against `15`, a different audience); with only the top-level
+> fields dropped it is 8 of 114. The first real run is judged against that number. Two rules the normaliser
+> obeys: it is applied to both sides identically, and it is **announced** — the diff page states exactly
+> which keys were dropped and how many references were resolved, and `?raw` shows the unnormalised diff.
+> This rule is a *judgment*, not a fact, and the browser's own principle applies to it as it does to
 > taxonomy: a rule derived here can disagree with what any other consumer derives. **It lives in the web only
 > to find out what the rule is.** Once it is stable it belongs to the CLI (a `resource compare` that reads two
 > exports offline, reuses the drift engine's verdicts and dotted-path deltas, and writes a comparison tree the
@@ -64,6 +75,16 @@ this entry.
 > (`?left=<key>&right=<key>`, two-step via links) — is the "select files on both sides" of the original
 > request and a natural second step, listed under follow-ups.
 >
+> **The single-side listings are dominated by bulk types.** Only-in-A is 918 rows for the reference pair, 780
+> of them unreferenced `Microsoft.Graph/groups` and `windowsAutopilotDeviceIdentities` — the types
+> `index.yaml` only counts under `counts.excluded`. Type groups are therefore rendered collapsed (`<details>`,
+> like the sidebar), and a type either index lists under `counts.excluded` is rendered last and marked, so a
+> reviewer reads policies first and device identities never. Those rows still link to the tenant's YAML view,
+> which makes this the first page that *links* to an excluded type's YAML. That widens nothing:
+> `GET /:tenant/_resource/*path` already serves any `.yaml` under `resources/` by URL and never consulted the
+> index; what the *Browsable excluded bulk types* idea guards is navigation built by walking the tree, and this
+> listing walks nothing — it reads `metadata.yaml` as data. That idea's wording is reconciled to say so.
+>
 > **Non-negotiables, preserved.** Read-only (only reads). Path safety: both tenants must be discovered tenants
 > and distinct, both keys go through `resolveResource(tenant, key)` — the existing boundary, called twice; no
 > new resolver. `_compare` is a root-level representation prefix, declared before `:tenant`; it cannot collide
@@ -78,43 +99,66 @@ this entry.
 
 - **Metadata reader.** `src/docs/resources-metadata.ts`: a pure, Nest-free parser for `resources/metadata.yaml`
   returning, per key, `displayName`, `resourceId`, `odataType`, `presentInTenant` — shape-validated, degrading
-  to "no metadata" on anything malformed. Only `presentInTenant: true` entries are listed: the export retains
-  entries for resources gone from the tenant, and a comparison is about what *is* configured. A service owns
-  the per-tenant cache (mtime + size, bounded) and exposes the group-name lookup the normaliser needs.
-- **Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's group
-  lookup, applies the drop list and the reference resolution from the design note, serialises canonically
-  (sorted keys, one style) and returns the text **and a report** (keys dropped, references resolved,
-  references left unresolved). The drop list is one exported constant, so the second iteration after first
-  real use is a data change. Marked in its header comment as provisional and destined for the CLI.
+  to "no metadata" on anything malformed. `resourceId` and `odataType` are optional (one entry in the
+  reference export has no `resourceId`; `odataType` is on 630 of 1029), and the map's keys carry the `.yaml`
+  suffix, unlike the drift observation's — strip it so a key is the same string the routes and
+  `resolveResource` use. Only `presentInTenant: true` entries are listed: the export retains entries for
+  resources gone from the tenant, and a comparison is about what *is* configured (neither reference export
+  has a `false` entry, so the fixture must supply one). The reader is loaded with a schema that keeps scalars
+  as text. The per-tenant cache reuses the mtime + size `cached()` helper and the metadata file constant that
+  `DriftService` already has for this very file, moved to a shared place rather than duplicated; it exposes the
+  all-types `resourceId → displayName` lookup the normaliser needs.
+- **Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's reference
+  lookup, applies the rule from the design note — any-depth `id`, any-depth `*@odata.context`, the named
+  top-level and group fields, the three reference fields resolved — serialises canonically (sorted keys, one
+  style, `CORE_SCHEMA` on both load and dump so an unquoted date-like scalar is not turned into a `Date` and
+  re-serialised differently) and returns the text **and a report** (keys dropped, references resolved,
+  references left unresolved). The drop list and the reference-field list are two exported constants, so the
+  next iteration after real use is a data change. Marked in its header comment as provisional and destined
+  for the CLI.
 - **Routes.** `GET /_compare` (`a` only → picker in selecting state; `a` and `b` → listing;
-  `a === b`, an unknown tenant, or a tenant without `resources/` → the 404 view with its own headline) and
-  `GET /_compare/*path?a=&b=` (the diff). Declared before `:tenant`; controller does HTTP concerns only.
-- **Picker.** *Compare with…* per eligible card; in selecting state, `a` is marked and the other eligible
-  cards offer *Compare*; a *cancel* link returns to `GET /`. Consistent with the standing decision that
-  whole-tenant actions live on the card.
-- **Listing.** Three-way split — only in A, only in B, in both — grouped by type with per-group and total
-  counts, each *both* row linking to its diff, each single-side row linking to that tenant's YAML view. **No
+  `a === b`, an unknown tenant, or a tenant without `resources/metadata.yaml` → the 404 view with a new
+  `NotFoundKind` and its own headline; `notFound()` learns to render without a single tenant in the header)
+  and `GET /_compare/*path?a=&b=` (the diff). Declared before `:tenant`, beside `healthz` and `favicon.ico`,
+  the two root-level routes that already precede it; controller does HTTP concerns only.
+- **Picker.** *Compare with…* per eligible card, where eligible means `resources/metadata.yaml` is present —
+  one `stat` per card at render time, the way the drift line is decided, since `TenantInfo.resourcesDir` is a
+  path and not a fact. In selecting state, `a` is marked and the other eligible cards offer *Compare*; a
+  *cancel* link returns to `GET /`. Consistent with the standing decision that whole-tenant actions live on
+  the card.
+- **Listing.** Three-way split — only in A, only in B, in both — grouped by type, each group a collapsed
+  `<details>` with its count, excluded types last and marked (design note above), a total per side, each
+  *both* row linking to its diff, each single-side row linking to that tenant's YAML view. **No
   same/different state in this pass**: it needs both files read and normalised for every pair (228 reads for
   the reference pair), while the three-way split is computed from the two metadata files alone. *Other
   option, for a later pass:* compute same/different eagerly on the listing by comparing the two normalised
   texts, cached per pair by both files' mtimes, and show the count of genuinely differing pairs — the number
   a stage-to-prod reviewer actually wants first.
+- **Diff partial.** The diff table is inline in `views/drift-diff.hbs` today; extract it into a
+  `views/partials/` partial taking the `YamlDiff` view model, used by the drift diff and the compare diff
+  alike so the two cannot render a hunk differently. Behaviour-preserving; the existing drift e2e cases
+  cover it.
 - **Diff page.** Resolve both keys via `resolveResource`, normalise both, `diffYaml` (the drift view's
-  function, unchanged), rendered through the drift diff partial. Above it: which tenant is left/right, the
+  function, unchanged), rendered through that partial. Above it: which tenant is left/right, the
   normalisation report as a caption, a `?raw` link for the unnormalised diff, and links to each side's YAML
   view. An identical pair renders "no differences after normalisation" plus the report, never an empty page.
 - **Tests.** `test/path-safety.spec.ts`: nothing new in the resolver, but an e2e case that a traversal in
   either key and a `_`-prefixed or unknown tenant in `a`/`b` 404 without leaking a path.
-  `test/compare-normalise.spec.ts`: each dropped field, group-id resolution, the unresolved-id flag, identical
-  output for identical configuration under different ids, report counts. `test/docs.e2e.spec.ts`: picker
-  link only on cards with `resources/`; selecting state; `a === b` refused; three-way counts from two
-  fixtures; diff ignores ids and timestamps, resolves a group id, `?raw` shows them again; an edited YAML or
-  metadata file is reflected on the next request. `test/styles-build.spec.ts` if any new rule lands in
-  `src/styles.css`.
-- **Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list,
-  the provisional status), `_compare` as a reserved prefix. `CHANGELOG.md` under `[Unreleased]`, stating that
-  the normalisation is provisional and where it is going. `.windsurf/rules/01-architecture.md`: the new
-  files, `_compare` beside `_resource`/`_drift`, and the reworded listing rule.
+  `test/compare-normalise.spec.ts`: each dropped field including a nested `id` and a nested
+  `*@odata.context`, resolution of a group id, a filter id and a notification template id, the unresolved-id
+  flag, the group identity fields, identical output for identical configuration under different ids, report
+  counts, and a date-like unquoted scalar surviving load/dump unchanged. `test/docs.e2e.spec.ts`: picker link
+  only on cards with `resources/metadata.yaml`; selecting state; `a === b` refused; three-way counts from two
+  fixtures with a `presentInTenant: false` entry left out and an excluded type rendered last; diff ignores
+  ids and timestamps, resolves a group id, `?raw` shows them again; an edited YAML or metadata file is
+  reflected on the next request. `test/styles-build.spec.ts` if any new rule lands in `src/styles.css`.
+- **Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list
+  and reference fields, the measured baseline, the provisional status), `_compare` as a reserved prefix.
+  `CHANGELOG.md` under `[Unreleased]`, stating that the normalisation is provisional and where it is going.
+  `.windsurf/rules/01-architecture.md`: the new files, `_compare` beside `_resource`/`_drift`, and the
+  reworded listing rule. The *Browsable excluded bulk types* idea below is reconciled per the design note.
+  Any change to the rule is mirrored into the `resource compare` idea in `go/NEXT-ITERATIONS.md`, which
+  quotes it.
 
 **Follow-ups (not in this entry).**
 
@@ -129,7 +173,8 @@ this entry.
   tree the way it renders `drift/` and stops normalising itself. Two open questions travel with it: **where
   the comparison tree lives** (everything today is under `<output>/<tenant>/`, and a comparison belongs to
   neither tenant), and that the rule must be *statable and testable* before it is frozen — which is what
-  this PoC exists to find out. Needs its own parked idea in `go/NEXT-ITERATIONS.md` so the Go side sees it.
+  this PoC exists to find out. The Go side already holds this as the parked idea *`resource compare`* in
+  `go/NEXT-ITERATIONS.md`, which quotes the rule as stated here; the two are kept in step.
 
 ## Fixes
 
@@ -357,11 +402,14 @@ entirely: the segment could then open and scroll to its own sidebar section.
 ### Idea: Browsable excluded bulk types
 
 Types the index merely counts under `counts.excluded` (Autopilot identities and the like), and any resource
-with no document, are unreachable — which is what keeps navigation purely index-derived and the **"counts and
-listings derive from the index, never from walking the tree"** non-negotiable intact. Unreferenced
-`Microsoft.Graph/groups` (the CLI documents a group only when an assignment references it) are in the same
-bucket. **Parked** because serving them requires amending that non-negotiable. **Revisit** if operators ask
-for the raw bulk YAML; the shape is settled — for each type named in `counts.excluded`, a single
+with no document, are unreachable from the navigation — which is what keeps navigation purely index-derived
+and the **"counts and listings derive from the index, never from walking the tree"** non-negotiable intact.
+Unreferenced `Microsoft.Graph/groups` (the CLI documents a group only when an assignment references it) are
+in the same bucket. They are not unservable: the YAML view serves any `.yaml` under `resources/` by URL and
+never consulted the index, and the scheduled tenant-compare entry lists and links them from
+`resources/metadata.yaml` read as data — neither walks the tree, so neither touches this idea. **Parked**
+because *navigating* to them from the index-driven tree requires amending that non-negotiable. **Revisit** if
+operators ask for the raw bulk YAML; the shape is settled — for each type named in `counts.excluded`, a single
 **non-recursive** `readdir` of `resources/<type>/` (`.yaml` only, sorted, cached under the existing discovery
 TTL, unreadable ⇒ empty), producing file names only, with counts still taken from the index. It reopens two
 UX questions: whether a `readdir`-vs-`counts.excluded` mismatch should be flagged as a stale index, and
