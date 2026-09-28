@@ -41,7 +41,8 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   summary, a *pending* marker for resources with no document yet, and count-only assignment badges.
 - **Sidebar navigation on every page** — one collapsible `<details>` per resource type, the section of the
   current document opened and the document marked, plus the tenant counts, export timestamp, the
-  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML.
+  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML. The tenant compare pages carry
+  the same tree, headed by the two tenants (see [Tenant compare](#tenant-compare)).
 - **Taxonomy filters** — when the index carries a taxonomy, the sidebar offers one chip group per axis the
   operator declared (Programme, Platform, Assignment scope, …) and narrows the tree server-side from query
   parameters, several axes at once, with counts that follow the selection. See
@@ -169,8 +170,8 @@ Discovery and resolution rules:
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link and, when at least two exports carry `resources/metadata.yaml`, a *Compare with…* link on each of those. |
 | `GET /_compare?a=<tenant>` | The picker in its compare selecting state: `a` is marked, every other eligible tenant offers *Compare with*, and *Cancel* returns to `/`. A bare `GET /_compare` redirects to `/`. |
-| `GET /_compare?a=<tenant>&b=<tenant>` | The three-way listing of the two exports' resources — in both, only in `a`, only in `b` — grouped by type. 404 for an unknown or `_`-prefixed tenant, the same tenant twice, or a tenant without a readable `resources/metadata.yaml`. |
-| `GET /_compare/*path?a=&b=` | One resource both exports list, as a line diff of the two files after normalisation; `&raw` diffs them as exported. The `.yaml` suffix is optional. 404 for a key either export does not list as present. |
+| `GET /_compare?a=<tenant>&b=<tenant>` | The three-way listing of the two exports' resources — in both, only in `a`, only in `b` — grouped by type, with the same types as a sidebar tree. 404 for an unknown or `_`-prefixed tenant, the same tenant twice, or a tenant without a readable `resources/metadata.yaml`. |
+| `GET /_compare/*path?a=&b=` | One resource both exports list, as a line diff of the two files after normalisation, with the pair marked in the sidebar tree; `&raw` diffs them as exported. The `.yaml` suffix is optional. 404 for a key either export does not list as present. |
 | `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. `documents` and `pending` are read from each tenant's `index.yaml` on every call, not cached, so a regenerated index is reflected immediately. |
 | `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
@@ -334,6 +335,12 @@ is configured the same in both, and where it differs. Offline and read-only like
   name, both opening the diff; a resource only one side has sits in its column with an empty cell opposite and
   opens that tenant's YAML view. Pairs come first in each type, then the left-only, then the right-only rows.
   The listing does not say whether a pair differs — that needs both files read.
+- **The sidebar** on both compare pages is the tenant sidebar's tree, derived from the listing itself, so the
+  two cannot disagree and nothing else is read: one collapsible section per type in the listing's order, with
+  the excluded types last and marked *not documented*; a pair opens its diff, a resource only one side has
+  opens that tenant's YAML view and says *only in* that tenant. On a pair's diff the pair is marked and its
+  section open, and *swap sides* keeps the pair. The header names both tenants, links back to the listing and
+  repeats the totals.
 - **The diff** normalises both files identically, then shows a line diff through the same partial as the drift
   diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, exactly as described
   for the drift diff above. A caption states exactly which keys were dropped and how many references were

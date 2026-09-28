@@ -28,13 +28,15 @@ section of the [repository README](../README.md) for the procedure.
   what was normalised and offers the diff as exported. Both pages read left against right: the listing puts
   each type in two columns headed by the tenants, a pair on one row and a one-sided resource beside an empty
   cell, and the diff stands the two files side by side with a changed line beside its counterpart, stacking
-  the two sides when there is not room for both. The normalisation rule is **provisional**: it lives in
-  the browser only to find out what the rule should be against real exports, and moves to the CLI once it is
-  stable (see `../go/NEXT-ITERATIONS.md`). The app stays read-only and offline; the listing is read from each
-  export's `resources/metadata.yaml` as data, never by walking the tree, and both files of a pair go through
-  the existing resources-root boundary. Pairing by file name is a heuristic the page states; manual pairing and
-  a same/different column on the listing are follow-ups in `NEXT-ITERATIONS.md`. Routes and the normalisation
-  rule are in `README.md`.
+  the two sides when there is not room for both. Both pages carry the documentation's sidebar: the types as a
+  collapsible tree, built from the listing itself so the two cannot disagree, with the pair being viewed
+  marked, so moving from one pair to the next no longer means going back to the listing. The normalisation
+  rule is **provisional**: it lives in the browser only to find out what the rule should be against real
+  exports, and moves to the CLI once it is stable (see `../go/NEXT-ITERATIONS.md`). The app stays read-only
+  and offline; the listing is read from each export's `resources/metadata.yaml` as data, never by walking the
+  tree, and both files of a pair go through the existing resources-root boundary. Pairing by file name is a
+  heuristic the page states; manual pairing and a same/different column on the listing are follow-ups in
+  `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
 
 ### Changed
 

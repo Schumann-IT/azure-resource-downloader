@@ -1,5 +1,6 @@
 import { NormaliseReport, normaliseResource } from './compare-normalise';
 import { MetadataEntry, ResourcesMetadata } from './resources-metadata';
+import { NavItem, NavSection, typeLabel } from './tenant-index';
 import { diffYaml, MAX_DIFF_BYTES, YamlDiff } from './yaml-diff';
 
 // Route prefix of the tenant compare. A root-level *representation* prefix: it
@@ -14,14 +15,16 @@ export interface CompareSide {
 }
 
 export interface ListingCell {
+  key: string;
   name: string;
   href: string;
 }
 
 // One row of the two-column listing: a paired key has both cells (each
 // linking to the pair diff), a single-side key one cell and an empty one
-// opposite.
+// opposite. `key` is what the sidebar marks the viewed pair by.
 export interface ListingRow {
+  key: string;
   left: ListingCell | null;
   right: ListingCell | null;
 }
@@ -95,12 +98,12 @@ export function compareListing(
           paired.map(([ea, eb]) => {
             const href = pairHref(a.id, b.id, ea.key);
             return [
-              { name: ea.displayName, href },
-              { name: eb.displayName, href },
+              { key: ea.key, name: ea.displayName, href },
+              { key: eb.key, name: eb.displayName, href },
             ];
           }),
-          aOnly.map((e) => ({ name: e.displayName, href: resourceHref(a.id, e.key) })),
-          bOnly.map((e) => ({ name: e.displayName, href: resourceHref(b.id, e.key) })),
+          aOnly.map((e) => ({ key: e.key, name: e.displayName, href: resourceHref(a.id, e.key) })),
+          bOnly.map((e) => ({ key: e.key, name: e.displayName, href: resourceHref(b.id, e.key) })),
         ),
       };
     })
@@ -124,10 +127,51 @@ export function interleaveRows(
   return [
     ...[...paired]
       .sort(([x], [y]) => byName(x, y))
-      .map(([l, r]) => ({ left: l, right: r })),
-    ...[...onlyA].sort(byName).map((c) => ({ left: c, right: null })),
-    ...[...onlyB].sort(byName).map((c) => ({ left: null, right: c })),
+      .map(([l, r]) => ({ key: l.key, left: l, right: r })),
+    ...[...onlyA].sort(byName).map((c) => ({ key: c.key, left: c, right: null })),
+    ...[...onlyB].sort(byName).map((c) => ({ key: c.key, left: null, right: c })),
   ];
+}
+
+// The compare sidebar's tree, derived from the listing itself so sidebar and
+// body cannot disagree and nothing beyond the two metadata files is read. One
+// section per type in the listing's order (excluded types last, noted), one item
+// per row: a pair opens its diff under the left side's name, a one-sided
+// resource its tenant's YAML view with a note naming that tenant. `activeKey`
+// is the pair being viewed, or '' on the listing page. Pure.
+export function compareNavigation(
+  listing: CompareListing,
+  leftId: string,
+  rightId: string,
+  activeKey = '',
+): NavSection[] {
+  return listing.groups.map((group) => {
+    const items = group.rows.flatMap((row): NavItem[] => {
+      const cell = row.left ?? row.right;
+      if (!cell) return [];
+      const paired = row.left !== null && row.right !== null;
+      const side = row.left ? leftId : rightId;
+      return [
+        {
+          href: cell.href,
+          label: cell.name,
+          summary: '',
+          documented: true,
+          badges: [],
+          active: activeKey !== '' && row.key === activeKey,
+          note: paired ? '' : `only in ${side}`,
+          exempt: false,
+        },
+      ];
+    });
+    return {
+      key: group.type,
+      label: typeLabel(group.type),
+      items,
+      active: items.some((i) => i.active),
+      note: group.excluded ? 'not documented' : '',
+    };
+  });
 }
 
 export interface PairComparison {

@@ -1,0 +1,40 @@
+  {{#if sections.length}}
+    <nav class="mt-4 space-y-1" aria-label="Documents">
+      {{#each sections}}
+        <details{{#if this.active}} open{{/if}}>
+          <summary class="rounded px-1.5 py-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+            {{this.label}}
+            <span class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">{{this.items.length}}</span>
+            {{#if this.note}}
+              <span class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">{{this.note}}</span>
+            {{/if}}
+          </summary>
+          <ul class="mt-1 mb-2 ml-3 border-l border-slate-200 dark:border-slate-700 pl-3 space-y-0.5">
+            {{#each this.items}}
+              <li>
+                <a
+                  href="{{this.href}}"
+                  {{#if this.active}}aria-current="page"{{/if}}
+                  class="block rounded px-1.5 py-1 text-sm {{#if this.active}}bg-slate-100 dark:bg-slate-800 font-medium text-brand-600 dark:text-brand-400{{else}}text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400{{/if}}"
+                >
+                  {{this.label}}
+                  {{#if this.note}}
+                    <span class="ml-1 text-xs text-slate-400 dark:text-slate-500">{{this.note}}</span>
+                  {{/if}}
+                  {{#if this.exempt}}
+                    <span class="ml-1 text-xs italic text-slate-400 dark:text-slate-500">outside the filter</span>
+                  {{/if}}
+                </a>
+              </li>
+            {{/each}}
+          </ul>
+        </details>
+      {{/each}}
+    </nav>
+  {{else}}
+    {{#if facets.length}}
+      <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+        No documents match these filters.
+      </p>
+    {{/if}}
+  {{/if}}

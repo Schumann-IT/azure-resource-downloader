@@ -2070,6 +2070,49 @@ settings:
     expect(res.text).not.toContain('id="compare-only-a"');
   });
 
+  it('puts the listing beside a sidebar of its types, derived from the listing', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    const aside = res.text.slice(
+      res.text.indexOf('<aside aria-label="Comparison navigation"'),
+      res.text.indexOf('</aside>'),
+    );
+    expect(aside).toMatch(/class="nav-tree/);
+    expect(res.text).not.toContain('aria-label="Tenant navigation"');
+    expect(res.text).toContain('class="doc-layout');
+    expect(res.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
+    // Types labelled as a tenant's sidebar labels them, excluded ones last.
+    expect(aside).toContain('Device Management Configuration Policies');
+    expect(aside.indexOf('Device Configurations')).toBeLessThan(
+      aside.indexOf('Windows Autopilot Device Identities'),
+    );
+    expect(aside).toMatch(/Windows Autopilot Device Identities[\s\S]*?not documented/);
+    // A pair opens its diff; a one-sided resource its tenant's YAML, noted.
+    expect(aside).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+    expect(aside).toMatch(
+      /href="\/stage\/_resource\/Microsoft\.Graph\/deviceConfigurations\/dc1"[\s\S]*?Stage only config[\s\S]*?only in stage/,
+    );
+    expect(aside).toMatch(/Prod only location[\s\S]*?only in prod/);
+    // Nothing is being viewed on the listing.
+    expect(aside).not.toContain('aria-current="page"');
+    expect(aside).not.toContain('<details open>');
+  });
+
+  it('marks the viewed pair in the sidebar of its diff, also as exported', async () => {
+    for (const url of [`/_compare/${P}/p1${q}`, `/_compare/${P}/p1${q}&raw`]) {
+      const res = await get(url).expect(200);
+      const aside = res.text.slice(
+        res.text.indexOf('<aside aria-label="Comparison navigation"'),
+        res.text.indexOf('</aside>'),
+      );
+      const self = href(`/_compare/${P}/p1?a=stage&b=prod`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      expect(aside).toMatch(new RegExp(`${self}\\s*aria-current="page"`));
+      expect(aside.split('<details open>').length - 1).toBe(1);
+      expect(aside).toMatch(/<details open>\s*<summary[^>]*>\s*Device Management Configuration Policies/);
+      // Swapping sides keeps the pair.
+      expect(aside).toContain(href(`/_compare/${P}/p1?a=prod&b=stage`));
+    }
+  });
+
   it('diffs a pair with ids and timestamps normalised away and references resolved', async () => {
     const res = await get(`/_compare/${P}/p1${q}`).expect(200);
     expect(res.text).toMatch(/class="diff-removed[\s\S]*?value: 1</);

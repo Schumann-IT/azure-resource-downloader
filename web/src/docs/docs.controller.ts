@@ -48,7 +48,9 @@ import { diffYaml } from './yaml-diff';
 import { CompareService } from './compare.service';
 import {
   COMPARE_PREFIX,
+  CompareListing,
   compareListing,
+  compareNavigation,
   listingHref,
   pairComparison,
   pairHref,
@@ -246,15 +248,7 @@ export class DocsController {
       return this.compareNotFound(res, 'compare', a, b, '');
     }
 
-    const excluded = new Set(
-      [left, right].flatMap((t) => t.index?.counts.excluded.map((e) => e.type) ?? []),
-    );
-    const listing = compareListing(
-      { id: left.info.id, metadata: left.metadata },
-      { id: right.info.id, metadata: right.metadata },
-      excluded,
-      RESOURCE_PREFIX,
-    );
+    const listing = this.listingOf(left, right);
     res.render('compare', {
       title: `Compare ${left.info.name} ↔ ${right.info.name}`,
       breadcrumb: [{ label: `${left.info.id} ↔ ${right.info.id}` }],
@@ -262,6 +256,7 @@ export class DocsController {
       right: { id: right.info.id, name: right.info.name },
       swapHref: listingHref(right.info.id, left.info.id),
       listing,
+      nav: this.compareNav(left, right, listing, ''),
     });
   }
 
@@ -319,8 +314,46 @@ export class DocsController {
       rawHref: `${self}&raw`,
       normalisedHref: self,
       raw: raw !== undefined,
+      nav: this.compareNav(left, right, this.listingOf(left, right), key),
       ...comparison,
     });
+  }
+
+  // The listing of two comparable tenants, built in one place for both compare
+  // routes so the pair page's sidebar is the listing page's tree. Types either
+  // index counts under `counts.excluded` go last; the rest is read from the two
+  // metadata files the tenants already hold.
+  private listingOf(left: CompareTenant, right: CompareTenant): CompareListing {
+    const excluded = new Set(
+      [left, right].flatMap((t) => t.index?.counts.excluded.map((e) => e.type) ?? []),
+    );
+    return compareListing(
+      { id: left.info.id, metadata: left.metadata },
+      { id: right.info.id, metadata: right.metadata },
+      excluded,
+      RESOURCE_PREFIX,
+    );
+  }
+
+  // View model for the compare sidebar: the two tenants, the listing's totals,
+  // the swap link (to the same pair when one is being viewed) and the tree.
+  // `activeKey` is the pair being viewed, or '' on the listing page.
+  private compareNav(
+    left: CompareTenant,
+    right: CompareTenant,
+    listing: CompareListing,
+    activeKey: string,
+  ): Record<string, unknown> {
+    const a = left.info.id;
+    const b = right.info.id;
+    return {
+      left: { id: a },
+      right: { id: b },
+      totals: listing.totals,
+      listingHref: listingHref(a, b),
+      swapHref: activeKey ? pairHref(b, a, activeKey) : listingHref(b, a),
+      sections: compareNavigation(listing, a, b, activeKey),
+    };
   }
 
   // GET /:tenant — the tenant landing page: the generation agent's tenant-wide

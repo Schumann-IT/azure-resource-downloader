@@ -3,7 +3,9 @@
   {{> head}}
   <body id="compare-diff-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     {{> header}}
-    <main class="mx-auto max-w-7xl px-4 py-8">
+    <div class="doc-layout mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
+      {{> compare_sidebar nav}}
+      <main class="doc-main min-w-0 flex-1">
       <h1 class="text-xl font-bold mb-2">{{name}}{{#if otherName}} <span class="font-normal text-slate-500 dark:text-slate-400">↔ {{otherName}}</span>{{/if}}</h1>
       <p class="doc-source mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
         <span>left <a href="{{left.yamlHref}}" class="font-mono text-brand-600 dark:text-brand-400 hover:underline">{{left.id}}</a></span>
@@ -53,6 +55,7 @@
       {{else}}
         <p class="compare-identical text-sm text-slate-500 dark:text-slate-400">The two files are identical.</p>
       {{/if}}
-    </main>
+      </main>
+    </div>
   </body>
 </html>

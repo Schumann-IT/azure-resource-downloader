@@ -47,7 +47,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `resources-metadata.ts` — pure `parseResourcesMetadata` for `resources/metadata.yaml` (+ the
     `RESOURCES_METADATA_FILE` constant and the set-valued reference lookup).
   - `compare-normalise.ts` — pure `normaliseResource`, the **provisional** cross-tenant identity rule.
-  - `compare-view.ts` — pure view models for the compare listing and pair diff.
+  - `compare-view.ts` — pure view models for the compare listing, its sidebar tree and pair diff.
   - `compare.service.ts` — cached metadata reads and the two files of a pair.
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
@@ -138,6 +138,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   its reserved query parameters.
 - Diff hunks go through the shared `diff_table` partial, so drift and compare cannot render a hunk
   differently.
+- The compare sidebar is derived from the listing (`compareNavigation`), never from an index, so sidebar and
+  body cannot disagree. Its tree and chips render through the same `sidebar_tree` / `sidebar_facets`
+  partials as the tenant sidebar; only the header partial differs.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in
