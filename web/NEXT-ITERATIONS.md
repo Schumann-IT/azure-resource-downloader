@@ -311,7 +311,65 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-*None outstanding.*
+### 3. The drift diff never goes side by side
+
+**Symptom.** The drift view's YAML diff (`/<tenant>/_drift/<key>?diff`) stays in the stacked layout on every
+screen, however wide; only the tenant compare's diff ever shows two panes. Entry 2 shipped the layout for
+both, so the drift half of it does not work.
+
+> **Cause: the page can never reach the threshold.** The diff partial switches to two panes when its own
+> width reaches `@5xl` (64rem). The drift diff page keeps the tenant sidebar: the layout is capped at
+> `max-w-7xl` (80rem), minus the `px-4` padding (2rem), the sidebar's `lg:w-80` (20rem) and the `gap-8`
+> (2rem), which leaves the main column **56rem at most** — 8rem short, by construction. The compare diff page
+> has no sidebar and gets up to 78rem, which is why it works there. The container query itself is right (it
+> is what makes one partial serve both pages); the threshold and the drift page's width do not fit each
+> other. Entry 2's review estimated the drift column at `lg` only and missed that it never grows past 56rem.
+>
+> **Options.** (a) **Lower the threshold** to `@3xl` (48rem): after the number and marker columns each pane
+> gets about 19rem of text, some 42 characters of `text-xs` monospace — enough for most YAML keys and
+> values, with wrapping for the rest, and it applies to the compare page too. (b) **Widen the drift diff
+> page**: let the layout grow past `max-w-7xl` on this page only (e.g. `max-w-screen-2xl`), so the column
+> reaches 64rem on a large monitor — but not on a laptop. The header is sized separately (`headerWidth`) and
+> an e2e case asserts it lines up with the page, so (b) has to pass the matching header width too. (c) **Drop
+> the sidebar on the diff page**, as the compare diff has none — loses the navigation the drift view
+> otherwise keeps. Recommended: **(a)**, optionally with (b), so a laptop gets two narrow panes and a large
+> screen two comfortable ones; (c) only if (a) reads too cramped in practice. The number stays one constant
+> in the partial, never per page.
+>
+> **The drift page switches twice as the window grows.** Below `lg` the sidebar stacks under the content
+> (`flex-col-reverse`), so the diff has the full width; at `lg` it moves beside it and takes 22rem. With a
+> 48rem threshold the drift diff is therefore side by side from a window of about 800px, stacked again from
+> 1024px (where the sidebar moves beside the content), and side by side again from about 1152px. That is
+> the container query working as intended — it follows the room the diff actually has — and is accepted,
+> not worked around; it is stated so it is not reported as a new bug.
+>
+> **Why entry 2 passed its tests while broken.** The e2e suite asserts class names, not layout; it cannot
+> see that a container never reaches its threshold. The constraint that actually failed — *the threshold
+> must fit inside the narrowest page that uses the partial, today the drift page's 56rem* — is therefore
+> written down where the next person will change it: the partial's header comment, which currently names
+> `@5xl`. And the fix is verified in a browser, not only by the suite.
+
+**Plan.**
+
+- **Threshold.** Change the partial's `@5xl:` variants to `@3xl:` (48rem) — all twelve, including the inner
+  wrapper's `w-full`, so the pane labels, the grid, the empty cells, the right-hand context cells and the
+  wrapping all switch together. Update the partial's header comment to name `@3xl` and to state the
+  constraint: the threshold must stay below the drift diff page's widest column (56rem), since that page
+  keeps the sidebar.
+- **Optional width.** If the manual check finds the panes too cramped, widen the drift diff page's layout
+  (`max-w-7xl` → `max-w-screen-2xl`) on that page only, pass the matching `headerWidth`, and keep the
+  header-alignment e2e case green; the documentation pages stay as they are.
+- **Tests.** `test/docs.e2e.spec.ts`: the drift and compare diff cases assert the new variant (`@3xl:grid` on
+  the right-hand context cell, `@3xl:grid-cols-2` on the rows) instead of `@5xl`. No compiled-CSS assertion
+  is added, since `src/styles.css` is not touched; the built CSS is checked by hand for the 48rem container
+  query.
+- **Manual check in a browser** — the step entry 2 skipped. Both diff pages at window widths 900, 1100, 1280
+  and 1440px, light and dark: the drift diff is two panes at 900, stacked at 1100, two panes at 1280 and
+  1440; the compare diff is two panes at all four; long lines wrap inside their pane; the stacked view still
+  scrolls sideways.
+- **Docs.** `README.md`'s Drift view entry says 64rem; change it to 48rem. `CHANGELOG.md`: completes the
+  drift diff's `### Changed` entry under `[Unreleased]` — no new entry, as the side-by-side layout has not
+  been released yet.
 
 ## Standing decisions
 
