@@ -189,15 +189,7 @@ this entry.
   known from real use.
 - **Manual pairing** (`?left=&right=`) and a **rename heuristic** (pair an only-A with an only-B whose
   normalised texts are identical).
-- **Side-by-side views.** Both compare pages are single-column today. The listing renders the three-way
-  split as three stacked sections, and the pair diff is a unified diff — the drift diff's table reused as is.
-  A reviewer comparing stage against prod reads *left tenant, right tenant*, so both should offer that
-  layout: the listing as two columns (A's resources beside B's, paired rows aligned, single-side rows with
-  an empty cell opposite), and the pair diff as a two-pane view with the normalised texts aligned line by
-  line, changed lines highlighted on both sides. The diff data already carries per-side line numbers, so
-  the two-pane variant is a second template over the same `YamlDiff`, not a second diff; the listing
-  variant is a view-model change only. Pure CSS (grid), no client-side JavaScript; the unified view stays as
-  the narrow-screen fallback.
+- **Side-by-side views** for the listing and the pair diff — promoted to a numbered entry of its own below.
 - **Move the normalisation to the CLI** — the condition this entry was accepted under. A `resource compare
   <a> <b>` in `go/` that reads two exports offline, applies the (by then stable and tested) identity rule,
   emits verdicts, dotted-path deltas and payloads, and writes an `analyze.md` so the drift-analysis agent can
@@ -207,6 +199,105 @@ this entry.
   neither tenant), and that the rule must be *statable and testable* before it is frozen — which is what
   this PoC exists to find out. The Go side already holds this as the parked idea *`resource compare`* in
   `go/NEXT-ITERATIONS.md`, which quotes the rule as stated here; the two are kept in step.
+
+### 2. Side-by-side layout for the tenant compare and the drift diff
+
+**Goal.** Let a reviewer read *left, right* wherever the browser puts two things next to each other: the
+tenant compare's resource listing as two columns with paired resources on one row and a gap opposite anything
+only one side has; a paired resource's diff as two panes with the two normalised texts aligned line by line;
+and the drift view's per-resource diff — baseline against observed — as the same two panes. Today all three
+are single-column: three stacked sections and, for both diffs, a unified table, which answers *what differs*
+but makes the reader reconstruct *which side has what*.
+
+> **Same data, second layout.** Nothing new is read or computed. The listing's view model already holds the
+> three-way split per type; a two-column rendering only needs the paired rows and the single-side rows of one
+> type interleaved into one ordered table (paired first, alphabetical; then A-only; then B-only, each with an
+> empty cell opposite). The pair diff's `YamlDiff` already carries `oldNo` and `newNo` per line, which is
+> exactly what a two-pane view needs: a removed line sits left with an empty right cell, an added line sits
+> right with an empty left cell, a context line spans both. The two-pane variant is therefore a second
+> template over the same hunks, not a second diff. The drift diff is the same `YamlDiff` from the same
+> function, so it gets the two panes for free — the only thing that differs between the two pages is what
+> the panes are called: *baseline* and *observed* on the drift diff, the two tenant ids on the compare. No
+> new dependency: the `diff` package already produces the line-level change set, and its only formatters
+> emit unified-patch text, so side-by-side is a template over what `diffLines` returns, not a library.
+> One pure step is still needed for it to read well: `diffLines` emits a changed block as a run of removed
+> lines followed by a run of added lines, and a split view should show the first removed line *beside* the
+> first added one, so a modified value is one row, not two. Within each hunk, a run of one kind is zipped
+> against the run of the other kind that follows it — whichever comes first — the overhang stays one-sided,
+> and context lines pair with themselves. That pairing is a view-model derivation from `YamlDiff`; `diffYaml`
+> and the flat `lines` are untouched.
+>
+> **One grid, reflowing — not two copies.** Rendering a unified table *and* a two-pane grid from the same
+> hunks and toggling them by CSS would double the diff markup on every response, bounded only by the 1 MiB
+> input cap — several megabytes of HTML at the worst case. Instead the partial renders the paired rows
+> **once**, as a CSS grid: four columns (left number, left text, right number, right text) when there is
+> room, and below that each row stacks its left cell over its right cell. The narrow view is thereby a
+> unified diff of the *paired* lines — a removed line directly above the added line it pairs with — rather
+> than today's run of `−` followed by a run of `+`. That is a deliberate change to the released drift diff,
+> recorded under `### Changed`; it is still one renderer, one DOM, and the same escaped data. The `<table>`
+> is retired; the `diff-added` / `diff-removed` / `diff-context` class hooks move onto the cells, so the
+> existing drift e2e assertions keep matching without change.
+>
+> **The partial measures itself, not the viewport.** The drift diff page has the sidebar (`doc-layout`,
+> `lg:flex-row`), so at `lg` its main column is about 700px — two panes of `text-xs` monospace YAML at 300px
+> each are useless — while the compare diff page has no sidebar and runs to `max-w-7xl`. No viewport
+> breakpoint fits both, and the partial must not know which page it is on. It therefore switches on its
+> **own width** with a container query: `@container` on the wrapper, the four-column layout from `@5xl`
+> (64rem, about 30rem of text per pane). Tailwind v4 ships container-query variants, so this is utilities in
+> the template and no `src/styles.css` rule. No client-side JavaScript, so no toggle; the width decides.
+>
+> **Long lines wrap inside a pane.** The unified table scrolls horizontally on `whitespace-pre`. In two panes
+> that is wrong: one 140-character line would widen the grid and push the right pane off-screen. Pane text
+> is `whitespace-pre-wrap break-all`, so a wrapped line stays on its row beside its counterpart — which is
+> the point of side-by-side. The stacked narrow view keeps `whitespace-pre` with the wrapper's horizontal
+> scroll, as today.
+>
+> **Non-negotiables, preserved.** Read-only; no new route, resolver or query parameter; every value stays
+> escaped, as in the unified table today; the hunk still has exactly one renderer, so the two diffs cannot
+> come apart in how a line looks. The drift page's own states — too large, identical, the raw links, the
+> finding link — sit outside the partial and are untouched.
+
+**Plan.**
+
+- **Row pairing.** A pure `pairRows(hunk)` beside `diffYaml` in `yaml-diff.ts`: walks a hunk's lines, zips
+  each run of removed or added lines against the run of the other kind that immediately follows it into
+  `{ left, right }` rows (either side `null` on the overhang; a context line on both sides), so the grid has
+  one row per visual line. `diffYaml`, `DiffLine` and the hunk's flat `lines` are unchanged.
+- **Diff partial becomes a reflowing grid.** `views/partials/diff-table.hbs` renders each hunk's paired
+  rows once, as a grid inside an `@container` wrapper: below `@5xl` every row stacks left cell over right
+  cell (a one-sided row shows its one cell); from `@5xl` the grid is four columns — left number, left text,
+  right number, right text — with the hunk header spanning the row. Pane text wraps (`whitespace-pre-wrap
+  break-all`) in the wide layout and keeps `whitespace-pre` in the stacked one. It takes `left` and `right`
+  labels that head the two panes in the wide layout. The `diff-added` / `diff-removed` / `diff-context`
+  classes stay, on the cells. The partial remains the only place a hunk is rendered.
+- **Drift diff page.** `views/drift-diff.hbs` passes `left="baseline"` and `right="observed"`; nothing
+  else on the page changes — the source line, the counts, the raw and finding links, the too-large and
+  identical states.
+- **Compare diff page.** `views/compare-diff.hbs` passes the two tenant ids; the report caption, the
+  audience line and the raw/normalised links are unchanged, as are the identical and too-large states.
+- **Two-column listing.** A pure function in `compare-view.ts` interleaves each type's paired, A-only and
+  B-only rows into one ordered list of `{ left, right }` cells (paired: both set; single-side: one empty),
+  and `views/compare.hbs` renders each type group as a two-column table headed by the two tenant ids, still
+  collapsed per type and with excluded types last. A paired row shows A's name left and B's name right —
+  `otherName` goes away — and **both** cells link to the pair diff; a single-side row's one cell links to
+  that tenant's YAML view, as today. The three per-side totals stay in the summary line; the three stacked
+  sections, and their `#compare-*` anchors (nothing links to them), are replaced, not kept beside the
+  table.
+- **Styles.** Expected to be utilities only (container variants, arbitrary grid columns). Only if a rule
+  Tailwind cannot express is needed does it go in `src/styles.css`, with a case in
+  `test/styles-build.spec.ts`; every state gets a dark variant.
+- **Tests.** `test/docs.e2e.spec.ts`: on both diff pages a removed line renders in a left cell only, an
+  added line in a right cell only, and a modified line as one row carrying both; the drift panes are headed
+  *baseline* / *observed* and the compare panes by the two tenant ids; the existing drift diff cases
+  (counts, raw links, too-large, identical, the class-hook regexes) pass unchanged; the listing renders a
+  paired resource on one row with both cells linking to its diff and a single-side resource with an empty
+  opposite cell, excluded types still last. Spec cases for `pairRows` (a modified line becomes one row; a
+  longer removed run leaves one-sided rows; added-before-removed pairs the same way; context pairs with
+  itself) and for the interleaving function's ordering.
+- **Docs.** `README.md` (the Drift view and Tenant compare sections: the two layouts, that the partial
+  switches on its own width, and that the narrow view pairs lines); `CHANGELOG.md` under `[Unreleased]` —
+  inside the tenant compare entry for the compare pages, and a `### Changed` entry for the drift diff, which
+  is a released feature changing shape in both layouts.
 
 ## Fixes
 
