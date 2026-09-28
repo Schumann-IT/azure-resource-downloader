@@ -19,25 +19,24 @@ section of the [repository README](../README.md) for the procedure.
 
 - **Two exports can now be put side by side — stage against prod — to see which resources are configured the
   same and where they differ.** A proof of concept: *Compare with…* on one picker card and then on another
-  opens a listing of both exports' resources — in both, only in one, only in the other — grouped by type, with
-  the bulk types the documentation leaves out collapsed at the end. Any resource both exports hold opens as one
-  line diff of the two YAML files with tenant-local identity normalised away: ids, timestamps and per-tenant
-  group addresses are dropped, and references to groups, filters and notification templates are resolved to
-  their names in each tenant, so equal configuration compares equal and a different audience shows as a
-  real difference. A pair that differs only in its assignments says so above the diff. The page states exactly
-  what was normalised and offers the diff as exported. Both pages read left against right: the listing puts
-  each type in two columns headed by the tenants, a pair on one row and a one-sided resource beside an empty
-  cell, and the diff stands the two files side by side with a changed line beside its counterpart, stacking
-  the two sides when there is not room for both. The diff shows both files whole, as an IDE's file comparison
-  does, so a difference is read in its place in the file rather than in a fragment. Both pages carry the
-  documentation's sidebar: the types as a collapsible tree, built from the listing itself so the two cannot
-  disagree, with the pair being viewed marked, so moving from one pair to the next no longer means going back
-  to the listing. The normalisation rule is **provisional**: it lives in the browser only to find out what the
+  opens a comparison laid out like an IDE's folder comparison: one pane listing both exports' resources side
+  by side, a pair on one row and a resource only one side has beside an empty cell, each pair marked
+  *identical*, *different*, *differs only in audience* or *could not compare* (with the reason). By default the
+  pane shows what needs attention and counts the rest; the identical pairs are one link away. Selecting a row
+  opens that pair's diff directly under the pane, with the row still marked, so a reviewer works down the
+  differences without leaving the page. The diff is of the two YAML files with tenant-local identity
+  normalised away: ids, timestamps and per-tenant group addresses are dropped, and references to groups,
+  filters and notification templates are resolved to their names in each tenant, so equal configuration
+  compares equal and a different audience shows as a real difference. The page states exactly what was
+  normalised and offers the diff as exported. The diff stands the two files side by side, whole, as an IDE's
+  file comparison does, with a changed line beside its counterpart, stacking the two sides when there is not
+  room for both. The normalisation rule is **provisional**: it lives in the browser only to find out what the
   rule should be against real exports, and moves to the CLI once it is stable (see `../go/NEXT-ITERATIONS.md`).
-  The app stays read-only and offline; the listing is read from each export's `resources/metadata.yaml` as
-  data, never by walking the tree, and both files of a pair go through the existing resources-root boundary.
-  Pairing by file name is a heuristic the page states; manual pairing and a same/different column on the
-  listing are follow-ups in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
+  The app stays read-only and offline and needs no script; which resources are listed is read from each
+  export's `resources/metadata.yaml` as data, never by walking the tree, and a pair's status reads only the two
+  files it names, through the existing resources-root boundary, remembered per file so an edited resource or a
+  re-downloaded export shows on the next request. Pairing by file name is a heuristic the page states; manual
+  pairing is a follow-up in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
 
 ### Changed
 

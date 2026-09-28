@@ -2046,87 +2046,115 @@ settings:
     expect(res.text).not.toContain(root);
   });
 
-  it('lists the three-way split from the two metadata files', async () => {
+  // The pane's rows, each one link, by the text they carry.
+  const paneRows = (html: string) =>
+    html.split('<a id="row-').slice(1).map((r) => r.slice(0, r.indexOf('</a>')));
+  const rowWith = (html: string, text: string) => paneRows(html).find((r) => r.includes(text));
+
+  it('lists both exports in one pane with the status of each pair', async () => {
     const res = await get(`/_compare${q}`).expect(200);
-    expect(res.text).toContain('4 in both · 3 only in stage · 2 only in prod');
+    expect(res.text).toContain('2 different · 3 only in stage · 2 only in prod · 2 identical');
     // A resource the export kept after it left the tenant is not listed.
     expect(res.text).not.toContain('Gone config');
-    // Paired rows link to their diff, single-side rows to that tenant's YAML.
-    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+    // A pair's row opens its diff with its own anchor; a one-sided row that
+    // tenant's YAML view.
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod#row-2`));
     expect(res.text).toContain('href="/stage/_resource/Microsoft.Graph/deviceConfigurations/dc1"');
     expect(res.text).toContain('href="/prod/_resource/Microsoft.Graph/namedLocations/loc1"');
-    // An excluded type comes last and is marked.
-    expect(res.text.indexOf('Microsoft.Graph/deviceConfigurations')).toBeLessThan(
-      res.text.indexOf('Microsoft.Graph/windowsAutopilotDeviceIdentities'),
+    // Types labelled as in the sidebar, the excluded one last and marked.
+    expect(res.text.indexOf('Device Configurations')).toBeLessThan(
+      res.text.indexOf('Windows Autopilot Device Identities'),
     );
-    expect(res.text).toMatch(/compare-excluded[\s\S]*?Microsoft\.Graph\/windowsAutopilotDeviceIdentities/);
-    expect(res.text).toContain('0 in both · 1 only left · 0 only right');
+    expect(res.text).toMatch(/compare-excluded[\s\S]*?Windows Autopilot Device Identities[\s\S]*?not documented/);
     expect(res.text).toContain(href(`/_compare?a=prod&b=stage`));
+    // Headed by the tenant ids; a grid of links, not a table or collapsed groups.
+    expect(res.text).toMatch(/class="compare-pane-head[^"]*">\s*<div[^>]*>stage<\/div>[\s\S]*?<div[^>]*>prod<\/div>/);
+    expect(res.text).not.toContain('<table');
+    expect(res.text).not.toContain('<details');
+    // Full width: no sidebar on the compare pages any more.
+    expect(res.text).not.toContain('<aside');
+    expect(res.text).toContain('class="doc-layout');
+    expect(res.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
     // `_compare` is a representation, not a breadcrumb segment.
     expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_compare<\/span>/);
   });
 
-  it('lists the two exports side by side, one row per key', async () => {
+  it('marks each status with a glyph and a hidden label, one link per row', async () => {
     const res = await get(`/_compare${q}`).expect(200);
-    const rows = res.text.split('<tr class="compare-row').slice(1).map((r) => r.slice(0, r.indexOf('</tr>')));
-    // A pair is one row: each side's own display name, both linking to the pair diff.
-    const three = rows.find((r) => r.includes('Policy Three (prod)'));
-    expect(three).toBeDefined();
-    expect(three).toContain(' compare-paired');
-    expect(three).toMatch(/>Policy Three<\/a>/);
-    expect(three!.split(href(`/_compare/${P}/p3?a=stage&b=prod`)).length - 1).toBe(2);
-    // A single-side key has one cell and an empty one opposite.
-    const onlyLeft = rows.find((r) => r.includes('Stage only config'));
-    expect(onlyLeft).toContain(' compare-only-left');
-    expect(onlyLeft).toMatch(/Stage only config[\s\S]*class="compare-empty/);
-    const onlyRight = rows.find((r) => r.includes('Prod only location'));
-    expect(onlyRight).toContain(' compare-only-right');
-    expect(onlyRight).toMatch(/class="compare-empty[\s\S]*Prod only location/);
-    // Pairs lead each type, and the columns are headed by the tenant ids.
-    expect(res.text).toMatch(/<th[^>]*>stage<\/th>\s*<th[^>]*>prod<\/th>/);
-    expect(res.text).not.toContain('id="compare-only-a"');
+    const expectRow = (text: string, state: string, marker: string, label: string) => {
+      const row = rowWith(res.text, text);
+      expect(row).toBeDefined();
+      expect(row).toContain(`compare-row compare-${state}`);
+      expect(row).toContain(`<span aria-hidden="true">${marker}</span><span class="sr-only">${label}</span>`);
+      // No anchor inside the row's own.
+      expect(row).not.toContain('<a ');
+    };
+    expectRow('Policy One', 'different', '≠', 'different');
+    expectRow('Policy Two', 'audience', '≠', 'differs only in audience');
+    expectRow('Stage only config', 'onlyLeft', '→', 'only in stage');
+    expectRow('Prod only location', 'onlyRight', '←', 'only in prod');
+    // A pair shows both names in one row, a one-sided row an empty cell opposite.
+    expect(rowWith(res.text, 'Policy One')).toContain(' compare-paired');
+    expect(rowWith(res.text, 'Stage only config')).toMatch(/Stage only config[\s\S]*class="compare-empty/);
+    expect(rowWith(res.text, 'Prod only location')).toMatch(/class="compare-empty[\s\S]*Prod only location/);
+    // Both sides' sizes, from the files the status read.
+    expect((rowWith(res.text, 'Policy One') ?? '').split(' B</span>').length - 1).toBe(2);
   });
 
-  it('puts the listing beside a sidebar of its types, derived from the listing', async () => {
+  it('hides identical pairs by default, counts them, and shows them with &same', async () => {
     const res = await get(`/_compare${q}`).expect(200);
-    const aside = res.text.slice(
-      res.text.indexOf('<aside aria-label="Comparison navigation"'),
-      res.text.indexOf('</aside>'),
-    );
-    expect(aside).toMatch(/class="nav-tree/);
-    expect(res.text).not.toContain('aria-label="Tenant navigation"');
-    expect(res.text).toContain('class="doc-layout');
-    expect(res.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
-    // Types labelled as a tenant's sidebar labels them, excluded ones last.
-    expect(aside).toContain('Device Management Configuration Policies');
-    expect(aside.indexOf('Device Configurations')).toBeLessThan(
-      aside.indexOf('Windows Autopilot Device Identities'),
-    );
-    expect(aside).toMatch(/Windows Autopilot Device Identities[\s\S]*?not documented/);
-    // A pair opens its diff; a one-sided resource its tenant's YAML, noted.
-    expect(aside).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
-    expect(aside).toMatch(
-      /href="\/stage\/_resource\/Microsoft\.Graph\/deviceConfigurations\/dc1"[\s\S]*?Stage only config[\s\S]*?only in stage/,
-    );
-    expect(aside).toMatch(/Prod only location[\s\S]*?only in prod/);
-    // Nothing is being viewed on the listing.
-    expect(aside).not.toContain('aria-current="page"');
-    expect(aside).not.toContain('<details open>');
+    expect(res.text).not.toContain('Policy Three');
+    expect(rowWith(res.text, '>Admins<')).toBeUndefined();
+    expect(res.text).toContain(`${href('/_compare?a=stage&b=prod&same')} class="compare-same`);
+    expect(res.text).toContain('show identical</a>');
+
+    const all = await get(`/_compare${q}&same`).expect(200);
+    const three = rowWith(all.text, 'Policy Three (prod)');
+    expect(three).toContain('compare-row compare-identical');
+    expect(three).toContain('<span class="sr-only">identical</span>');
+    expect(three).toMatch(/>Policy Three<\/span>/);
+    expect(all.text).toContain('hide identical</a>');
+    // Every row link keeps the view, and a row keeps its number in both views.
+    expect(all.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod&same#row-2`));
+    expect(all.text).toContain(href(`/_compare/${P}/p3?a=stage&b=prod&same#row-3`));
+    expect(all.text).toContain(href('/_compare?a=prod&b=stage&same'));
   });
 
-  it('marks the viewed pair in the sidebar of its diff, also as exported', async () => {
+  it('points the empty diff area at the first difference', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    expect(res.text).toContain('Select a pair above to see its diff');
+    const first = href(`/_compare/${P}/p1?a=stage&b=prod#row-2`);
+    expect(res.text).toContain(`${first} class="compare-first-difference`);
+  });
+
+  it('marks the selected pair above its diff, also as exported and when identical', async () => {
     for (const url of [`/_compare/${P}/p1${q}`, `/_compare/${P}/p1${q}&raw`]) {
       const res = await get(url).expect(200);
-      const aside = res.text.slice(
-        res.text.indexOf('<aside aria-label="Comparison navigation"'),
-        res.text.indexOf('</aside>'),
-      );
-      const self = href(`/_compare/${P}/p1?a=stage&b=prod`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      expect(aside).toMatch(new RegExp(`${self}\\s*aria-current="page"`));
-      expect(aside.split('<details open>').length - 1).toBe(1);
-      expect(aside).toMatch(/<details open>\s*<summary[^>]*>\s*Device Management Configuration Policies/);
-      // Swapping sides keeps the pair.
-      expect(aside).toContain(href(`/_compare/${P}/p1?a=prod&b=stage`));
+      expect(res.text).toMatch(/<a id="row-2" href="[^"]*" aria-current="page"/);
+      expect(res.text.match(/aria-current="page"/g)).toHaveLength(1);
+      expect(res.text).not.toContain('<aside');
+      // The pane comes first, the diff under it; swapping sides keeps the pair.
+      expect(res.text.indexOf('class="compare-pane ')).toBeLessThan(res.text.indexOf('class="doc-source'));
+      expect(res.text).toContain(href(`/_compare/${P}/p1?a=prod&b=stage`));
+    }
+    // An identical pair is not hidden from its own page.
+    const same = await get(`/_compare/${P}/p3${q}`).expect(200);
+    expect(same.text).toMatch(/<a id="row-3" href="[^"]*" aria-current="page"/);
+    expect(rowWith(same.text, '>Admins<')).toBeUndefined();
+  });
+
+  it('shows ? with its reason for a pair it cannot judge, without leaking a path', async () => {
+    const p3 = path.join(root, `prod/resources/${P}/p3.yaml`);
+    try {
+      await fsp.writeFile(p3, 'settings: [\n');
+      const res = await get(`/_compare${q}`).expect(200);
+      const row = rowWith(res.text, 'Policy Three (prod)');
+      expect(row).toContain('compare-row compare-unknown');
+      expect(row).toContain('<span aria-hidden="true">?</span><span class="sr-only">could not compare: does not parse</span>');
+      expect(res.text).toContain('· 1 could not compare');
+      expect(res.text).not.toContain(root);
+    } finally {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
     }
   });
 
@@ -2227,11 +2255,30 @@ settings:
         PROD_METADATA + entry('Microsoft.Graph/deviceConfigurations/dc1', 'Now in prod', null),
       );
       const listing = await get(`/_compare${q}`).expect(200);
-      expect(listing.text).toContain('5 in both · 2 only in stage · 2 only in prod');
+      // p3 now differs; dc1 is paired, and identical.
+      expect(listing.text).toContain('3 different · 2 only in stage · 2 only in prod · 2 identical');
+      expect(rowWith(listing.text, 'Policy Three (prod)')).toContain('compare-row compare-different');
     } finally {
       await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
       await fsp.writeFile(metadata, PROD_METADATA);
     }
+    const restored = await get(`/_compare${q}`).expect(200);
+    expect(restored.text).toContain('2 different · 3 only in stage · 2 only in prod · 2 identical');
+  });
+
+  it('re-evaluates a pair when its metadata changes how a reference resolves', async () => {
+    const metadata = path.join(root, 'prod/resources/metadata.yaml');
+    try {
+      // The same file, but prod's Admins group now has another name, so p3's
+      // audience no longer resolves to the same group as stage's.
+      await fsp.writeFile(metadata, PROD_METADATA.replace('displayName: Admins', 'displayName: Prod admins'));
+      const res = await get(`/_compare${q}`).expect(200);
+      expect(rowWith(res.text, 'Policy Three (prod)')).toContain('compare-row compare-audience');
+    } finally {
+      await fsp.writeFile(metadata, PROD_METADATA);
+    }
+    const restored = await get(`/_compare${q}`).expect(200);
+    expect(restored.text).not.toContain('Policy Three');
   });
 
   it('writes nothing under the docs root', async () => {
@@ -2239,8 +2286,10 @@ settings:
     await get('/').expect(200);
     await get('/_compare?a=stage').expect(200);
     await get(`/_compare${q}`).expect(200);
+    await get(`/_compare${q}&same`).expect(200);
     await get(`/_compare/${P}/p1${q}`).expect(200);
     await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    await get(`/_compare/${P}/p3${q}&same`).expect(200);
     expect(await snapshot(root)).toEqual(before);
   });
 });

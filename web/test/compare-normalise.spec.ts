@@ -168,6 +168,12 @@ rules:
     expect(normaliseResource(policy(P1, G1), lookupA, new Map(), opts)?.text).toBe(
       normaliseResource(policy(P2, G2), lookupB, new Map(), opts)?.text,
     );
+    // The same cut, from the one parse: equal to normalising without assignments.
+    expect(a?.textWithoutAssignments).toBe(
+      normaliseResource(policy(P1, G1), lookupA, new Map(), opts)?.text,
+    );
+    expect(a?.textWithoutAssignments).toBe(b?.textWithoutAssignments);
+    expect(normaliseResource('name: x\n', new Map(), new Map())?.textWithoutAssignments).toBe('name: x\n');
   });
 
   it('keeps an unquoted date-like scalar as the same text', () => {

@@ -56,6 +56,10 @@ export interface NormaliseReport {
 
 export interface NormalisedResource {
   text: string;
+  // The same normalised document without its top-level `assignments`, for the
+  // "differs only in audience" check. Cut from the walked result rather than
+  // walked again: each key is walked on its own, so the two are equivalent.
+  textWithoutAssignments: string;
   report: NormaliseReport;
 }
 
@@ -96,17 +100,25 @@ export function normaliseResource(
     lookup,
     nameCounts,
   };
-  const normalised = walk(source, state);
+  const normalised = walk(source, state) as Record<string, unknown>;
   state.report.droppedKeys = [...state.keys].sort();
-  return {
-    text: yaml.dump(normalised, {
-      schema: yaml.CORE_SCHEMA,
-      sortKeys: true,
-      lineWidth: -1,
-      noRefs: true,
-    }),
-    report: state.report,
-  };
+  const text = dump(normalised);
+  let textWithoutAssignments = text;
+  if ('assignments' in normalised) {
+    const rest = { ...normalised };
+    delete rest.assignments;
+    textWithoutAssignments = dump(rest);
+  }
+  return { text, textWithoutAssignments, report: state.report };
+}
+
+function dump(value: unknown): string {
+  return yaml.dump(value, {
+    schema: yaml.CORE_SCHEMA,
+    sortKeys: true,
+    lineWidth: -1,
+    noRefs: true,
+  });
 }
 
 // Whether a value names a tenant-local identity: it contains a GUID that is not

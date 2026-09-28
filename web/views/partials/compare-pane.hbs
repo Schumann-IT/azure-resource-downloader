@@ -1,0 +1,56 @@
+{{!-- The comparison pane of both compare pages, from the `ComparePane` view
+      model: the totals, then every resource of both exports as one scrollable
+      list, a type header over its rows. Each row is ONE link — a CSS grid of
+      five cells (left name, left size, status, right size, right name), never
+      a <table>, since an <a> cannot wrap a <tr> — to the pair diff, or,
+      one-sided, to that tenant's YAML view; no anchor inside another. The
+      status marker is a glyph with a visually hidden label, so it is not
+      meaning by glyph and colour alone. The selected pair is `aria-current`.
+      The pane opens at 40% of the viewport and is resizable both ways (a
+      `height` with a larger `max-height`); sizes drop below `lg`. Every value
+      is escaped. --}}
+<section aria-label="Comparison" class="compare-pane-section mb-6">
+  <p class="compare-totals mb-2 text-sm text-slate-500 dark:text-slate-400">
+    {{totals.different}} different · {{totals.onlyA}} only in {{leftId}} · {{totals.onlyB}} only in {{rightId}} · {{totals.identical}} identical{{#if totals.unknown}} · {{totals.unknown}} could not compare{{/if}}
+    · <a href="{{sameHref}}" class="compare-same text-brand-600 dark:text-brand-400 hover:underline">{{#if same}}hide identical{{else}}show identical{{/if}}</a>
+    · <a href="{{swapHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">swap sides</a>
+  </p>
+  <div class="compare-pane h-[40vh] min-h-32 max-h-[90vh] resize-y overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 text-sm">
+    <div class="compare-pane-head sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_5rem_2rem_5rem_minmax(0,1fr)] border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-semibold text-slate-600 dark:text-slate-300">
+      <div class="px-3 py-1.5 font-mono">{{leftId}}</div>
+      <div class="hidden lg:block px-2 py-1.5 text-right font-normal">size</div>
+      <div class="px-1 py-1.5"><span class="sr-only">status</span></div>
+      <div class="hidden lg:block px-2 py-1.5 font-normal">size</div>
+      <div class="px-3 py-1.5 font-mono">{{rightId}}</div>
+    </div>
+    {{#if emptyNote}}
+      <p class="compare-pane-empty px-3 py-3 text-slate-500 dark:text-slate-400">{{emptyNote}}</p>
+    {{/if}}
+    {{#each groups}}
+      <div class="compare-group{{#if this.excluded}} compare-excluded{{/if}}">
+        <div class="compare-type border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+          {{this.label}}{{#if this.excluded}} <span class="font-normal text-slate-500 dark:text-slate-400">not documented</span>{{/if}}
+        </div>
+        {{#each this.rows}}
+          <a id="row-{{this.n}}" href="{{this.href}}"{{#if this.selected}} aria-current="page"{{/if}} class="compare-row compare-{{this.state}}{{#if this.left}}{{#if this.right}} compare-paired{{else}} compare-only-left{{/if}}{{else}} compare-only-right{{/if}} grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_5rem_2rem_5rem_minmax(0,1fr)] scroll-mt-8 border-b border-slate-100 dark:border-slate-800 {{#if this.selected}}bg-slate-100 dark:bg-slate-800 font-medium{{else}}hover:bg-slate-50 dark:hover:bg-slate-900{{/if}} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-400">
+            {{#if this.left}}
+              <span class="compare-cell truncate px-3 py-0.5 text-slate-800 dark:text-slate-200">{{this.left.name}}</span>
+              <span class="hidden lg:block px-2 py-0.5 text-right text-xs tabular-nums text-slate-400 dark:text-slate-500">{{this.left.size}}</span>
+            {{else}}
+              <span class="compare-empty bg-slate-50 dark:bg-slate-900/60"></span>
+              <span class="hidden lg:block bg-slate-50 dark:bg-slate-900/60"></span>
+            {{/if}}
+            <span class="compare-status py-0.5 text-center font-mono font-bold {{#if this.is.different}}text-sky-700 dark:text-sky-300{{/if}}{{#if this.is.audience}}text-sky-400 dark:text-sky-600{{/if}}{{#if this.is.identical}}text-slate-400 dark:text-slate-500{{/if}}{{#if this.is.unknown}}text-amber-600 dark:text-amber-400{{/if}}{{#if this.is.onlyLeft}}text-emerald-700 dark:text-emerald-300{{/if}}{{#if this.is.onlyRight}}text-emerald-700 dark:text-emerald-300{{/if}}"><span aria-hidden="true">{{this.marker}}</span><span class="sr-only">{{this.label}}</span></span>
+            {{#if this.right}}
+              <span class="hidden lg:block px-2 py-0.5 text-xs tabular-nums text-slate-400 dark:text-slate-500">{{this.right.size}}</span>
+              <span class="compare-cell truncate px-3 py-0.5 text-slate-800 dark:text-slate-200">{{this.right.name}}</span>
+            {{else}}
+              <span class="hidden lg:block bg-slate-50 dark:bg-slate-900/60"></span>
+              <span class="compare-empty bg-slate-50 dark:bg-slate-900/60"></span>
+            {{/if}}
+          </a>
+        {{/each}}
+      </div>
+    {{/each}}
+  </div>
+</section>

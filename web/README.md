@@ -41,8 +41,8 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   summary, a *pending* marker for resources with no document yet, and count-only assignment badges.
 - **Sidebar navigation on every page** — one collapsible `<details>` per resource type, the section of the
   current document opened and the document marked, plus the tenant counts, export timestamp, the
-  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML. The tenant compare pages carry
-  the same tree, headed by the two tenants (see [Tenant compare](#tenant-compare)).
+  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML. The tenant compare pages have
+  no sidebar; their comparison pane lists the pairs instead (see [Tenant compare](#tenant-compare)).
 - **Taxonomy filters** — when the index carries a taxonomy, the sidebar offers one chip group per axis the
   operator declared (Programme, Platform, Assignment scope, …) and narrows the tree server-side from query
   parameters, several axes at once, with counts that follow the selection. See
@@ -160,9 +160,10 @@ Discovery and resolution rules:
 - A matched tenant **owns its whole subtree**; discovery does not descend further looking for nested tenants.
 - Directories whose name starts with `_` or `.` are skipped (housekeeping folders such as `_to_delete/`).
 - Counts in the picker and sidebar come from the index (`counts.documented`, `counts.pending`,
-  `counts.excluded`), never from walking the tree. The tenant compare's listing is the one exception to *the
-  index*, not to *never walking*: it reads each export's `resources/metadata.yaml` as data. The tenant's
-  display name is the index's `tenant` field (the Entra default domain), falling back to the folder name.
+  `counts.excluded`), never from walking the tree. The tenant compare is the one exception to *the index*, not
+  to *never walking*: its rows are read from each export's `resources/metadata.yaml` as data, and only a pair's
+  status reads the two resource files the metadata names. The tenant's display name is the index's `tenant`
+  field (the Entra default domain), falling back to the folder name.
 
 ## Routes
 
@@ -170,8 +171,8 @@ Discovery and resolution rules:
 | --- | --- |
 | `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link and, when at least two exports carry `resources/metadata.yaml`, a *Compare with…* link on each of those. |
 | `GET /_compare?a=<tenant>` | The picker in its compare selecting state: `a` is marked, every other eligible tenant offers *Compare with*, and *Cancel* returns to `/`. A bare `GET /_compare` redirects to `/`. |
-| `GET /_compare?a=<tenant>&b=<tenant>` | The three-way listing of the two exports' resources — in both, only in `a`, only in `b` — grouped by type, with the same types as a sidebar tree. 404 for an unknown or `_`-prefixed tenant, the same tenant twice, or a tenant without a readable `resources/metadata.yaml`. |
-| `GET /_compare/*path?a=&b=` | One resource both exports list, as a line diff of the two files after normalisation, with the pair marked in the sidebar tree; `&raw` diffs them as exported. The `.yaml` suffix is optional. 404 for a key either export does not list as present. |
+| `GET /_compare?a=<tenant>&b=<tenant>` | The comparison pane of the two exports — every pair with its status, one-sided resources, what needs attention first — above an empty diff area pointing at the first difference; `&same` also shows identical pairs. 404 for an unknown or `_`-prefixed tenant, the same tenant twice, or a tenant without a readable `resources/metadata.yaml`. |
+| `GET /_compare/*path?a=&b=` | The same pane with this pair selected, above a line diff of the two files after normalisation; `&raw` diffs them as exported, `&same` keeps identical pairs in the pane. The `.yaml` suffix is optional. 404 for a key either export does not list as present. |
 | `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. `documents` and `pending` are read from each tenant's `index.yaml` on every call, not cached, so a regenerated index is reflected immediately. |
 | `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
@@ -331,21 +332,29 @@ is configured the same in both, and where it differs. Offline and read-only like
 - **Selection** is two plain links on the picker: *Compare with…* on the first tenant, then *Compare with …*
   on the second. A tenant takes part only when its export has a readable `resources/metadata.yaml`, so
   docs-only copies get no link.
-- **The listing** is computed from the two `resources/metadata.yaml` files alone — no resource file is read
-  and no directory walked. Resources are paired by their export path (`<APIType>/<endpoint>/<name>`), which is
-  a heuristic the page states: different policies can share a name, and a renamed policy shows once on each
-  side. Only resources still present in the tenant (`presentInTenant` not `false`) are listed. Type groups are
-  collapsed; types either index counts under `counts.excluded` come last and are marked *not documented*.
-  Each type is a two-column table headed by the two tenants: a pair is one row with each side's own display
-  name, both opening the diff; a resource only one side has sits in its column with an empty cell opposite and
-  opens that tenant's YAML view. Pairs come first in each type, then the left-only, then the right-only rows.
-  The listing does not say whether a pair differs — that needs both files read.
-- **The sidebar** on both compare pages is the tenant sidebar's tree, derived from the listing itself, so the
-  two cannot disagree and nothing else is read: one collapsible section per type in the listing's order, with
-  the excluded types last and marked *not documented*; a pair opens its diff, a resource only one side has
-  opens that tenant's YAML view and says *only in* that tenant. On a pair's diff the pair is marked and its
-  section open, and *swap sides* keeps the pair. The header names both tenants, links back to the listing and
-  repeats the totals.
+- **The comparison pane** heads both compare pages, full width, like the top half of an IDE's folder
+  comparison. Which rows exist comes from the two `resources/metadata.yaml` files alone — no directory walked.
+  Resources are paired by their export path (`<APIType>/<endpoint>/<name>`), which is a heuristic the page
+  states: different policies can share a name, and a renamed policy shows once on each side. Only resources
+  still present in the tenant (`presentInTenant` not `false`) are listed. One flat, scrollable list: a header
+  row per type, types either index counts under `counts.excluded` last and marked *not documented*; then per
+  row the left name and size, a status, the right size and name. Pairs come first in each type, then the
+  left-only, then the right-only rows. Each row is one link: a pair to its diff, a resource only one side has
+  to that tenant's YAML view. The pane opens at 40% of the window and can be dragged taller or shorter; below
+  1024px the sizes drop.
+- **The status** of a pair is `=` *identical*, `≠` *different* (lighter when it *differs only in audience*),
+  or `?` *could not compare* with the reason — a file that does not parse, cannot be read, or is too large to
+  normalise and differs as exported. `→` / `←` mark a resource only one side has, pointing away from that side.
+  Every marker has a hidden label, so it is never meaning by glyph and colour alone. It is decided the way the
+  diff page decides it, from the same normalisation, over hashes of each file kept per file (never its text)
+  and validated by that file's and its export's metadata timestamps and sizes, so an edited resource or a
+  re-downloaded export shows on the next request. Its cost is one read and normalisation per paired file on a
+  cold cache, then only file checks.
+- **What is shown**: by default the pane lists what needs attention — different, one-sided and unknown rows —
+  and counts everything (*N different · N only in a · N only in b · N identical*); *show identical* (`&same`)
+  lists the identical pairs too, and every row link keeps that choice. The pair being viewed is always listed
+  and marked, whatever its status, and the page opens with it scrolled into view. *swap sides* keeps the pair.
+  Without a selected pair the diff area links the first difference.
 - **The diff** normalises both files identically, then shows a line diff through the same partial as the drift
   diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, with the same
   marking, count and jump links, exactly as described for the drift diff above. Unlike the drift diff it shows

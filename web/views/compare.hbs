@@ -3,64 +3,29 @@
   {{> head}}
   <body id="compare-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     {{> header}}
-    <div class="doc-layout mx-auto max-w-7xl px-4 py-8 flex flex-col-reverse gap-8 lg:flex-row">
-      {{> compare_sidebar nav}}
-      <main class="doc-main min-w-0 flex-1">
+    <div class="doc-layout mx-auto max-w-7xl px-4 py-8">
+      <main class="doc-main min-w-0">
       <h1 class="text-2xl font-bold mb-1">
         <a href="/{{left.id}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{left.id}}</a>
         <span class="text-slate-400">↔</span>
         <a href="/{{right.id}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{right.id}}</a>
       </h1>
-      <p class="compare-totals text-sm text-slate-500 dark:text-slate-400">
-        {{listing.totals.both}} in both · {{listing.totals.onlyA}} only in {{left.id}} · {{listing.totals.onlyB}} only in {{right.id}}
-        · <a href="{{swapHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">swap sides</a>
-      </p>
-      <p class="compare-note mt-3 mb-8 text-xs text-slate-500 dark:text-slate-400">
+      <p class="compare-note mb-4 text-xs text-slate-500 dark:text-slate-400">
         Resources are paired by their export path, which is a heuristic: two tenants can hold different policies under
         the same name, and a renamed policy shows once on each side. Listed from each export's
-        <code class="font-mono">resources/metadata.yaml</code>, resources still present in the tenant only. Open a pair
-        to see whether it differs — this listing does not read the files. Types the documentation leaves out come last.
+        <code class="font-mono">resources/metadata.yaml</code>, resources still present in the tenant only; a pair's
+        status compares the two files after the provisional normalisation. Types the documentation leaves out come last.
       </p>
 
-      {{#if listing.groups.length}}
-        <div class="compare-groups space-y-1">
-          {{#each listing.groups}}
-            <details class="compare-group rounded border border-slate-200 dark:border-slate-700{{#if this.excluded}} compare-excluded{{/if}}">
-              <summary class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
-                <span class="font-mono">{{this.type}}</span>
-                <span class="text-xs font-normal text-slate-500 dark:text-slate-400">{{this.both}} in both · {{this.onlyA}} only left · {{this.onlyB}} only right</span>
-                {{#if this.excluded}}<span class="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">not documented</span>{{/if}}
-              </summary>
-              <table class="w-full table-fixed border-collapse text-sm">
-                <thead>
-                  <tr class="text-left text-xs text-slate-500 dark:text-slate-400">
-                    <th class="w-1/2 px-3 py-1 font-mono font-medium">{{@root.left.id}}</th>
-                    <th class="w-1/2 border-l border-slate-200 dark:border-slate-700 px-3 py-1 font-mono font-medium">{{@root.right.id}}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {{#each this.rows}}
-                    <tr class="compare-row{{#if this.left}}{{#if this.right}} compare-paired{{else}} compare-only-left{{/if}}{{else}} compare-only-right{{/if}} border-t border-slate-100 dark:border-slate-800">
-                      {{#if this.left}}
-                        <td class="compare-cell px-3 py-0.5 break-words"><a href="{{this.left.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.left.name}}</a></td>
-                      {{else}}
-                        <td class="compare-empty bg-slate-50 dark:bg-slate-900/60 px-3 py-0.5"></td>
-                      {{/if}}
-                      {{#if this.right}}
-                        <td class="compare-cell border-l border-slate-200 dark:border-slate-700 px-3 py-0.5 break-words"><a href="{{this.right.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.right.name}}</a></td>
-                      {{else}}
-                        <td class="compare-empty border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-3 py-0.5"></td>
-                      {{/if}}
-                    </tr>
-                  {{/each}}
-                </tbody>
-              </table>
-            </details>
-          {{/each}}
-        </div>
-      {{else}}
-        <p class="text-sm text-slate-500 dark:text-slate-400">Neither export lists a resource still present in its tenant.</p>
-      {{/if}}
+      {{> compare_pane pane leftId=left.id rightId=right.id}}
+
+      <div class="compare-diff-area rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
+        {{#if pane.firstDifferenceHref}}
+          Select a pair above to see its diff, or <a href="{{pane.firstDifferenceHref}}" class="compare-first-difference text-brand-600 dark:text-brand-400 hover:underline">open the first difference</a>.
+        {{else}}
+          Select a pair above to see its diff. No pair differs.
+        {{/if}}
+      </div>
       </main>
     </div>
   </body>

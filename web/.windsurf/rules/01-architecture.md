@@ -47,8 +47,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `resources-metadata.ts` — pure `parseResourcesMetadata` for `resources/metadata.yaml` (+ the
     `RESOURCES_METADATA_FILE` constant and the set-valued reference lookup).
   - `compare-normalise.ts` — pure `normaliseResource`, the **provisional** cross-tenant identity rule.
-  - `compare-view.ts` — pure view models for the compare listing, its sidebar tree and pair diff.
-  - `compare.service.ts` — cached metadata reads and the two files of a pair.
+  - `compare-view.ts` — pure view models for the compare listing, its comparison pane (per-file digests and
+    pair status) and pair diff.
+  - `compare.service.ts` — cached metadata reads, the per-file digest cache and the two files of a pair.
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
@@ -129,20 +130,27 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   the CLI (`resource compare`, parked in `../go/NEXT-ITERATIONS.md`); keep it data (exported constants), keep
   it applied identically to both sides, keep it announced (the report caption and `&raw`), and mirror any
   change into that Go idea.
-- The listing comes from the two `resources/metadata.yaml` files alone; no resource file is read and no
-  directory is walked for it. A tenant takes part only with a readable metadata file.
+- Which rows exist, and where, comes from the two `resources/metadata.yaml` files alone; no directory is
+  walked for it. A tenant takes part only with a readable metadata file. Only a pair's *status* reads resource
+  files — only for keys both exports list as present, only through `resolveResource`.
+- The status is cached **per file, not per pair**: `CompareService` keeps each file's hashes (as exported,
+  normalised, normalised without `assignments`) and size, never a text, validated by the file's mtime + size
+  and its export's metadata stat, and bounded. A pair's status comes from two digests through `pairStatus`,
+  never through `pairComparison`, so no diff is computed per row; the per-file normalisation step
+  (`normaliseFile`) is shared by both, so the pane and the diff page cannot apply different rules.
 - Both files of a pair are located only through `resolveResource`, and only for a key both exports list as
   present — no new resolver.
 - `_compare` is a root-level *representation* prefix: out of the breadcrumb, both routes declared before
-  `:tenant`. It cannot shadow a tenant because discovery skips `_`-prefixed folders. `a`, `b` and `raw` are
-  its reserved query parameters.
+  `:tenant`. It cannot shadow a tenant because discovery skips `_`-prefixed folders. `a`, `b`, `raw` and
+  `same` are its reserved query parameters.
 - Diff hunks go through the shared `diff_table` partial, so drift and compare cannot render a hunk
   differently. The compare diff's whole-file view is `diffYaml`'s `WHOLE_FILE` context plus the partial's
   `full` parameter, never a second partial; the per-line character parts are plain `{ text, changed }` data,
   escaped like every other diff value.
-- The compare sidebar is derived from the listing (`compareNavigation`), never from an index, so sidebar and
-  body cannot disagree. Its tree and chips render through the same `sidebar_tree` / `sidebar_facets`
-  partials as the tenant sidebar; only the header partial differs.
+- Both compare pages render the **comparison pane** (`compare_pane`, from `comparePane`) above the diff area,
+  full width with no sidebar. Each row is one `<a>` — a CSS grid, never a `<table>` — with no anchor inside
+  it; every status marker carries a visually hidden label. The pair being viewed is always shown, whatever
+  its status, and row links keep the view's query minus the key.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in

@@ -185,8 +185,8 @@ this entry.
 
 **Follow-ups (not in this entry).**
 
-- **Eager same/different on the listing** — the other option above, once the pair count and read cost are
-  known from real use.
+- ~~**Eager same/different on the listing** — the other option above, once the pair count and read cost are
+  known from real use.~~ *Promoted into entry 7 (the comparison pane) and shipped there.*
 - **Manual pairing** (`?left=&right=`) and a **rename heuristic** (pair an only-A with an only-B whose
   normalised texts are identical).
 - **Side-by-side views** for the listing and the pair diff — promoted to a numbered entry of its own below.
@@ -444,10 +444,12 @@ endpoint navigation above being in place, since the chips live in that sidebar.
   membership through the `docs/<type>/<name>.md` ↔ key mapping, union for a pair; the compare selection is
   parsed with the existing `parseFacetSelection` against the merged axes.
 - **Narrowing.** `compareListing` (or a pure step after it) drops rows the selection excludes and recomputes
-  the group counts and totals; `compareNavigation` keeps the viewed pair as an exempt item on the diff page.
-  Chip hrefs, item hrefs and *swap sides* carry the selection; *Clear filters* is the listing href.
-- **Views.** `compare_sidebar.hbs` includes `sidebar_facets` with the compare filters and the *Showing N of
-  M* line; the listing body renders the narrowed groups. No new markup beyond what the shared partial has.
+  the group counts and totals; the comparison pane keeps the viewed pair shown whatever the selection, as it
+  already does whatever its status. Chip hrefs, row hrefs and *swap sides* carry the selection (the pane's row
+  hrefs already keep the view's query minus the key); *Clear filters* is the listing href.
+- **Views.** The compare pages include `sidebar_facets` above the comparison pane (they have no sidebar), with
+  the compare filters and the *Showing N of M* line; the pane renders the narrowed groups. No new markup
+  beyond what the shared partial has.
 - **Tests.** `test/tenant-index.spec.ts`: `a`/`b` are not offered as axes, `selectionHref` appends with `&`,
   the refactor keeps every existing case. Spec cases for the merge (order, labels, a value only one side
   declares), the membership join (pair union, one-sided row, unlisted row → uncategorised) and the narrowed
@@ -687,7 +689,7 @@ its types in collapsed groups; the diff is a second page.
 
 **Plan.**
 
-- **Pair status.** Extract the per-file normalisation step out of `pairComparison` in `compare-view.ts` into
+- ~~**Pair status.** Extract the per-file normalisation step out of `pairComparison` in `compare-view.ts` into
   one pure function returning a file's normalised text and its text without `assignments` (or the reason
   there is none); `pairComparison` calls it for both sides and adds the diff. On the same function, a pure
   `fileDigest(raw, metadata)` yields the file's three `sha256` hashes (`crypto`, as the drift verification
@@ -698,19 +700,28 @@ its types in collapsed groups; the diff is a second page.
   digest cache keyed by file path, validated by the file's mtime + size and its metadata file's, and a
   `digests(tenant, keys)` that stats and reads with a small concurrency bound, called once per side; sizes
   come back with it. `FileCache` validates by one file's stat, so the digest cache is a sibling of it that
-  also checks the metadata stat, not a change to `FileCache` — the drift readers keep theirs as is.
-- **Listing model.** `compareListing` rows gain `status` and the two sizes. A pure step numbers every row over
+  also checks the metadata stat, not a change to `FileCache` — the drift readers keep theirs as is. *Shipped
+  as:* the per-file step is `normaliseFile`, over `normaliseResource`, which now returns the text without
+  `assignments` from the same parse and walk (one extra dump, not a second parse) — so a file costs one
+  `yaml.load` and at most two `yaml.dump`s; `digests(tenant, metadata, keys)` takes the parsed metadata it is
+  validated against.~~
+- ~~**Listing model.** `compareListing` rows gain `status` and the two sizes. A pure step numbers every row over
   the full list, then splits the default view (non-identical, plus the selected key whatever its status) from
   `&same`, and computes the four totals; a group left without rows is dropped from the view. `same` joins the
-  reserved query parameters, and one helper builds a row href from the current query minus the key.
-- **Views.** A `compare_pane` partial: a CSS grid, one `<a>` per row holding the five cells, a header row and a
+  reserved query parameters, and one helper builds a row href from the current query minus the key. *Shipped
+  as:* `compareListing` stays metadata-only; the pure step is `comparePane(listing, leftDigests, rightDigests,
+  options)`, which also builds the row hrefs, *show/hide identical*, *swap sides* and the first-difference link,
+  and says why the pane is empty. A fifth count, *could not compare*, is shown when it is not zero.~~
+- ~~**Views.** A `compare_pane` partial: a CSS grid, one `<a>` per row holding the five cells, a header row and a
   group-header row per type, markers with hidden labels, the resize container. `compare.hbs` and
   `compare-diff.hbs` become one layout, pane then diff area, with no sidebar. `compare-diff.hbs` keeps the diff,
   and the listing page shows the *select a pair* state. Remove `compare-sidebar.hbs` and `compareNavigation`,
-  with its spec cases, since their purpose moves to the pane.
-- **Controller.** Both compare routes build the listing with statuses through the existing `listingOf`
-  helper, then pass the selected key and `same`. No filesystem logic in the controller.
-- **Tests.** Spec: `fileDigest` for a parsable file, an unparsable one and one over the size cap (raw hash
+  with its spec cases, since their purpose moves to the pane. *Shipped as:* the pair page heads the pane with
+  a link back to the listing; the raw/normalised toggle keeps `&same` too.~~
+- ~~**Controller.** Both compare routes build the listing with statuses through the existing `listingOf`
+  helper, then pass the selected key and `same`. No filesystem logic in the controller. *Shipped as:* one
+  private `paneOf` beside `listingOf`.~~
+- ~~**Tests.** Spec: `fileDigest` for a parsable file, an unparsable one and one over the size cap (raw hash
   only), and that two files equal after normalisation digest equal; `pairStatus` for identical, audience-only,
   different, unparsable, too-large-but-equal and too-large-and-different; `pairComparison` unchanged through
   the extraction (its existing cases pass as they are); the default / `&same` split, the selected identical
@@ -722,11 +733,16 @@ its types in collapsed groups; the diff is a second page.
   nested anchors. Freshness: an edited resource flips `=` to `≠`, and an edited `metadata.yaml` re-evaluates a
   pair whose reference resolution changes, each on the next request. Plus writes-nothing and no-path-leak for
   an unreadable pair. The existing compare cases are updated where they asserted the collapsed groups or the
-  sidebar. That is the behaviour this entry changes, stated in the entry, not a weakened assertion.
-- **Manual check in a browser.** The reference exports: cold and warm load time of the listing against the
+  sidebar. That is the behaviour this entry changes, stated in the entry, not a weakened assertion. *Shipped
+  as:* plus a spec case that `pairStatus` and `pairComparison` agree on *identical* and *audience only*, and a
+  normaliser case for the one-parse text without `assignments`. The metadata freshness case renames prod's
+  Admins group, which turns an identical pair into *differs only in audience*; the unknown case writes an
+  unparsable file and restores it.~~
+- ~~**Manual check in a browser.** The reference exports: cold and warm load time of the listing against the
   pass criteria above (about 1.5 s cold, about 200 ms warm); the pane scroll landing on the selected row
-  without the page jumping; the divider dragging both ways; light and dark; 900 and 1440px.
-- **Docs.** `README.md` (Tenant compare: the pane, the status and what it costs, `&same`, one page shape;
+  without the page jumping; the divider dragging both ways; light and dark; 900 and 1440px.~~ *Passed; load
+  times within the criteria.*
+- ~~**Docs.** `README.md` (Tenant compare: the pane, the status and what it costs, `&same`, one page shape;
   routes table). `.windsurf/rules/01-architecture.md`: in Tenant compare, the rows-from-metadata /
   status-from-`resolveResource` split, the per-file digest cache (hashes only, validated by file and metadata
   stat), `same` reserved, and the compare sidebar rule replaced by the pane. `CHANGELOG.md`: amend the tenant
@@ -736,7 +752,7 @@ its types in collapsed groups; the diff is a second page.
   no-client-side-JavaScript rule* gets one sentence saying this pane was checked against the rule and needed
   no script. Entry 4 is rewritten where it names what this entry removes: its *Narrowing* item's
   `compareNavigation` exemption becomes the pane's always-shown selected pair, and its *Views* item puts
-  `sidebar_facets` above the pane instead of inside `compare_sidebar.hbs`, so entry 4 stays self-contained.
+  `sidebar_facets` above the pane instead of inside `compare_sidebar.hbs`, so entry 4 stays self-contained.~~
 
 **Follow-ups (not in this entry).**
 
@@ -1132,7 +1148,10 @@ frontend framework"*) and claimed in `README.md`'s Frontend section. **Parked** 
 a feature: nothing is unblocked until a specific blocked feature is actually wanted, and every one of them is
 itself parked. **Revisit** when a feature someone has asked for cannot be built server-side at acceptable cost —
 tenant-wide search is the honest candidate — or when the alternative has become visibly worse than the script
-would be (a `:target` hack, a route invented only to compensate, a workaround nobody can explain).
+would be (a `:target` hack, a route invented only to compensate, a workaround nobody can explain). The tenant
+compare's IDE-style comparison pane was checked against the rule and needed no script: statuses are computed
+on the server, selecting a row is a link, the selected row is scrolled to with a fragment and the pane is
+resized with CSS.
 
 **Note what the rule does and does not forbid.** It bans *shipped script* — no `<script>`, no bundler, no
 framework, no client-side state. It does not ban HTML interactivity: `<details>`/`<summary>`, `:target`,

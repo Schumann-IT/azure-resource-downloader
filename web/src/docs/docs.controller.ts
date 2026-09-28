@@ -50,9 +50,11 @@ import {
   COMPARE_PREFIX,
   CompareListing,
   compareListing,
-  compareNavigation,
+  ComparePane,
+  comparePane,
   listingHref,
   pairComparison,
+  pairedKeys,
   pairHref,
   selectHref,
 } from './compare-view';
@@ -226,14 +228,16 @@ export class DocsController {
   }
 
   // GET /_compare?a=&b= — the tenant compare. `a` alone is the picker in its
-  // selecting state; `a` and `b` the three-way listing of the two exports'
-  // resources, read from their `resources/metadata.yaml`. Declared before
-  // `:tenant` so the prefix wins; it cannot shadow a tenant because discovery
-  // skips `_`-prefixed folders. Read-only.
+  // selecting state; `a` and `b` the comparison pane of the two exports'
+  // resources (rows from their `resources/metadata.yaml`, each pair's status from
+  // its two files) with no pair selected; `&same` also shows identical pairs.
+  // Declared before `:tenant` so the prefix wins; it cannot shadow a tenant
+  // because discovery skips `_`-prefixed folders. Read-only.
   @Get(COMPARE_PREFIX)
   async compareTenants(
     @Query('a') a: unknown,
     @Query('b') b: unknown,
+    @Query('same') same: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     if (a === undefined) {
@@ -248,28 +252,27 @@ export class DocsController {
       return this.compareNotFound(res, 'compare', a, b, '');
     }
 
-    const listing = this.listingOf(left, right);
     res.render('compare', {
       title: `Compare ${left.info.name} ↔ ${right.info.name}`,
       breadcrumb: [{ label: `${left.info.id} ↔ ${right.info.id}` }],
       left: { id: left.info.id, name: left.info.name },
       right: { id: right.info.id, name: right.info.name },
-      swapHref: listingHref(right.info.id, left.info.id),
-      listing,
-      nav: this.compareNav(left, right, listing, ''),
+      pane: await this.paneOf(left, right, '', same !== undefined),
     });
   }
 
   // GET /_compare/*path?a=&b= — one resource present in both exports as a line
-  // diff of the two files with tenant-local identity normalised away; `?raw`
-  // diffs them as exported. Both files are located only through
-  // `resolveResource`, and only for a key both exports list.
+  // diff of the two files with tenant-local identity normalised away, under the
+  // comparison pane with this pair selected; `?raw` diffs them as exported and
+  // `&same` keeps identical pairs in the pane. Both files are located only
+  // through `resolveResource`, and only for a key both exports list.
   @Get(`${COMPARE_PREFIX}/*path`)
   async comparePair(
     @Param() params: any,
     @Query('a') a: unknown,
     @Query('b') b: unknown,
     @Query('raw') raw: string | undefined,
+    @Query('same') same: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const relPath = joinPath(params.path ?? params['0'] ?? '');
@@ -311,18 +314,17 @@ export class DocsController {
         id: right.info.id,
         yamlHref: `/${right.info.id}/${RESOURCE_PREFIX}/${key}`,
       },
-      listingHref: listingHref(left.info.id, right.info.id),
-      rawHref: `${self}&raw`,
-      normalisedHref: self,
+      rawHref: `${self}${same !== undefined ? '&same' : ''}&raw`,
+      normalisedHref: `${self}${same !== undefined ? '&same' : ''}`,
       raw: raw !== undefined,
-      nav: this.compareNav(left, right, this.listingOf(left, right), key),
+      pane: await this.paneOf(left, right, key, same !== undefined),
       ...comparison,
     });
   }
 
   // The listing of two comparable tenants, built in one place for both compare
-  // routes so the pair page's sidebar is the listing page's tree. Types either
-  // index counts under `counts.excluded` go last; the rest is read from the two
+  // routes so the pair page's pane is the listing page's. Types either index
+  // counts under `counts.excluded` go last; the rows are read from the two
   // metadata files the tenants already hold.
   private listingOf(left: CompareTenant, right: CompareTenant): CompareListing {
     const excluded = new Set(
@@ -336,25 +338,27 @@ export class DocsController {
     );
   }
 
-  // View model for the compare sidebar: the two tenants, the listing's totals,
-  // the swap link (to the same pair when one is being viewed) and the tree.
-  // `activeKey` is the pair being viewed, or '' on the listing page.
-  private compareNav(
+  // The comparison pane of both compare routes: the listing's rows with each
+  // pair's status from the two sides' per-file digests. `selectedKey` is the
+  // pair being viewed, or '' on the listing page.
+  private async paneOf(
     left: CompareTenant,
     right: CompareTenant,
-    listing: CompareListing,
-    activeKey: string,
-  ): Record<string, unknown> {
-    const a = left.info.id;
-    const b = right.info.id;
-    return {
-      left: { id: a },
-      right: { id: b },
-      totals: listing.totals,
-      listingHref: listingHref(a, b),
-      swapHref: activeKey ? pairHref(b, a, activeKey) : listingHref(b, a),
-      sections: compareNavigation(listing, a, b, activeKey),
-    };
+    selectedKey: string,
+    same: boolean,
+  ): Promise<ComparePane> {
+    const listing = this.listingOf(left, right);
+    const keys = pairedKeys(listing);
+    const [leftDigests, rightDigests] = await Promise.all([
+      this.compare.digests(left.info, left.metadata, keys),
+      this.compare.digests(right.info, right.metadata, keys),
+    ]);
+    return comparePane(listing, leftDigests, rightDigests, {
+      a: left.info.id,
+      b: right.info.id,
+      selectedKey,
+      same,
+    });
   }
 
   // GET /:tenant — the tenant landing page: the generation agent's tenant-wide

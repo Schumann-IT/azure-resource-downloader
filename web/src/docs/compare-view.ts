@@ -1,6 +1,7 @@
-import { NormaliseReport, normaliseResource } from './compare-normalise';
+import { createHash } from 'crypto';
+import { NormalisedResource, NormaliseReport, normaliseResource } from './compare-normalise';
 import { MetadataEntry, ResourcesMetadata } from './resources-metadata';
-import { NavItem, NavSection, typeLabel } from './tenant-index';
+import { typeLabel } from './tenant-index';
 import { DIFF_CONTEXT, diffYaml, MAX_DIFF_BYTES, YamlDiff } from './yaml-diff';
 
 // Route prefix of the tenant compare. A root-level *representation* prefix: it
@@ -133,45 +134,279 @@ export function interleaveRows(
   ];
 }
 
-// The compare sidebar's tree, derived from the listing itself so sidebar and
-// body cannot disagree and nothing beyond the two metadata files is read. One
-// section per type in the listing's order (excluded types last, noted), one item
-// per row: a pair opens its diff under the left side's name, a one-sided
-// resource its tenant's YAML view with a note naming that tenant. `activeKey`
-// is the pair being viewed, or '' on the listing page. Pure.
-export function compareNavigation(
+// The keys both exports hold, in listing order: the only keys whose files the
+// pane's status reads.
+export function pairedKeys(listing: CompareListing): string[] {
+  return listing.groups.flatMap((g) =>
+    g.rows.filter((r) => r.left !== null && r.right !== null).map((r) => r.key),
+  );
+}
+
+// One file as its tenant's normalisation sees it: the one step both the pair
+// diff and the pane's status build on, so the two cannot apply different rules.
+// Undefined when the YAML does not parse to an object.
+export function normaliseFile(
+  raw: string,
+  metadata: ResourcesMetadata,
+): NormalisedResource | undefined {
+  return normaliseResource(raw, metadata.lookup, metadata.nameCounts);
+}
+
+// What the pane keeps per resource file, instead of its text: hashes of the
+// file as exported, normalised, and normalised without `assignments`. The two
+// normalised hashes are null when the file does not parse or is over the size
+// cap, with the reason in `reason`. A few dozen bytes per file, so the cache
+// holding them stays small however many pairs are compared.
+export interface FileDigest {
+  size: number;
+  raw: string;
+  normalised: string | null;
+  withoutAssignments: string | null;
+  reason: string;
+}
+
+export function fileDigest(raw: string, metadata: ResourcesMetadata): FileDigest {
+  const size = Buffer.byteLength(raw);
+  const digest = { size, raw: sha256(raw), normalised: null, withoutAssignments: null };
+  if (size > MAX_DIFF_BYTES) return { ...digest, reason: 'too large to normalise' };
+  const n = normaliseFile(raw, metadata);
+  if (!n) return { ...digest, reason: 'does not parse' };
+  return {
+    ...digest,
+    normalised: sha256(n.text),
+    withoutAssignments: sha256(n.textWithoutAssignments),
+    reason: '',
+  };
+}
+
+export type PairState = 'identical' | 'audience' | 'different' | 'unknown';
+
+export interface PairStatus {
+  state: PairState;
+  reason: string;
+}
+
+// A pair's status from its two digests — never from the texts and never through
+// `pairComparison`, so no diff is computed per row. Mirrors what the pair diff
+// page concludes: files equal as exported are identical; above the combined
+// size cap nothing is normalised, so unequal files cannot be judged; otherwise
+// the normalised hashes decide, then the ones without `assignments`. A null
+// digest is a file that could not be read. Pure.
+export function pairStatus(left: FileDigest | null, right: FileDigest | null): PairStatus {
+  if (!left || !right) return { state: 'unknown', reason: 'a file could not be read' };
+  if (left.raw === right.raw) return { state: 'identical', reason: '' };
+  if (left.size + right.size > MAX_DIFF_BYTES) {
+    return { state: 'unknown', reason: 'too large to normalise' };
+  }
+  if (left.normalised === null || right.normalised === null) {
+    return { state: 'unknown', reason: left.reason || right.reason };
+  }
+  if (left.normalised === right.normalised) return { state: 'identical', reason: '' };
+  if (left.withoutAssignments === right.withoutAssignments) {
+    return { state: 'audience', reason: '' };
+  }
+  return { state: 'different', reason: '' };
+}
+
+export type RowState = PairState | 'onlyLeft' | 'onlyRight';
+
+export interface PaneCell {
+  name: string;
+  size: string;
+}
+
+// One row of the comparison pane: one link, to the pair diff (carrying the
+// view's query and its own `#row-<n>`) or, one-sided, to that tenant's YAML
+// view. `n` numbers the full list, so a row keeps its anchor whether identical
+// pairs are shown or not.
+export interface PaneRow {
+  n: number;
+  key: string;
+  href: string;
+  selected: boolean;
+  left: PaneCell | null;
+  right: PaneCell | null;
+  state: RowState;
+  is: Record<RowState, boolean>;
+  marker: string;
+  label: string;
+}
+
+export interface PaneGroup {
+  type: string;
+  label: string;
+  excluded: boolean;
+  rows: PaneRow[];
+}
+
+export interface PaneTotals {
+  different: number;
+  onlyA: number;
+  onlyB: number;
+  identical: number;
+  unknown: number;
+}
+
+export interface ComparePane {
+  groups: PaneGroup[];
+  totals: PaneTotals;
+  same: boolean;
+  sameHref: string;
+  swapHref: string;
+  listingHref: string;
+  firstDifferenceHref: string | null;
+  // Why the pane shows no row, or '' when it shows some.
+  emptyNote: string;
+}
+
+export interface PaneOptions {
+  a: string;
+  b: string;
+  // The pair being viewed, or '' on the listing page.
+  selectedKey: string;
+  // Whether identical pairs are shown (`&same`).
+  same: boolean;
+}
+
+const MARKERS: Record<RowState, string> = {
+  identical: '=',
+  audience: '≠',
+  different: '≠',
+  unknown: '?',
+  onlyLeft: '→',
+  onlyRight: '←',
+};
+
+// The comparison pane from the listing and the two sides' digests. By default
+// it shows what needs attention — different, one-sided and unknown rows — and
+// always the pair being viewed, so the row that is marked and scrolled to exists
+// on every pair page; `same` shows the identical pairs too. A type left without
+// rows is dropped. Every row link keeps the view's query (`same`) and drops the
+// key. Pure.
+export function comparePane(
   listing: CompareListing,
-  leftId: string,
-  rightId: string,
-  activeKey = '',
-): NavSection[] {
-  return listing.groups.map((group) => {
-    const items = group.rows.flatMap((row): NavItem[] => {
-      const cell = row.left ?? row.right;
-      if (!cell) return [];
-      const paired = row.left !== null && row.right !== null;
-      const side = row.left ? leftId : rightId;
-      return [
-        {
-          href: cell.href,
-          label: cell.name,
-          summary: '',
-          documented: true,
-          badges: [],
-          active: activeKey !== '' && row.key === activeKey,
-          note: paired ? '' : `only in ${side}`,
-          exempt: false,
-        },
-      ];
+  leftDigests: Map<string, FileDigest | null>,
+  rightDigests: Map<string, FileDigest | null>,
+  options: PaneOptions,
+): ComparePane {
+  const { a, b, selectedKey, same } = options;
+  const query = same ? '&same' : '';
+  const totals: PaneTotals = { different: 0, onlyA: 0, onlyB: 0, identical: 0, unknown: 0 };
+  let n = 0;
+  let firstDifferenceHref: string | null = null;
+
+  const groups = listing.groups.map((group): PaneGroup => {
+    const rows = group.rows.map((row): PaneRow => {
+      n++;
+      const ld = leftDigests.get(row.key) ?? null;
+      const rd = rightDigests.get(row.key) ?? null;
+      const status = rowStatus(row, ld, rd);
+      const pairLink = `${pairHref(a, b, row.key)}${query}#row-${n}`;
+      const href = row.left && row.right ? pairLink : (row.left ?? row.right)?.href ?? '';
+      countRow(totals, status.state);
+      if (!firstDifferenceHref && (status.state === 'different' || status.state === 'audience')) {
+        firstDifferenceHref = pairLink;
+      }
+      return {
+        n,
+        key: row.key,
+        href,
+        selected: selectedKey !== '' && row.key === selectedKey,
+        left: row.left ? { name: row.left.name, size: formatSize(ld?.size) } : null,
+        right: row.right ? { name: row.right.name, size: formatSize(rd?.size) } : null,
+        state: status.state,
+        is: stateFlags(status.state),
+        marker: MARKERS[status.state],
+        label: rowLabel(status, a, b),
+      };
     });
     return {
-      key: group.type,
+      type: group.type,
       label: typeLabel(group.type),
-      items,
-      active: items.some((i) => i.active),
-      note: group.excluded ? 'not documented' : '',
+      excluded: group.excluded,
+      rows: rows.filter((r) => same || r.selected || r.state !== 'identical'),
     };
   });
+
+  const self = selectedKey ? pairHref(a, b, selectedKey) : listingHref(a, b);
+  const swapped = { a: b, b: a };
+  const swap = selectedKey
+    ? pairHref(swapped.a, swapped.b, selectedKey)
+    : listingHref(swapped.a, swapped.b);
+  const visible = groups.filter((g) => g.rows.length > 0);
+  return {
+    groups: visible,
+    totals,
+    same,
+    sameHref: same ? self : `${self}&same`,
+    swapHref: `${swap}${query}`,
+    listingHref: `${listingHref(a, b)}${query}`,
+    firstDifferenceHref,
+    emptyNote: visible.length > 0 ? '' : emptyNote(totals),
+  };
+}
+
+function emptyNote(totals: PaneTotals): string {
+  return totals.identical > 0
+    ? 'Nothing needs attention: every pair is identical and nothing is one-sided.'
+    : 'Neither export lists a resource still present in its tenant.';
+}
+
+function rowStatus(
+  row: ListingRow,
+  left: FileDigest | null,
+  right: FileDigest | null,
+): { state: RowState; reason: string } {
+  if (!row.right) return { state: 'onlyLeft', reason: '' };
+  if (!row.left) return { state: 'onlyRight', reason: '' };
+  return pairStatus(left, right);
+}
+
+function countRow(totals: PaneTotals, state: RowState): void {
+  if (state === 'different' || state === 'audience') totals.different++;
+  else if (state === 'onlyLeft') totals.onlyA++;
+  else if (state === 'onlyRight') totals.onlyB++;
+  else totals[state]++;
+}
+
+function stateFlags(state: RowState): Record<RowState, boolean> {
+  return {
+    identical: state === 'identical',
+    audience: state === 'audience',
+    different: state === 'different',
+    unknown: state === 'unknown',
+    onlyLeft: state === 'onlyLeft',
+    onlyRight: state === 'onlyRight',
+  };
+}
+
+// The marker's visually hidden label, so a status is never meaning by glyph and
+// colour alone; an unknown status carries its reason here, since a `title` is
+// not read out.
+function rowLabel(status: { state: RowState; reason: string }, a: string, b: string): string {
+  switch (status.state) {
+    case 'identical':
+      return 'identical';
+    case 'audience':
+      return 'differs only in audience';
+    case 'different':
+      return 'different';
+    case 'onlyLeft':
+      return `only in ${a}`;
+    case 'onlyRight':
+      return `only in ${b}`;
+    default:
+      return `could not compare: ${status.reason}`;
+  }
+}
+
+// A file size as the pane shows it; empty when the file was not read (a
+// one-sided row, or a file that could not be).
+export function formatSize(bytes: number | undefined): string {
+  if (bytes === undefined) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export interface PairComparison {
@@ -213,18 +448,12 @@ export function pairComparison(
   if (raw || Buffer.byteLength(left) + Buffer.byteLength(right) > MAX_DIFF_BYTES) {
     return unnormalised();
   }
-  const na = normaliseResource(left, a.lookup, a.nameCounts);
-  const nb = normaliseResource(right, b.lookup, b.nameCounts);
+  const na = normaliseFile(left, a);
+  const nb = normaliseFile(right, b);
   if (!na || !nb) return unnormalised();
 
   const identical = na.text === nb.text;
-  let audienceOnly = false;
-  if (!identical) {
-    const opts = { withoutAssignments: true };
-    const wa = normaliseResource(left, a.lookup, a.nameCounts, opts);
-    const wb = normaliseResource(right, b.lookup, b.nameCounts, opts);
-    audienceOnly = !!wa && !!wb && wa.text === wb.text;
-  }
+  const audienceOnly = !identical && na.textWithoutAssignments === nb.textWithoutAssignments;
   const keys = new Set([...na.report.droppedKeys, ...nb.report.droppedKeys]);
   return {
     diff: diffYaml(na.text, nb.text, context),
@@ -253,4 +482,8 @@ function byExcludedThenType(x: ListingGroup, y: ListingGroup): number {
 
 function encodeKey(key: string): string {
   return key.split('/').map(encodeURIComponent).join('/');
+}
+
+function sha256(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
 }
