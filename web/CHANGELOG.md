@@ -29,14 +29,15 @@ section of the [repository README](../README.md) for the procedure.
   filters and notification templates are resolved to their names in each tenant, so equal configuration
   compares equal and a different audience shows as a real difference. The page states exactly what was
   normalised and offers the diff as exported. The diff stands the two files side by side, whole, as an IDE's
-  file comparison does, with a changed line beside its counterpart, stacking the two sides when there is not
-  room for both. The normalisation rule is **provisional**: it lives in the browser only to find out what the
+  file comparison does, with a changed line beside its counterpart and only the characters that differ marked,
+  stacking the two sides when there is not room for both; the page counts the differences and links each one
+  to the next. The normalisation rule is **provisional**: it lives in the browser only to find out what the
   rule should be against real exports, and moves to the CLI once it is stable (see `../go/NEXT-ITERATIONS.md`).
   The app stays read-only and offline and needs no script; which resources are listed is read from each
   export's `resources/metadata.yaml` as data, never by walking the tree, and a pair's status reads only the two
   files it names, through the existing resources-root boundary, remembered per file so an edited resource or a
   re-downloaded export shows on the next request. Pairing by file name is a heuristic the page states; manual
-  pairing is a follow-up in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
+  pairing is a parked idea in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
 
 ### Changed
 

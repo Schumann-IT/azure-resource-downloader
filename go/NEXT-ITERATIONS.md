@@ -96,10 +96,10 @@ for the different ones, payloads, and an `analyze.md` so the drift-analysis agen
 each difference (security posture, compliance, lifecycle, who is affected) rather than only that bytes differ.
 No Azure call: both inputs are export trees, so the command is offline like `docs analyze-drift`.
 
-**Why this exists as a Go idea now.** The web project has scheduled a **web-only proof of concept** of exactly
-this comparison (`web/NEXT-ITERATIONS.md`, entry 1: two-click tenant selection on the picker, a three-way
-listing from the two `resources/metadata.yaml` files, and a per-resource YAML diff). To make equal
-configuration compare equal across tenants, that PoC **normalises tenant-local identity in the browser**:
+**Why this exists as a Go idea now.** The web project has shipped a **web-only proof of concept** of exactly
+this comparison (the docs browser's tenant compare, described in `web/README.md`: two-click tenant
+selection on the picker, a listing from the two `resources/metadata.yaml` files, and a per-resource YAML diff).
+To make equal configuration compare equal across tenants, that PoC **normalises tenant-local identity in the browser**:
 drops every `id` or `sourceId` at any depth whose value contains a GUID (ids without one — settings
 ordinals, `all_users`, authentication method names, the all-zero sentinels — are content and stay), every
 `*@odata.context` key at any depth, `createdDateTime`, `lastModifiedDateTime`, `version` and the group
