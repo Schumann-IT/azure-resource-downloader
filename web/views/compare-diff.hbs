@@ -15,6 +15,9 @@
           <span>·</span>
           <span class="text-emerald-700 dark:text-emerald-300">+{{diff.added}}</span>
           <span class="text-red-700 dark:text-red-300">−{{diff.removed}}</span>
+          {{#if diff.changes}}
+            <a href="#change-1" class="diff-changes text-brand-600 dark:text-brand-400 hover:underline">{{diff.changesLabel}}</a>
+          {{/if}}
         {{/unless}}
         <span>·</span>
         {{#if raw}}
@@ -44,12 +47,16 @@
         </p>
       {{/if}}
 
+      {{#if diff.capped}}
+        <p class="compare-capped mb-4 text-xs text-slate-500 dark:text-slate-400">These files are too long to show whole, so only the differences are shown, with their context.</p>
+      {{/if}}
+
       {{#if diff.tooLarge}}
         <p class="drift-diff-too-large rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
           These files are too large to diff here — compare the YAML views instead.
         </p>
       {{else if diff.hunks.length}}
-        {{> diff_table hunks=diff.hunks left=left.id right=right.id}}
+        {{> diff_table hunks=diff.hunks left=left.id right=right.id full=diff.wholeFile}}
       {{else if normalised}}
         <p class="compare-identical text-sm text-slate-500 dark:text-slate-400">No differences after normalisation.</p>
       {{else}}

@@ -312,8 +312,13 @@ CLI's job — this app only renders what is on disk, and never acts on it.
   line directly above its replacement. The switch is a container query on the diff's own width, not the
   window's, so the sidebar is accounted for; no script is involved. With the sidebar beside it that takes a
   window of about 1152px; between 1024px and that the diff stacks, and below 1024px, where the sidebar moves
-  under the content, it is side by side again from about 800px. It is computed per request as plain data
-  and escaped by the template; above 1 MiB combined it is not computed and the raw files are offered instead.
+  under the content, it is side by side again from about 800px. Side by side, both line numbers meet in the
+  middle and the `−` / `+` signs are dropped; stacked, the signs stay. A modified line is tinted on both
+  sides and its differing characters are shaded and underlined (a line that changed by more than half, or is
+  over 500 characters, is tinted whole). The page counts the differences — runs of adjacent changed lines —
+  and links the first; each difference links to the next, the last back to the first. It is computed per
+  request as plain data and escaped by the template; above 1 MiB combined it is not computed and the raw
+  files are offered instead.
   An addition, which has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the
   documentation route.
@@ -342,12 +347,14 @@ is configured the same in both, and where it differs. Offline and read-only like
   section open, and *swap sides* keeps the pair. The header names both tenants, links back to the listing and
   repeats the totals.
 - **The diff** normalises both files identically, then shows a line diff through the same partial as the drift
-  diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, exactly as described
-  for the drift diff above. A caption states exactly which keys were dropped and how many references were
-  resolved, ambiguous or unresolved; `&raw` shows the files as exported. A pair identical after normalisation
-  says *No differences after normalisation*; one that is identical once `assignments` is removed as well says
-  *Differs only in audience*. Line numbers are those of the normalised text. Above 1 MiB combined, or when a file
-  does not parse, nothing is normalised.
+  diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, with the same
+  marking, count and jump links, exactly as described for the drift diff above. Unlike the drift diff it shows
+  **the whole file**, the way an IDE compares two files, with no hunk headers; above 3,000 lines it falls back
+  to the changes with three lines of context and says so. A caption states exactly which keys were dropped
+  and how many references were resolved, ambiguous or unresolved; `&raw` shows the files as exported. A pair
+  identical after normalisation says *No differences after normalisation*; one that is identical once
+  `assignments` is removed as well says *Differs only in audience*. Line numbers are those of the normalised
+  text. Above 1 MiB combined, or when a file does not parse, nothing is normalised.
 - **The normalisation rule is provisional** and destined for the CLI (`azure-rd resource compare`, parked in
   `../go/NEXT-ITERATIONS.md`); until then it lives in `src/docs/compare-normalise.ts` as data:
   - **dropped** at any depth: `id` and `sourceId` when their value contains a GUID other than the all-zero

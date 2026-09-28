@@ -44,7 +44,7 @@ import {
 } from './tenant-index';
 import { ExportService } from './export/export.service';
 import { splitLeadingHeading } from './section-hooks';
-import { diffYaml } from './yaml-diff';
+import { diffYaml, WHOLE_FILE } from './yaml-diff';
 import { CompareService } from './compare.service';
 import {
   COMPARE_PREFIX,
@@ -292,6 +292,7 @@ export class DocsController {
       left.metadata,
       right.metadata,
       raw !== undefined,
+      WHOLE_FILE,
     );
     const self = pairHref(left.info.id, right.info.id, key);
     res.render('compare-diff', {

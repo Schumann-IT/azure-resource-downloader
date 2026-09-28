@@ -137,7 +137,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   `:tenant`. It cannot shadow a tenant because discovery skips `_`-prefixed folders. `a`, `b` and `raw` are
   its reserved query parameters.
 - Diff hunks go through the shared `diff_table` partial, so drift and compare cannot render a hunk
-  differently.
+  differently. The compare diff's whole-file view is `diffYaml`'s `WHOLE_FILE` context plus the partial's
+  `full` parameter, never a second partial; the per-line character parts are plain `{ text, changed }` data,
+  escaped like every other diff value.
 - The compare sidebar is derived from the listing (`compareNavigation`), never from an index, so sidebar and
   body cannot disagree. Its tree and chips render through the same `sidebar_tree` / `sidebar_facets`
   partials as the tenant sidebar; only the header partial differs.

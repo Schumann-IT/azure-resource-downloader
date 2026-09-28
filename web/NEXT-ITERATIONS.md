@@ -459,7 +459,7 @@ endpoint navigation above being in place, since the chips live in that sidebar.
   `.windsurf/rules/01-architecture.md` (Tenant compare: indexes annotate rows, never add them; `a`/`b`
   reserved everywhere); `CHANGELOG.md` inside the tenant compare entry under `[Unreleased]`.
 
-### 6. The compare diff reads like an IDE's file comparison
+### ~~6. The compare diff reads like an IDE's file comparison~~
 
 **Goal.** Let a reviewer read a pair the way an IDE's *Compare Files* view shows it: both files **whole**,
 side by side, equal lines level with each other, and the eye drawn only to what differs — down to the
@@ -536,22 +536,29 @@ strongly, and a count of differences with a way to jump from one to the next.
 
 **Plan.**
 
-- **Diff data.** In `yaml-diff.ts`: a named whole-file context constant for `diffYaml`, `MAX_FULL_LINES`
+- ~~**Diff data.** In `yaml-diff.ts`: a named whole-file context constant for `diffYaml`, `MAX_FULL_LINES`
   (3,000) beyond which a whole-file request is served as hunks with a flag the page can state, and the
   character-pass constants (ratio 0.5, 500 characters). `DiffRow` gains `modified` (both sides present, not
   context), per-side `parts` (`{ text, changed }[]`, or none when over the threshold or the length cap) and
   the index of the difference block it opens, if any; `YamlDiff` gains the block count. `pairRows` stays the
   only pairing step; the character pass runs on its modified rows only. `pairComparison` gains the
-  whole-file option and passes it through.
-- **Partial.** `views/partials/diff-table.hbs`: a `full` parameter that omits the hunk header; the modified
+  whole-file option and passes it through. *Shipped as:* `WHOLE_FILE`, `MAX_FULL_LINES`, `MAX_PART_RATIO`,
+  `MAX_PART_LINE`; `pairRows` returns a `PairedRow` and a marking step turns it into the `DiffRow`
+  (`leftParts` / `rightParts`, `change`, `next`); `YamlDiff` gains `changes`, `changesLabel`, `wholeFile` and
+  `capped`; the character pass is the exported `charParts`.~~
+- ~~**Partial.** `views/partials/diff-table.hbs`: a `full` parameter that omits the hunk header; the modified
   tint, the stronger underlined part shade (with dark variants); the two-pane row as *text · number · number
   · text* through `@3xl:order-last` on the left number, signs hidden from `@3xl`; the per-block anchor with
   `scroll-mt-16` and the labelled next-difference link in the gutter; the stacked layout below `@3xl` as
-  today. Update its header comment for the new row shape.
-- **Pages.** `compare-diff.hbs` passes `full` and shows *N differences* with a link to the first and, when
+  today. Update its header comment for the new row shape. *Shipped as:* the offset is `scroll-mt-18`
+  (4.5rem), the value the section headings already use, since the header can wrap to two lines; the
+  changed parts are `<mark>` elements; the next link (↓, or ↑ back to the first) sits at the row's right
+  edge rather than between the numbers, where it would cover them; a single difference gets no link; lines
+  only one side has keep today's red and green rather than green on both sides.~~
+- ~~**Pages.** `compare-diff.hbs` passes `full` and shows *N differences* with a link to the first and, when
   capped, the fallback note. `drift-diff.hbs` shows the difference count too and keeps hunks. The compare
-  controller sets the whole-file option on `pairComparison` — no other logic there.
-- **Tests.** `test/yaml-diff.spec.ts`: whole-file context yields one hunk with every line and line numbers
+  controller sets the whole-file option on `pairComparison` — no other logic there.~~
+- ~~**Tests.** `test/yaml-diff.spec.ts`: whole-file context yields one hunk with every line and line numbers
   intact, and no hunk at all for equal texts; the line cap falls back to hunks with the flag set; a modified
   row's parts mark only the differing characters; two unrelated lines (over the ratio) and an over-long line
   get no parts; a 3-against-1 run yields one modified row and two one-sided rows; block count and block
@@ -560,15 +567,21 @@ strongly, and a count of differences with a way to jump from one to the next.
   underlined changed part and no sign in the two-pane markup, *N differences*, `#change-1` with `scroll-mt-16`
   and the labelled next-difference link; the drift diff still shows its `@@` headers and gains the modified row
   and anchors; the existing class-hook assertions pass unchanged. No `src/styles.css` change, so no
-  `styles-build` case.
-- **Manual check in a browser.** The reference pair from the screenshot's exports and one short policy pair,
+  `styles-build` case. *Shipped as:* the class-hook assertions pass unchanged, but the ones matching a
+  changed line's text (`enabled: true<`, `value: 15<`, `groupId: …`) now read the page through an
+  `unmarked()` helper that removes only the `<mark>` tags, because the marks split that text by design.
+  The compare case's *no `groupId:` on the page* became *`groupId:` only as an unchanged line, never a
+  changed one*: the whole file now shows the resolved audience as context, and the intent (the same audience
+  is not a difference) is what is asserted. The next-difference links are checked on the `&raw` diff, the
+  one fixture pair with more than one difference.~~
+- ~~**Manual check in a browser.** The reference pair from the screenshot's exports and one short policy pair,
   light and dark, at 900 and 1440px: equal lines level, characters marked, gutter numbers meeting in the
-  middle, next-difference links landing below the sticky header, stacked view still readable.
-- **Docs.** `README.md` (Tenant compare: the diff shows the whole file, what is marked and how to jump between
+  middle, next-difference links landing below the sticky header, stacked view still readable.~~
+- ~~**Docs.** `README.md` (Tenant compare: the diff shows the whole file, what is marked and how to jump between
   differences, the line cap; Drift view: the shared marking and the count); `.windsurf/rules/01-architecture.md`
   (Tenant compare: the whole-file mode is a partial parameter, not a second partial; the character parts are
   plain data); `CHANGELOG.md` inside the tenant compare entry and the drift diff's `### Changed` entry under
-  `[Unreleased]`, both still unreleased.
+  `[Unreleased]`, both still unreleased.~~
 
 ### 7. The compare listing becomes the IDE's comparison pane, above the diff
 

@@ -14,6 +14,9 @@
             <span>·</span>
             <span class="text-emerald-700 dark:text-emerald-300">+{{diff.added}}</span>
             <span class="text-red-700 dark:text-red-300">−{{diff.removed}}</span>
+            {{#if diff.changes}}
+              <a href="#change-1" class="diff-changes text-brand-600 dark:text-brand-400 hover:underline">{{diff.changesLabel}}</a>
+            {{/if}}
           {{/unless}}
           <span>·</span>
           <a href="{{baselineRawHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">baseline raw</a>

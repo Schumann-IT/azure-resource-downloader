@@ -1,7 +1,7 @@
 import { NormaliseReport, normaliseResource } from './compare-normalise';
 import { MetadataEntry, ResourcesMetadata } from './resources-metadata';
 import { NavItem, NavSection, typeLabel } from './tenant-index';
-import { diffYaml, MAX_DIFF_BYTES, YamlDiff } from './yaml-diff';
+import { DIFF_CONTEXT, diffYaml, MAX_DIFF_BYTES, YamlDiff } from './yaml-diff';
 
 // Route prefix of the tenant compare. A root-level *representation* prefix: it
 // cannot collide with a tenant because discovery skips `_`-prefixed folders,
@@ -193,16 +193,18 @@ export interface ReportView {
 // The comparison of one paired resource: both files normalised with their own
 // tenant's lookup and diffed, plus the "differs only in audience" check — the
 // two documents compared again without `assignments`. A text comparison, not a
-// structural diff.
+// structural diff. `context` is passed to `diffYaml` as is: the compare page
+// asks for the whole file, and the cap falling back to hunks is `diffYaml`'s.
 export function pairComparison(
   left: string,
   right: string,
   a: ResourcesMetadata,
   b: ResourcesMetadata,
   raw: boolean,
+  context = DIFF_CONTEXT,
 ): PairComparison {
   const unnormalised = (): PairComparison => ({
-    diff: diffYaml(left, right),
+    diff: diffYaml(left, right, context),
     normalised: false,
     identical: left === right,
     audienceOnly: false,
@@ -225,7 +227,7 @@ export function pairComparison(
   }
   const keys = new Set([...na.report.droppedKeys, ...nb.report.droppedKeys]);
   return {
-    diff: diffYaml(na.text, nb.text),
+    diff: diffYaml(na.text, nb.text, context),
     normalised: true,
     identical,
     audienceOnly,

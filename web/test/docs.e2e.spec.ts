@@ -10,6 +10,10 @@ import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
 import { OVERVIEW_FILE } from '../src/docs/export/confluence';
 
+// A diff page with the `<mark>`s around changed characters removed, so a line
+// is matched as the text it reads as. Only the marks go; every other tag stays.
+const unmarked = (html: string) => html.replace(/<\/?mark[^>]*>/g, '');
+
 // Reproduces, as automated tests, the manual endpoint checks: discovery via
 // docs/index.yaml, picker, the summary-driven tenant landing page and its
 // index fallback, the sidebar navigation, a nested settings-catalog doc with
@@ -1610,8 +1614,8 @@ findings: 4
     expect(res.text).toContain(`resources/${T}/changed1.yaml`);
     expect(res.text).toContain(`drift/${T}/changed1.yaml`);
     expect(res.text).toContain('@@ -1,3 +1,3 @@');
-    expect(res.text).toMatch(/class="diff-removed[\s\S]*? {2}enabled: true</);
-    expect(res.text).toMatch(/class="diff-added[\s\S]*? {2}enabled: false</);
+    expect(unmarked(res.text)).toMatch(/class="diff-removed[\s\S]*? {2}enabled: true</);
+    expect(unmarked(res.text)).toMatch(/class="diff-added[\s\S]*? {2}enabled: false</);
     expect(res.text).toMatch(/class="diff-context[\s\S]*?id: changed1</);
     expect(res.text).toContain(`href="/drifted/_resource/${T}/changed1?raw"`);
     expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?raw"`);
@@ -1625,9 +1629,22 @@ findings: 4
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">baseline</);
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">observed</);
     // A modified value is one row: the removed line left, the added line right.
-    expect(res.text).toMatch(
+    expect(unmarked(res.text)).toMatch(
       /class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*? {2}enabled: true<[\s\S]*?<div class="diff-added diff-right[\s\S]*? {2}enabled: false</,
     );
+    // The pair is a modification: tinted on both sides, only what differs marked.
+    expect(res.text).toContain('class="diff-removed diff-left diff-modified ');
+    expect(res.text).toContain('class="diff-added diff-right diff-modified ');
+    expect(res.text).toMatch(/ {2}enabled: <mark class="diff-mark[^"]*underline[^"]*">[^<]+<\/mark>/);
+    // The signs only show when stacked; the numbers meet in the middle when wide.
+    expect(res.text).toMatch(/class="diff-sign select-none @3xl:hidden[^"]*">−</);
+    expect(res.text).toMatch(/class="diff-sign select-none @3xl:hidden[^"]*">\+</);
+    expect(res.text).toContain('@3xl:order-last');
+    // One difference: counted and anchored, with no link pointing at itself.
+    expect(res.text).toContain('<a href="#change-1" class="diff-changes');
+    expect(res.text).toContain('>1 difference</a>');
+    expect(res.text).toContain('id="change-1" class="diff-row grid grid-cols-1 @3xl:grid-cols-2 relative scroll-mt-18"');
+    expect(res.text).not.toContain('class="diff-next');
     expect(res.text).not.toMatch(/class="diff-removed diff-right/);
     expect(res.text).not.toMatch(/class="diff-added diff-left/);
     // A context line is present on both sides, the right copy only when wide.
@@ -1656,7 +1673,7 @@ findings: 4
     const diff = await get(`/drifted/_drift/${T}/old_name?diff`).expect(200);
     expect(diff.text).toContain(`resources/${T}/old_name.yaml`);
     expect(diff.text).toContain(`drift/${T}/new_name.yaml`);
-    expect(diff.text).toMatch(/class="diff-added[\s\S]*?displayName: New name</);
+    expect(unmarked(diff.text)).toMatch(/class="diff-added[\s\S]*?displayName: New name</);
   });
 
   it('renders an addition with its payload, and no documentation link', async () => {
@@ -2115,11 +2132,21 @@ settings:
 
   it('diffs a pair with ids and timestamps normalised away and references resolved', async () => {
     const res = await get(`/_compare/${P}/p1${q}`).expect(200);
-    expect(res.text).toMatch(/class="diff-removed[\s\S]*?value: 1</);
-    expect(res.text).toMatch(/class="diff-added[\s\S]*?value: 15</);
-    // The same audience on both sides: resolved, so not part of the diff.
+    expect(unmarked(res.text)).toMatch(/class="diff-removed[\s\S]*?value: 1</);
+    expect(unmarked(res.text)).toMatch(/class="diff-added[\s\S]*?value: 15</);
+    // Only the added digit is marked.
+    expect(res.text).toMatch(/value: 1<mark class="diff-mark[^"]*">5<\/mark>/);
+    // The whole file, as one hunk without its `@@` header, from its first line.
+    expect(res.text.match(/class="diff-hunk"/g)).toHaveLength(1);
+    expect(res.text).not.toContain('diff-hunk-header');
+    expect(res.text).toContain('name: Same policy');
+    expect(res.text).toContain('>1 difference</a>');
+    expect(res.text).not.toContain('compare-capped');
+    // The same audience on both sides: resolved, so not part of the diff — shown
+    // only as an unchanged line of the whole file, never as a changed one.
     expect(res.text).toContain('references resolved to names\n          1 left, 1 right');
-    expect(res.text).not.toContain('groupId:');
+    expect(res.text).toMatch(/class="diff-context diff-left[^"]*">(?:(?!<\/div>)[\s\S])*groupId: /);
+    expect(unmarked(res.text)).not.toMatch(/class="diff-(?:removed|added)[^"]*">(?:(?!<\/div>)[\s\S])*groupId:/);
     for (const guid of [GUIDS.stageP1, GUIDS.prodP1, GUIDS.stageAdmins, GUIDS.prodAdmins]) {
       expect(res.text).not.toContain(guid);
     }
@@ -2132,23 +2159,35 @@ settings:
     // Side by side, headed by the two tenant ids; the modified value is one row.
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">stage</);
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">prod</);
-    expect(res.text).toMatch(/class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*?value: 1<[\s\S]*?<div class="diff-added diff-right[\s\S]*?value: 15</);
+    expect(unmarked(res.text)).toMatch(/class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*?value: 1<[\s\S]*?<div class="diff-added diff-right[\s\S]*?value: 15</);
     expect(res.text).toContain('class="diff-row grid grid-cols-1 @3xl:grid-cols-2"');
   });
 
   it('shows the raw diff with the identities back', async () => {
     const res = await get(`/_compare/${P}/p1${q}&raw`).expect(200);
-    expect(res.text).toContain(GUIDS.stageP1);
-    expect(res.text).toContain(GUIDS.prodP1);
+    expect(unmarked(res.text)).toContain(GUIDS.stageP1);
+    expect(unmarked(res.text)).toContain(GUIDS.prodP1);
     expect(res.text).toContain('The files as exported, without normalisation.');
     expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+  });
+
+  it('links each difference to the next, the last back to the first', async () => {
+    const res = await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    const count = Number(/>(\d+) differences<\/a>/.exec(res.text)?.[1]);
+    expect(count).toBeGreaterThan(1);
+    for (let n = 1; n <= count; n++) {
+      expect(res.text).toContain(`id="change-${n}" class="diff-row`);
+    }
+    expect(res.text).toContain('<a href="#change-2" aria-label="next difference"');
+    expect(res.text).toContain('<a href="#change-1" aria-label="first difference"');
+    expect(res.text).not.toContain(`id="change-${count + 1}"`);
   });
 
   it('says when a pair differs only in audience', async () => {
     const res = await get(`/_compare/${P}/p2${q}`).expect(200);
     expect(res.text).toContain('Differs only in audience');
-    expect(res.text).toContain('groupId: Stage audience');
-    expect(res.text).toContain('groupId: Prod audience');
+    expect(unmarked(res.text)).toContain('groupId: Stage audience');
+    expect(unmarked(res.text)).toContain('groupId: Prod audience');
   });
 
   it('says when a pair is identical after normalisation', async () => {
@@ -2180,7 +2219,7 @@ settings:
       await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 20));
       const diff = await get(`/_compare/${P}/p3${q}`).expect(200);
       expect(diff.text).not.toContain('No differences after normalisation.');
-      expect(diff.text).toMatch(/class="diff-added[\s\S]*?value: 20</);
+      expect(unmarked(diff.text)).toMatch(/class="diff-added[\s\S]*?value: 20</);
 
       await write('prod/resources/Microsoft.Graph/deviceConfigurations/dc1.yaml', 'displayName: Stage only config\n');
       await fsp.writeFile(
