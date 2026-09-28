@@ -86,6 +86,9 @@ export interface NavSection {
   label: string;
   items: NavItem[];
   active: boolean;
+  // A marker beside the section label (the compare's *not documented*), so the
+  // one tree partial serves every sidebar without testing what page it is on.
+  note?: string;
 }
 
 export interface NavItem {
@@ -95,6 +98,9 @@ export interface NavItem {
   documented: boolean;
   badges: string[];
   active: boolean;
+  // The marker beside the label: *pending* in a tenant's tree, *only in <tenant>*
+  // in the compare's. Set by the builder so the tree partial renders it blindly.
+  note: string;
   // True for an item the selection excludes that is listed anyway because it is
   // the document being viewed. It is what makes the tree longer than the match
   // count, so the view must be able to say so rather than leave the reader to
@@ -286,6 +292,7 @@ export function buildNavigation(
       documented: resource.documented,
       badges: badgesFor(index, resource),
       active: isActive,
+      note: resource.documented ? '' : 'pending',
       exempt: !matches,
     });
   }
@@ -656,7 +663,9 @@ function toResource(src: Record<string, any>): IndexResource {
   };
 }
 
-function typeLabel(type: string): string {
+// A resource type as the sidebar names it. Exported so the compare sidebar
+// labels endpoints exactly as a tenant's does.
+export function typeLabel(type: string): string {
   const leaf = type.split('/').pop() || type;
   const spaced = leaf.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);

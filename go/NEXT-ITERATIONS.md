@@ -88,6 +88,63 @@ a diff/review workflow on `resources/` that cannot read `metadata.yaml`. If prom
 (the already-downloaded groups/filters/templates), never from a live lookup, and write the name into a sidecar
 `_name` key the way `id-resolution` does — never in place of the id.
 
+### Idea: `resource compare` — an offline comparison of two exports, and the home of the cross-tenant identity rule
+
+Compare two tenants' exports on disk — stage against prod — the way `resource drift` compares one tenant
+against its own export: a verdict per resource key (only in A, only in B, same, different), dotted-path deltas
+for the different ones, payloads, and an `analyze.md` so the drift-analysis agent can judge the **impact** of
+each difference (security posture, compliance, lifecycle, who is affected) rather than only that bytes differ.
+No Azure call: both inputs are export trees, so the command is offline like `docs analyze-drift`.
+
+**Why this exists as a Go idea now.** The web project has shipped a **web-only proof of concept** of exactly
+this comparison (the docs browser's tenant compare, described in `web/README.md`: two-click tenant
+selection on the picker, a listing from the two `resources/metadata.yaml` files, and a per-resource YAML diff).
+To make equal configuration compare equal across tenants, that PoC **normalises tenant-local identity in the browser**:
+drops every `id` or `sourceId` at any depth whose value contains a GUID (ids without one — settings
+ordinals, `all_users`, authentication method names, the all-zero sentinels — are content and stay), every
+`*@odata.context` key at any depth, `createdDateTime`, `lastModifiedDateTime`, `version` and the group
+identity fields (`mail`, `mailNickname`, `proxyAddresses`, `securityIdentifier`, `renewedDateTime`), and
+resolves `assignments[].target.groupId`, `assignments[].target.deviceAndAppManagementAssignmentFilterId` and
+`notificationTemplateId` to the display name of the matching `resourceId` in the same tenant's
+`metadata.yaml` — a set-valued lookup, since neither `resourceId` nor `displayName` is unique in real exports:
+a reference resolves only when every entry with that id agrees on the name, otherwise the GUID stays and is
+flagged ambiguous or unresolved, and a zero-sentinel reference means *none* and passes through. Measured
+against the two reference exports, that rule leaves 19 of 114 paired resources identical, 36 once
+`assignments` is removed as well — the difference being the same policy targeting a differently named group
+in each tenant, which the web diff page reports as *differs only in audience*. That rule is a **judgment,
+not a fact**, and it was accepted on the web side under one condition, recorded there: it is provisional and
+**moves to the CLI once it is stable**. The PoC's job is to find out what the rule is against real pairs;
+this idea's job is to receive it. Until then the browser computes what the CLI should be emitting — the same
+disagreement risk the taxonomy rules exist to prevent (a rule derived in one consumer can disagree with every
+other), tolerated here only because there is no other consumer yet.
+
+**Not planned — parked deliberately**, until the PoC has produced a rule that can be *stated and tested* —
+a fixed drop list plus a reference-resolution table per field, with fixtures from a real stage/prod pair —
+rather than guessed per resource type. Promoting it before that would freeze a guess into a contract the
+browser then depends on.
+
+**Shape when promoted.**
+
+- **Engine** beside the drift engine (`internal/drift` or a sibling `internal/compare`), reusing the verdict
+  and delta machinery over normalised documents; the normalisation is one exported, table-driven, unit-tested
+  function — the *single* truth the browser stops duplicating.
+- **Command** `azure-rd resource compare` taking two export domains (both resolved the way `--domain` is
+  today), offline, `--dry-run` withholding only the writes like `resource drift`.
+- **Output tree — placement is the open design question.** Every tree today lives under `<output>/<tenant>/`
+  and a comparison belongs to neither tenant. Candidates: a sibling root `<output>/compare/<a>__<b>/`, or
+  under the left tenant `<output>/<a>/compare/<b>/`. Whichever is chosen, the tree mirrors `resources/` keys
+  the way `drift/` does (metadata at the root, payloads ≥ 2 levels deep, agent-written documents beside them),
+  is cleared and rebuilt per run with no history, and carries a schema `version:` from day one — the field
+  `drift/metadata.yaml` lacks and `index.yaml` learned to need.
+- **Analysis prompt** as a third template beside `generate_prompt_template.md` and
+  `analyze_drift_template.md`, with `doc-prompt.md` as the per-type lens again — **not regeneration-gated**,
+  moving no `promptSha256`.
+- The browser then renders the tree as it renders `drift/` and deletes its own normaliser.
+
+**Relation to the idea above.** This does **not** trigger *resolve Graph object ids to names inside the
+exported YAML*: the comparison reads names from `metadata.yaml`, which is exactly the consumer that idea says
+does not need them in the YAML. The facts stay facts.
+
 ### Idea: bootstrap the curated taxonomy from per-document LLM suggestions
 
 Have the doc-generation model suggest, per resource, which programmes it belongs to (as *labels* with a short

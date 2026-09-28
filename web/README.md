@@ -41,7 +41,8 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
   summary, a *pending* marker for resources with no document yet, and count-only assignment badges.
 - **Sidebar navigation on every page** — one collapsible `<details>` per resource type, the section of the
   current document opened and the document marked, plus the tenant counts, export timestamp, the
-  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML.
+  incomplete-export banner and the excluded bulk types. Collapsing is pure HTML. The tenant compare pages have
+  no sidebar; their comparison pane lists the pairs instead (see [Tenant compare](#tenant-compare)).
 - **Taxonomy filters** — when the index carries a taxonomy, the sidebar offers one chip group per axis the
   operator declared (Programme, Platform, Assignment scope, …) and narrows the tree server-side from query
   parameters, several axes at once, with counts that follow the selection. See
@@ -159,14 +160,19 @@ Discovery and resolution rules:
 - A matched tenant **owns its whole subtree**; discovery does not descend further looking for nested tenants.
 - Directories whose name starts with `_` or `.` are skipped (housekeeping folders such as `_to_delete/`).
 - Counts in the picker and sidebar come from the index (`counts.documented`, `counts.pending`,
-  `counts.excluded`), never from walking the tree. The tenant's display name is the index's `tenant` field
-  (the Entra default domain), falling back to the folder name.
+  `counts.excluded`), never from walking the tree. The tenant compare is the one exception to *the index*, not
+  to *never walking*: its rows are read from each export's `resources/metadata.yaml` as data, and only a pair's
+  status reads the two resource files the metadata names. The tenant's display name is the index's `tenant`
+  field (the Entra default domain), falling back to the folder name.
 
 ## Routes
 
 | Route | Response |
 | --- | --- |
-| `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link. |
+| `GET /` | Tenant picker (`views/picker.hbs`), with each tenant's export download link and, when at least two exports carry `resources/metadata.yaml`, a *Compare with…* link on each of those. |
+| `GET /_compare?a=<tenant>` | The picker in its compare selecting state: `a` is marked, every other eligible tenant offers *Compare with*, and *Cancel* returns to `/`. A bare `GET /_compare` redirects to `/`. |
+| `GET /_compare?a=<tenant>&b=<tenant>` | The comparison pane of the two exports — every pair with its status, one-sided resources, what needs attention first — above an empty diff area pointing at the first difference; `&same` also shows identical pairs. 404 for an unknown or `_`-prefixed tenant, the same tenant twice, or a tenant without a readable `resources/metadata.yaml`. |
+| `GET /_compare/*path?a=&b=` | The same pane with this pair selected, above a line diff of the two files after normalisation; `&raw` diffs them as exported, `&same` keeps identical pairs in the pane. The `.yaml` suffix is optional. 404 for a key either export does not list as present. |
 | `GET /healthz` | JSON `{ status, rootReadable, tenants, documents, pending }`. Always `200`: the process is healthy even when `DOCS_ROOT` is missing or unreadable, so a probe reading only the status code does not flap while a volume is remounted. In that case `rootReadable` is `false` and `status` is `degraded` instead of `ok` — the way to tell an empty tree from a missing one. The root's path is never returned. `documents` and `pending` are read from each tenant's `index.yaml` on every call, not cached, so a regenerated index is reflected immediately. |
 | `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
@@ -183,12 +189,14 @@ Discovery and resolution rules:
 
 Anything that does not resolve to a Markdown file inside the tenant's `docs/` — or to a `.yaml` file inside
 its `resources/` — renders the 404 view, which never leaks a filesystem path. The view names what was
-missing — tenant, document, source YAML, export format, drift observation, drift finding, observed payload or YAML diff —
-rather than always saying *Document not found*.
+missing — tenant, document, source YAML, export format, drift observation, drift finding, observed payload, YAML diff,
+tenant comparison or resource comparison — rather than always saying *Document not found*.
 `docs/generate.md` is tool input, not documentation, and is never served.
 
 `_resource`, `_drift` and `_export` are *representation* prefixes, not path segments: they never appear in the
 breadcrumb, and they cannot collide with a resource type because no Azure/Graph type segment starts with `_`.
+`_compare` is the root-level counterpart: it cannot collide with a tenant because discovery skips `_`-prefixed
+folders.
 
 ## Taxonomy filters
 
@@ -298,12 +306,78 @@ CLI's job — this app only renders what is on disk, and never acts on it.
 - **Integrity.** Before a comparison or payload is shown, the baseline and observed files are hashed and
   checked against the observation; a mismatch withholds both and says so.
 - **YAML diff.** When both sides of a change or rename are verified, the finding links one **YAML diff**
-  instead of separate baseline and observed views: a unified diff with three lines of context, line numbers
-  for both sides, and raw links to either file. It is computed per request as plain data and escaped by the
-  template; above 1 MiB combined it is not computed and the raw files are offered instead. An addition, which
-  has no baseline, keeps its observed YAML links.
+  instead of separate baseline and observed views: a line diff with three lines of context, line numbers for
+  both sides, and raw links to either file. It is laid out **side by side** — *baseline* left, *observed*
+  right, a modified line as one row — whenever the diff itself is at least 48rem wide; narrower, each row
+  stacks its baseline line above its observed one, so the narrow view is a unified diff with every changed
+  line directly above its replacement. The switch is a container query on the diff's own width, not the
+  window's, so the sidebar is accounted for; no script is involved. With the sidebar beside it that takes a
+  window of about 1152px; between 1024px and that the diff stacks, and below 1024px, where the sidebar moves
+  under the content, it is side by side again from about 800px. Side by side, both line numbers meet in the
+  middle and the `−` / `+` signs are dropped; stacked, the signs stay. A modified line is tinted on both
+  sides and its differing characters are shaded and underlined (a line that changed by more than half, or is
+  over 500 characters, is tinted whole). The page counts the differences — runs of adjacent changed lines —
+  and links the first; each difference links to the next, the last back to the first. It is computed per
+  request as plain data and escaped by the template; above 1 MiB combined it is not computed and the raw
+  files are offered instead.
+  An addition, which has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the
   documentation route.
+
+## Tenant compare
+
+A **proof of concept**: put two exports side by side — stage against prod — and see, per resource, whether it
+is configured the same in both, and where it differs. Offline and read-only like everything else; no Azure call.
+
+- **Selection** is two plain links on the picker: *Compare with…* on the first tenant, then *Compare with …*
+  on the second. A tenant takes part only when its export has a readable `resources/metadata.yaml`, so
+  docs-only copies get no link.
+- **The comparison pane** heads both compare pages, full width, like the top half of an IDE's folder
+  comparison. Which rows exist comes from the two `resources/metadata.yaml` files alone — no directory walked.
+  Resources are paired by their export path (`<APIType>/<endpoint>/<name>`), which is a heuristic the page
+  states: different policies can share a name, and a renamed policy shows once on each side. Only resources
+  still present in the tenant (`presentInTenant` not `false`) are listed. One flat, scrollable list: a header
+  row per type, types either index counts under `counts.excluded` last and marked *not documented*; then per
+  row the left name and size, a status, the right size and name. Pairs come first in each type, then the
+  left-only, then the right-only rows. Each row is one link: a pair to its diff, a resource only one side has
+  to that tenant's YAML view. The pane opens at 40% of the window and can be dragged taller or shorter; below
+  1024px the sizes drop.
+- **The status** of a pair is `=` *identical*, `≠` *different* (lighter when it *differs only in audience*),
+  or `?` *could not compare* with the reason — a file that does not parse, cannot be read, or is too large to
+  normalise and differs as exported. `→` / `←` mark a resource only one side has, pointing away from that side.
+  Every marker has a hidden label, so it is never meaning by glyph and colour alone. It is decided the way the
+  diff page decides it, from the same normalisation, over hashes of each file kept per file (never its text)
+  and validated by that file's and its export's metadata timestamps and sizes, so an edited resource or a
+  re-downloaded export shows on the next request. Its cost is one read and normalisation per paired file on a
+  cold cache, then only file checks.
+- **What is shown**: by default the pane lists what needs attention — different, one-sided and unknown rows —
+  and counts everything (*N different · N only in a · N only in b · N identical*); *show identical* (`&same`)
+  lists the identical pairs too, and every row link keeps that choice. The pair being viewed is always listed
+  and marked, whatever its status, and the page opens with it scrolled into view. *swap sides* keeps the pair.
+  Without a selected pair the diff area links the first difference.
+- **The diff** normalises both files identically, then shows a line diff through the same partial as the drift
+  diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, with the same
+  marking, count and jump links, exactly as described for the drift diff above. Unlike the drift diff it shows
+  **the whole file**, the way an IDE compares two files, with no hunk headers; above 3,000 lines it falls back
+  to the changes with three lines of context and says so. A caption states exactly which keys were dropped
+  and how many references were resolved, ambiguous or unresolved; `&raw` shows the files as exported. A pair
+  identical after normalisation says *No differences after normalisation*; one that is identical once
+  `assignments` is removed as well says *Differs only in audience*. Line numbers are those of the normalised
+  text. Above 1 MiB combined, or when a file does not parse, nothing is normalised.
+- **The normalisation rule is provisional** and destined for the CLI (`azure-rd resource compare`, parked in
+  `../go/NEXT-ITERATIONS.md`); until then it lives in `src/docs/compare-normalise.ts` as data:
+  - **dropped** at any depth: `id` and `sourceId` when their value contains a GUID other than the all-zero
+    sentinels (ids without one — settings ordinals, `all_users`, authentication method names — are content);
+    every key ending in `@odata.context`; `createdDateTime`, `lastModifiedDateTime`, `version`, and the group
+    identity fields `mail`, `mailNickname`, `proxyAddresses`, `securityIdentifier`, `renewedDateTime`;
+  - **resolved**, never dropped: `groupId`, `deviceAndAppManagementAssignmentFilterId` and
+    `notificationTemplateId` become the `displayName` of the entry in that tenant's own `metadata.yaml` with
+    that `resourceId` — only when every such entry agrees on the name (otherwise *ambiguous*); an id with no
+    entry stays and counts as *unresolved*; an all-zero sentinel means *none* and passes through;
+  - **serialised** canonically: sorted keys, core schema on both load and dump, so no scalar changes type.
+- **Measured baseline** against the two reference exports (1029 and 181 resources, 114 paired): 19 pairs are
+  identical after normalisation, 17 more differ only in audience, 6 references stay unresolved. A change to the
+  rule is judged against these numbers.
 
 ## Rendering
 
@@ -425,10 +499,12 @@ built in a temp directory and removed afterwards.
 | `test/path-safety.spec.ts` | Traversal, symlink escape, null bytes, absolute paths, one extension per root for both roots, one extension per drift resolver and the drift depth guard. |
 | `test/drift-observation.spec.ts` | Observation parsing (malformed rejected, never a throw), the baseline timestamp read, and every drift state in evaluation order, including renames and the validity gate. |
 | `test/link-rewrite.spec.ts` | `.md` href rewriting for the documentation and drift route bases. |
-| `test/yaml-diff.spec.ts` | The drift diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap. |
+| `test/yaml-diff.spec.ts` | The line diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap, and the pairing of removed and added lines into side-by-side rows. |
+| `test/compare-view.spec.ts` | The compare listing's row order within a type: pairs, then left-only, then right-only, each alphabetical. |
+| `test/compare-normalise.spec.ts` | The compare's normalisation rule — every dropped key, the id shapes kept and dropped, reference resolution with its ambiguous, unresolved and sentinel outcomes, the audience-only variant, scalar stability — and `resources/metadata.yaml` parsing. |
 | `test/tenant-index.spec.ts` | `index.yaml` parsing (malformed file rejected, later schema accepted, `facets`/`programmes`/`groups`/vocabularies), navigation building, every taxonomy-filter rule listed above (OR/AND, selection-aware counts, uncategorised bucket, exempt active document, version-2 synthesis, no-taxonomy passthrough), and `filterableAxes`/`groupByAxis` — the rule the export shares. |
 | `test/section-hooks.spec.ts` | Heading slugs, declared vs undeclared headings, matched/unmatched marker pairs, section wrapping (an H2 inside a spliced block never opens one), metadata-table detection. |
-| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree. |
+| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
 | `test/export.spec.ts` | The exporter's pure modules: page titles, the allowlist serialiser, href rewriting, the format (space, page plan, provenance, overview and its axis index in all three modes), `parseExportIndexMode`, and the shared `<details>` fixture. |
 | `test/styles-build.spec.ts` | Compiles `src/styles.css` with the local Tailwind CLI and asserts the custom rules survive. |
 
@@ -461,14 +537,19 @@ web/
 │       ├── drift-observation.ts         # drift/metadata.yaml parsing + the one drift decision
 │       ├── drift.service.ts             # observation / baseline / hash reads, mtime-cached
 │       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists
-│       ├── yaml-diff.ts                 # unified line diff of baseline vs observed payload
+│       ├── yaml-diff.ts                 # line diff of two YAML texts, hunks + side-by-side rows
+│       ├── file-cache.ts                # mtime + size parsed-file cache shared by drift and compare
+│       ├── resources-metadata.ts        # resources/metadata.yaml parsing + reference lookup
+│       ├── compare-normalise.ts         # the provisional cross-tenant identity rule
+│       ├── compare-view.ts              # compare view models: three-way listing, pair comparison
+│       ├── compare.service.ts           # metadata reads (cached) + the two files of a pair
 │       └── export/
 │           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
 │           ├── confluence.ts            # the format: space, page plan, overview, provenance
 │           ├── export-index-mode.ts     # EXPORT_INDEX → by-type / axis / both overview index
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
-├── views/                               # page/tenant/resource/drift/drift-tenant/drift-diff/picker/error + partials/
+├── views/                               # page/tenant/resource/drift/drift-tenant/drift-diff/compare/compare-diff/picker/error + partials/
 ├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
 ├── scripts/

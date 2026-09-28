@@ -13,6 +13,48 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Added
+
+#### Tenant compare
+
+- **Two exports can now be put side by side — stage against prod — to see which resources are configured the
+  same and where they differ.** A proof of concept: *Compare with…* on one picker card and then on another
+  opens a comparison laid out like an IDE's folder comparison: one pane listing both exports' resources side
+  by side, a pair on one row and a resource only one side has beside an empty cell, each pair marked
+  *identical*, *different*, *differs only in audience* or *could not compare* (with the reason). By default the
+  pane shows what needs attention and counts the rest; the identical pairs are one link away. Selecting a row
+  opens that pair's diff directly under the pane, with the row still marked, so a reviewer works down the
+  differences without leaving the page. The diff is of the two YAML files with tenant-local identity
+  normalised away: ids, timestamps and per-tenant group addresses are dropped, and references to groups,
+  filters and notification templates are resolved to their names in each tenant, so equal configuration
+  compares equal and a different audience shows as a real difference. The page states exactly what was
+  normalised and offers the diff as exported. The diff stands the two files side by side, whole, as an IDE's
+  file comparison does, with a changed line beside its counterpart and only the characters that differ marked,
+  stacking the two sides when there is not room for both; the page counts the differences and links each one
+  to the next. The normalisation rule is **provisional**: it lives in the browser only to find out what the
+  rule should be against real exports, and moves to the CLI once it is stable (see `../go/NEXT-ITERATIONS.md`).
+  The app stays read-only and offline and needs no script; which resources are listed is read from each
+  export's `resources/metadata.yaml` as data, never by walking the tree, and a pair's status reads only the two
+  files it names, through the existing resources-root boundary, remembered per file so an edited resource or a
+  re-downloaded export shows on the next request. Pairing by file name is a heuristic the page states; manual
+  pairing is a parked idea in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
+
+### Changed
+
+#### Drift view
+
+- **The YAML diff of a changed or renamed resource now shows baseline and observed side by side.** A changed
+  line sits beside what replaced it, under *baseline* and *observed*, so the question *which side has what*
+  no longer has to be reconstructed from `−` and `+` runs. Where there is not room for two panes the rows
+  stack, and even then each changed line is directly above its replacement rather than in a separate run.
+  The layout follows the width of the diff itself, not the window, so the sidebar is accounted for; no
+  script is involved, the diff is still computed per request from the verified files and escaped by the
+  template, and the drift diff and the tenant compare still render a line through one shared template, so
+  the two cannot come apart. A modified line is tinted on both sides with only the characters that differ
+  marked — shaded and underlined, so not by colour alone — so a changed timestamp or value no longer reads
+  as a whole line removed and another added. The page counts the differences and links each one to the next,
+  with plain links rather than a script.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

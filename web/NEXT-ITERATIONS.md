@@ -11,8 +11,6 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
-*None outstanding.*
-
 ## Fixes
 
 Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
@@ -23,7 +21,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-*None outstanding.*
+None scheduled.
 
 ## Standing decisions
 
@@ -239,11 +237,14 @@ entirely: the segment could then open and scroll to its own sidebar section.
 ### Idea: Browsable excluded bulk types
 
 Types the index merely counts under `counts.excluded` (Autopilot identities and the like), and any resource
-with no document, are unreachable — which is what keeps navigation purely index-derived and the **"counts and
-listings derive from the index, never from walking the tree"** non-negotiable intact. Unreferenced
-`Microsoft.Graph/groups` (the CLI documents a group only when an assignment references it) are in the same
-bucket. **Parked** because serving them requires amending that non-negotiable. **Revisit** if operators ask
-for the raw bulk YAML; the shape is settled — for each type named in `counts.excluded`, a single
+with no document, are unreachable from the navigation — which is what keeps navigation purely index-derived
+and the **"counts and listings derive from the index, never from walking the tree"** non-negotiable intact.
+Unreferenced `Microsoft.Graph/groups` (the CLI documents a group only when an assignment references it) are
+in the same bucket. They are not unservable: the YAML view serves any `.yaml` under `resources/` by URL and
+never consulted the index, and the scheduled tenant-compare entry lists and links them from
+`resources/metadata.yaml` read as data — neither walks the tree, so neither touches this idea. **Parked**
+because *navigating* to them from the index-driven tree requires amending that non-negotiable. **Revisit** if
+operators ask for the raw bulk YAML; the shape is settled — for each type named in `counts.excluded`, a single
 **non-recursive** `readdir` of `resources/<type>/` (`.yaml` only, sorted, cached under the existing discovery
 TTL, unreadable ⇒ empty), producing file names only, with counts still taken from the index. It reopens two
 UX questions: whether a `readdir`-vs-`counts.excluded` mismatch should be flagged as a stale index, and
@@ -269,25 +270,6 @@ a read-only browser that stores no state. **Revisit** once one-way HTML publishi
 re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
 system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
 picker*).
-
-### Idea: Tenant diff
-
-*As an administrator I would like to diff the configuration of two tenants, so I can detect and understand
-drift.* Two use cases: **a)** diff a staging tenant against production, so a reviewed change can be moved
-from stage to prod quickly and nothing else moves with it; **b)** compare configuration *and* documentation
-across several tenants and see what the differences actually mean, not just that bytes differ. The pairing
-key already exists — every export uses the same `<type>/<name>` layout under `docs/` and `resources/`, and
-`docs/index.yaml` gives per-tenant type, scope and counts without walking the tree — so a first version could
-be a three-way listing (only in A, only in B, in both but different) over the index, refined to a per-document
-comparison. **Parked** because it is a comparison *engine*, not a view: identity does not survive across
-tenants (GUIDs, assignment group ids and display names all differ, so equal configuration reads as different
-and the interesting drift hides in the noise), a readable diff of a 317-setting document needs interaction
-the no-client-side-JavaScript rule forbids (relaxing it has its own idea below, and would remove only this one of
-the four obstacles), every route today is scoped to one `:tenant`, and it is not settled whether the comparison
-belongs here at all rather than in the CLI, which holds the facts (`resources/metadata.yaml`, the per-resource
-hashes) that make a semantic diff cheap. **Revisit** when a stage/prod tenant pair is actually exported side by
-side into one docs root, and once there is an answer for cross-tenant identity — a normalisation of tenant-local
-ids that can be stated and tested, not guessed per resource type.
 
 ### Idea: Further export formats and partial exports
 
@@ -356,7 +338,10 @@ frontend framework"*) and claimed in `README.md`'s Frontend section. **Parked** 
 a feature: nothing is unblocked until a specific blocked feature is actually wanted, and every one of them is
 itself parked. **Revisit** when a feature someone has asked for cannot be built server-side at acceptable cost —
 tenant-wide search is the honest candidate — or when the alternative has become visibly worse than the script
-would be (a `:target` hack, a route invented only to compensate, a workaround nobody can explain).
+would be (a `:target` hack, a route invented only to compensate, a workaround nobody can explain). The tenant
+compare's IDE-style comparison pane was checked against the rule and needed no script: statuses are computed
+on the server, selecting a row is a link, the selected row is scrolled to with a fragment and the pane is
+resized with CSS.
 
 **Note what the rule does and does not forbid.** It bans *shipped script* — no `<script>`, no bundler, no
 framework, no client-side state. It does not ban HTML interactivity: `<details>`/`<summary>`, `:target`,
@@ -386,14 +371,16 @@ re-renders server-side on each click; the `exempt` flag plus the `matched`/`tota
 filter cannot hide the page you are on; `NavSection.active` exists to render one `<details open>`; `lineAnchors()`
 plus `.line:target` deliver `#L42`; `shiki` emits dual-theme output so dark mode can stay
 `prefers-color-scheme`; and `findings-table.ts` already tags rows with `data-severity` for a filter that cannot
-be built yet. Six parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
+be built yet. Five parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
 item on this list, parked squarely on it), **a name filter and per-item context in the sidebar** (no type-ahead
 without script, and remembering which sections were open is excluded on purpose), **an actionable findings
 block** (expressible only as sibling anchors plus `:target`, which spends the URL fragment `#findings` already
 owns and needs a *Show all* reset as part of the feature), **clickable breadcrumb segments** (CSS cannot open a
-collapsed `<details>` from an anchor, so it needs a whole new route and view), **an explicit dark-mode toggle**,
-and **tenant diff** (a readable diff of a 317-setting document needs interaction). The export standing decision
-inherits it too: *no dropdown, no picker widget*.
+collapsed `<details>` from an anchor, so it needs a whole new route and view), and **an explicit dark-mode
+toggle**. *Tenant diff* used to be the sixth, on the claim that a readable diff of a 317-setting document needs
+interaction — the drift view's server-rendered YAML diff disproved that for the per-resource case, and the idea
+has since shipped as the tenant compare, with two-click link selection and no script. The export standing
+decision inherits it too: *no dropdown, no picker widget*.
 
 **Not a binary decision, if it is picked up.** Three tiers, all open. **(a) Keep it** and pay the workaround
 cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a small dependency-free script
@@ -443,3 +430,36 @@ in `scripts/working-tree-clean.js` (the preflight resolves `git` through `PATH`)
 `eslint-disable-next-line` at its site, because a baseline must not be where a standing choice hides. Deleting
 the file and the two scripts is the last step and is the only operator-visible part, so that one does get a
 `CHANGELOG.md` entry.
+
+### Idea: Manual pairing and a rename heuristic for the tenant compare
+
+The tenant compare pairs resources by their export path (`<APIType>/<endpoint>/<name>`), a heuristic the page
+states: two tenants can hold different policies under the same name, and a renamed policy shows as one row only
+in each side. Let a reviewer pair an only-in-a row with an only-in-b row by hand (`?left=<key>&right=<key>`, two
+steps via links, both keys still required to be listed as present and located only through `resolveResource`),
+and offer a **rename heuristic** that suggests such a pair when the two files' normalised hashes are identical —
+the per-file digests the comparison pane already keeps make that a lookup, not a read. **Parked** because the
+compare is a proof of concept and nobody has yet reported a mispaired or split resource in a real review.
+**Revisit** when a reviewer does, or when the one-sided rows of a real pair turn out to be mostly renames.
+
+### Idea: Move the compare normalisation to the CLI
+
+The cross-tenant identity rule (`src/docs/compare-normalise.ts`) was accepted in the browser on one condition:
+it is provisional and moves to the CLI once it is stable. The CLI side is the parked *`resource compare`* idea
+in `../go/NEXT-ITERATIONS.md` — reading two exports offline, applying the rule, emitting verdicts, dotted-path
+deltas, payloads and an `analyze.md` so the drift-analysis agent can judge the *impact* of each difference.
+The browser then renders that tree the way it renders `drift/` and stops normalising itself; the comparison
+pane's statuses come from the tree instead of the digest cache. Two questions travel with it: **where the
+comparison tree lives** (everything today is under `<output>/<tenant>/`, and a comparison belongs to neither
+tenant), and that the rule must be *statable and testable* before it is frozen. **Parked** until real reviews
+have stopped changing the rule. **Revisit** when the drop list and reference fields have held unchanged across
+several real stage/prod pairs; until then any change to the rule is mirrored into that Go idea, which quotes it.
+
+### Idea: A one-sided resource in the compare's diff area
+
+Selecting a `←` / `→` row in the comparison pane leaves the page for that tenant's YAML view. The reference IDE
+instead shows the one file in the area under the pane, so the reviewer keeps their place. It needs the shared
+highlighter on the compare pages and a way to say *this side only* in the URL, located through the existing
+`resolveResource` and escaped like the YAML view. **Parked** because the YAML view already answers the question
+and one-sided rows are read far less often than differing pairs. **Revisit** if reviewers work through the
+one-sided rows of a comparison as routinely as the differing ones.

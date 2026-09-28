@@ -1,0 +1,72 @@
+{{!-- One line diff, from the `YamlDiff` hunks as plain data — every line is
+      escaped here, never passed through as HTML. Shared by the drift diff and
+      the tenant compare so the two cannot render a hunk differently.
+      Rendered once, as a grid of paired rows that reflows on the partial's own
+      width (a container query, not the viewport): from @3xl (48rem) the two
+      sides stand side by side under the `left` / `right` labels; below it each
+      row stacks its left cell over its right cell, and a context line is shown
+      once. The threshold must stay below the widest column of the narrowest
+      page using this partial — the drift diff keeps the sidebar, which leaves
+      it 56rem at most — or that page can never go side by side.
+      From @3xl a row reads *left text · left number | right number · right
+      text*, the numbers meeting in the middle as in an IDE's file comparison;
+      one markup path, the left number moved with `@3xl:order-last`. The `−` /
+      `+` signs only show when stacked, where they are the one way to tell the
+      halves of a modified row apart. A modified row is tinted on both sides,
+      its differing characters in `<mark>`s (shaded and underlined, so not by
+      colour alone). The first row of each difference carries `change-<n>` and
+      a link to the next one. `full` says the one hunk is the whole file, so
+      its `@@` header is left out. --}}
+<div class="drift-diff @container overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+  <div class="min-w-full w-max @3xl:w-full font-mono text-xs">
+    <div class="diff-panes-head hidden @3xl:grid grid-cols-2 border-b border-slate-200 dark:border-slate-700 font-sans text-xs font-semibold text-slate-600 dark:text-slate-300">
+      <div class="diff-pane-label px-3 py-1.5">{{left}}</div>
+      <div class="diff-pane-label border-l border-slate-200 dark:border-slate-700 px-3 py-1.5">{{right}}</div>
+    </div>
+    {{#each hunks}}
+      <div class="diff-hunk">
+        {{#unless ../full}}
+          <div class="diff-hunk-header bg-slate-100 dark:bg-slate-800 px-3 py-1 text-slate-500 dark:text-slate-400">{{this.header}}</div>
+        {{/unless}}
+        {{#each this.rows}}
+          <div{{#if this.change}} id="change-{{this.change}}"{{/if}} class="diff-row grid grid-cols-1 @3xl:grid-cols-2{{#if this.change}} relative scroll-mt-18{{/if}}">
+            {{#if this.context}}
+              <div class="diff-context diff-left grid grid-cols-[3rem_1rem_minmax(0,1fr)] @3xl:grid-cols-[minmax(0,1fr)_3rem]">
+                <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500 @3xl:order-last">{{this.left.oldNo}}</span>
+                <span class="select-none @3xl:hidden"></span>
+                <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 @3xl:pl-3 text-slate-700 dark:text-slate-300">{{this.left.text}}</span>
+              </div>
+              <div class="diff-context diff-right hidden @3xl:grid grid-cols-[3rem_1rem_minmax(0,1fr)] @3xl:grid-cols-[3rem_minmax(0,1fr)] border-l border-slate-200 dark:border-slate-700">
+                <span class="select-none px-2 text-right @3xl:text-left text-slate-400 dark:text-slate-500">{{this.right.newNo}}</span>
+                <span class="select-none @3xl:hidden"></span>
+                <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 text-slate-700 dark:text-slate-300">{{this.right.text}}</span>
+              </div>
+            {{else}}
+              {{#if this.left}}
+                <div class="diff-removed diff-left{{#if this.modified}} diff-modified{{/if}} grid grid-cols-[3rem_1rem_minmax(0,1fr)] @3xl:grid-cols-[minmax(0,1fr)_3rem] {{#if this.modified}}bg-sky-50 dark:bg-sky-950/40{{else}}bg-red-50 dark:bg-red-950/40{{/if}}">
+                  <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500 @3xl:order-last">{{this.left.oldNo}}</span>
+                  <span class="diff-sign select-none @3xl:hidden {{#if this.modified}}text-sky-700 dark:text-sky-300{{else}}text-red-700 dark:text-red-300{{/if}}">−</span>
+                  <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 @3xl:pl-3 {{#if this.modified}}text-slate-800 dark:text-slate-200{{else}}text-red-900 dark:text-red-200{{/if}}">{{#if this.leftParts}}{{#each this.leftParts}}{{#if this.changed}}<mark class="diff-mark rounded-sm bg-sky-200 text-inherit underline decoration-sky-600 underline-offset-2 dark:bg-sky-800/70 dark:decoration-sky-300">{{this.text}}</mark>{{else}}{{this.text}}{{/if}}{{/each}}{{else}}{{this.left.text}}{{/if}}</span>
+                </div>
+              {{else}}
+                <div class="diff-empty diff-left hidden @3xl:block bg-slate-50 dark:bg-slate-900/60"></div>
+              {{/if}}
+              {{#if this.right}}
+                <div class="diff-added diff-right{{#if this.modified}} diff-modified{{/if}} grid grid-cols-[3rem_1rem_minmax(0,1fr)] @3xl:grid-cols-[3rem_minmax(0,1fr)] {{#if this.modified}}bg-sky-50 dark:bg-sky-950/40{{else}}bg-emerald-50 dark:bg-emerald-950/40{{/if}} @3xl:border-l @3xl:border-slate-200 @3xl:dark:border-slate-700">
+                  <span class="select-none px-2 text-right @3xl:text-left text-slate-400 dark:text-slate-500">{{this.right.newNo}}</span>
+                  <span class="diff-sign select-none @3xl:hidden {{#if this.modified}}text-sky-700 dark:text-sky-300{{else}}text-emerald-700 dark:text-emerald-300{{/if}}">+</span>
+                  <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 {{#if this.modified}}text-slate-800 dark:text-slate-200{{else}}text-emerald-900 dark:text-emerald-200{{/if}}">{{#if this.rightParts}}{{#each this.rightParts}}{{#if this.changed}}<mark class="diff-mark rounded-sm bg-sky-200 text-inherit underline decoration-sky-600 underline-offset-2 dark:bg-sky-800/70 dark:decoration-sky-300">{{this.text}}</mark>{{else}}{{this.text}}{{/if}}{{/each}}{{else}}{{this.right.text}}{{/if}}</span>
+                </div>
+              {{else}}
+                <div class="diff-empty diff-right hidden @3xl:block border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60"></div>
+              {{/if}}
+            {{/if}}
+            {{#if this.next}}
+              <a href="#change-{{this.next.n}}" aria-label="{{this.next.label}}" title="{{this.next.label}}" class="diff-next absolute right-1 top-0 rounded px-1 font-sans text-slate-500 dark:text-slate-400 bg-white/90 dark:bg-slate-950/90 hover:text-brand-600 dark:hover:text-brand-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">{{#if this.next.first}}↑{{else}}↓{{/if}}</a>
+            {{/if}}
+          </div>
+        {{/each}}
+      </div>
+    {{/each}}
+  </div>
+</div>

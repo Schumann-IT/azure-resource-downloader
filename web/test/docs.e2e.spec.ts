@@ -10,6 +10,10 @@ import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
 import { OVERVIEW_FILE } from '../src/docs/export/confluence';
 
+// A diff page with the `<mark>`s around changed characters removed, so a line
+// is matched as the text it reads as. Only the marks go; every other tag stays.
+const unmarked = (html: string) => html.replace(/<\/?mark[^>]*>/g, '');
+
 // Reproduces, as automated tests, the manual endpoint checks: discovery via
 // docs/index.yaml, picker, the summary-driven tenant landing page and its
 // index fallback, the sidebar navigation, a nested settings-catalog doc with
@@ -1610,11 +1614,44 @@ findings: 4
     expect(res.text).toContain(`resources/${T}/changed1.yaml`);
     expect(res.text).toContain(`drift/${T}/changed1.yaml`);
     expect(res.text).toContain('@@ -1,3 +1,3 @@');
-    expect(res.text).toMatch(/class="diff-removed[\s\S]*? {2}enabled: true</);
-    expect(res.text).toMatch(/class="diff-added[\s\S]*? {2}enabled: false</);
+    expect(unmarked(res.text)).toMatch(/class="diff-removed[\s\S]*? {2}enabled: true</);
+    expect(unmarked(res.text)).toMatch(/class="diff-added[\s\S]*? {2}enabled: false</);
     expect(res.text).toMatch(/class="diff-context[\s\S]*?id: changed1</);
     expect(res.text).toContain(`href="/drifted/_resource/${T}/changed1?raw"`);
     expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?raw"`);
+  });
+
+  it('lays the drift diff out side by side, baseline left and observed right', async () => {
+    const res = await get(`/drifted/_drift/${T}/changed1?diff`).expect(200);
+    // One grid that reflows on its own width — a container query, not a second copy.
+    expect(res.text).toContain('class="drift-diff @container');
+    expect(res.text.match(/class="diff-hunk"/g)).toHaveLength(1);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">baseline</);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">observed</);
+    // A modified value is one row: the removed line left, the added line right.
+    expect(unmarked(res.text)).toMatch(
+      /class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*? {2}enabled: true<[\s\S]*?<div class="diff-added diff-right[\s\S]*? {2}enabled: false</,
+    );
+    // The pair is a modification: tinted on both sides, only what differs marked.
+    expect(res.text).toContain('class="diff-removed diff-left diff-modified ');
+    expect(res.text).toContain('class="diff-added diff-right diff-modified ');
+    expect(res.text).toMatch(/ {2}enabled: <mark class="diff-mark[^"]*underline[^"]*">[^<]+<\/mark>/);
+    // The signs only show when stacked; the numbers meet in the middle when wide.
+    expect(res.text).toMatch(/class="diff-sign select-none @3xl:hidden[^"]*">−</);
+    expect(res.text).toMatch(/class="diff-sign select-none @3xl:hidden[^"]*">\+</);
+    expect(res.text).toContain('@3xl:order-last');
+    // One difference: counted and anchored, with no link pointing at itself.
+    expect(res.text).toContain('<a href="#change-1" class="diff-changes');
+    expect(res.text).toContain('>1 difference</a>');
+    expect(res.text).toContain('id="change-1" class="diff-row grid grid-cols-1 @3xl:grid-cols-2 relative scroll-mt-18"');
+    expect(res.text).not.toContain('class="diff-next');
+    expect(res.text).not.toMatch(/class="diff-removed diff-right/);
+    expect(res.text).not.toMatch(/class="diff-added diff-left/);
+    // A context line is present on both sides, the right copy only when wide.
+    expect(res.text).toMatch(/class="diff-context diff-left[\s\S]*?id: changed1<[\s\S]*?class="diff-context diff-right hidden @3xl:grid/);
+    // Two panes from 48rem: below the 56rem the drift page's column reaches beside the sidebar.
+    expect(res.text).toContain('class="diff-row grid grid-cols-1 @3xl:grid-cols-2"');
+    expect(res.text).not.toContain('@5xl:');
   });
 
   it('withholds the diff when either side is missing or no longer verified', async () => {
@@ -1636,7 +1673,7 @@ findings: 4
     const diff = await get(`/drifted/_drift/${T}/old_name?diff`).expect(200);
     expect(diff.text).toContain(`resources/${T}/old_name.yaml`);
     expect(diff.text).toContain(`drift/${T}/new_name.yaml`);
-    expect(diff.text).toMatch(/class="diff-added[\s\S]*?displayName: New name</);
+    expect(unmarked(diff.text)).toMatch(/class="diff-added[\s\S]*?displayName: New name</);
   });
 
   it('renders an addition with its payload, and no documentation link', async () => {
@@ -1837,6 +1874,423 @@ findings: 4
     } finally {
       await writeDrift();
     }
+  });
+});
+
+describe('Docs browser tenant compare (e2e)', () => {
+  const P = 'Microsoft.Graph/deviceManagementConfigurationPolicies';
+  const GUIDS = {
+    stageAdmins: '8964516b-c223-4f58-a866-232d3690c9b4',
+    stageAudience: '11111111-c223-4f58-a866-232d3690c9b4',
+    prodAdmins: '7a73b11f-e242-4ffe-ab1a-c4a8a70d5f64',
+    prodAudience: '22222222-e242-4ffe-ab1a-c4a8a70d5f64',
+    stageP1: 'c036fdcb-4fad-4596-94cb-365d2b23a016',
+    stageP2: 'c036fdcb-4fad-4596-94cb-365d2b23a017',
+    stageP3: 'c036fdcb-4fad-4596-94cb-365d2b23a018',
+    prodP1: '866b2e5d-a549-472c-b618-3df33778ba05',
+    prodP2: '866b2e5d-a549-472c-b618-3df33778ba06',
+    prodP3: '866b2e5d-a549-472c-b618-3df33778ba07',
+  };
+
+  const policy = (policyId: string, groupId: string, value: number) => `'@odata.context': https://graph.microsoft.com/beta/$metadata#x('${policyId}')
+id: ${policyId}
+createdDateTime: "2026-03-28T16:56:52Z"
+lastModifiedDateTime: "2026-03-28T16:56:52Z"
+name: Same policy
+assignments:
+    - id: ${policyId}_${groupId}
+      sourceId: ${policyId}
+      target:
+        groupId: ${groupId}
+settings:
+    - id: "0"
+      value: ${value}
+`;
+
+  const index = (tenant: string, excluded = '') =>
+    [
+      'version: 3',
+      `tenant: ${tenant}`,
+      'generatedAt: "2026-01-01T00:00:00Z"',
+      'complete: true',
+      'counts:',
+      '    documented: 0',
+      '    pending: 0',
+      ...(excluded ? ['    excluded:', `        ${excluded}: 1`] : []),
+      'resources: []',
+      '',
+    ].join('\n');
+
+  const entry = (key: string, name: string, id: string | null, present = true) =>
+    [
+      `    ${key}.yaml:`,
+      ...(id ? [`        resourceId: ${id}`] : []),
+      `        displayName: ${name}`,
+      `        presentInTenant: ${present}`,
+      '',
+    ].join('\n');
+
+  const metadata = (entries: string[]) =>
+    ['generatedAt: "2026-01-01T00:00:00Z"', 'resources:', ...entries].join('\n');
+
+  const STAGE_METADATA = metadata([
+    entry('Microsoft.Graph/groups/admins', 'Admins', GUIDS.stageAdmins),
+    entry('Microsoft.Graph/groups/stage_audience', 'Stage audience', GUIDS.stageAudience),
+    entry(P + '/p1', 'Policy One', GUIDS.stageP1),
+    entry(P + '/p2', 'Policy Two', GUIDS.stageP2),
+    entry(P + '/p3', 'Policy Three', GUIDS.stageP3),
+    entry('Microsoft.Graph/deviceConfigurations/dc1', 'Stage only config', null),
+    entry('Microsoft.Graph/deviceConfigurations/gone', 'Gone config', null, false),
+    entry('Microsoft.Graph/windowsAutopilotDeviceIdentities/dev1', 'Device one', null),
+  ]);
+
+  const PROD_METADATA = metadata([
+    entry('Microsoft.Graph/groups/admins', 'Admins', GUIDS.prodAdmins),
+    entry('Microsoft.Graph/groups/prod_audience', 'Prod audience', GUIDS.prodAudience),
+    entry(P + '/p1', 'Policy One', GUIDS.prodP1),
+    entry(P + '/p2', 'Policy Two', GUIDS.prodP2),
+    entry(P + '/p3', 'Policy Three (prod)', GUIDS.prodP3),
+    entry('Microsoft.Graph/namedLocations/loc1', 'Prod only location', null),
+  ]);
+
+  let app: NestExpressApplication;
+  let root: string;
+
+  const write = async (rel: string, content: string) => {
+    const file = path.join(root, rel);
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await fsp.writeFile(file, content);
+  };
+  const get = (url: string) => request(app.getHttpServer()).get(url);
+  const q = '?a=stage&b=prod';
+  // An href as Handlebars writes it into an attribute: `&` and `=` escaped.
+  const href = (url: string) =>
+    `href="${url.replace(/&/g, '&amp;').replace(/=/g, '&#x3D;')}"`;
+
+  beforeAll(async () => {
+    root = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-compare-'));
+    await write('stage/docs/index.yaml', index('Stage', 'Microsoft.Graph/windowsAutopilotDeviceIdentities'));
+    await write('stage/resources/metadata.yaml', STAGE_METADATA);
+    await write('stage/resources/Microsoft.Graph/groups/admins.yaml', 'displayName: Admins\nmail: a@stage\n');
+    await write('stage/resources/Microsoft.Graph/groups/stage_audience.yaml', 'displayName: Stage audience\n');
+    await write(`stage/resources/${P}/p1.yaml`, policy(GUIDS.stageP1, GUIDS.stageAdmins, 1));
+    await write(`stage/resources/${P}/p2.yaml`, policy(GUIDS.stageP2, GUIDS.stageAudience, 1));
+    await write(`stage/resources/${P}/p3.yaml`, policy(GUIDS.stageP3, GUIDS.stageAdmins, 1));
+    await write('stage/resources/Microsoft.Graph/deviceConfigurations/dc1.yaml', 'displayName: Stage only config\n');
+    await write('stage/resources/Microsoft.Graph/deviceConfigurations/gone.yaml', 'displayName: Gone config\n');
+
+    await write('prod/docs/index.yaml', index('Prod'));
+    await write('prod/resources/metadata.yaml', PROD_METADATA);
+    await write('prod/resources/Microsoft.Graph/groups/admins.yaml', 'displayName: Admins\nmail: a@prod\n');
+    await write('prod/resources/Microsoft.Graph/groups/prod_audience.yaml', 'displayName: Prod audience\n');
+    await write(`prod/resources/${P}/p1.yaml`, policy(GUIDS.prodP1, GUIDS.prodAdmins, 15));
+    await write(`prod/resources/${P}/p2.yaml`, policy(GUIDS.prodP2, GUIDS.prodAudience, 1));
+    await write(`prod/resources/${P}/p3.yaml`, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
+
+    // A docs-only copy: a tenant, but not comparable.
+    await write('docsonly/docs/index.yaml', index('Docs only'));
+    // A housekeeping folder that looks like an export: never a tenant, so
+    // never comparable either.
+    await write('_hidden/docs/index.yaml', index('Hidden'));
+    await write('_hidden/resources/metadata.yaml', PROD_METADATA);
+
+    process.env.DOCS_ROOT = root;
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureViews(app);
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await fsp.rm(root, { recursive: true, force: true });
+  });
+
+  it('offers Compare with… only on cards whose export has resources/metadata.yaml', async () => {
+    const res = await get('/').expect(200);
+    expect(res.text).toContain(href(`/_compare?a=stage`));
+    expect(res.text).toContain(href(`/_compare?a=prod`));
+    expect(res.text).not.toContain('a&#x3D;docsonly');
+    expect(res.text).not.toContain('compare-selecting');
+  });
+
+  it('renders the picker in its selecting state for a alone', async () => {
+    const res = await get('/_compare?a=stage').expect(200);
+    expect(res.text).toContain('Comparing <strong>Stage</strong>');
+    expect(res.text).toContain('class="compare-cancel');
+    expect(res.text).toContain('compare-selected');
+    expect(res.text).toContain(href(`/_compare?a=stage&b=prod`));
+    expect(res.text).toContain('Compare with Stage</a>');
+    expect(res.text).not.toContain('b&#x3D;docsonly');
+    expect(res.text).not.toContain('b&#x3D;stage');
+    expect(res.text).not.toContain('compare-start');
+  });
+
+  it('redirects a bare /_compare to the picker', async () => {
+    const res = await get('/_compare').expect(302);
+    expect(res.headers.location).toBe('/');
+  });
+
+  it.each([
+    ['the same tenant twice', '/_compare?a=stage&b=stage'],
+    ['an unknown tenant', '/_compare?a=nobody&b=prod'],
+    ['an unknown first tenant alone', '/_compare?a=nobody'],
+    ['a tenant without resources/metadata.yaml', '/_compare?a=docsonly&b=prod'],
+    ['a _-prefixed folder', '/_compare?a=_hidden&b=prod'],
+    ['a repeated parameter', '/_compare?a=stage&a=prod&b=prod'],
+  ])('refuses %s without leaking a path', async (_label, url) => {
+    const res = await get(url).expect(404);
+    expect(res.text).toContain('Tenant comparison not available');
+    expect(res.text).not.toContain(root);
+  });
+
+  // The pane's rows, each one link, by the text they carry.
+  const paneRows = (html: string) =>
+    html.split('<a id="row-').slice(1).map((r) => r.slice(0, r.indexOf('</a>')));
+  const rowWith = (html: string, text: string) => paneRows(html).find((r) => r.includes(text));
+
+  it('lists both exports in one pane with the status of each pair', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    expect(res.text).toContain('2 different · 3 only in stage · 2 only in prod · 2 identical');
+    // A resource the export kept after it left the tenant is not listed.
+    expect(res.text).not.toContain('Gone config');
+    // A pair's row opens its diff with its own anchor; a one-sided row that
+    // tenant's YAML view.
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod#row-2`));
+    expect(res.text).toContain('href="/stage/_resource/Microsoft.Graph/deviceConfigurations/dc1"');
+    expect(res.text).toContain('href="/prod/_resource/Microsoft.Graph/namedLocations/loc1"');
+    // Types labelled as in the sidebar, the excluded one last and marked.
+    expect(res.text.indexOf('Device Configurations')).toBeLessThan(
+      res.text.indexOf('Windows Autopilot Device Identities'),
+    );
+    expect(res.text).toMatch(/compare-excluded[\s\S]*?Windows Autopilot Device Identities[\s\S]*?not documented/);
+    expect(res.text).toContain(href(`/_compare?a=prod&b=stage`));
+    // Headed by the tenant ids; a grid of links, not a table or collapsed groups.
+    expect(res.text).toMatch(/class="compare-pane-head[^"]*">\s*<div[^>]*>stage<\/div>[\s\S]*?<div[^>]*>prod<\/div>/);
+    expect(res.text).not.toContain('<table');
+    expect(res.text).not.toContain('<details');
+    // Full width: no sidebar on the compare pages any more.
+    expect(res.text).not.toContain('<aside');
+    expect(res.text).toContain('class="doc-layout');
+    expect(res.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
+    // `_compare` is a representation, not a breadcrumb segment.
+    expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_compare<\/span>/);
+  });
+
+  it('marks each status with a glyph and a hidden label, one link per row', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    const expectRow = (text: string, state: string, marker: string, label: string) => {
+      const row = rowWith(res.text, text);
+      expect(row).toBeDefined();
+      expect(row).toContain(`compare-row compare-${state}`);
+      expect(row).toContain(`<span aria-hidden="true">${marker}</span><span class="sr-only">${label}</span>`);
+      // No anchor inside the row's own.
+      expect(row).not.toContain('<a ');
+    };
+    expectRow('Policy One', 'different', '≠', 'different');
+    expectRow('Policy Two', 'audience', '≠', 'differs only in audience');
+    expectRow('Stage only config', 'onlyLeft', '→', 'only in stage');
+    expectRow('Prod only location', 'onlyRight', '←', 'only in prod');
+    // A pair shows both names in one row, a one-sided row an empty cell opposite.
+    expect(rowWith(res.text, 'Policy One')).toContain(' compare-paired');
+    expect(rowWith(res.text, 'Stage only config')).toMatch(/Stage only config[\s\S]*class="compare-empty/);
+    expect(rowWith(res.text, 'Prod only location')).toMatch(/class="compare-empty[\s\S]*Prod only location/);
+    // Both sides' sizes, from the files the status read.
+    expect((rowWith(res.text, 'Policy One') ?? '').split(' B</span>').length - 1).toBe(2);
+  });
+
+  it('hides identical pairs by default, counts them, and shows them with &same', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    expect(res.text).not.toContain('Policy Three');
+    expect(rowWith(res.text, '>Admins<')).toBeUndefined();
+    expect(res.text).toContain(`${href('/_compare?a=stage&b=prod&same')} class="compare-same`);
+    expect(res.text).toContain('show identical</a>');
+
+    const all = await get(`/_compare${q}&same`).expect(200);
+    const three = rowWith(all.text, 'Policy Three (prod)');
+    expect(three).toContain('compare-row compare-identical');
+    expect(three).toContain('<span class="sr-only">identical</span>');
+    expect(three).toMatch(/>Policy Three<\/span>/);
+    expect(all.text).toContain('hide identical</a>');
+    // Every row link keeps the view, and a row keeps its number in both views.
+    expect(all.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod&same#row-2`));
+    expect(all.text).toContain(href(`/_compare/${P}/p3?a=stage&b=prod&same#row-3`));
+    expect(all.text).toContain(href('/_compare?a=prod&b=stage&same'));
+  });
+
+  it('points the empty diff area at the first difference', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    expect(res.text).toContain('Select a pair above to see its diff');
+    const first = href(`/_compare/${P}/p1?a=stage&b=prod#row-2`);
+    expect(res.text).toContain(`${first} class="compare-first-difference`);
+  });
+
+  it('marks the selected pair above its diff, also as exported and when identical', async () => {
+    for (const url of [`/_compare/${P}/p1${q}`, `/_compare/${P}/p1${q}&raw`]) {
+      const res = await get(url).expect(200);
+      expect(res.text).toMatch(/<a id="row-2" href="[^"]*" aria-current="page"/);
+      expect(res.text.match(/aria-current="page"/g)).toHaveLength(1);
+      expect(res.text).not.toContain('<aside');
+      // The pane comes first, the diff under it; swapping sides keeps the pair.
+      expect(res.text.indexOf('class="compare-pane ')).toBeLessThan(res.text.indexOf('class="doc-source'));
+      expect(res.text).toContain(href(`/_compare/${P}/p1?a=prod&b=stage`));
+    }
+    // An identical pair is not hidden from its own page.
+    const same = await get(`/_compare/${P}/p3${q}`).expect(200);
+    expect(same.text).toMatch(/<a id="row-3" href="[^"]*" aria-current="page"/);
+    expect(rowWith(same.text, '>Admins<')).toBeUndefined();
+  });
+
+  it('shows ? with its reason for a pair it cannot judge, without leaking a path', async () => {
+    const p3 = path.join(root, `prod/resources/${P}/p3.yaml`);
+    try {
+      await fsp.writeFile(p3, 'settings: [\n');
+      const res = await get(`/_compare${q}`).expect(200);
+      const row = rowWith(res.text, 'Policy Three (prod)');
+      expect(row).toContain('compare-row compare-unknown');
+      expect(row).toContain('<span aria-hidden="true">?</span><span class="sr-only">could not compare: does not parse</span>');
+      expect(res.text).toContain('· 1 could not compare');
+      expect(res.text).not.toContain(root);
+    } finally {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
+    }
+  });
+
+  it('diffs a pair with ids and timestamps normalised away and references resolved', async () => {
+    const res = await get(`/_compare/${P}/p1${q}`).expect(200);
+    expect(unmarked(res.text)).toMatch(/class="diff-removed[\s\S]*?value: 1</);
+    expect(unmarked(res.text)).toMatch(/class="diff-added[\s\S]*?value: 15</);
+    // Only the added digit is marked.
+    expect(res.text).toMatch(/value: 1<mark class="diff-mark[^"]*">5<\/mark>/);
+    // The whole file, as one hunk without its `@@` header, from its first line.
+    expect(res.text.match(/class="diff-hunk"/g)).toHaveLength(1);
+    expect(res.text).not.toContain('diff-hunk-header');
+    expect(res.text).toContain('name: Same policy');
+    expect(res.text).toContain('>1 difference</a>');
+    expect(res.text).not.toContain('compare-capped');
+    // The same audience on both sides: resolved, so not part of the diff — shown
+    // only as an unchanged line of the whole file, never as a changed one.
+    expect(res.text).toContain('references resolved to names\n          1 left, 1 right');
+    expect(res.text).toMatch(/class="diff-context diff-left[^"]*">(?:(?!<\/div>)[\s\S])*groupId: /);
+    expect(unmarked(res.text)).not.toMatch(/class="diff-(?:removed|added)[^"]*">(?:(?!<\/div>)[\s\S])*groupId:/);
+    for (const guid of [GUIDS.stageP1, GUIDS.prodP1, GUIDS.stageAdmins, GUIDS.prodAdmins]) {
+      expect(res.text).not.toContain(guid);
+    }
+    expect(res.text).not.toContain('2026-03-28T16:56:52Z');
+    expect(res.text).toContain('class="compare-report');
+    expect(res.text).toContain('createdDateTime');
+    expect(res.text).not.toContain('Differs only in audience');
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod&raw`));
+    expect(res.text).toContain(`href="/stage/_resource/${P}/p1"`);
+    // Side by side, headed by the two tenant ids; the modified value is one row.
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">stage</);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">prod</);
+    expect(unmarked(res.text)).toMatch(/class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*?value: 1<[\s\S]*?<div class="diff-added diff-right[\s\S]*?value: 15</);
+    expect(res.text).toContain('class="diff-row grid grid-cols-1 @3xl:grid-cols-2"');
+  });
+
+  it('shows the raw diff with the identities back', async () => {
+    const res = await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    expect(unmarked(res.text)).toContain(GUIDS.stageP1);
+    expect(unmarked(res.text)).toContain(GUIDS.prodP1);
+    expect(res.text).toContain('The files as exported, without normalisation.');
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+  });
+
+  it('links each difference to the next, the last back to the first', async () => {
+    const res = await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    const count = Number(/>(\d+) differences<\/a>/.exec(res.text)?.[1]);
+    expect(count).toBeGreaterThan(1);
+    for (let n = 1; n <= count; n++) {
+      expect(res.text).toContain(`id="change-${n}" class="diff-row`);
+    }
+    expect(res.text).toContain('<a href="#change-2" aria-label="next difference"');
+    expect(res.text).toContain('<a href="#change-1" aria-label="first difference"');
+    expect(res.text).not.toContain(`id="change-${count + 1}"`);
+  });
+
+  it('says when a pair differs only in audience', async () => {
+    const res = await get(`/_compare/${P}/p2${q}`).expect(200);
+    expect(res.text).toContain('Differs only in audience');
+    expect(unmarked(res.text)).toContain('groupId: Stage audience');
+    expect(unmarked(res.text)).toContain('groupId: Prod audience');
+  });
+
+  it('says when a pair is identical after normalisation', async () => {
+    const res = await get(`/_compare/${P}/p3.yaml${q}`).expect(200);
+    expect(res.text).toContain('No differences after normalisation.');
+    expect(res.text).not.toContain('class="drift-diff ');
+  });
+
+  it.each([
+    ['a traversal', `/_compare/..%2F..%2Fstage%2Fdocs%2Findex${q}`],
+    ['a key only one export lists', `/_compare/Microsoft.Graph/deviceConfigurations/dc1${q}`],
+    ['a key no longer present in the tenant', `/_compare/Microsoft.Graph/deviceConfigurations/gone${q}`],
+    ['the metadata file itself', `/_compare/metadata${q}`],
+  ])('refuses %s as a resource comparison without leaking a path', async (_label, url) => {
+    const res = await get(url).expect(404);
+    expect(res.text).toContain('Resource comparison not available');
+    expect(res.text).not.toContain(root);
+  });
+
+  it('refuses a pair diff for an ineligible tenant', async () => {
+    const res = await get(`/_compare/${P}/p1?a=stage&b=docsonly`).expect(404);
+    expect(res.text).toContain('Tenant comparison not available');
+  });
+
+  it('reflects an edited resource and an edited metadata file on the next request', async () => {
+    const p3 = path.join(root, `prod/resources/${P}/p3.yaml`);
+    const metadata = path.join(root, 'prod/resources/metadata.yaml');
+    try {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 20));
+      const diff = await get(`/_compare/${P}/p3${q}`).expect(200);
+      expect(diff.text).not.toContain('No differences after normalisation.');
+      expect(unmarked(diff.text)).toMatch(/class="diff-added[\s\S]*?value: 20</);
+
+      await write('prod/resources/Microsoft.Graph/deviceConfigurations/dc1.yaml', 'displayName: Stage only config\n');
+      await fsp.writeFile(
+        metadata,
+        PROD_METADATA + entry('Microsoft.Graph/deviceConfigurations/dc1', 'Now in prod', null),
+      );
+      const listing = await get(`/_compare${q}`).expect(200);
+      // p3 now differs; dc1 is paired, and identical.
+      expect(listing.text).toContain('3 different · 2 only in stage · 2 only in prod · 2 identical');
+      expect(rowWith(listing.text, 'Policy Three (prod)')).toContain('compare-row compare-different');
+    } finally {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
+      await fsp.writeFile(metadata, PROD_METADATA);
+    }
+    const restored = await get(`/_compare${q}`).expect(200);
+    expect(restored.text).toContain('2 different · 3 only in stage · 2 only in prod · 2 identical');
+  });
+
+  it('re-evaluates a pair when its metadata changes how a reference resolves', async () => {
+    const metadata = path.join(root, 'prod/resources/metadata.yaml');
+    try {
+      // The same file, but prod's Admins group now has another name, so p3's
+      // audience no longer resolves to the same group as stage's.
+      await fsp.writeFile(metadata, PROD_METADATA.replace('displayName: Admins', 'displayName: Prod admins'));
+      const res = await get(`/_compare${q}`).expect(200);
+      expect(rowWith(res.text, 'Policy Three (prod)')).toContain('compare-row compare-audience');
+    } finally {
+      await fsp.writeFile(metadata, PROD_METADATA);
+    }
+    const restored = await get(`/_compare${q}`).expect(200);
+    expect(restored.text).not.toContain('Policy Three');
+  });
+
+  it('writes nothing under the docs root', async () => {
+    const before = await snapshot(root);
+    await get('/').expect(200);
+    await get('/_compare?a=stage').expect(200);
+    await get(`/_compare${q}`).expect(200);
+    await get(`/_compare${q}&same`).expect(200);
+    await get(`/_compare/${P}/p1${q}`).expect(200);
+    await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    await get(`/_compare/${P}/p3${q}&same`).expect(200);
+    expect(await snapshot(root)).toEqual(before);
   });
 });
 
