@@ -387,80 +387,6 @@ tenants instead of one.
   under `[Unreleased]`. *Shipped as:* the partials rule sits under Tenant compare, beside the `diff_table`
   one, rather than under Boundaries.~~
 
-### 4. The taxonomy filters narrow the tenant compare
-
-**Goal.** Let a reviewer compare *the Windows compliance policies* or *the Defender programme* of two tenants
-rather than everything both hold, with the chip groups the tenant sidebar already offers and the same
-behaviour: OR within an axis, AND across, the selection in the URL, counts that follow it. Depends on the
-endpoint navigation above being in place, since the chips live in that sidebar.
-
-> **Membership comes from both indexes, joined through the sanctioned key mapping.** A metadata entry carries
-> no taxonomy; the index does (`resources[].facets`). The compare routes already load both tenants' indexes,
-> and the CLI's own mapping `docs/<type>/<name>.md` ↔ `resources/<type>/<name>.yaml` makes an index resource
-> and a metadata key the same thing, so each listing row can be given a membership without reading a file:
-> for a pair, the union of the two sides' memberships on each axis; for a one-sided row, that side's. A row
-> neither index lists — the excluded bulk types — has an empty membership and falls into *Uncategorised*,
-> which is already how a resource an axis matched to nothing is shown. **A pair matches when either side
-> matches**, so a policy one tenant categorised and the other did not is still found under its value; the
-> alternative (both sides) would hide exactly the difference a reviewer is looking for.
->
-> **Axes are the union of what the two indexes declare.** The CLI resolves the taxonomy from its config, so
-> two exports of the same operator declare the same axes and usually the same values, but their counts differ
-> and a value one tenant matched to nothing may be missing from the other's header. Axes are merged by id,
-> values by id in the left header's order with the right header's extras appended, labels from the left
-> header first. Only axes `filterableAxes` offers on at least one side are offered.
->
-> **One matching rule, not a second one.** `buildFacetFilters`, `countMatching` and the selection matching
-> in `tenant-index.ts` are written against an index. Their core — axes, a list of members each carrying a
-> per-axis membership, the selection — is extracted so the tenant sidebar and the compare sidebar call one
-> function; the index-shaped entry points stay as wrappers. This is the same reason the Confluence export
-> classifies through `filterableAxes`: a second definition of *matches* is exactly the drift to avoid.
->
-> **Reserved parameters and hrefs.** `a`, `b` and `raw` are the compare routes' own query parameters. `a` and
-> `b` join `raw`, `yaml` and `diff` in the reserved set, globally: an axis with either id is not offered on
-> any page, which is the one rule the reserved set already states. Every compare href carries `?a=&b=`, so
-> `selectionHref` appends with `&` when its base already has a query string; the selection rides along on
-> every item href and on *swap sides*, and *Clear filters* is the plain listing href.
->
-> **What is narrowed.** On the listing page the filter narrows the sidebar **and** the type groups in the
-> body, with the *Showing N of M* line: the body is a listing of resources, not a document, and a listing
-> that ignored its own sidebar's filter would read as broken. On the pair diff page the filter narrows the
-> sidebar only, and the pair being viewed stays listed and marked *outside the filter*, exactly as a
-> document does. The README's sentence that filters narrow navigation, not page bodies, is refined to say so.
->
-> **Non-negotiables, preserved.** Read-only; no new route or resolver; the listing is still built from the
-> two metadata files, the indexes only *annotate* rows that already exist and never add one; a tenant whose
-> index cannot be read inside the discovery TTL simply contributes no membership; `a`/`b`/`raw` cannot be
-> shadowed; every value stays escaped and no script is introduced.
-
-**Plan.**
-
-- **Filter core.** In `tenant-index.ts`, extract the member-based core of `buildFacetFilters`,
-  `countMatching` and `matchesSelection` — `(axes, members, selection, hrefFor)` — and re-express the
-  index-shaped functions over it. Existing spec cases pass unchanged. Add `a` and `b` to the reserved query
-  parameters and teach `selectionHref` to append to an existing query string.
-- **Compare axes and membership.** Pure functions in `compare-view.ts`: merge the two indexes' filterable
-  axes by id (left order, right extras, left labels first); annotate each listing row with its per-axis
-  membership through the `docs/<type>/<name>.md` ↔ key mapping, union for a pair; the compare selection is
-  parsed with the existing `parseFacetSelection` against the merged axes.
-- **Narrowing.** `compareListing` (or a pure step after it) drops rows the selection excludes and recomputes
-  the group counts and totals; the comparison pane keeps the viewed pair shown whatever the selection, as it
-  already does whatever its status. Chip hrefs, row hrefs and *swap sides* carry the selection (the pane's row
-  hrefs already keep the view's query minus the key); *Clear filters* is the listing href.
-- **Views.** The compare pages include `sidebar_facets` above the comparison pane (they have no sidebar), with
-  the compare filters and the *Showing N of M* line; the pane renders the narrowed groups. No new markup
-  beyond what the shared partial has.
-- **Tests.** `test/tenant-index.spec.ts`: `a`/`b` are not offered as axes, `selectionHref` appends with `&`,
-  the refactor keeps every existing case. Spec cases for the merge (order, labels, a value only one side
-  declares), the membership join (pair union, one-sided row, unlisted row → uncategorised) and the narrowed
-  counts. `test/docs.e2e.spec.ts`: a filtered listing shows only matching groups and rows with the count
-  line, the chips carry `a` and `b`, the diff page keeps the viewed pair *outside the filter*, an axis id
-  colliding with `a` is ignored.
-- **Docs.** `README.md` (Taxonomy filters: the compare pages, the either-side rule, the refined
-  navigation-not-bodies sentence; routes table: the compare routes take the filter parameters);
-  `.windsurf/rules/01-architecture.md` (Tenant compare: indexes annotate rows, never add them; `a`/`b`
-  reserved everywhere); `CHANGELOG.md` inside the tenant compare entry under `[Unreleased]`.
-
 ### ~~6. The compare diff reads like an IDE's file comparison~~
 
 **Goal.** Let a reviewer read a pair the way an IDE's *Compare Files* view shows it: both files **whole**,
@@ -585,7 +511,7 @@ strongly, and a count of differences with a way to jump from one to the next.
   plain data); `CHANGELOG.md` inside the tenant compare entry and the drift diff's `### Changed` entry under
   `[Unreleased]`, both still unreleased.~~
 
-### 7. The compare listing becomes the IDE's comparison pane, above the diff
+### ~~7. The compare listing becomes the IDE's comparison pane, above the diff~~
 
 **Goal.** Put the top half of an IDE's folder comparison on the compare pages: every resource of both exports in
 one scrollable pane, a pair on one row, a status column saying at a glance whether the pair is **identical**
@@ -642,7 +568,7 @@ its types in collapsed groups; the diff is a second page.
 > nested anchors. That rules out a `<table>`, since an `<a>` cannot wrap a `<tr>`: the pane is a CSS **grid**
 > whose rows are `<a>` elements holding the five cells, with a header row and one group-header row per type —
 > the same shape the tenant listing uses, and the reference look exactly. Every row link carries the page's
-> current query (`a`, `b`, `same`, and entry 4's filters once they land) minus the key, so the view does not
+> current query (`a`, `b`, `same`) minus the key, so the view does not
 > reset on each click. Links carry `#row-<n>`, so after the page load the browser brings the selected row into
 > view inside the pane. A fragment scrolls the page as well as the pane, so the row gets a `scroll-margin-top`
 > that keeps the page itself from moving. This is the one layout detail the manual check has to confirm. A
@@ -656,7 +582,7 @@ its types in collapsed groups; the diff is a second page.
 > which the header already shows. By default the pane shows **what needs attention**: different, one-sided
 > and unknown rows. Identical pairs are counted in the header and shown with a `&same` link, a GET parameter
 > that is added to the compare routes' reserved set. The **selected pair is always shown**, whatever its
-> status and whether or not `same` is set — the exemption entry 4 gives the viewed pair — so the row that is
+> status and whether or not `same` is set, so the row that is
 > marked and scrolled to exists on every pair page. A type whose rows are all hidden is hidden with them, not
 > shown as an empty header. Rows are numbered over the full list, so `#row-<n>` is the same anchor in both
 > views. The totals become the four counts (*N different · N only in a · N only in b · N identical*), plus
@@ -669,8 +595,7 @@ its types in collapsed groups; the diff is a second page.
 > place, and keeping both would show the same list twice beside a diff that needs the width. So the compare
 > pages drop back to full width, with no `<aside>`: the `doc-layout` wrapper and its `max-w-7xl` stay, the
 > `<main>` simply fills it. `compareNavigation` and the compare sidebar partial are removed. The shared
-> `sidebar_tree` / `sidebar_facets` split stays, because the tenant sidebar uses it and entry 4's chips can sit
-> above the pane through `sidebar_facets`. Entry 3 is unreleased, so this amends its part of the tenant
+> `sidebar_tree` / `sidebar_facets` split stays, because the tenant sidebar uses it. Entry 3 is unreleased, so this amends its part of the tenant
 > compare changelog entry rather than adding a *Changed* one. *Other option:* keep the sidebar and add the
 > pane. Not recommended, for the duplication.
 >
@@ -753,6 +678,7 @@ its types in collapsed groups; the diff is a second page.
   no script. Entry 4 is rewritten where it names what this entry removes: its *Narrowing* item's
   `compareNavigation` exemption becomes the pane's always-shown selected pair, and its *Views* item puts
   `sidebar_facets` above the pane instead of inside `compare_sidebar.hbs`, so entry 4 stays self-contained.~~
+  *Entry 4 (taxonomy filters on the compare) was dropped afterwards without implementation.*
 
 **Follow-ups (not in this entry).**
 
