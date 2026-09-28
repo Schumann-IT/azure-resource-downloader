@@ -301,6 +301,159 @@ but makes the reader reconstruct *which side has what*.
   inside the tenant compare entry for the compare pages, and a `### Changed` entry for the drift diff, which
   is a released feature changing shape in both layouts.~~
 
+### 3. The tenant compare gets the sidebar's endpoint navigation
+
+**Goal.** Let a reviewer move between the pairs of a comparison the way they move between a tenant's documents:
+from the sidebar, by resource type, without going back to the listing. Today both compare pages are
+single-column — the listing is the only way from one pair diff to the next — while every tenant page has the
+tree of types in a sidebar. The compare pages get the same sidebar shell and the same tree, headed by the two
+tenants instead of one.
+
+> **Same data, second consumer.** The tenant sidebar is built from one tenant's `docs/index.yaml`; the compare
+> listing must come from the two `resources/metadata.yaml` files alone, and the rule stands. The compare
+> sidebar is therefore derived from the listing's own view model, not from either index: one section per type
+> group in the listing's order (documented types first, excluded types last and marked *not documented*), one
+> item per row — a pair links to its diff, a resource only one side has links to that tenant's YAML view and
+> says *only in `<tenant>`*. Sidebar and body agree by construction, and nothing new is read. On the pair diff
+> page the pair being viewed is the active item and its section is open, as a document is on its own page; on
+> the listing page nothing is active. A row today carries names and hrefs only, so it gains its key — the
+> one datum the active marker needs, and what `?raw` must not disturb. Sections are labelled the way the
+> tenant sidebar labels endpoints (*Device Compliance Policies*, not the raw type), which is what makes the
+> two sidebars read as one thing.
+>
+> **One tree renderer.** `views/partials/sidebar.hbs` renders three things: a tenant header (name linking to
+> `/<tenant>`, counts, the incomplete-export banner, the excluded-types footer), the filter chips and the
+> type tree. Only the header is tenant-specific. It is split into partials — the tree and the chips each
+> become one — and a compare sidebar composes its own header (`a ↔ b`, the three totals, *swap sides*, the
+> way back to the listing) with the shared tree and chip partials. The same principle as `diff_table`: the
+> tenant pages and the compare pages cannot come to render a tree differently. The tree's *pending* marker
+> becomes a generic per-item note, set to *pending* by the tenant navigation and *only in `<tenant>`* by the
+> compare one, so the rendered tenant sidebar does not change by a byte.
+>
+> **Layout.** Both compare pages move onto the `doc-layout` shell the tenant pages use (`lg:flex-row`,
+> sidebar left, `max-w-7xl`), so the header row lines up with the content as it does everywhere else. Below
+> `lg` that shell puts the sidebar *under* the content, so the listing's own totals line and *swap sides* stay
+> in the body where a phone reads them first; the sidebar header repeats the counts, as the tenant sidebar
+> repeats the export summary's. The diff partial switches on its own width, so the pair diff now behaves
+> exactly as the drift diff does beside a sidebar — two panes from about 800px, stacked between 1024px and
+> about 1152px, two panes again above. The README's compare section already defers to the drift diff's
+> description, which this makes literally true. **It changes one expectation elsewhere:** the drift diff
+> fix's pending browser check expects the compare diff to be two panes at every width; once this lands it
+> stacks at 1100px like the drift diff, and the check is read that way.
+>
+> **Non-negotiables, preserved.** Read-only; no new route, resolver or query parameter; the listing is still
+> computed from the two metadata files and nothing walks a directory; `_compare` stays out of the breadcrumb;
+> every value stays escaped. No client-side JavaScript: the open section is a server-set `open` attribute, as
+> today.
+
+**Plan.**
+
+- **Sidebar partials.** Split `views/partials/sidebar.hbs` into `sidebar_tree.hbs` (the `<details>` per
+  type with its items, and the *No documents match these filters* fallback it renders when the tree is empty
+  and chips are offered) and `sidebar_facets.hbs` (the chip groups and the *Showing N of M · Clear filters*
+  line), included by `sidebar.hbs` around its tenant header and excluded-types footer. Markup identical to
+  today's.
+- **Generic item note.** `NavItem` gains `note: string` (`pending` when the resource is not documented,
+  empty otherwise) and `NavSection` an optional `note`; `sidebar_tree.hbs` renders the notes instead of
+  testing `documented`. `tenant.hbs`'s landing-page fallback listing keeps `documented`.
+- **Compare navigation.** `ListingRow` gains `key`. A pure `compareNavigation(listing, leftId, rightId,
+  activeKey)` in `compare-view.ts` returning `NavSection[]` from the `CompareListing`: sections in the
+  listing's order, excluded ones noted *not documented*, labels through `typeLabel` (exported from
+  `tenant-index.ts`); items from the rows — pair → pair diff href, single side → that tenant's YAML href with
+  note *only in `<id>`*; `active` on the row whose key is being viewed and on its section, `exempt` always
+  false here.
+- **Compare sidebar and shell.** `views/partials/compare_sidebar.hbs`, an `<aside>` with its own
+  `aria-label` (*Comparison navigation*; the tenant one stays *Tenant navigation*, which an e2e case asserts):
+  the two tenants linking to the listing, the three totals and *swap sides*, then the shared chip and tree
+  partials. `views/compare.hbs` and `views/compare-diff.hbs` switch to the `doc-layout` shell (`max-w-7xl`,
+  header at its default width) and include it; the listing body keeps its heading, totals line, note and type
+  groups, the diff page its source line and *all resources* link.
+- **Controller.** One private helper builds the `CompareListing` for two `CompareTenant`s — the excluded set
+  from both indexes plus `compareListing` — and both routes call it, so the pair route gets the listing from
+  the two metadata files it already holds with no extra read and no second construction. Both pass `nav`.
+- **Tests.** Spec cases for `compareNavigation` (order, notes, active pair also under `?raw`, hrefs).
+  `test/docs.e2e.spec.ts`: both compare pages render the sidebar under its own label, the pair diff page
+  opens the viewed pair's section and marks the pair, a one-sided item links to the YAML view with its note,
+  excluded sections come last; the existing compare cases (per-row href counts, the excluded-last `indexOf`
+  check, the totals wording) and the tenant sidebar cases pass unchanged.
+- **Docs.** `README.md` (*Sidebar navigation on every page* now includes the compare pages; the Tenant
+  compare section names the sidebar and what a one-sided item links to; the routes table); `.windsurf/rules/
+  01-architecture.md` (Tenant compare: the sidebar is derived from the listing, never from an index;
+  Boundaries: the tree and the chips each have one partial); `CHANGELOG.md` inside the tenant compare entry
+  under `[Unreleased]`.
+
+### 4. The taxonomy filters narrow the tenant compare
+
+**Goal.** Let a reviewer compare *the Windows compliance policies* or *the Defender programme* of two tenants
+rather than everything both hold, with the chip groups the tenant sidebar already offers and the same
+behaviour: OR within an axis, AND across, the selection in the URL, counts that follow it. Depends on the
+endpoint navigation above being in place, since the chips live in that sidebar.
+
+> **Membership comes from both indexes, joined through the sanctioned key mapping.** A metadata entry carries
+> no taxonomy; the index does (`resources[].facets`). The compare routes already load both tenants' indexes,
+> and the CLI's own mapping `docs/<type>/<name>.md` ↔ `resources/<type>/<name>.yaml` makes an index resource
+> and a metadata key the same thing, so each listing row can be given a membership without reading a file:
+> for a pair, the union of the two sides' memberships on each axis; for a one-sided row, that side's. A row
+> neither index lists — the excluded bulk types — has an empty membership and falls into *Uncategorised*,
+> which is already how a resource an axis matched to nothing is shown. **A pair matches when either side
+> matches**, so a policy one tenant categorised and the other did not is still found under its value; the
+> alternative (both sides) would hide exactly the difference a reviewer is looking for.
+>
+> **Axes are the union of what the two indexes declare.** The CLI resolves the taxonomy from its config, so
+> two exports of the same operator declare the same axes and usually the same values, but their counts differ
+> and a value one tenant matched to nothing may be missing from the other's header. Axes are merged by id,
+> values by id in the left header's order with the right header's extras appended, labels from the left
+> header first. Only axes `filterableAxes` offers on at least one side are offered.
+>
+> **One matching rule, not a second one.** `buildFacetFilters`, `countMatching` and the selection matching
+> in `tenant-index.ts` are written against an index. Their core — axes, a list of members each carrying a
+> per-axis membership, the selection — is extracted so the tenant sidebar and the compare sidebar call one
+> function; the index-shaped entry points stay as wrappers. This is the same reason the Confluence export
+> classifies through `filterableAxes`: a second definition of *matches* is exactly the drift to avoid.
+>
+> **Reserved parameters and hrefs.** `a`, `b` and `raw` are the compare routes' own query parameters. `a` and
+> `b` join `raw`, `yaml` and `diff` in the reserved set, globally: an axis with either id is not offered on
+> any page, which is the one rule the reserved set already states. Every compare href carries `?a=&b=`, so
+> `selectionHref` appends with `&` when its base already has a query string; the selection rides along on
+> every item href and on *swap sides*, and *Clear filters* is the plain listing href.
+>
+> **What is narrowed.** On the listing page the filter narrows the sidebar **and** the type groups in the
+> body, with the *Showing N of M* line: the body is a listing of resources, not a document, and a listing
+> that ignored its own sidebar's filter would read as broken. On the pair diff page the filter narrows the
+> sidebar only, and the pair being viewed stays listed and marked *outside the filter*, exactly as a
+> document does. The README's sentence that filters narrow navigation, not page bodies, is refined to say so.
+>
+> **Non-negotiables, preserved.** Read-only; no new route or resolver; the listing is still built from the
+> two metadata files, the indexes only *annotate* rows that already exist and never add one; a tenant whose
+> index cannot be read inside the discovery TTL simply contributes no membership; `a`/`b`/`raw` cannot be
+> shadowed; every value stays escaped and no script is introduced.
+
+**Plan.**
+
+- **Filter core.** In `tenant-index.ts`, extract the member-based core of `buildFacetFilters`,
+  `countMatching` and `matchesSelection` — `(axes, members, selection, hrefFor)` — and re-express the
+  index-shaped functions over it. Existing spec cases pass unchanged. Add `a` and `b` to the reserved query
+  parameters and teach `selectionHref` to append to an existing query string.
+- **Compare axes and membership.** Pure functions in `compare-view.ts`: merge the two indexes' filterable
+  axes by id (left order, right extras, left labels first); annotate each listing row with its per-axis
+  membership through the `docs/<type>/<name>.md` ↔ key mapping, union for a pair; the compare selection is
+  parsed with the existing `parseFacetSelection` against the merged axes.
+- **Narrowing.** `compareListing` (or a pure step after it) drops rows the selection excludes and recomputes
+  the group counts and totals; `compareNavigation` keeps the viewed pair as an exempt item on the diff page.
+  Chip hrefs, item hrefs and *swap sides* carry the selection; *Clear filters* is the listing href.
+- **Views.** `compare_sidebar.hbs` includes `sidebar_facets` with the compare filters and the *Showing N of
+  M* line; the listing body renders the narrowed groups. No new markup beyond what the shared partial has.
+- **Tests.** `test/tenant-index.spec.ts`: `a`/`b` are not offered as axes, `selectionHref` appends with `&`,
+  the refactor keeps every existing case. Spec cases for the merge (order, labels, a value only one side
+  declares), the membership join (pair union, one-sided row, unlisted row → uncategorised) and the narrowed
+  counts. `test/docs.e2e.spec.ts`: a filtered listing shows only matching groups and rows with the count
+  line, the chips carry `a` and `b`, the diff page keeps the viewed pair *outside the filter*, an axis id
+  colliding with `a` is ignored.
+- **Docs.** `README.md` (Taxonomy filters: the compare pages, the either-side rule, the refined
+  navigation-not-bodies sentence; routes table: the compare routes take the filter parameters);
+  `.windsurf/rules/01-architecture.md` (Tenant compare: indexes annotate rows, never add them; `a`/`b`
+  reserved everywhere); `CHANGELOG.md` inside the tenant compare entry under `[Unreleased]`.
+
 ## Fixes
 
 Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
@@ -311,7 +464,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the branch is closed and the release is cut — that is when the entry is deleted, not the moment
 the code lands.
 
-### 3. The drift diff never goes side by side
+### 5. The drift diff never goes side by side
 
 **Symptom.** The drift view's YAML diff (`/<tenant>/_drift/<key>?diff`) stays in the stacked layout on every
 screen, however wide; only the tenant compare's diff ever shows two panes. Entry 2 shipped the layout for
