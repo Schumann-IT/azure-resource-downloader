@@ -8,22 +8,14 @@ import {
   parseBaselineGeneratedAt,
   parseObservation,
 } from './drift-observation';
+import { FileCache } from './file-cache';
 import { resolveDriftPayload, resolveResource } from './path-safety';
+import { RESOURCES_METADATA_FILE } from './resources-metadata';
 import { TenantInfo } from './tenant-discovery.service';
 import { TenantIndex } from './tenant-index';
 
-// The export's own metadata, whose top-level `generatedAt` is the baseline an
-// observation is valid against.
-const RESOURCES_METADATA_FILE = 'metadata.yaml';
-
 // Bound on the per-file hash cache, like the render caches.
 const MAX_HASH_ENTRIES = 500;
-
-interface CacheEntry<T> {
-  mtimeMs: number;
-  size: number;
-  value: T;
-}
 
 // The files a finding's page may show, each only once it is verified against
 // the hash the observation recorded for it. `intact` is false when a file the
@@ -44,14 +36,14 @@ export interface DriftFiles {
 // the app.
 @Injectable()
 export class DriftService {
-  private readonly observations = new Map<string, CacheEntry<DriftObservation | undefined>>();
-  private readonly baselines = new Map<string, CacheEntry<string | undefined>>();
-  private readonly hashes = new Map<string, CacheEntry<string>>();
+  private readonly observations = new FileCache<DriftObservation | undefined>(MAX_HASH_ENTRIES);
+  private readonly baselines = new FileCache<string | undefined>(MAX_HASH_ENTRIES);
+  private readonly hashes = new FileCache<string>(MAX_HASH_ENTRIES);
 
   // The tenant's observation, or undefined when there is none or it does not
   // parse.
   async observation(info: TenantInfo): Promise<DriftObservation | undefined> {
-    return this.cached(this.observations, info.driftObservationPath, (raw) =>
+    return this.observations.read(info.driftObservationPath, (raw) =>
       parseObservation(raw.toString('utf8')),
     );
   }
@@ -68,7 +60,7 @@ export class DriftService {
   ): Promise<string | undefined> {
     const file = path.join(info.resourcesDir, RESOURCES_METADATA_FILE);
     if (!(await exists(file))) return index?.generatedAt ?? undefined;
-    return this.cached(this.baselines, file, (raw) =>
+    return this.baselines.read(file, (raw) =>
       parseBaselineGeneratedAt(raw.toString('utf8')),
     );
   }
@@ -120,44 +112,10 @@ export class DriftService {
     expected: string,
   ): Promise<string | null> {
     if (!file || !expected) return null;
-    const actual = await this.cached(this.hashes, file, (raw) =>
+    const actual = await this.hashes.read(file, (raw) =>
       createHash('sha256').update(raw).digest('hex'),
     );
     return actual === expected ? file : null;
-  }
-
-  private async cached<T>(
-    cache: Map<string, CacheEntry<T>>,
-    file: string,
-    parse: (raw: Buffer) => T,
-  ): Promise<T | undefined> {
-    let stat;
-    try {
-      stat = await fs.stat(file);
-    } catch {
-      cache.delete(file);
-      return undefined;
-    }
-    const hit = cache.get(file);
-    if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
-      return hit.value;
-    }
-
-    let raw: Buffer;
-    try {
-      raw = await fs.readFile(file);
-    } catch {
-      cache.delete(file);
-      return undefined;
-    }
-    const value = parse(raw);
-    cache.delete(file);
-    cache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
-    if (cache.size > MAX_HASH_ENTRIES) {
-      const oldest = cache.keys().next().value;
-      if (oldest !== undefined) cache.delete(oldest);
-    }
-    return value;
   }
 }
 

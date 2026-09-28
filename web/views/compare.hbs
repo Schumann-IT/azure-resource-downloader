@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  {{> head}}
+  <body id="compare-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header headerWidth="max-w-5xl"}}
+    <main class="mx-auto max-w-5xl px-4 py-10">
+      <h1 class="text-2xl font-bold mb-1">
+        <a href="/{{left.id}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{left.id}}</a>
+        <span class="text-slate-400">↔</span>
+        <a href="/{{right.id}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{right.id}}</a>
+      </h1>
+      <p class="compare-totals text-sm text-slate-500 dark:text-slate-400">
+        {{listing.both.total}} in both · {{listing.onlyA.total}} only in {{left.id}} · {{listing.onlyB.total}} only in {{right.id}}
+        · <a href="{{swapHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">swap sides</a>
+      </p>
+      <p class="compare-note mt-3 mb-8 text-xs text-slate-500 dark:text-slate-400">
+        Resources are paired by their export path, which is a heuristic: two tenants can hold different policies under
+        the same name, and a renamed policy shows once on each side. Listed from each export's
+        <code class="font-mono">resources/metadata.yaml</code>, resources still present in the tenant only. Open a pair
+        to see whether it differs — this listing does not read the files. Types the documentation leaves out come last.
+      </p>
+
+      {{#each sections}}
+        <section id="{{this.id}}" class="compare-section mb-10">
+          <h2 class="text-lg font-semibold mb-3">{{this.title}} <span class="text-sm font-normal text-slate-500 dark:text-slate-400">({{this.section.total}})</span></h2>
+          {{#if this.section.groups.length}}
+            <div class="space-y-1">
+              {{#each this.section.groups}}
+                <details class="compare-group rounded border border-slate-200 dark:border-slate-700{{#if this.excluded}} compare-excluded{{/if}}">
+                  <summary class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+                    <span class="font-mono">{{this.type}}</span>
+                    <span class="text-slate-500 dark:text-slate-400">({{this.count}})</span>
+                    {{#if this.excluded}}<span class="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">not documented</span>{{/if}}
+                  </summary>
+                  <ul class="px-3 pb-2 pt-1 text-sm">
+                    {{#each this.rows}}
+                      <li class="py-0.5">
+                        <a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.name}}</a>{{#if this.otherName}} <span class="text-slate-500 dark:text-slate-400">↔ {{this.otherName}}</span>{{/if}}
+                      </li>
+                    {{/each}}
+                  </ul>
+                </details>
+              {{/each}}
+            </div>
+          {{else}}
+            <p class="text-sm text-slate-500 dark:text-slate-400">None.</p>
+          {{/if}}
+        </section>
+      {{/each}}
+    </main>
+  </body>
+</html>

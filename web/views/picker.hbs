@@ -6,12 +6,18 @@
     <main class="mx-auto max-w-5xl px-4 py-10">
       <h1 class="text-2xl font-bold mb-1">Tenant documentation</h1>
       <p class="text-slate-500 dark:text-slate-400 mb-6">Generated Azure / Entra ID / Intune configuration docs.</p>
+      {{#if selecting}}
+        <p class="compare-selecting mb-6 rounded-lg border border-brand-400 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+          Comparing <strong>{{selecting.name}}</strong> — choose the tenant to compare it with.
+          <a href="/" class="compare-cancel ml-2 text-brand-600 dark:text-brand-400 hover:underline">Cancel</a>
+        </p>
+      {{/if}}
       {{#if tenants.length}}
         <ul class="space-y-3">
           {{#each tenants}}
-            <li class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:border-brand-400 dark:hover:border-brand-400 transition">
+            <li class="rounded-lg border {{#if this.selected}}border-brand-400 dark:border-brand-400{{else}}border-slate-200 dark:border-slate-700{{/if}} p-4 hover:border-brand-400 dark:hover:border-brand-400 transition">
               <a href="/{{this.id}}" class="block">
-                <span class="text-lg font-semibold text-brand-600 dark:text-brand-400">{{this.id}}</span>
+                <span class="text-lg font-semibold text-brand-600 dark:text-brand-400">{{this.id}}</span>{{#if this.selected}}<span class="compare-selected ml-2 rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">selected</span>{{/if}}
                 <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
                   {{this.documented}} documented{{#if this.pending}} · {{this.pending}} pending{{/if}}{{#if this.generatedAt}} · exported {{this.generatedAt}}{{/if}}{{#if this.drift}} · {{#if this.drift.outdated}}drift observation outdated {{this.drift.observedAt}}{{else if this.drift.findings}}<span class="picker-drift text-amber-700 dark:text-amber-300">drift detected on {{this.drift.resources}} {{this.drift.observedAt}}</span>{{else}}no drift detected {{this.drift.observedAt}}{{/if}}{{/if}}
                 </span>
@@ -24,6 +30,16 @@
                 >Download Confluence HTML export (.zip)</a>
                 <span class="ml-2">One-way publish: importing creates a new space, and edits in Confluence are lost on the next import.</span>
               </p>
+              {{#if this.compareHref}}
+                <p class="mt-2 text-xs">
+                  <a href="{{this.compareHref}}" class="compare-start rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-slate-600 dark:text-slate-300 hover:border-brand-400 dark:hover:border-brand-400">Compare with…</a>
+                </p>
+              {{/if}}
+              {{#if this.compareWithHref}}
+                <p class="mt-2 text-xs">
+                  <a href="{{this.compareWithHref}}" class="compare-with rounded border border-brand-400 px-2 py-1 font-medium text-brand-600 dark:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-900">Compare with {{../selecting.name}}</a>
+                </p>
+              {{/if}}
             </li>
           {{/each}}
         </ul>

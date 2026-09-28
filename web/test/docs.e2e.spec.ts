@@ -1840,6 +1840,285 @@ findings: 4
   });
 });
 
+describe('Docs browser tenant compare (e2e)', () => {
+  const P = 'Microsoft.Graph/deviceManagementConfigurationPolicies';
+  const GUIDS = {
+    stageAdmins: '8964516b-c223-4f58-a866-232d3690c9b4',
+    stageAudience: '11111111-c223-4f58-a866-232d3690c9b4',
+    prodAdmins: '7a73b11f-e242-4ffe-ab1a-c4a8a70d5f64',
+    prodAudience: '22222222-e242-4ffe-ab1a-c4a8a70d5f64',
+    stageP1: 'c036fdcb-4fad-4596-94cb-365d2b23a016',
+    stageP2: 'c036fdcb-4fad-4596-94cb-365d2b23a017',
+    stageP3: 'c036fdcb-4fad-4596-94cb-365d2b23a018',
+    prodP1: '866b2e5d-a549-472c-b618-3df33778ba05',
+    prodP2: '866b2e5d-a549-472c-b618-3df33778ba06',
+    prodP3: '866b2e5d-a549-472c-b618-3df33778ba07',
+  };
+
+  const policy = (policyId: string, groupId: string, value: number) => `'@odata.context': https://graph.microsoft.com/beta/$metadata#x('${policyId}')
+id: ${policyId}
+createdDateTime: "2026-03-28T16:56:52Z"
+lastModifiedDateTime: "2026-03-28T16:56:52Z"
+name: Same policy
+assignments:
+    - id: ${policyId}_${groupId}
+      sourceId: ${policyId}
+      target:
+        groupId: ${groupId}
+settings:
+    - id: "0"
+      value: ${value}
+`;
+
+  const index = (tenant: string, excluded = '') =>
+    [
+      'version: 3',
+      `tenant: ${tenant}`,
+      'generatedAt: "2026-01-01T00:00:00Z"',
+      'complete: true',
+      'counts:',
+      '    documented: 0',
+      '    pending: 0',
+      ...(excluded ? ['    excluded:', `        ${excluded}: 1`] : []),
+      'resources: []',
+      '',
+    ].join('\n');
+
+  const entry = (key: string, name: string, id: string | null, present = true) =>
+    [
+      `    ${key}.yaml:`,
+      ...(id ? [`        resourceId: ${id}`] : []),
+      `        displayName: ${name}`,
+      `        presentInTenant: ${present}`,
+      '',
+    ].join('\n');
+
+  const metadata = (entries: string[]) =>
+    ['generatedAt: "2026-01-01T00:00:00Z"', 'resources:', ...entries].join('\n');
+
+  const STAGE_METADATA = metadata([
+    entry('Microsoft.Graph/groups/admins', 'Admins', GUIDS.stageAdmins),
+    entry('Microsoft.Graph/groups/stage_audience', 'Stage audience', GUIDS.stageAudience),
+    entry(P + '/p1', 'Policy One', GUIDS.stageP1),
+    entry(P + '/p2', 'Policy Two', GUIDS.stageP2),
+    entry(P + '/p3', 'Policy Three', GUIDS.stageP3),
+    entry('Microsoft.Graph/deviceConfigurations/dc1', 'Stage only config', null),
+    entry('Microsoft.Graph/deviceConfigurations/gone', 'Gone config', null, false),
+    entry('Microsoft.Graph/windowsAutopilotDeviceIdentities/dev1', 'Device one', null),
+  ]);
+
+  const PROD_METADATA = metadata([
+    entry('Microsoft.Graph/groups/admins', 'Admins', GUIDS.prodAdmins),
+    entry('Microsoft.Graph/groups/prod_audience', 'Prod audience', GUIDS.prodAudience),
+    entry(P + '/p1', 'Policy One', GUIDS.prodP1),
+    entry(P + '/p2', 'Policy Two', GUIDS.prodP2),
+    entry(P + '/p3', 'Policy Three (prod)', GUIDS.prodP3),
+    entry('Microsoft.Graph/namedLocations/loc1', 'Prod only location', null),
+  ]);
+
+  let app: NestExpressApplication;
+  let root: string;
+
+  const write = async (rel: string, content: string) => {
+    const file = path.join(root, rel);
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await fsp.writeFile(file, content);
+  };
+  const get = (url: string) => request(app.getHttpServer()).get(url);
+  const q = '?a=stage&b=prod';
+  // An href as Handlebars writes it into an attribute: `&` and `=` escaped.
+  const href = (url: string) =>
+    `href="${url.replace(/&/g, '&amp;').replace(/=/g, '&#x3D;')}"`;
+
+  beforeAll(async () => {
+    root = await fsp.mkdtemp(path.join(os.tmpdir(), 'docsroot-compare-'));
+    await write('stage/docs/index.yaml', index('Stage', 'Microsoft.Graph/windowsAutopilotDeviceIdentities'));
+    await write('stage/resources/metadata.yaml', STAGE_METADATA);
+    await write('stage/resources/Microsoft.Graph/groups/admins.yaml', 'displayName: Admins\nmail: a@stage\n');
+    await write('stage/resources/Microsoft.Graph/groups/stage_audience.yaml', 'displayName: Stage audience\n');
+    await write(`stage/resources/${P}/p1.yaml`, policy(GUIDS.stageP1, GUIDS.stageAdmins, 1));
+    await write(`stage/resources/${P}/p2.yaml`, policy(GUIDS.stageP2, GUIDS.stageAudience, 1));
+    await write(`stage/resources/${P}/p3.yaml`, policy(GUIDS.stageP3, GUIDS.stageAdmins, 1));
+    await write('stage/resources/Microsoft.Graph/deviceConfigurations/dc1.yaml', 'displayName: Stage only config\n');
+    await write('stage/resources/Microsoft.Graph/deviceConfigurations/gone.yaml', 'displayName: Gone config\n');
+
+    await write('prod/docs/index.yaml', index('Prod'));
+    await write('prod/resources/metadata.yaml', PROD_METADATA);
+    await write('prod/resources/Microsoft.Graph/groups/admins.yaml', 'displayName: Admins\nmail: a@prod\n');
+    await write('prod/resources/Microsoft.Graph/groups/prod_audience.yaml', 'displayName: Prod audience\n');
+    await write(`prod/resources/${P}/p1.yaml`, policy(GUIDS.prodP1, GUIDS.prodAdmins, 15));
+    await write(`prod/resources/${P}/p2.yaml`, policy(GUIDS.prodP2, GUIDS.prodAudience, 1));
+    await write(`prod/resources/${P}/p3.yaml`, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
+
+    // A docs-only copy: a tenant, but not comparable.
+    await write('docsonly/docs/index.yaml', index('Docs only'));
+    // A housekeeping folder that looks like an export: never a tenant, so
+    // never comparable either.
+    await write('_hidden/docs/index.yaml', index('Hidden'));
+    await write('_hidden/resources/metadata.yaml', PROD_METADATA);
+
+    process.env.DOCS_ROOT = root;
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureViews(app);
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await fsp.rm(root, { recursive: true, force: true });
+  });
+
+  it('offers Compare with… only on cards whose export has resources/metadata.yaml', async () => {
+    const res = await get('/').expect(200);
+    expect(res.text).toContain(href(`/_compare?a=stage`));
+    expect(res.text).toContain(href(`/_compare?a=prod`));
+    expect(res.text).not.toContain('a&#x3D;docsonly');
+    expect(res.text).not.toContain('compare-selecting');
+  });
+
+  it('renders the picker in its selecting state for a alone', async () => {
+    const res = await get('/_compare?a=stage').expect(200);
+    expect(res.text).toContain('Comparing <strong>Stage</strong>');
+    expect(res.text).toContain('class="compare-cancel');
+    expect(res.text).toContain('compare-selected');
+    expect(res.text).toContain(href(`/_compare?a=stage&b=prod`));
+    expect(res.text).toContain('Compare with Stage</a>');
+    expect(res.text).not.toContain('b&#x3D;docsonly');
+    expect(res.text).not.toContain('b&#x3D;stage');
+    expect(res.text).not.toContain('compare-start');
+  });
+
+  it('redirects a bare /_compare to the picker', async () => {
+    const res = await get('/_compare').expect(302);
+    expect(res.headers.location).toBe('/');
+  });
+
+  it.each([
+    ['the same tenant twice', '/_compare?a=stage&b=stage'],
+    ['an unknown tenant', '/_compare?a=nobody&b=prod'],
+    ['an unknown first tenant alone', '/_compare?a=nobody'],
+    ['a tenant without resources/metadata.yaml', '/_compare?a=docsonly&b=prod'],
+    ['a _-prefixed folder', '/_compare?a=_hidden&b=prod'],
+    ['a repeated parameter', '/_compare?a=stage&a=prod&b=prod'],
+  ])('refuses %s without leaking a path', async (_label, url) => {
+    const res = await get(url).expect(404);
+    expect(res.text).toContain('Tenant comparison not available');
+    expect(res.text).not.toContain(root);
+  });
+
+  it('lists the three-way split from the two metadata files', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    expect(res.text).toContain('4 in both · 3 only in stage · 2 only in prod');
+    // A resource the export kept after it left the tenant is not listed.
+    expect(res.text).not.toContain('Gone config');
+    // Paired rows link to their diff, single-side rows to that tenant's YAML.
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+    expect(res.text).toContain('href="/stage/_resource/Microsoft.Graph/deviceConfigurations/dc1"');
+    expect(res.text).toContain('href="/prod/_resource/Microsoft.Graph/namedLocations/loc1"');
+    // A differing display name is shown beside the pair.
+    expect(res.text).toContain('↔ Policy Three (prod)');
+    // An excluded type comes last in its section and is marked.
+    const onlyA = res.text.slice(res.text.indexOf('id="compare-only-a"'), res.text.indexOf('id="compare-only-b"'));
+    expect(onlyA.indexOf('Microsoft.Graph/deviceConfigurations')).toBeLessThan(
+      onlyA.indexOf('Microsoft.Graph/windowsAutopilotDeviceIdentities'),
+    );
+    expect(onlyA).toContain('compare-excluded');
+    expect(res.text).toContain(href(`/_compare?a=prod&b=stage`));
+    // `_compare` is a representation, not a breadcrumb segment.
+    expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_compare<\/span>/);
+  });
+
+  it('diffs a pair with ids and timestamps normalised away and references resolved', async () => {
+    const res = await get(`/_compare/${P}/p1${q}`).expect(200);
+    expect(res.text).toMatch(/class="diff-removed[\s\S]*?value: 1</);
+    expect(res.text).toMatch(/class="diff-added[\s\S]*?value: 15</);
+    // The same audience on both sides: resolved, so not part of the diff.
+    expect(res.text).toContain('references resolved to names\n          1 left, 1 right');
+    expect(res.text).not.toContain('groupId:');
+    for (const guid of [GUIDS.stageP1, GUIDS.prodP1, GUIDS.stageAdmins, GUIDS.prodAdmins]) {
+      expect(res.text).not.toContain(guid);
+    }
+    expect(res.text).not.toContain('2026-03-28T16:56:52Z');
+    expect(res.text).toContain('class="compare-report');
+    expect(res.text).toContain('createdDateTime');
+    expect(res.text).not.toContain('Differs only in audience');
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod&raw`));
+    expect(res.text).toContain(`href="/stage/_resource/${P}/p1"`);
+  });
+
+  it('shows the raw diff with the identities back', async () => {
+    const res = await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    expect(res.text).toContain(GUIDS.stageP1);
+    expect(res.text).toContain(GUIDS.prodP1);
+    expect(res.text).toContain('The files as exported, without normalisation.');
+    expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
+  });
+
+  it('says when a pair differs only in audience', async () => {
+    const res = await get(`/_compare/${P}/p2${q}`).expect(200);
+    expect(res.text).toContain('Differs only in audience');
+    expect(res.text).toContain('groupId: Stage audience');
+    expect(res.text).toContain('groupId: Prod audience');
+  });
+
+  it('says when a pair is identical after normalisation', async () => {
+    const res = await get(`/_compare/${P}/p3.yaml${q}`).expect(200);
+    expect(res.text).toContain('No differences after normalisation.');
+    expect(res.text).not.toContain('class="drift-diff ');
+  });
+
+  it.each([
+    ['a traversal', `/_compare/..%2F..%2Fstage%2Fdocs%2Findex${q}`],
+    ['a key only one export lists', `/_compare/Microsoft.Graph/deviceConfigurations/dc1${q}`],
+    ['a key no longer present in the tenant', `/_compare/Microsoft.Graph/deviceConfigurations/gone${q}`],
+    ['the metadata file itself', `/_compare/metadata${q}`],
+  ])('refuses %s as a resource comparison without leaking a path', async (_label, url) => {
+    const res = await get(url).expect(404);
+    expect(res.text).toContain('Resource comparison not available');
+    expect(res.text).not.toContain(root);
+  });
+
+  it('refuses a pair diff for an ineligible tenant', async () => {
+    const res = await get(`/_compare/${P}/p1?a=stage&b=docsonly`).expect(404);
+    expect(res.text).toContain('Tenant comparison not available');
+  });
+
+  it('reflects an edited resource and an edited metadata file on the next request', async () => {
+    const p3 = path.join(root, `prod/resources/${P}/p3.yaml`);
+    const metadata = path.join(root, 'prod/resources/metadata.yaml');
+    try {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 20));
+      const diff = await get(`/_compare/${P}/p3${q}`).expect(200);
+      expect(diff.text).not.toContain('No differences after normalisation.');
+      expect(diff.text).toMatch(/class="diff-added[\s\S]*?value: 20</);
+
+      await write('prod/resources/Microsoft.Graph/deviceConfigurations/dc1.yaml', 'displayName: Stage only config\n');
+      await fsp.writeFile(
+        metadata,
+        PROD_METADATA + entry('Microsoft.Graph/deviceConfigurations/dc1', 'Now in prod', null),
+      );
+      const listing = await get(`/_compare${q}`).expect(200);
+      expect(listing.text).toContain('5 in both · 2 only in stage · 2 only in prod');
+    } finally {
+      await fsp.writeFile(p3, policy(GUIDS.prodP3, GUIDS.prodAdmins, 1));
+      await fsp.writeFile(metadata, PROD_METADATA);
+    }
+  });
+
+  it('writes nothing under the docs root', async () => {
+    const before = await snapshot(root);
+    await get('/').expect(200);
+    await get('/_compare?a=stage').expect(200);
+    await get(`/_compare${q}`).expect(200);
+    await get(`/_compare/${P}/p1${q}`).expect(200);
+    await get(`/_compare/${P}/p1${q}&raw`).expect(200);
+    expect(await snapshot(root)).toEqual(before);
+  });
+});
+
 // Reads one entry, matched by the tail of its name, out of a zip in memory.
 function readZipEntry(zip: Buffer, suffix: string): Promise<string> {
   return new Promise((resolve, reject) => {

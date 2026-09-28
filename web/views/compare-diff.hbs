@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  {{> head}}
+  <body id="compare-diff-page" class="bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+    {{> header}}
+    <main class="mx-auto max-w-7xl px-4 py-8">
+      <h1 class="text-xl font-bold mb-2">{{name}}{{#if otherName}} <span class="font-normal text-slate-500 dark:text-slate-400">↔ {{otherName}}</span>{{/if}}</h1>
+      <p class="doc-source mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+        <span>left <a href="{{left.yamlHref}}" class="font-mono text-brand-600 dark:text-brand-400 hover:underline">{{left.id}}</a></span>
+        <span>→</span>
+        <span>right <a href="{{right.yamlHref}}" class="font-mono text-brand-600 dark:text-brand-400 hover:underline">{{right.id}}</a></span>
+        {{#unless diff.tooLarge}}
+          <span>·</span>
+          <span class="text-emerald-700 dark:text-emerald-300">+{{diff.added}}</span>
+          <span class="text-red-700 dark:text-red-300">−{{diff.removed}}</span>
+        {{/unless}}
+        <span>·</span>
+        {{#if raw}}
+          <a href="{{normalisedHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">normalised diff</a>
+        {{else}}
+          <a href="{{rawHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">raw diff</a>
+        {{/if}}
+        <a href="{{listingHref}}" class="text-brand-600 dark:text-brand-400 hover:underline">all resources</a>
+      </p>
+
+      {{#if report}}
+        <p class="compare-report mb-4 text-xs text-slate-500 dark:text-slate-400">
+          Normalised before diffing (provisional rule): dropped <code class="font-mono">{{report.droppedKeys}}</code>
+          ({{report.left.dropped}} left, {{report.right.dropped}} right); references resolved to names
+          {{report.left.resolved}} left, {{report.right.resolved}} right{{#if report.left.ambiguous}}; ambiguous left {{report.left.ambiguous}}{{/if}}{{#if report.right.ambiguous}}; ambiguous right {{report.right.ambiguous}}{{/if}}{{#if report.left.unresolved}}; unresolved left {{report.left.unresolved}}{{/if}}{{#if report.right.unresolved}}; unresolved right {{report.right.unresolved}}{{/if}}{{#if report.left.sharedNames}}; names shared by several resources left {{report.left.sharedNames}}{{/if}}{{#if report.right.sharedNames}}; names shared by several resources right {{report.right.sharedNames}}{{/if}}.
+          Line numbers are those of the normalised text, not of the YAML views.
+        </p>
+      {{else if raw}}
+        <p class="compare-report mb-4 text-xs text-slate-500 dark:text-slate-400">The files as exported, without normalisation.</p>
+      {{else}}
+        <p class="compare-report mb-4 text-xs text-slate-500 dark:text-slate-400">Shown as exported: the files are too large or do not parse, so nothing was normalised.</p>
+      {{/if}}
+
+      {{#if audienceOnly}}
+        <p class="compare-audience-only mb-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          Differs only in audience: the configuration is the same, the assignments are not.
+        </p>
+      {{/if}}
+
+      {{#if diff.tooLarge}}
+        <p class="drift-diff-too-large rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+          These files are too large to diff here — compare the YAML views instead.
+        </p>
+      {{else if diff.hunks.length}}
+        {{> diff_table hunks=diff.hunks}}
+      {{else if normalised}}
+        <p class="compare-identical text-sm text-slate-500 dark:text-slate-400">No differences after normalisation.</p>
+      {{else}}
+        <p class="compare-identical text-sm text-slate-500 dark:text-slate-400">The two files are identical.</p>
+      {{/if}}
+    </main>
+  </body>
+</html>

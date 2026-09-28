@@ -40,7 +40,14 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `drift-observation.ts` — pure functions (`parseObservation`, `driftState`, `tenantDriftState`).
   - `drift.service.ts` — observation, baseline timestamp and verified-hash reads, mtime-cached.
   - `drift-view.ts` — pure view models for the drift pages and the Drift switcher entries.
-  - `yaml-diff.ts` — pure function (`diffYaml`) behind the drift YAML diff, over `diff` (jsdiff).
+  - `yaml-diff.ts` — pure function (`diffYaml`) behind the drift and compare YAML diffs, over `diff` (jsdiff).
+  - `file-cache.ts` — `FileCache`, the bounded mtime + size parsed-file cache the drift and compare
+    services share.
+  - `resources-metadata.ts` — pure `parseResourcesMetadata` for `resources/metadata.yaml` (+ the
+    `RESOURCES_METADATA_FILE` constant and the set-valued reference lookup).
+  - `compare-normalise.ts` — pure `normaliseResource`, the **provisional** cross-tenant identity rule.
+  - `compare-view.ts` — pure view models for the compare listing and pair diff.
+  - `compare.service.ts` — cached metadata reads and the two files of a pair.
 - `views/` + `views/partials/` → Handlebars templates. `public/app.css` is generated and gitignored.
 - `test/` → `*.spec.ts` only (Jest `testRegex`).
 
@@ -85,8 +92,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - A matched tenant owns its whole subtree — do not descend into it looking for more tenants.
 - Skip directories starting with `_` or `.` (housekeeping folders such as `_to_delete/`).
 - Depth is bounded (`MAX_DEPTH`); keep it bounded.
-- Counts shown to the user are **derived from the index** (`counts.documented` / `counts.pending` /
-  `counts.excluded`), never by walking the tree.
+- Counts and listings shown to the user are **read as data, never by walking the tree**: from the index
+  (`counts.documented` / `counts.pending` / `counts.excluded`), and for the tenant compare only from each
+  export's `resources/metadata.yaml`.
 - A malformed/unreadable index makes the folder *not a tenant* — it must never crash discovery.
 
 ### Source YAML view
@@ -114,6 +122,21 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   `:tenant/*path` catch-all. `raw`, `yaml` and `diff` are reserved query parameters, never taxonomy axes.
 - The YAML diff is computed only from two verified files and emitted as plain data, escaped by the
   template — never as trusted HTML.
+
+### Tenant compare
+- A **proof of concept**. The normalisation rule in `compare-normalise.ts` is provisional and destined for
+  the CLI (`resource compare`, parked in `../go/NEXT-ITERATIONS.md`); keep it data (exported constants), keep
+  it applied identically to both sides, keep it announced (the report caption and `&raw`), and mirror any
+  change into that Go idea.
+- The listing comes from the two `resources/metadata.yaml` files alone; no resource file is read and no
+  directory is walked for it. A tenant takes part only with a readable metadata file.
+- Both files of a pair are located only through `resolveResource`, and only for a key both exports list as
+  present — no new resolver.
+- `_compare` is a root-level *representation* prefix: out of the breadcrumb, both routes declared before
+  `:tenant`. It cannot shadow a tenant because discovery skips `_`-prefixed folders. `a`, `b` and `raw` are
+  its reserved query parameters.
+- Diff hunks go through the shared `diff_table` partial, so drift and compare cannot render a hunk
+  differently.
 
 ### Rendering
 - Exactly **one** `markdown-it` instance, owned by `MarkdownRendererService` and built in

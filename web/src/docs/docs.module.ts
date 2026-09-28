@@ -5,6 +5,7 @@ import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { ExportService } from './export/export.service';
 import { DriftService } from './drift.service';
+import { CompareService } from './compare.service';
 
 @Module({
   controllers: [DocsController],
@@ -14,6 +15,7 @@ import { DriftService } from './drift.service';
     YamlHighlighterService,
     ExportService,
     DriftService,
+    CompareService,
   ],
 })
 export class DocsModule {}

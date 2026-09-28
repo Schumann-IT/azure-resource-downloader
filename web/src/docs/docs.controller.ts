@@ -45,6 +45,16 @@ import {
 import { ExportService } from './export/export.service';
 import { splitLeadingHeading } from './section-hooks';
 import { diffYaml } from './yaml-diff';
+import { CompareService } from './compare.service';
+import {
+  COMPARE_PREFIX,
+  compareListing,
+  listingHref,
+  pairComparison,
+  pairHref,
+  selectHref,
+} from './compare-view';
+import { ResourcesMetadata } from './resources-metadata';
 
 // Route prefix for the source-YAML representation of a document. It is a
 // *representation*, not a path segment: it never appears in the breadcrumb, and
@@ -76,7 +86,9 @@ type NotFoundKind =
   | 'noDrift'
   | 'drift'
   | 'payload'
-  | 'diff';
+  | 'diff'
+  | 'compare'
+  | 'comparePair';
 
 const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
   tenant: 'Tenant not found',
@@ -87,7 +99,17 @@ const NOT_FOUND_HEADLINE: Record<NotFoundKind, string> = {
   drift: 'Drift finding not found',
   payload: 'Observed payload not found',
   diff: 'YAML diff not available',
+  compare: 'Tenant comparison not available',
+  comparePair: 'Resource comparison not available',
 };
+
+// A tenant as the compare routes need it: discovered, and with a readable
+// `resources/metadata.yaml`, which is the listing's source.
+interface CompareTenant {
+  info: TenantInfo;
+  index: TenantIndex | undefined;
+  metadata: ResourcesMetadata;
+}
 
 @Controller()
 export class DocsController {
@@ -97,6 +119,7 @@ export class DocsController {
     private readonly highlighter: YamlHighlighterService,
     private readonly exporter: ExportService,
     private readonly drift: DriftService,
+    private readonly compare: CompareService,
   ) {}
 
   // Discovered tenants paired with their freshly read index, on every call —
@@ -120,11 +143,28 @@ export class DocsController {
     );
   }
 
-  // GET / — tenant picker, which is also where a tenant's export is offered.
+  // GET / — tenant picker, which is also where a tenant's export is offered
+  // and a comparison is started.
   @Get()
   async picker(@Res() res: Response): Promise<void> {
+    await this.renderPicker(res, null);
+  }
+
+  // The picker, optionally in the compare selecting state: `selecting` is
+  // marked and every other eligible card offers to be the second tenant. A card
+  // is eligible when its export has a readable `resources/metadata.yaml`, and
+  // the offer is only made when at least two are.
+  private async renderPicker(res: Response, selecting: TenantInfo | null): Promise<void> {
+    const paired = await this.withIndex();
+    const eligible = new Set<string>();
+    await Promise.all(
+      paired.map(async ({ info }) => {
+        if (await this.compare.metadataOf(info)) eligible.add(info.id);
+      }),
+    );
+    const canCompare = eligible.size >= 2;
     const tenants = await Promise.all(
-      (await this.withIndex()).map(async ({ info, index }) => ({
+      paired.map(async ({ info, index }) => ({
         id: info.id,
         name: info.name,
         documented: index.counts.documented,
@@ -132,9 +172,20 @@ export class DocsController {
         generatedAt: index.generatedAt,
         drift: pickerDrift(await this.tenantDrift(info, index)),
         exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
+        compareHref:
+          !selecting && canCompare && eligible.has(info.id) ? selectHref(info.id) : null,
+        selected: selecting?.id === info.id,
+        compareWithHref:
+          selecting && selecting.id !== info.id && eligible.has(info.id)
+            ? listingHref(selecting.id, info.id)
+            : null,
       })),
     );
-    res.render('picker', { title: 'Documentation', tenants });
+    res.render('picker', {
+      title: selecting ? withTenant('Compare', selecting.name) : 'Documentation',
+      tenants,
+      selecting: selecting ? { id: selecting.id, name: selecting.name } : null,
+    });
   }
 
   // GET /healthz — discovery health. Always 200: the process is healthy even
@@ -170,6 +221,111 @@ export class DocsController {
   @Get('favicon.ico')
   favicon(@Res() res: Response): void {
     res.redirect(301, '/favicon.svg');
+  }
+
+  // GET /_compare?a=&b= — the tenant compare. `a` alone is the picker in its
+  // selecting state; `a` and `b` the three-way listing of the two exports'
+  // resources, read from their `resources/metadata.yaml`. Declared before
+  // `:tenant` so the prefix wins; it cannot shadow a tenant because discovery
+  // skips `_`-prefixed folders. Read-only.
+  @Get(COMPARE_PREFIX)
+  async compareTenants(
+    @Query('a') a: unknown,
+    @Query('b') b: unknown,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (a === undefined) {
+      res.redirect(302, '/');
+      return;
+    }
+    const left = await this.compareTenant(a);
+    if (!left) return this.compareNotFound(res, 'compare', a, b, '');
+    if (b === undefined) return this.renderPicker(res, left.info);
+    const right = await this.compareTenant(b);
+    if (!right || right.info.id === left.info.id) {
+      return this.compareNotFound(res, 'compare', a, b, '');
+    }
+
+    const excluded = new Set(
+      [left, right].flatMap((t) => t.index?.counts.excluded.map((e) => e.type) ?? []),
+    );
+    const listing = compareListing(
+      { id: left.info.id, metadata: left.metadata },
+      { id: right.info.id, metadata: right.metadata },
+      excluded,
+      RESOURCE_PREFIX,
+    );
+    res.render('compare', {
+      title: `Compare ${left.info.name} ↔ ${right.info.name}`,
+      breadcrumb: [{ label: `${left.info.id} ↔ ${right.info.id}` }],
+      left: { id: left.info.id, name: left.info.name },
+      right: { id: right.info.id, name: right.info.name },
+      swapHref: listingHref(right.info.id, left.info.id),
+      listing,
+      sections: [
+        { id: 'compare-both', title: 'In both', section: listing.both },
+        { id: 'compare-only-a', title: `Only in ${left.info.id}`, section: listing.onlyA },
+        { id: 'compare-only-b', title: `Only in ${right.info.id}`, section: listing.onlyB },
+      ],
+    });
+  }
+
+  // GET /_compare/*path?a=&b= — one resource present in both exports as a line
+  // diff of the two files with tenant-local identity normalised away; `?raw`
+  // diffs them as exported. Both files are located only through
+  // `resolveResource`, and only for a key both exports list.
+  @Get(`${COMPARE_PREFIX}/*path`)
+  async comparePair(
+    @Param() params: any,
+    @Query('a') a: unknown,
+    @Query('b') b: unknown,
+    @Query('raw') raw: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const relPath = joinPath(params.path ?? params['0'] ?? '');
+    const key = relPath.replace(/\.yaml$/i, '');
+    const left = await this.compareTenant(a);
+    const right = await this.compareTenant(b);
+    if (!left || !right || left.info.id === right.info.id) {
+      return this.compareNotFound(res, 'compare', a, b, relPath);
+    }
+    const entryA = left.metadata.entries.find((e) => e.key === key && e.presentInTenant);
+    const entryB = right.metadata.entries.find((e) => e.key === key && e.presentInTenant);
+    const files = entryA && entryB ? await this.compare.pair(left.info, right.info, key) : null;
+    if (!entryA || !entryB || !files) {
+      return this.compareNotFound(res, 'comparePair', a, b, relPath);
+    }
+
+    const comparison = pairComparison(
+      files.left,
+      files.right,
+      left.metadata,
+      right.metadata,
+      raw !== undefined,
+    );
+    const self = pairHref(left.info.id, right.info.id, key);
+    res.render('compare-diff', {
+      title: `Compare: ${entryA.displayName} · ${left.info.id} ↔ ${right.info.id}`,
+      breadcrumb: [
+        { label: `${left.info.id} ↔ ${right.info.id}` },
+        ...this.breadcrumb(key),
+      ],
+      name: entryA.displayName,
+      otherName: entryB.displayName === entryA.displayName ? null : entryB.displayName,
+      left: {
+        id: left.info.id,
+        yamlHref: `/${left.info.id}/${RESOURCE_PREFIX}/${key}`,
+      },
+      right: {
+        id: right.info.id,
+        yamlHref: `/${right.info.id}/${RESOURCE_PREFIX}/${key}`,
+      },
+      listingHref: listingHref(left.info.id, right.info.id),
+      rawHref: `${self}&raw`,
+      normalisedHref: self,
+      raw: raw !== undefined,
+      ...comparison,
+    });
   }
 
   // GET /:tenant — the tenant landing page: the generation agent's tenant-wide
@@ -745,11 +901,36 @@ export class DocsController {
     kind: NotFoundKind,
     tenant: string,
     requested: string,
+    detail?: string,
   ): void {
     const headline = NOT_FOUND_HEADLINE[kind];
     res
       .status(404)
-      .render('error', { title: headline, headline, tenant, requested });
+      .render('error', { title: headline, headline, tenant, requested, detail });
+  }
+
+  // A tenant that can take part in a comparison, or null: the query value must
+  // be one discovered tenant with readable resource metadata.
+  private async compareTenant(value: unknown): Promise<CompareTenant | null> {
+    if (typeof value !== 'string' || !value) return null;
+    const info = await this.discovery.get(value);
+    if (!info) return null;
+    const metadata = await this.compare.metadataOf(info);
+    if (!metadata) return null;
+    return { info, index: await this.discovery.getIndex(info), metadata };
+  }
+
+  // A compare 404 is about two tenants, not one, so it names both in the
+  // detail line and puts no tenant in the header.
+  private compareNotFound(
+    res: Response,
+    kind: NotFoundKind,
+    a: unknown,
+    b: unknown,
+    requested: string,
+  ): void {
+    const name = (v: unknown) => (typeof v === 'string' && v ? v : '(none)');
+    this.notFound(res, kind, '', requested, `Comparing ${name(a)} with ${name(b)}`);
   }
 }
 

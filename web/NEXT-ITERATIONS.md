@@ -11,7 +11,7 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
-### 1. Tenant compare — a proof of concept, web-only
+### ~~1. Tenant compare — a proof of concept, web-only~~
 
 **Goal.** Put two exports side by side and answer, per resource, *is this configured the same in both tenants,
 and if not, where exactly does it differ* — without the noise that makes every cross-tenant diff read as
@@ -58,13 +58,13 @@ this entry.
 > counted in the report. A zero-sentinel reference means *none* and passes through unflagged (46 of them in
 > the reference pair). Settings-catalog `settingDefinitionId`s and template references are Microsoft-global
 > and stay as they are, which is why the settings-catalog pairs are the most valuable part of the PoC.
-> **Measured baseline**, from a script applying exactly this rule with `js-yaml` over the 114 pairs: **19 are
-> identical**; **27** are identical once `assignments` is removed as well; with only the original top-level
-> drop list it was 8. The 8 in between are the same policy targeting a group with a different name in each
-> tenant (`M365-CO-STA-…` against `M365-CO-DYN-…`) — a real finding by the rule, and a systematic one in this
-> pair, so the diff page says **"differs only in audience"** when the two documents are identical after
-> removing `assignments` too: two normalisations and a text comparison, no structural diff. The first real
-> run is judged against those numbers. Two rules the normaliser obeys: it is applied to both sides
+> **Measured baseline**, from the shipped normaliser over the 114 pairs: **19 are identical**; **36** are
+> identical once `assignments` is removed as well (an earlier line-based estimate said 27); with only the
+> original top-level drop list it was 8. The 17 in between are the same policy targeting a group with a
+> different name in each tenant (`M365-CO-STA-…` against `M365-CO-DYN-…`) — a real finding by the rule, and a
+> systematic one in this pair, so the diff page says **"differs only in audience"** when the two documents
+> are identical after removing `assignments` too: two normalisations and a text comparison, no structural
+> diff. The first real run is judged against those numbers. Two rules the normaliser obeys: it is applied to both sides
 > identically, and it is **announced** — the diff page states exactly which keys were dropped, how many
 > references were resolved, ambiguous or unresolved, and `?raw` shows the unnormalised diff.
 > This rule is a *judgment*, not a fact, and the browser's own principle applies to it as it does to
@@ -88,7 +88,7 @@ this entry.
 > (`?left=<key>&right=<key>`, two-step via links) — is the "select files on both sides" of the original
 > request and a natural second step, listed under follow-ups.
 >
-> **The single-side listings are dominated by bulk types.** Only-in-A is 918 rows for the reference pair, 780
+> **The single-side listings are dominated by bulk types.** Only-in-A is 915 rows for the reference pair, 780
 > of them unreferenced `Microsoft.Graph/groups` and `windowsAutopilotDeviceIdentities` — the types
 > `index.yaml` only counts under `counts.excluded`. Type groups are therefore rendered collapsed (`<details>`,
 > like the sidebar), and a type either index lists under `counts.excluded` is rendered last and marked, so a
@@ -110,7 +110,7 @@ this entry.
 
 **Plan.**
 
-- **Metadata reader.** `src/docs/resources-metadata.ts`: a pure, Nest-free parser for `resources/metadata.yaml`
+- ~~**Metadata reader.** `src/docs/resources-metadata.ts`: a pure, Nest-free parser for `resources/metadata.yaml`
   returning, per key, `displayName`, `resourceId`, `odataType`, `presentInTenant` — shape-validated, degrading
   to "no metadata" on anything malformed. `resourceId` and `odataType` are optional (one entry in the
   reference export has no `resourceId`; `odataType` is on 630 of 1029), and the map's keys carry the `.yaml`
@@ -120,8 +120,8 @@ this entry.
   has a `false` entry, so the fixture must supply one). The reader is loaded with a schema that keeps scalars
   as text. The per-tenant cache reuses the mtime + size `cached()` helper and the metadata file constant that
   `DriftService` already has for this very file, moved to a shared place rather than duplicated; it exposes the
-  all-types `resourceId → Set<displayName>` lookup the normaliser needs.
-- **Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's reference
+  all-types `resourceId → Set<displayName>` lookup the normaliser needs.~~
+- ~~**Normaliser.** `src/docs/compare-normalise.ts`: pure. Takes a parsed document plus that tenant's reference
   lookup (`resourceId → Set<displayName>`), applies the rule from the design note — GUID-containing `id` and
   `sourceId` at any depth, any-depth `*@odata.context`, the named top-level and group fields, the three
   reference fields resolved with the ambiguous / unresolved / sentinel outcomes — serialises canonically
@@ -130,36 +130,38 @@ this entry.
   **and a report** (keys dropped; references resolved, ambiguous, unresolved; names shared by several
   entries). An option removes `assignments` as well, for the audience-only check. The drop list, the
   reference-field list and the GUID test are exported constants, so the next iteration after real use is a
-  data change. Marked in its header comment as provisional and destined for the CLI.
-- **Routes.** `GET /_compare` (`a` only → picker in selecting state; `a` and `b` → listing;
+  data change. Marked in its header comment as provisional and destined for the CLI.~~
+- ~~**Routes.** `GET /_compare` (`a` only → picker in selecting state; `a` and `b` → listing;
   `a === b`, an unknown tenant, or a tenant without `resources/metadata.yaml` → the 404 view with a new
   `NotFoundKind` and its own headline; `notFound()` learns to render without a single tenant in the header)
   and `GET /_compare/*path?a=&b=` (the diff). Declared before `:tenant`, beside `healthz` and `favicon.ico`,
-  the two root-level routes that already precede it; controller does HTTP concerns only.
-- **Picker.** *Compare with…* per eligible card, where eligible means `resources/metadata.yaml` is present —
+  the two root-level routes that already precede it; controller does HTTP concerns only.~~
+- ~~**Picker.** *Compare with…* per eligible card, where eligible means `resources/metadata.yaml` is present —
   one `stat` per card at render time, the way the drift line is decided, since `TenantInfo.resourcesDir` is a
   path and not a fact. In selecting state, `a` is marked and the other eligible cards offer *Compare*; a
   *cancel* link returns to `GET /`. Consistent with the standing decision that whole-tenant actions live on
-  the card.
-- **Listing.** Three-way split — only in A, only in B, in both — grouped by type, each group a collapsed
+  the card. *Shipped as:* eligible means the metadata file is present **and parses** (the same cached read
+  the listing uses, so a card never links to a 404), and the link is only offered while at least two cards
+  are eligible.~~
+- ~~**Listing.** Three-way split — only in A, only in B, in both — grouped by type, each group a collapsed
   `<details>` with its count, excluded types last and marked (design note above), a total per side, each
   *both* row linking to its diff, each single-side row linking to that tenant's YAML view. **No
   same/different state in this pass**: it needs both files read and normalised for every pair (228 reads for
   the reference pair), while the three-way split is computed from the two metadata files alone. *Other
   option, for a later pass:* compute same/different eagerly on the listing by comparing the two normalised
   texts, cached per pair by both files' mtimes, and show the count of genuinely differing pairs — the number
-  a stage-to-prod reviewer actually wants first.
-- **Diff partial.** The diff table is inline in `views/drift-diff.hbs` today; extract it into a
+  a stage-to-prod reviewer actually wants first.~~
+- ~~**Diff partial.** The diff table is inline in `views/drift-diff.hbs` today; extract it into a
   `views/partials/` partial taking the `YamlDiff` view model, used by the drift diff and the compare diff
   alike so the two cannot render a hunk differently. Behaviour-preserving; the existing drift e2e cases
-  cover it.
-- **Diff page.** Resolve both keys via `resolveResource`, normalise both, `diffYaml` (the drift view's
+  cover it.~~
+- ~~**Diff page.** Resolve both keys via `resolveResource`, normalise both, `diffYaml` (the drift view's
   function, unchanged), rendered through that partial. Above it: which tenant is left/right, the
   normalisation report as a caption, a `?raw` link for the unnormalised diff, and links to each side's YAML
   view. An identical pair renders "no differences after normalisation" plus the report, never an empty page;
   a pair that is identical only once `assignments` is removed as well says "differs only in audience" above
-  the diff, so the reviewer's first question is answered before the first hunk.
-- **Tests.** `test/path-safety.spec.ts`: nothing new in the resolver, but an e2e case that a traversal in
+  the diff, so the reviewer's first question is answered before the first hunk.~~
+- ~~**Tests.** `test/path-safety.spec.ts`: nothing new in the resolver, but an e2e case that a traversal in
   either key and a `_`-prefixed or unknown tenant in `a`/`b` 404 without leaking a path.
   `test/compare-normalise.spec.ts`: each dropped field including a nested `id` and a nested
   `*@odata.context`; the id shapes — `GUID`, `GUID_GUID`, `GUID:GUID`, `GUID_en-us` dropped, `"0"`,
@@ -172,14 +174,14 @@ this entry.
   `presentInTenant: false` entry left out and an excluded type rendered last; diff ignores ids and
   timestamps, resolves a group id, `?raw` shows them again; "differs only in audience" for a pair that
   differs in its target group alone; an edited YAML or metadata file is reflected on the next request.
-  `test/styles-build.spec.ts` if any new rule lands in `src/styles.css`.
-- **Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list
+  `test/styles-build.spec.ts` if any new rule lands in `src/styles.css`.~~
+- ~~**Docs and rules.** `README.md`: routes table, the compare contract (source of the listing, the drop list
   and reference fields, the measured baseline, the provisional status), `_compare` as a reserved prefix.
   `CHANGELOG.md` under `[Unreleased]`, stating that the normalisation is provisional and where it is going.
   `.windsurf/rules/01-architecture.md`: the new files, `_compare` beside `_resource`/`_drift`, and the
   reworded listing rule. The *Browsable excluded bulk types* idea below is reconciled per the design note.
   Any change to the rule is mirrored into the `resource compare` idea in `go/NEXT-ITERATIONS.md`, which
-  quotes it.
+  quotes it.~~
 
 **Follow-ups (not in this entry).**
 
