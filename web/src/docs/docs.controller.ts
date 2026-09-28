@@ -262,11 +262,6 @@ export class DocsController {
       right: { id: right.info.id, name: right.info.name },
       swapHref: listingHref(right.info.id, left.info.id),
       listing,
-      sections: [
-        { id: 'compare-both', title: 'In both', section: listing.both },
-        { id: 'compare-only-a', title: `Only in ${left.info.id}`, section: listing.onlyA },
-        { id: 'compare-only-b', title: `Only in ${right.info.id}`, section: listing.onlyB },
-      ],
     });
   }
 

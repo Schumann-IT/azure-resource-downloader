@@ -25,13 +25,29 @@ section of the [repository README](../README.md) for the procedure.
   group addresses are dropped, and references to groups, filters and notification templates are resolved to
   their names in each tenant, so equal configuration compares equal and a different audience shows as a
   real difference. A pair that differs only in its assignments says so above the diff. The page states exactly
-  what was normalised and offers the diff as exported. The normalisation rule is **provisional**: it lives in
+  what was normalised and offers the diff as exported. Both pages read left against right: the listing puts
+  each type in two columns headed by the tenants, a pair on one row and a one-sided resource beside an empty
+  cell, and the diff stands the two files side by side with a changed line beside its counterpart, stacking
+  the two sides when there is not room for both. The normalisation rule is **provisional**: it lives in
   the browser only to find out what the rule should be against real exports, and moves to the CLI once it is
   stable (see `../go/NEXT-ITERATIONS.md`). The app stays read-only and offline; the listing is read from each
   export's `resources/metadata.yaml` as data, never by walking the tree, and both files of a pair go through
   the existing resources-root boundary. Pairing by file name is a heuristic the page states; manual pairing and
   a same/different column on the listing are follow-ups in `NEXT-ITERATIONS.md`. Routes and the normalisation
   rule are in `README.md`.
+
+### Changed
+
+#### Drift view
+
+- **The YAML diff of a changed or renamed resource now shows baseline and observed side by side.** A changed
+  line sits beside what replaced it, under *baseline* and *observed*, so the question *which side has what*
+  no longer has to be reconstructed from `−` and `+` runs. Where there is not room for two panes the rows
+  stack, and even then each changed line is directly above its replacement rather than in a separate run.
+  The layout follows the width of the diff itself, not the window, so the sidebar is accounted for; no
+  script is involved, the diff is still computed per request from the verified files and escaped by the
+  template, and the drift diff and the tenant compare still render a line through one shared template, so
+  the two cannot come apart.
 
 ## [0.3.0] - 2026-09-28
 

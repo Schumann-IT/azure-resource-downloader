@@ -304,10 +304,14 @@ CLI's job — this app only renders what is on disk, and never acts on it.
 - **Integrity.** Before a comparison or payload is shown, the baseline and observed files are hashed and
   checked against the observation; a mismatch withholds both and says so.
 - **YAML diff.** When both sides of a change or rename are verified, the finding links one **YAML diff**
-  instead of separate baseline and observed views: a unified diff with three lines of context, line numbers
-  for both sides, and raw links to either file. It is computed per request as plain data and escaped by the
-  template; above 1 MiB combined it is not computed and the raw files are offered instead. An addition, which
-  has no baseline, keeps its observed YAML links.
+  instead of separate baseline and observed views: a line diff with three lines of context, line numbers for
+  both sides, and raw links to either file. It is laid out **side by side** — *baseline* left, *observed*
+  right, a modified line as one row — whenever the diff itself is at least 64rem wide; narrower, each row
+  stacks its baseline line above its observed one, so the narrow view is a unified diff with every changed
+  line directly above its replacement. The switch is a container query on the diff's own width, not the
+  window's, so the sidebar is accounted for; no script is involved. It is computed per request as plain data
+  and escaped by the template; above 1 MiB combined it is not computed and the raw files are offered instead.
+  An addition, which has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the
   documentation route.
 
@@ -324,14 +328,17 @@ is configured the same in both, and where it differs. Offline and read-only like
   a heuristic the page states: different policies can share a name, and a renamed policy shows once on each
   side. Only resources still present in the tenant (`presentInTenant` not `false`) are listed. Type groups are
   collapsed; types either index counts under `counts.excluded` come last and are marked *not documented*.
-  Paired rows open the diff; single-side rows open that tenant's YAML view. The listing does not say whether a
-  pair differs — that needs both files read.
-- **The diff** normalises both files identically, then shows a unified line diff through the same table as the
-  drift diff. A caption states exactly which keys were dropped and how many references were resolved,
-  ambiguous or unresolved; `&raw` shows the files as exported. A pair identical after normalisation says *No
-  differences after normalisation*; one that is identical once `assignments` is removed as well says
-  *Differs only in audience*. Line numbers are those of the normalised text. Above 1 MiB combined, or when a
-  file does not parse, nothing is normalised.
+  Each type is a two-column table headed by the two tenants: a pair is one row with each side's own display
+  name, both opening the diff; a resource only one side has sits in its column with an empty cell opposite and
+  opens that tenant's YAML view. Pairs come first in each type, then the left-only, then the right-only rows.
+  The listing does not say whether a pair differs — that needs both files read.
+- **The diff** normalises both files identically, then shows a line diff through the same partial as the drift
+  diff — side by side under the two tenant ids when it is wide enough, stacked otherwise, exactly as described
+  for the drift diff above. A caption states exactly which keys were dropped and how many references were
+  resolved, ambiguous or unresolved; `&raw` shows the files as exported. A pair identical after normalisation
+  says *No differences after normalisation*; one that is identical once `assignments` is removed as well says
+  *Differs only in audience*. Line numbers are those of the normalised text. Above 1 MiB combined, or when a file
+  does not parse, nothing is normalised.
 - **The normalisation rule is provisional** and destined for the CLI (`azure-rd resource compare`, parked in
   `../go/NEXT-ITERATIONS.md`); until then it lives in `src/docs/compare-normalise.ts` as data:
   - **dropped** at any depth: `id` and `sourceId` when their value contains a GUID other than the all-zero
@@ -467,7 +474,8 @@ built in a temp directory and removed afterwards.
 | `test/path-safety.spec.ts` | Traversal, symlink escape, null bytes, absolute paths, one extension per root for both roots, one extension per drift resolver and the drift depth guard. |
 | `test/drift-observation.spec.ts` | Observation parsing (malformed rejected, never a throw), the baseline timestamp read, and every drift state in evaluation order, including renames and the validity gate. |
 | `test/link-rewrite.spec.ts` | `.md` href rewriting for the documentation and drift route bases. |
-| `test/yaml-diff.spec.ts` | The drift diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap. |
+| `test/yaml-diff.spec.ts` | The line diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap, and the pairing of removed and added lines into side-by-side rows. |
+| `test/compare-view.spec.ts` | The compare listing's row order within a type: pairs, then left-only, then right-only, each alphabetical. |
 | `test/compare-normalise.spec.ts` | The compare's normalisation rule — every dropped key, the id shapes kept and dropped, reference resolution with its ambiguous, unresolved and sentinel outcomes, the audience-only variant, scalar stability — and `resources/metadata.yaml` parsing. |
 | `test/tenant-index.spec.ts` | `index.yaml` parsing (malformed file rejected, later schema accepted, `facets`/`programmes`/`groups`/vocabularies), navigation building, every taxonomy-filter rule listed above (OR/AND, selection-aware counts, uncategorised bucket, exempt active document, version-2 synthesis, no-taxonomy passthrough), and `filterableAxes`/`groupByAxis` — the rule the export shares. |
 | `test/section-hooks.spec.ts` | Heading slugs, declared vs undeclared headings, matched/unmatched marker pairs, section wrapping (an H2 inside a spliced block never opens one), metadata-table detection. |
@@ -504,7 +512,7 @@ web/
 │       ├── drift-observation.ts         # drift/metadata.yaml parsing + the one drift decision
 │       ├── drift.service.ts             # observation / baseline / hash reads, mtime-cached
 │       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists
-│       ├── yaml-diff.ts                 # unified line diff of baseline vs observed payload
+│       ├── yaml-diff.ts                 # line diff of two YAML texts, hunks + side-by-side rows
 │       ├── file-cache.ts                # mtime + size parsed-file cache shared by drift and compare
 │       ├── resources-metadata.ts        # resources/metadata.yaml parsing + reference lookup
 │       ├── compare-normalise.ts         # the provisional cross-tenant identity rule

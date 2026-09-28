@@ -27,7 +27,7 @@
             These files are too large to diff here — compare the raw files instead.
           </p>
         {{else if diff.hunks.length}}
-          {{> diff_table hunks=diff.hunks}}
+          {{> diff_table hunks=diff.hunks left="baseline" right="observed"}}
         {{else}}
           <p class="drift-diff-identical text-sm text-slate-500 dark:text-slate-400">
             The two files are identical line for line; the finding comes from the recorded comparison, not from these bytes.

@@ -13,29 +13,31 @@ export interface CompareSide {
   metadata: ResourcesMetadata;
 }
 
-export interface ListingRow {
+export interface ListingCell {
   name: string;
-  // The other tenant's display name for a paired key, when it differs.
-  otherName: string | null;
   href: string;
+}
+
+// One row of the two-column listing: a paired key has both cells (each
+// linking to the pair diff), a single-side key one cell and an empty one
+// opposite.
+export interface ListingRow {
+  left: ListingCell | null;
+  right: ListingCell | null;
 }
 
 export interface ListingGroup {
   type: string;
-  count: number;
   excluded: boolean;
+  both: number;
+  onlyA: number;
+  onlyB: number;
   rows: ListingRow[];
 }
 
-export interface ListingSection {
-  total: number;
-  groups: ListingGroup[];
-}
-
 export interface CompareListing {
-  onlyA: ListingSection;
-  onlyB: ListingSection;
-  both: ListingSection;
+  totals: { both: number; onlyA: number; onlyB: number };
+  groups: ListingGroup[];
 }
 
 export function selectHref(a: string): string {
@@ -73,27 +75,59 @@ export function compareListing(
   }
   const onlyB = [...right.values()].filter((e) => !left.has(e.key));
 
+  const types = new Set([
+    ...onlyA.map((e) => e.type),
+    ...onlyB.map((e) => e.type),
+    ...both.map(([e]) => e.type),
+  ]);
+  const groups = [...types]
+    .map((type): ListingGroup => {
+      const paired = both.filter(([e]) => e.type === type);
+      const aOnly = onlyA.filter((e) => e.type === type);
+      const bOnly = onlyB.filter((e) => e.type === type);
+      return {
+        type,
+        excluded: excludedTypes.has(type),
+        both: paired.length,
+        onlyA: aOnly.length,
+        onlyB: bOnly.length,
+        rows: interleaveRows(
+          paired.map(([ea, eb]) => {
+            const href = pairHref(a.id, b.id, ea.key);
+            return [
+              { name: ea.displayName, href },
+              { name: eb.displayName, href },
+            ];
+          }),
+          aOnly.map((e) => ({ name: e.displayName, href: resourceHref(a.id, e.key) })),
+          bOnly.map((e) => ({ name: e.displayName, href: resourceHref(b.id, e.key) })),
+        ),
+      };
+    })
+    .sort(byExcludedThenType);
+
   return {
-    onlyA: section(
-      onlyA.map((e) => ({ entry: e, row: { name: e.displayName, otherName: null, href: resourceHref(a.id, e.key) } })),
-      excludedTypes,
-    ),
-    onlyB: section(
-      onlyB.map((e) => ({ entry: e, row: { name: e.displayName, otherName: null, href: resourceHref(b.id, e.key) } })),
-      excludedTypes,
-    ),
-    both: section(
-      both.map(([ea, eb]) => ({
-        entry: ea,
-        row: {
-          name: ea.displayName,
-          otherName: eb.displayName === ea.displayName ? null : eb.displayName,
-          href: pairHref(a.id, b.id, ea.key),
-        },
-      })),
-      excludedTypes,
-    ),
+    totals: { both: both.length, onlyA: onlyA.length, onlyB: onlyB.length },
+    groups,
   };
+}
+
+// One type's rows in reading order for the two-column listing: the pairs
+// first, then what only the left side has, then what only the right side has,
+// each alphabetical by the name shown on its side. Pure.
+export function interleaveRows(
+  paired: Array<[ListingCell, ListingCell]>,
+  onlyA: ListingCell[],
+  onlyB: ListingCell[],
+): ListingRow[] {
+  const byName = (x: ListingCell, y: ListingCell) => x.name.localeCompare(y.name);
+  return [
+    ...[...paired]
+      .sort(([x], [y]) => byName(x, y))
+      .map(([l, r]) => ({ left: l, right: r })),
+    ...[...onlyA].sort(byName).map((c) => ({ left: c, right: null })),
+    ...[...onlyB].sort(byName).map((c) => ({ left: null, right: c })),
+  ];
 }
 
 export interface PairComparison {
@@ -163,27 +197,6 @@ function present(metadata: ResourcesMetadata): Map<string, MetadataEntry> {
   return new Map(
     metadata.entries.filter((e) => e.presentInTenant).map((e) => [e.key, e]),
   );
-}
-
-function section(
-  items: Array<{ entry: MetadataEntry; row: ListingRow }>,
-  excludedTypes: Set<string>,
-): ListingSection {
-  const byType = new Map<string, ListingRow[]>();
-  for (const { entry, row } of items) {
-    const rows = byType.get(entry.type) ?? [];
-    rows.push(row);
-    byType.set(entry.type, rows);
-  }
-  const groups = [...byType.entries()]
-    .map(([type, rows]) => ({
-      type,
-      count: rows.length,
-      excluded: excludedTypes.has(type),
-      rows: rows.sort((x, y) => x.name.localeCompare(y.name)),
-    }))
-    .sort(byExcludedThenType);
-  return { total: items.length, groups };
 }
 
 // Documented types first, then the excluded ones; alphabetical within each.

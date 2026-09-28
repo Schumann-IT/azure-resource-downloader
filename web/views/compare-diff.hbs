@@ -47,7 +47,7 @@
           These files are too large to diff here — compare the YAML views instead.
         </p>
       {{else if diff.hunks.length}}
-        {{> diff_table hunks=diff.hunks}}
+        {{> diff_table hunks=diff.hunks left=left.id right=right.id}}
       {{else if normalised}}
         <p class="compare-identical text-sm text-slate-500 dark:text-slate-400">No differences after normalisation.</p>
       {{else}}

@@ -40,7 +40,8 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `drift-observation.ts` — pure functions (`parseObservation`, `driftState`, `tenantDriftState`).
   - `drift.service.ts` — observation, baseline timestamp and verified-hash reads, mtime-cached.
   - `drift-view.ts` — pure view models for the drift pages and the Drift switcher entries.
-  - `yaml-diff.ts` — pure function (`diffYaml`) behind the drift and compare YAML diffs, over `diff` (jsdiff).
+  - `yaml-diff.ts` — pure functions (`diffYaml`, `pairRows`) behind the drift and compare YAML diffs, over
+    `diff` (jsdiff); `pairRows` gives each hunk its side-by-side rows.
   - `file-cache.ts` — `FileCache`, the bounded mtime + size parsed-file cache the drift and compare
     services share.
   - `resources-metadata.ts` — pure `parseResourcesMetadata` for `resources/metadata.yaml` (+ the

@@ -1617,6 +1617,23 @@ findings: 4
     expect(res.text).toContain(`href="/drifted/_drift/${T}/changed1?raw"`);
   });
 
+  it('lays the drift diff out side by side, baseline left and observed right', async () => {
+    const res = await get(`/drifted/_drift/${T}/changed1?diff`).expect(200);
+    // One grid that reflows on its own width — a container query, not a second copy.
+    expect(res.text).toContain('class="drift-diff @container');
+    expect(res.text.match(/class="diff-hunk"/g)).toHaveLength(1);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">baseline</);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">observed</);
+    // A modified value is one row: the removed line left, the added line right.
+    expect(res.text).toMatch(
+      /class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*? {2}enabled: true<[\s\S]*?<div class="diff-added diff-right[\s\S]*? {2}enabled: false</,
+    );
+    expect(res.text).not.toMatch(/class="diff-removed diff-right/);
+    expect(res.text).not.toMatch(/class="diff-added diff-left/);
+    // A context line is present on both sides, the right copy only when wide.
+    expect(res.text).toMatch(/class="diff-context diff-left[\s\S]*?id: changed1<[\s\S]*?class="diff-context diff-right hidden @5xl:grid/);
+  });
+
   it('withholds the diff when either side is missing or no longer verified', async () => {
     await get(`/drifted/_drift/${T}/tampered1?diff`).expect(404);
     // An addition has no baseline to diff against.
@@ -2018,17 +2035,36 @@ settings:
     expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod`));
     expect(res.text).toContain('href="/stage/_resource/Microsoft.Graph/deviceConfigurations/dc1"');
     expect(res.text).toContain('href="/prod/_resource/Microsoft.Graph/namedLocations/loc1"');
-    // A differing display name is shown beside the pair.
-    expect(res.text).toContain('↔ Policy Three (prod)');
-    // An excluded type comes last in its section and is marked.
-    const onlyA = res.text.slice(res.text.indexOf('id="compare-only-a"'), res.text.indexOf('id="compare-only-b"'));
-    expect(onlyA.indexOf('Microsoft.Graph/deviceConfigurations')).toBeLessThan(
-      onlyA.indexOf('Microsoft.Graph/windowsAutopilotDeviceIdentities'),
+    // An excluded type comes last and is marked.
+    expect(res.text.indexOf('Microsoft.Graph/deviceConfigurations')).toBeLessThan(
+      res.text.indexOf('Microsoft.Graph/windowsAutopilotDeviceIdentities'),
     );
-    expect(onlyA).toContain('compare-excluded');
+    expect(res.text).toMatch(/compare-excluded[\s\S]*?Microsoft\.Graph\/windowsAutopilotDeviceIdentities/);
+    expect(res.text).toContain('0 in both · 1 only left · 0 only right');
     expect(res.text).toContain(href(`/_compare?a=prod&b=stage`));
     // `_compare` is a representation, not a breadcrumb segment.
     expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_compare<\/span>/);
+  });
+
+  it('lists the two exports side by side, one row per key', async () => {
+    const res = await get(`/_compare${q}`).expect(200);
+    const rows = res.text.split('<tr class="compare-row').slice(1).map((r) => r.slice(0, r.indexOf('</tr>')));
+    // A pair is one row: each side's own display name, both linking to the pair diff.
+    const three = rows.find((r) => r.includes('Policy Three (prod)'));
+    expect(three).toBeDefined();
+    expect(three).toContain(' compare-paired');
+    expect(three).toMatch(/>Policy Three<\/a>/);
+    expect(three!.split(href(`/_compare/${P}/p3?a=stage&b=prod`)).length - 1).toBe(2);
+    // A single-side key has one cell and an empty one opposite.
+    const onlyLeft = rows.find((r) => r.includes('Stage only config'));
+    expect(onlyLeft).toContain(' compare-only-left');
+    expect(onlyLeft).toMatch(/Stage only config[\s\S]*class="compare-empty/);
+    const onlyRight = rows.find((r) => r.includes('Prod only location'));
+    expect(onlyRight).toContain(' compare-only-right');
+    expect(onlyRight).toMatch(/class="compare-empty[\s\S]*Prod only location/);
+    // Pairs lead each type, and the columns are headed by the tenant ids.
+    expect(res.text).toMatch(/<th[^>]*>stage<\/th>\s*<th[^>]*>prod<\/th>/);
+    expect(res.text).not.toContain('id="compare-only-a"');
   });
 
   it('diffs a pair with ids and timestamps normalised away and references resolved', async () => {
@@ -2047,6 +2083,10 @@ settings:
     expect(res.text).not.toContain('Differs only in audience');
     expect(res.text).toContain(href(`/_compare/${P}/p1?a=stage&b=prod&raw`));
     expect(res.text).toContain(`href="/stage/_resource/${P}/p1"`);
+    // Side by side, headed by the two tenant ids; the modified value is one row.
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">stage</);
+    expect(res.text).toMatch(/class="diff-pane-label[^"]*">prod</);
+    expect(res.text).toMatch(/class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*?value: 1<[\s\S]*?<div class="diff-added diff-right[\s\S]*?value: 15</);
   });
 
   it('shows the raw diff with the identities back', async () => {

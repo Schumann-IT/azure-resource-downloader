@@ -18,9 +18,19 @@ export interface DiffLine {
   newNo: number | null;
 }
 
+// One visual row of the side-by-side layout: a context line on both sides, or
+// a removed line beside the added line it pairs with. Either side is null on
+// the overhang of an uneven change.
+export interface DiffRow {
+  context: boolean;
+  left: DiffLine | null;
+  right: DiffLine | null;
+}
+
 export interface DiffHunk {
   header: string;
   lines: DiffLine[];
+  rows: DiffRow[];
 }
 
 export interface YamlDiff {
@@ -102,7 +112,57 @@ function toHunks(lines: DiffLine[], context: number): DiffHunk[] {
     }
     current.push(line);
   });
-  return groups.map((group) => ({ header: hunkHeader(group), lines: group }));
+  return groups.map((group) => ({
+    header: hunkHeader(group),
+    lines: group,
+    rows: pairRows(group),
+  }));
+}
+
+// Pairs a hunk's lines for the side-by-side layout, so a modified value is one
+// row rather than a removed row followed by an added one: each run of removed
+// or added lines is zipped against the run of the other kind that immediately
+// follows it, whichever comes first. Pure; the flat lines stay the unified
+// view's input.
+export function pairRows(lines: DiffLine[]): DiffRow[] {
+  const rows: DiffRow[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.added && !line.removed) {
+      rows.push({ context: true, left: line, right: line });
+      i++;
+      continue;
+    }
+    const first = takeRun(lines, i, line.added);
+    i += first.length;
+    const second =
+      i < lines.length && (lines[i].added || lines[i].removed)
+        ? takeRun(lines, i, lines[i].added)
+        : [];
+    i += second.length;
+    const removed = line.removed ? first : second;
+    const added = line.added ? first : second;
+    for (let k = 0; k < Math.max(removed.length, added.length); k++) {
+      rows.push({
+        context: false,
+        left: removed[k] ?? null,
+        right: added[k] ?? null,
+      });
+    }
+  }
+  return rows;
+}
+
+function takeRun(lines: DiffLine[], start: number, added: boolean): DiffLine[] {
+  let end = start;
+  while (
+    end < lines.length &&
+    (added ? lines[end].added : lines[end].removed)
+  ) {
+    end++;
+  }
+  return lines.slice(start, end);
 }
 
 function hunkHeader(lines: DiffLine[]): string {
