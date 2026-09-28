@@ -189,6 +189,15 @@ this entry.
   known from real use.
 - **Manual pairing** (`?left=&right=`) and a **rename heuristic** (pair an only-A with an only-B whose
   normalised texts are identical).
+- **Side-by-side views.** Both compare pages are single-column today. The listing renders the three-way
+  split as three stacked sections, and the pair diff is a unified diff — the drift diff's table reused as is.
+  A reviewer comparing stage against prod reads *left tenant, right tenant*, so both should offer that
+  layout: the listing as two columns (A's resources beside B's, paired rows aligned, single-side rows with
+  an empty cell opposite), and the pair diff as a two-pane view with the normalised texts aligned line by
+  line, changed lines highlighted on both sides. The diff data already carries per-side line numbers, so
+  the two-pane variant is a second template over the same `YamlDiff`, not a second diff; the listing
+  variant is a view-model change only. Pure CSS (grid), no client-side JavaScript; the unified view stays as
+  the narrow-screen fallback.
 - **Move the normalisation to the CLI** — the condition this entry was accepted under. A `resource compare
   <a> <b>` in `go/` that reads two exports offline, applies the (by then stable and tested) identity rule,
   emits verdicts, dotted-path deltas and payloads, and writes an `analyze.md` so the drift-analysis agent can

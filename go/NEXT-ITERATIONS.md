@@ -109,7 +109,7 @@ resolves `assignments[].target.groupId`, `assignments[].target.deviceAndAppManag
 `metadata.yaml` — a set-valued lookup, since neither `resourceId` nor `displayName` is unique in real exports:
 a reference resolves only when every entry with that id agrees on the name, otherwise the GUID stays and is
 flagged ambiguous or unresolved, and a zero-sentinel reference means *none* and passes through. Measured
-against the two reference exports, that rule leaves 19 of 114 paired resources identical, 27 once
+against the two reference exports, that rule leaves 19 of 114 paired resources identical, 36 once
 `assignments` is removed as well — the difference being the same policy targeting a differently named group
 in each tenant, which the web diff page reports as *differs only in audience*. That rule is a **judgment,
 not a fact**, and it was accepted on the web side under one condition, recorded there: it is provisional and
