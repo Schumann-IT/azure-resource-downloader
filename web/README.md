@@ -306,10 +306,12 @@ CLI's job — this app only renders what is on disk, and never acts on it.
 - **YAML diff.** When both sides of a change or rename are verified, the finding links one **YAML diff**
   instead of separate baseline and observed views: a line diff with three lines of context, line numbers for
   both sides, and raw links to either file. It is laid out **side by side** — *baseline* left, *observed*
-  right, a modified line as one row — whenever the diff itself is at least 64rem wide; narrower, each row
+  right, a modified line as one row — whenever the diff itself is at least 48rem wide; narrower, each row
   stacks its baseline line above its observed one, so the narrow view is a unified diff with every changed
   line directly above its replacement. The switch is a container query on the diff's own width, not the
-  window's, so the sidebar is accounted for; no script is involved. It is computed per request as plain data
+  window's, so the sidebar is accounted for; no script is involved. With the sidebar beside it that takes a
+  window of about 1152px; between 1024px and that the diff stacks, and below 1024px, where the sidebar moves
+  under the content, it is side by side again from about 800px. It is computed per request as plain data
   and escaped by the template; above 1 MiB combined it is not computed and the raw files are offered instead.
   An addition, which has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the

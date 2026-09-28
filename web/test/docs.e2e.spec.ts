@@ -1631,7 +1631,10 @@ findings: 4
     expect(res.text).not.toMatch(/class="diff-removed diff-right/);
     expect(res.text).not.toMatch(/class="diff-added diff-left/);
     // A context line is present on both sides, the right copy only when wide.
-    expect(res.text).toMatch(/class="diff-context diff-left[\s\S]*?id: changed1<[\s\S]*?class="diff-context diff-right hidden @5xl:grid/);
+    expect(res.text).toMatch(/class="diff-context diff-left[\s\S]*?id: changed1<[\s\S]*?class="diff-context diff-right hidden @3xl:grid/);
+    // Two panes from 48rem: below the 56rem the drift page's column reaches beside the sidebar.
+    expect(res.text).toContain('class="diff-row grid grid-cols-1 @3xl:grid-cols-2"');
+    expect(res.text).not.toContain('@5xl:');
   });
 
   it('withholds the diff when either side is missing or no longer verified', async () => {
@@ -2087,6 +2090,7 @@ settings:
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">stage</);
     expect(res.text).toMatch(/class="diff-pane-label[^"]*">prod</);
     expect(res.text).toMatch(/class="diff-row[^"]*">\s*<div class="diff-removed diff-left[\s\S]*?value: 1<[\s\S]*?<div class="diff-added diff-right[\s\S]*?value: 15</);
+    expect(res.text).toContain('class="diff-row grid grid-cols-1 @3xl:grid-cols-2"');
   });
 
   it('shows the raw diff with the identities back', async () => {

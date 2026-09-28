@@ -2,12 +2,15 @@
       escaped here, never passed through as HTML. Shared by the drift diff and
       the tenant compare so the two cannot render a hunk differently.
       Rendered once, as a grid of paired rows that reflows on the partial's own
-      width (a container query, not the viewport): from @5xl the two sides stand
-      side by side under the `left` / `right` labels; below it each row stacks
-      its left cell over its right cell, and a context line is shown once. --}}
+      width (a container query, not the viewport): from @3xl (48rem) the two
+      sides stand side by side under the `left` / `right` labels; below it each
+      row stacks its left cell over its right cell, and a context line is shown
+      once. The threshold must stay below the widest column of the narrowest
+      page using this partial — the drift diff keeps the sidebar, which leaves
+      it 56rem at most — or that page can never go side by side. --}}
 <div class="drift-diff @container overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-  <div class="min-w-full w-max @5xl:w-full font-mono text-xs">
-    <div class="diff-panes-head hidden @5xl:grid grid-cols-2 border-b border-slate-200 dark:border-slate-700 font-sans text-xs font-semibold text-slate-600 dark:text-slate-300">
+  <div class="min-w-full w-max @3xl:w-full font-mono text-xs">
+    <div class="diff-panes-head hidden @3xl:grid grid-cols-2 border-b border-slate-200 dark:border-slate-700 font-sans text-xs font-semibold text-slate-600 dark:text-slate-300">
       <div class="diff-pane-label px-3 py-1.5">{{left}}</div>
       <div class="diff-pane-label border-l border-slate-200 dark:border-slate-700 px-3 py-1.5">{{right}}</div>
     </div>
@@ -15,36 +18,36 @@
       <div class="diff-hunk">
         <div class="diff-hunk-header bg-slate-100 dark:bg-slate-800 px-3 py-1 text-slate-500 dark:text-slate-400">{{this.header}}</div>
         {{#each this.rows}}
-          <div class="diff-row grid grid-cols-1 @5xl:grid-cols-2">
+          <div class="diff-row grid grid-cols-1 @3xl:grid-cols-2">
             {{#if this.context}}
               <div class="diff-context diff-left grid grid-cols-[3rem_1rem_minmax(0,1fr)]">
                 <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500">{{this.left.oldNo}}</span>
                 <span class="select-none"></span>
-                <span class="whitespace-pre @5xl:whitespace-pre-wrap @5xl:break-all pr-3 text-slate-700 dark:text-slate-300">{{this.left.text}}</span>
+                <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 text-slate-700 dark:text-slate-300">{{this.left.text}}</span>
               </div>
-              <div class="diff-context diff-right hidden @5xl:grid grid-cols-[3rem_1rem_minmax(0,1fr)] border-l border-slate-200 dark:border-slate-700">
+              <div class="diff-context diff-right hidden @3xl:grid grid-cols-[3rem_1rem_minmax(0,1fr)] border-l border-slate-200 dark:border-slate-700">
                 <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500">{{this.right.newNo}}</span>
                 <span class="select-none"></span>
-                <span class="whitespace-pre @5xl:whitespace-pre-wrap @5xl:break-all pr-3 text-slate-700 dark:text-slate-300">{{this.right.text}}</span>
+                <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 text-slate-700 dark:text-slate-300">{{this.right.text}}</span>
               </div>
             {{else}}
               {{#if this.left}}
                 <div class="diff-removed diff-left grid grid-cols-[3rem_1rem_minmax(0,1fr)] bg-red-50 dark:bg-red-950/40">
                   <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500">{{this.left.oldNo}}</span>
                   <span class="select-none text-red-700 dark:text-red-300">−</span>
-                  <span class="whitespace-pre @5xl:whitespace-pre-wrap @5xl:break-all pr-3 text-red-900 dark:text-red-200">{{this.left.text}}</span>
+                  <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 text-red-900 dark:text-red-200">{{this.left.text}}</span>
                 </div>
               {{else}}
-                <div class="diff-empty diff-left hidden @5xl:block bg-slate-50 dark:bg-slate-900/60"></div>
+                <div class="diff-empty diff-left hidden @3xl:block bg-slate-50 dark:bg-slate-900/60"></div>
               {{/if}}
               {{#if this.right}}
-                <div class="diff-added diff-right grid grid-cols-[3rem_1rem_minmax(0,1fr)] bg-emerald-50 dark:bg-emerald-950/40 @5xl:border-l @5xl:border-slate-200 @5xl:dark:border-slate-700">
+                <div class="diff-added diff-right grid grid-cols-[3rem_1rem_minmax(0,1fr)] bg-emerald-50 dark:bg-emerald-950/40 @3xl:border-l @3xl:border-slate-200 @3xl:dark:border-slate-700">
                   <span class="select-none px-2 text-right text-slate-400 dark:text-slate-500">{{this.right.newNo}}</span>
                   <span class="select-none text-emerald-700 dark:text-emerald-300">+</span>
-                  <span class="whitespace-pre @5xl:whitespace-pre-wrap @5xl:break-all pr-3 text-emerald-900 dark:text-emerald-200">{{this.right.text}}</span>
+                  <span class="whitespace-pre @3xl:whitespace-pre-wrap @3xl:break-all pr-3 text-emerald-900 dark:text-emerald-200">{{this.right.text}}</span>
                 </div>
               {{else}}
-                <div class="diff-empty diff-right hidden @5xl:block border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60"></div>
+                <div class="diff-empty diff-right hidden @3xl:block border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60"></div>
               {{/if}}
             {{/if}}
           </div>

@@ -351,25 +351,26 @@ both, so the drift half of it does not work.
 
 **Plan.**
 
-- **Threshold.** Change the partial's `@5xl:` variants to `@3xl:` (48rem) — all twelve, including the inner
+- ~~**Threshold.** Change the partial's `@5xl:` variants to `@3xl:` (48rem) — all twelve, including the inner
   wrapper's `w-full`, so the pane labels, the grid, the empty cells, the right-hand context cells and the
   wrapping all switch together. Update the partial's header comment to name `@3xl` and to state the
   constraint: the threshold must stay below the drift diff page's widest column (56rem), since that page
-  keeps the sidebar.
+  keeps the sidebar.~~
 - **Optional width.** If the manual check finds the panes too cramped, widen the drift diff page's layout
   (`max-w-7xl` → `max-w-screen-2xl`) on that page only, pass the matching `headerWidth`, and keep the
   header-alignment e2e case green; the documentation pages stay as they are.
-- **Tests.** `test/docs.e2e.spec.ts`: the drift and compare diff cases assert the new variant (`@3xl:grid` on
+- ~~**Tests.** `test/docs.e2e.spec.ts`: the drift and compare diff cases assert the new variant (`@3xl:grid` on
   the right-hand context cell, `@3xl:grid-cols-2` on the rows) instead of `@5xl`. No compiled-CSS assertion
   is added, since `src/styles.css` is not touched; the built CSS is checked by hand for the 48rem container
-  query.
+  query.~~
 - **Manual check in a browser** — the step entry 2 skipped. Both diff pages at window widths 900, 1100, 1280
   and 1440px, light and dark: the drift diff is two panes at 900, stacked at 1100, two panes at 1280 and
   1440; the compare diff is two panes at all four; long lines wrap inside their pane; the stacked view still
   scrolls sideways.
-- **Docs.** `README.md`'s Drift view entry says 64rem; change it to 48rem. `CHANGELOG.md`: completes the
+- ~~**Docs.** `README.md`'s Drift view entry says 64rem; change it to 48rem. `CHANGELOG.md`: completes the
   drift diff's `### Changed` entry under `[Unreleased]` — no new entry, as the side-by-side layout has not
-  been released yet.
+  been released yet. *Shipped as:* `README.md` also states the window widths at which the drift diff
+  switches; the changelog entry needed no edit, since it never named a threshold and now simply holds.~~
 
 ## Standing decisions
 
