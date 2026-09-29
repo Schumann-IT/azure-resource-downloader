@@ -9,115 +9,222 @@ of truth for what the tool *does today*.
 
 ## 1. Attribute each drift finding to an actor and a time, from the tenant's Log Analytics audit tables
 
-**Goal.** Answer *who changed this, and when* for every drifted resource. A drift observation today says a
-resource's bytes moved somewhere between the baseline and the observation; the change record that names the
-actor already exists in the operator's Log Analytics workspace, keyed by the same object GUID the finding
-carries. Join the two and record the result as a new, separate artifact at the drift tree root — so the
-drift-analysis agent, and a human reading the tree, can tell a deliberate administrative change from an
-unexplained one.
+**Goal.** Answer *who changed this, and when* for every finding of a drift observation. `drift/metadata.yaml`
+says a resource's bytes moved between the baseline and the observation; the change record naming the actor
+already exists in the operator's Log Analytics workspace, keyed by the same object GUID the finding carries
+and bounded by the same two timestamps. Join the two and record the result as a separate artifact,
+`drift/audit.yaml`, so the drift-analysis agent — and a human reading the tree — can weigh a change against
+who made it instead of reading it as anonymous. Attribution is enrichment: it never changes a verdict and
+never fails a run.
 
-> **Why a separate `drift/audit.yaml` and not `drift/metadata.yaml`.** Three structural reasons, not
-> presentation: (1) **provenance differs** — the observation is computed from bytes this run fetched and can be
-> verified against them, while audit rows are copied from an external system with its own ingestion latency,
-> retention and completeness, so folding them in makes the observation partly unverifiable; (2) it would
-> **break determinism** — `findingsSha256` and the "identical bytes over an unchanged tenant except the
-> timestamp" property would be lost, because a re-run sees whatever has been ingested since; (3) it **must be
-> allowed to fail** — no workspace, no permission or a window past retention may not invalidate the
-> observation, and a separate artifact can simply be absent. Lifecycle is free: the file sits at the drift tree
-> root beside `metadata.yaml` and `analyze.md`, where no payload can be, so it is swept by the drift run's
-> existing clear-and-rebuild and by a re-baselining `resource download`. **No new delete path.**
+> **Why a separate `drift/audit.yaml` and not `drift/metadata.yaml`.** (1) **Provenance differs** — the
+> observation is computed from bytes this run fetched and can be verified against them; audit rows are copied
+> from an external system with its own ingestion latency, retention and completeness. (2) **Determinism** —
+> `findingsSha256` and the "identical bytes over an unchanged tenant except the timestamp" property survive
+> only if the observation never contains what was ingested since. (3) **It must be allowed to fail** — no
+> workspace, no grant or a window past retention may not invalidate the observation; a separate file can
+> simply be absent. It sits at the drift root beside `metadata.yaml` and `analyze.md`, where no payload can be
+> (payloads are ≥ 2 levels deep), so `drift.ClearTree` — the drift run's clear-and-rebuild and the
+> re-baselining download — sweeps it. **No new delete path.**
 >
 > **The join key and the window already exist.** `Finding.ResourceID` is the Graph object GUID the audit
-> tables record as the target, and `Observation.Baseline.GeneratedAt` → `Observation.ObservedAt` is exactly the
-> interval the verdict claims the change happened in — so the query needs no heuristic bounds.
+> tables record as the target; `Observation.Baseline.GeneratedAt .. Observation.ObservedAt` is exactly the
+> interval the verdict claims the change fell in. No heuristic bounds; the whole window is queried in one go.
 >
-> **Facts only, and the gaps are facts too.** Record the actor (UPN / application name), the activity, its
-> result, the event timestamp and the correlation id — never a judgment such as "authorized" or "expected".
-> Where the join cannot be made the entry says so explicitly with a distinct status, because *no event found*
-> and *could not look* must never render as the same thing: singleton types (`organization`,
-> `authorizationPolicy`, `deviceManagementSettings`, …) have no GUID target to join on; a window starting
-> before the workspace's retention is *unknown*, not *unchanged*; ingestion latency means a change observed
-> seconds ago may not be queryable yet; and several events in one window are a list, never a single "who".
+> **Facts only, and the gaps are facts too.** Record the actor (UPN or application display name), activity,
+> result, event timestamp and correlation id — never "authorized" or "expected". Where the join cannot be made
+> the entry says why with a distinct status, because *no event found* and *could not look* must never render
+> the same: singletons and pseudo-ids (`organization`, `onPremisesSynchronization` = tenant GUID,
+> `authorizationPolicy`, `authenticationMethodsPolicy`, `deviceManagement`, `organizationalBranding`,
+> `applePushNotificationCertificate` = Apple ID, the default `roleScopeTags` `"0"`) have no GUID target;
+> a window starting before the table's earliest row is *unknown*, not *unchanged*; ingestion lag means a
+> change observed minutes ago may not be queryable yet — which is why `resource audit` is re-runnable; and
+> several events in one window are a list, never a single "who".
 >
-> **Failure semantics (settled).** The lookup is enrichment and **never fails a run** — in either entry point
-> it warns, records the per-finding status, writes whatever it could answer, and leaves the exit code to the
-> drift comparison alone. This mirrors how a permission error skips a type instead of failing a download.
+> **Failure semantics (settled).** In both entry points the lookup warns, records the per-table and
+> per-finding status, writes whatever it could answer, and leaves the exit code to the drift comparison. A
+> missing grant is detected through `azure.IsPermissionError` and degrades to `query-failed` with the grant
+> named. Only the standalone `resource audit` adds one refusal of its own: exit 2 when *nothing* could be
+> answered (no observation, superseded observation, tenant mismatch, no workspace configured, no table
+> queried at all), because a scripted rerun must notice.
+>
+> **Coverage and routing (settled).** No field says Intune vs Entra; the routing is derived from what each
+> registered handler already declares: `models.DetectAPIType` separates ARM from Graph, and every Graph
+> handler's `RequiredPermissions` decides the table — any `DeviceManagement*` permission → `IntuneAuditLogs`
+> (join on `Properties.TargetObjectIds`); `Policy.Read.All`, `Group.Read.All`, `Agreement.Read.All`,
+> `Organization.Read.All`, `OrganizationalBranding.Read.All`, `OnPremDirectorySynchronization.Read.All` →
+> `AuditLogs` (join on `TargetResources[].id`). ARM types and types not registered in this build are
+> `not-queried` with a reason; `AzureActivity` can be added later behind the same per-finding shape. Both
+> tables' field names are mapped onto **one** event shape and never leak into the artifact.
+>
+> **Where the workspace is configured (settled).** Tenant profiles exist (`<config-dir>/<domain>.yaml`,
+> `internal/config` `keyScopes`), so the workspace is one tenant-scoped, config-only key,
+> `audit-workspace-id`, holding the workspace **id** (GUID) — never a name (resolving one needs a
+> subscription, Reader on its resource group and cross-subscription disambiguation). There is deliberately
+> **no flag and no environment variable**: a value typed for one tenant and forgotten would silently apply to
+> the next, and a wrong workspace does not fail loudly — it returns no rows, which reads as *nobody changed it*.
+>
+> **Decision.** How is attribution enabled in a drift run: by the presence of `audit-workspace-id` in the
+> tenant profile — no flag; unset means off.
+>
+> **Decision.** Is `drift/audit.yaml` written when no workspace is configured: no — the file exists only when
+> a workspace is configured, so *absent file = attribution off* (simplest for the browser; `ClearTree` sweeps
+> an old one on the next drift run anyway). `resource audit` with no workspace refuses (exit 2) naming the key.
+>
+> **Contract.** `drift/audit.yaml` — written by `resource audit` and by `resource drift` when
+> `audit-workspace-id` is set, after `metadata.yaml`, atomically, at the drift root; swept by `ClearTree`:
+> ```yaml
+> version: 1
+> observedAt: <obs.ObservedAt>            # the observation this attribution belongs to
+> baselineGeneratedAt: <obs.Baseline.GeneratedAt>
+> tenant: <obs.Tenant>
+> toolVersion: <version.Tool()>
+> queriedAt: <RFC3339 UTC>
+> workspaceId: <guid>
+> window: { from: <baselineGeneratedAt>, to: <observedAt> }
+> tables:
+>   IntuneAuditLogs: { status: ok | failed, reason: "", earliest: <RFC3339 or ""> }
+>   AuditLogs:       { status: ok | failed, reason: "", earliest: <RFC3339 or ""> }
+> counts: { matched, noEventInWindow, noJoinKey, retentionExceeded, queryFailed, notQueried }
+> findings:
+>   <type>/<name>.yaml:                   # exactly the keys of drift/metadata.yaml findings, every one
+>     status: matched | no-event-in-window | no-join-key | retention-exceeded | query-failed | not-queried
+>     table: IntuneAuditLogs | AuditLogs | ""
+>     reason: ""                          # for query-failed / not-queried / no-join-key / retention-exceeded
+>     events:                             # matched only; newest first; may be several
+>       - { at: <RFC3339>, actor: <UPN or app display name>, actorType: user | application | unknown,
+>           activity: <ActivityDisplayName / OperationName>, result: success | failure | unknown, correlationId: "" }
+> ```
+> Facts only, never a judgment. The browser reads it as data, joins by key, and treats it as outdated unless
+> `observedAt` and `baselineGeneratedAt` equal the observation's. Bytes are deterministic for a fixed query
+> result except `queriedAt`.
+>
+> **Owner.** none beyond the one-line drift-root addition to `../.claude/rules/go-export-safety.md`; every
+> other file is under `go/`. No sequencing with the web side: the browser gates on `observedAt` /
+> `baselineGeneratedAt`, so either side may ship first.
+>
+> **Implementer.** opus — new package, new SDK, new token audience.
 >
 > **Not regeneration-gated.** It touches no `doc-prompt.md` and no per-type template, so no `promptSha256`
-> moves and no documentation regeneration is forced. The drift-analysis template is not hashed either.
->
-> **Coverage (settled).** `IntuneAuditLogs` for the Intune/device-management types plus `AuditLogs` (Entra
-> directory audit) for conditional access, groups, named locations and the authentication policies. The three
-> ARM types are out of scope for this entry and report their status as not queried; `AzureActivity` can be
-> added later behind the same per-finding shape.
->
-> **Where the workspace is configured (settled), and the ordering that follows.** The workspace is a
-> **per-tenant fact**, like the tenant domain itself — not a per-invocation choice — so it is one plain,
-> config-only key in **that tenant's own configuration file**. This entry therefore depends on the
-> per-tenant configuration profiles planned ahead of it (a config directory of `<domain>.yaml` files selected
-> by `--domain`): with profiles, the setting is a single scalar in the file that already describes the
-> tenant; without them it would have to be a domain-keyed map inside a shared file, which is strictly worse
-> and would have to be migrated afterwards. **Do not implement this entry first.**
->
-> Two consequences are deliberate. The key holds the workspace **id** (the GUID `azquery` queries by; a full
-> ARM resource id may be accepted as an alternative spelling), never a display name — resolving a name would
-> need a subscription, Reader on the workspace's resource group and disambiguation across subscriptions, a
-> whole second permission surface to save pasting a GUID once per tenant. And there is deliberately **no
-> flag and no `AZURE_RD_*` variable**: both beat the config file in the precedence order, so a value passed or
-> exported for one tenant and forgotten would silently apply to the next — and a wrong workspace does not fail
-> loudly, it returns no matching rows, which reads as *nobody changed it*. Binding the setting to the tenant's
-> own profile makes that mistake unrepresentable.
+> moves. The drift-analysis template (`analyze_drift_template.md`) is not hashed either.
 
 **Plan.**
 
-- Add an `internal/audit` engine (imported by `internal/drift`, keeping the dependency direction that already
-  holds for `drift` → `docs`) that takes an `Observation` plus a workspace id and returns one attribution per
-  finding. Query `IntuneAuditLogs` and `AuditLogs` through `sdk/monitor/query/azquery` (new direct dependency,
-  added with `make deps`) over the observation's window, and map both schemas onto **one** finding-shaped
-  record — the two tables' field names must not leak into the artifact.
-- Route each finding to a table by its `APIType`/resource type, not by trying both: Intune types to
-  `IntuneAuditLogs` (joining `Properties.TargetObjectIds` against the finding's `resourceId`), Entra types to
-  `AuditLogs` (joining `TargetResources[].id`), everything else straight to a stated not-queried status.
-- Batch the lookup: one query per table for the whole finding set (a GUID `in (…)` set), not one query per
-  finding — a drift observation can carry hundreds.
-- Write `drift/audit.yaml` atomically, last, the way `WriteObservation` writes the observation. It is
-  self-describing: a schema `version:` from day one (the field `drift/metadata.yaml` lacks and `index.yaml`
-  learned to need), the workspace queried, the exact window, the tables consulted, the `observedAt` and
-  baseline `generatedAt` it belongs to, and a per-finding status of `matched` / `no-event-in-window` /
-  `no-join-key` / `retention-exceeded` / `query-failed` / `not-queried`.
-- Refuse to attribute a superseded observation: reuse the `docs analyze-drift` preflight rule (baseline
-  `generatedAt` mismatch) and the tenant cross-check, so an audit file can never describe an observation the
-  current baseline has replaced.
-- Expose it twice, over the one engine: a standalone `azure-rd resource audit` that enriches the observation
-  already on disk (re-runnable without re-fetching the tenant — the usual case, since ingestion lags), and a
-  drift run that calls the same engine after comparing. Per the option model established by the
-  configuration entry above, the latter is enabled by a config key, not a flag — it changes what a run
-  produces — while the standalone command remains the explicit, visible entry point. Both honour `--dry-run`
-  by withholding only the write and saying an earlier `audit.yaml` was not refreshed.
-- Add one config-only option, `audit-workspace-id:`, read from the tenant's configuration profile and
-  registered on the tenant-scoped side of the key partition (so it is rejected in a base file). Empty or
-  absent means the lookup is off and every finding's status says so — never a silent no-op. Add it to
-  `config.example.domain.yaml` **empty and commented**, preserving that file's no-op promise.
-- Record the workspace actually queried in `drift/audit.yaml`, so an attribution can always be traced back to
-  the source it came from and a profile mix-up is visible after the fact rather than only at the time.
-- Note the new audience in the auth surface: the workspace token is issued for `api.loganalytics.io`, so the
-  operator needs *Log Analytics Reader* on the workspace, and the dedicated-app path needs the Log Analytics
-  API permission added. Detect a missing permission through `azure.IsPermissionError` and degrade to
-  `query-failed` with a warning naming the grant required.
-- Splice the attribution into `docs analyze-drift`: each finding's section gains the actor and timestamp when
-  one is known, and an explicit "attribution unavailable (<status>)" line when it is not, so the analysis
-  agent can weigh a change against who made it instead of reading it as anonymous.
-- Tests: schema mapping for both tables from recorded fixtures (no network), routing by resource type, the
-  batching query construction, the preflight refusals, every status path including retention and permission
-  failure, determinism of the written bytes for a fixed input, and the dry-run withholding. Cover the
-  off-by-default case (no workspace configured) reporting a stated status rather than an empty result. Extend
-  the drift command's flag-surface test so `--audit` is offered only where honoured.
-- Documentation: a README section on attributing drift (prerequisites — Intune and Entra diagnostic settings
-  shipping to one workspace, the RBAC grant — the two entry points, the profile key that enables it, the
-  artifact and its statuses, and the ephemerality it shares with the rest of the drift tree), plus the
-  output-layout list gaining `drift/audit.yaml`;
-  `CHANGELOG.md` under `[Unreleased]`; and the drift-tree lifecycle rule in
-  `.windsurf/rules/04-security-and-ops.md` naming the new root file as swept, never pruned.
+- **File shape and lifecycle in `internal/drift` (`audit.go`)**, so `docs analyze-drift` can read it without
+  an import cycle: `AuditFileName = "audit.yaml"`, `AuditPath(tenantDir)`, the `Attribution` /
+  `AttributionFinding` / `AttributionEvent` / `TableStatus` / `AttributionCounts` types and the six status
+  constants (yaml tags exactly as in the Contract), `LoadAttribution(tenantDir)` returning a distinct
+  `ErrNoAttribution`, `(a *Attribution) Matches(obs Observation) bool` (observedAt and baseline generatedAt
+  equal), and `WriteAttribution(tenantDir, *Attribution, dryRun) (string, error)` — never clears anything,
+  never creates the tree (an absent `drift/` means no observation), writes atomically; under `dryRun` returns
+  the path and writes nothing.
+- **One atomic-write helper instead of a third copy**: extract the temp-file-in-dir → write → `Chmod 0644` →
+  `Rename` sequence duplicated in `docs.writeMetadata` and `drift.WriteObservation` into an exported
+  `docs.WriteFileAtomic(path string, data []byte) error` (drift already imports docs) and use it in all three
+  places; the existing observation and metadata tests keep passing unchanged.
+- **Extract the currency check** from `analyzePreflight` into exported
+  `drift.CheckCurrent(tenantDir, expectDomain string) (Observation, docs.Metadata, error)`: `LoadObservation`
+  → `docs.LoadExportMetadata` → both tenant cross-checks (`docs.ErrTenantMismatch`) → `obs.Baseline.GeneratedAt
+  != meta.GeneratedAt` → `ErrObservationSuperseded`. `analyzePreflight` calls it and keeps the marker
+  validation and `verifyPayloads`; an audit file can therefore never describe an observation the current
+  baseline has replaced.
+- **Engine package `internal/audit`** (imports `drift`, `azure`, `handlers`, `models`; imported by
+  `cmd/resource` only — never by `drift`):
+  - `Route(registry, rtype, resourceID) (table string, status string, reason string)` builds the type → table
+    map once from the registry (`models.PermissionScoped.RequiredPermissions()`: any permission with prefix
+    `DeviceManagement` → `IntuneAuditLogs`; the six Entra permissions → `AuditLogs`; `DetectAPIType` ≠ Graph
+    → `not-queried` "ARM resource; AzureActivity is not consulted"; unregistered type → `not-queried` "type
+    not registered in this build"), then applies the join-key guard: an explicit singleton-type set (the
+    types listed in the Notes) and a strict GUID-shape check → `no-join-key` with the reason. Only
+    GUID-shaped ids ever reach a query string, which is also what makes the KQL interpolation safe.
+  - `Querier` interface (`Query(ctx, workspaceID, kql string, from, to *time.Time) (Table, error)`) with the
+    one real implementation over `sdk/monitor/query/azlogs` (`azlogs.NewClient(cred, nil)`,
+    `QueryWorkspace(ctx, id, azlogs.QueryBody{Query, Timespan}, nil)`; the client requests the
+    `https://api.loganalytics.io/.default` audience itself). New direct dependency added with `make deps`
+    (verify the package path and `QueryBody`/`TimeInterval` names at that point — `azquery` is deprecated
+    and must not be used).
+  - Queries, one per table per chunk of ≤ 200 ids over the whole window: `IntuneAuditLogs | where
+    TimeGenerated between (from .. to) | extend P = parse_json(Properties) | mv-expand T = P.TargetObjectIds
+    | where tostring(T) in~ (ids) | project …` and `AuditLogs | … | mv-expand T = TargetResources | where
+    tostring(T.id) in~ (ids) | project …`; ids embedded as a quoted list. Row mapping onto
+    `AttributionEvent`: Intune actor from `Properties.Actor.UPN` (user) else `Properties.Actor.ApplicationName`
+    (application), activity `OperationName`, result `ResultType`; Entra actor from
+    `InitiatedBy.user.userPrincipalName` else `InitiatedBy.app.displayName`, activity `ActivityDisplayName`,
+    result `Result`; results lower-cased to `success | failure | unknown`; `correlationId` from
+    `CorrelationId`. Column names are pinned by the recorded fixtures, not by memory.
+  - Retention, data-driven and permission-free: per table one unbounded `| summarize min(TimeGenerated)`
+    (no `Timespan`) before the event queries; `earliest` recorded per table; when `window.from` precedes it,
+    every finding of that table without an event becomes `retention-exceeded` (reason states both times);
+    a table with no rows at all records `earliest: ""` and the same status with reason "table has no rows".
+  - Status mapping: routed + ≥ 1 event → `matched` (events sorted newest first, then by correlationId);
+    routed, table `ok`, no event → `no-event-in-window` or `retention-exceeded`; table `failed` →
+    `query-failed` with the table's reason (a permission error names the grant: *Log Analytics Reader* on the
+    workspace, and `Data.Read` on the Log Analytics API for a dedicated app); a token that cannot be minted at
+    all marks both tables `failed` and every routable finding `query-failed`. Exactly one entry per
+    observation finding; `counts` tallies the statuses.
+  - `Attribute(ctx, q Querier, registry, obs drift.Observation, opts Options) *drift.Attribution` where
+    `Options{WorkspaceID, ToolVersion, Now, Selection{Types, ResourceIDs, ResourceGroup}}`: findings outside
+    the selection are `not-queried` "outside this run's selection" so the file stays complete; `Now` is
+    injected for tests.
+- **Configuration key** `audit-workspace-id` → `ScopeTenant` in `internal/config/keys.go`, read with
+  `viper.GetString`, no default; validated at load as a GUID (fatal naming the key — a full ARM resource id is
+  not accepted). `config.example.domain.yaml` gains the key **empty and commented** under a new "Audit
+  attribution" heading explaining the grant and the diagnostic-settings prerequisite;
+  `TestConfigExampleDomainIsNoOp` asserts it is unset, `TestConfigExamplesCoverThePartition` passes by
+  construction, and `TestPartitionIsEnforced` gains the case "audit-workspace-id in the base file".
+- **Tenant-dir helper move**: relocate `resolveExportDir` (offline with `--domain`, else authenticate with the
+  profile's credentials and resolve, else the single export) from `cmd/docs/generate_prompt.go` to
+  `cmdutil.ResolveExportDir(ctx, baseOutput, declaredDomain) (tenantDir, expectDomain string, err error)`,
+  collapsing `detectSingleExportDomain` onto the existing `cmdutil.ExportDomains`; the three `docs`
+  subcommands call it unchanged in behaviour.
+- **`resource audit` command** (`cmd/resource/audit.go`, attached in `cmd/resource.go`; the parent's Long
+  text no longer says "all four"): resolves the tenant dir through `cmdutil.ResolveExportDir`, runs
+  `drift.CheckCurrent`, refuses (exit 2) on `ErrNoObservation` / `ErrObservationSuperseded` /
+  `ErrTenantMismatch` / empty `audit-workspace-id`, builds the credential with
+  `azure.NewCredential(client-id, tenant-id)` from the profile (never `runprep.Prepare` — no Graph probe, no
+  dedicated-app prompt), a lazy registry via `handlers.NewRegistry(lazyCred, "", false)` for routing, calls
+  `audit.Attribute`, writes with `drift.WriteAttribution`, prints the per-table status and the status counts,
+  and exits 2 when no table could be queried. Honours the inherited flags: `--type` narrows the attributed
+  findings to those types, `--resource-id` / `--resource-group` filter the finding set (documented: ARM
+  findings are never queried, so `--resource-group` yields an all-`not-queried` file and warns); no
+  `--exit-code`. `--dry-run` runs the queries, reports, withholds the write and says an earlier `audit.yaml`
+  was not refreshed. Extend `TestResourceGroupSharesFlags` and `TestRemovedFlagsAreGone` to include `audit`
+  and to assert it does not offer `--exit-code`.
+- **Drift-run integration** in `cmd/resource/drift.go`: after `WriteObservation` returns (metadata written
+  last), when `audit-workspace-id` is set, attribute `rep.Observation` with `prep.Client.GetCredential()`
+  (the same credential minting a token for the Log Analytics audience), the run's selection as
+  `Options.Selection`, and write `audit.yaml`; warn per failed table; the exit code stays the comparison's.
+  Unset key → one info line, no file. Under `--dry-run` query and report, withhold the write, note the stale
+  file. Update the command's Long text.
+- **Prompt splice** in `internal/drift` (`analyzeprompt*.go`, `analyze_drift_template.md` — not hashed, not
+  regeneration-gated): `GenerateAnalyzePrompt` loads `audit.yaml` via `LoadAttribution` and uses it only when
+  `Matches(obs)`; the `observation` block gains `- Attribution: <workspace, queriedAt, per-table status,
+  counts>` or `- Attribution: none (no drift/audit.yaml — configure audit-workspace-id or run 'azure-rd
+  resource audit')` or `… outdated (belongs to observation <observedAt>)`, plus the ingestion-lag caveat;
+  `renderFinding` emits `- Changed by: <actor> (<actorType>) at <at> — <activity>, <result>, correlation
+  <id>` per event (newest first) or `- Attribution unavailable (<status>: <reason>)`; step 2 gains a short
+  2b' note (an attributed actor is a fact about *who*, never proof of intent; several events are listed, judge
+  the latest; absence is not evidence); the ground rules add `drift/audit.yaml` to the never-touch list.
+- **Tests, no network**: recorded response fixtures for both table schemas (row → event mapping, actor
+  precedence, result normalisation); routing of **every registered type** through the real registry
+  (each lands on exactly one of the two tables or `not-queried`) plus the singleton/pseudo-id → `no-join-key`
+  cases; chunking (201 ids → two queries, ids only GUID-shaped); every status path including retention
+  (earliest after `window.from`, empty table) and permission failure (a fake `Querier` returning an
+  `*azcore.ResponseError` 403 → `query-failed` naming the grant, token failure → both tables failed); the
+  selection filter producing `not-queried`; `CheckCurrent` refusals; `WriteAttribution` writing after the
+  observation and never under dry-run; byte determinism for a fixed fixture and injected `Now`;
+  `LoadAttribution`/`Matches` staleness; the prompt splice with present, absent and outdated files
+  (deterministic output); the config key partition and the example file's no-op promise; the flag-surface
+  tests above.
+- **Documentation** (written at *done*): README — new `resource audit` section (prerequisites: Intune and
+  Entra diagnostic settings shipping `IntuneAuditLogs` / `AuditLogs` to one workspace, *Log Analytics
+  Reader* on it, the profile key; flags honoured; the artifact and its statuses; re-runnability and
+  ingestion lag; exit codes), `resource drift` (enabled by the key, written after the observation),
+  `docs analyze-drift` (the spliced lines), Authentication (third audience `api.loganalytics.io`; the
+  app-registration script adds the Log Analytics API delegated permission `Data.Read`), Configuration
+  partition table (`audit-workspace-id` tenant-scoped), Output layout tree (`drift/audit.yaml`, swept);
+  `CHANGELOG.md` under `[Unreleased]`; the drift-root file lists in `.windsurf/rules/04-security-and-ops.md`
+  and `../.claude/rules/go-export-safety.md` naming `audit.yaml` as swept, never pruned.
 
 ## Parked ideas
 
