@@ -43,8 +43,9 @@ commits `main` takes directly are a changelog close and the release stamp.
   **no README or changelog yet**; stop so the user can verify. By default this runs the agent pipeline for
   one side.
 - `implement pair go N web M` → `/implement-pair`: Opus plan review, one checkpoint with the user, two
-  Sonnet implementers in parallel, Opus review, two Sonnet QA agents. The session commits per project;
-  **agents never run git**.
+  Sonnet implementers in parallel (build and tests locally), a push with CI as the quality authority, Opus
+  review, two Sonnet fixers for findings and red pipelines. The session commits per project and waits for
+  CI; **agents never run git or lint**.
 - `item N is done` / `drop item N` → `/item-done`: **now** write the project's `README.md` and
   `CHANGELOG.md` (from the entry, the diff and the reports), archive the entry to
   `.claude/archive/<project>/` (kept forever, never auto-loaded — `/archive` lists and shows them),
@@ -67,9 +68,14 @@ concerns and are edited by hand only when the user asks.
 - `make branch-ready-go`, `make branch-ready-web`, `make branch-ready` — each refuses while its own folder has
   uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`
   (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not
-  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, every entry archived
-  as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on any failed check. **Commit first,
-  then run**; fix, commit, rerun. Archiving done entries and running the gate is `/close-branch`.
+  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, Conventional
+  Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on
+  any failed check. **Commit first, then run**; fix, commit, rerun. The `-report` variants
+  (`make branch-ready-report-go` / `-web`) run the same checks without the pipeline.
+- **CI is the quality authority.** The `branch-ready` workflow runs the pipelines (`ci-go`, `ci-web`) on
+  every push and the branch reports (`branch-ready-go`, `branch-ready-web`) on the pull request; branch
+  protection requires all four. Locally: implementers run build and tests before anything is committed, no
+  agent runs lint, and `/close-branch` runs the report targets, pushes and waits for CI to be green.
 - `/pull-request` — after `/close-branch`: builds the title (Conventional Commits) and the description
   from the template, shows both for editing, pushes, creates the PR with `gh`, links `#N` back into the
   changelog entries and the archive files. Merging is done on GitHub (squash).
