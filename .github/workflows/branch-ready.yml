@@ -33,3 +33,24 @@ jobs:
         env:
           RELEASE_BRANCH: ${{ github.base_ref }}
         run: make branch-ready-go
+
+  web:
+    name: branch-ready-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/package.json
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: make branch-ready-web
+        env:
+          RELEASE_BRANCH: ${{ github.base_ref }}
+        run: make branch-ready-web

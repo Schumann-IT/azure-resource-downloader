@@ -27,13 +27,13 @@ the only layer that actually gates.
 
 **Plan.**
 
-- Add a job `web` with `name: branch-ready-web` to `.github/workflows/branch-ready.yml` once the Go entry has
+- ~~Add a job `web` with `name: branch-ready-web` to `.github/workflows/branch-ready.yml` once the Go entry has
   created it. It uses the same workflow and the same `pull_request` trigger on `main`, with no `paths:`
   filter. The job runs `actions/checkout` with `ref: ${{ github.head_ref }}` and `fetch-depth: 0`,
   `actions/setup-node` with `node-version-file: web/package.json`, `cache: npm` and
   `cache-dependency-path: web/package-lock.json`, and `npm ci` with `working-directory: web`. Its last step
   runs `make branch-ready-web` from the repository root with `RELEASE_BRANCH: ${{ github.base_ref }}` in the
-  step's `env`.
+  step's `env`.~~
 - Confirm in the runner that the gate needs no script change. `npm ci` must write only the gitignored
   `node_modules/`. `public/app.css` is gitignored and built after the clean-tree preflight.
   `test/readiness-git.spec.ts` sets its own git identity and `-b main`, so it runs on a bare runner. The
