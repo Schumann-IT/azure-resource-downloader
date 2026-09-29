@@ -56,7 +56,7 @@ function normalise(value: string): string {
 // wrap it in. Anything else returns null and is left alone: an unexpected value
 // must render as plain text, never as a silently wrong icon.
 export function severityOf(value: string): Severity | null;
-export function severityOf(value: string, set: ReadonlySet<string>): string | null;
+export function severityOf(value: string, set: ReadonlySet<string>): Severity | DriftSeverity | null;
 export function severityOf(
   value: string,
   set: ReadonlySet<string> = KNOWN,
@@ -74,8 +74,8 @@ export function verdictOf(value: string): Verdict | null {
 // Tags every findings table in `tokens` with `.findings`, and each of its body
 // rows (and that row's severity cell) with `data-severity` from the set that
 // belongs to the table kind: the drift set when a Verdict column is present,
-// the summary's otherwise. Mutates in place,
-// which is how markdown-it core rules work.
+// the summary's otherwise. Mutates in place, which is how markdown-it core rules
+// work.
 export function applyFindingsTable(tokens: any[]): void {
   for (let i = 0; i < tokens.length; i++) {
     if (tokens[i].type !== 'table_open') continue;
