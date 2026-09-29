@@ -115,7 +115,8 @@ azure-resource-downloader/
 ```
 
 Per-project rules for editors and AI assistants live in `go/.windsurf/rules/` and `web/.windsurf/rules/`;
-they apply only to their own folder.
+they apply only to their own folder. Claude Code reads the same rules from `CLAUDE.md` (root, `go/`, `web/`),
+the path-scoped files in `.claude/rules/` and the procedures in `.claude/skills/`; the two sets are kept in step.
 
 ## Development workflow
 
