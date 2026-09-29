@@ -60,26 +60,26 @@ table gets, so a reader is not left guessing why `high` rows carry an icon and `
 
 **Plan.**
 
-- `src/docs/findings-table.ts`: add `DRIFT_SEVERITIES = ['high', 'medium', 'low', 'info'] as const` and its
+- ~~`src/docs/findings-table.ts`: add `DRIFT_SEVERITIES = ['high', 'medium', 'low', 'info'] as const` and its
   type beside `SEVERITIES`; make the severity normaliser take the closed set to check against, and have
   `applyFindingsTable` decide the table kind (Verdict column present or not) **before** tagging rows, so
   `annotateRows` gets the drift set for a `.findings-drift` table and the summary set otherwise. Row and
   cell attributes (`data-severity`, `title`) keep today's shape; a value outside the table's own set stays
-  untagged plain text. Update the file's header and exported-function comments to name both sets.
-- `src/styles.css`: scoped under `.findings.findings-drift` (so it outranks the summary rules), set
+  untagged plain text. Update the file's header and exported-function comments to name both sets.~~
+- ~~`src/styles.css`: scoped under `.findings.findings-drift` (so it outranks the summary rules), set
   `--sev-color` / `--sev-icon` for `high`, `medium`, `low` and `info` per the mapping in the Notes, reusing
   the summary's SVGs and hues for the first three and adding one neutral icon for `info`; add the matching
   dark-mode lifts in the existing `prefers-color-scheme: dark` block. Without these rules a tagged `low` or
   `info` cell would lose its word to the `text-indent` and draw no icon — the CSS is not optional. Update the
-  drift-table header comment to name the severity set.
-- `test/docs.e2e.spec.ts`, the drift index case: extend the `DRIFT_INDEX` fixture with a `low` row, an `info`
+  drift-table header comment to name the severity set.~~
+- ~~`test/docs.e2e.spec.ts`, the drift index case: extend the `DRIFT_INDEX` fixture with a `low` row, an `info`
   inventory row (no link, "inventory change — not analyzed") and a `critical` row, and assert
   `<tr data-severity="…">` plus `<td data-severity="…" title="…">` for `high`, `medium`, `low` and `info`,
-  and that `critical` stays untagged in the drift table; keep the existing `medium | shifted` row working.
-- `test/docs.e2e.spec.ts`, the summary Findings case: add a `low` row to the summary fixture and assert it
-  stays untagged (the summary set stays closed).
-- `test/styles-build.spec.ts`: assert the compiled CSS carries `.findings-drift` rules with
-  `[data-severity="low"]` and `[data-severity="info"]`.
+  and that `critical` stays untagged in the drift table; keep the existing `medium | shifted` row working.~~
+- ~~`test/docs.e2e.spec.ts`, the summary Findings case: add a `low` row to the summary fixture and assert it
+  stays untagged (the summary set stays closed).~~
+- ~~`test/styles-build.spec.ts`: assert the compiled CSS carries `.findings-drift` rules with
+  `[data-severity="low"]` and `[data-severity="info"]`.~~
 - `CHANGELOG.md` under `[Unreleased]` → `### Fixed`.
 
 ## Standing decisions

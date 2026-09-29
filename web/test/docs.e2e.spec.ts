@@ -222,6 +222,7 @@ The firewall baseline is
 | critical | Two credentials sit in the configuration in cleartext. | 2 | [Policy One](Microsoft.Graph/deviceManagementConfigurationPolicies/p1.md) |
 | medium | Six resources are configured but targeted at nothing. | 6 | — |
 | nonsense | An unrecognised severity must stay plain text. | 1 | — |
+| low | A drift-only severity: the summary's set stays closed. | 1 | — |
 
 ### Recommendations
 
@@ -799,6 +800,10 @@ describe('Docs browser (e2e)', () => {
     // A value outside the closed set is left alone rather than mislabelled.
     expect(res.text).not.toContain('data-severity="nonsense"');
     expect(res.text).toContain('<td>nonsense</td>');
+
+    // The drift vocabulary does not leak into the summary table.
+    expect(res.text).not.toContain('data-severity="low"');
+    expect(res.text).toContain('<td>low</td>');
   });
 
   it('tags declared document sections and leaves undeclared headings unstyled', async () => {
@@ -1493,6 +1498,9 @@ findings: 4
 |---|---|---|---|
 | high | changed | [Changed one](${T}/changed1.md) | Tightened. |
 | medium | shifted | [Changed one](${T}/changed1.md) | Unknown verdict. |
+| low | changed | [Changed one](${T}/changed1.md) | Cosmetic. |
+| critical | changed | [Changed one](${T}/changed1.md) | Not in the drift set. |
+| info | added | Microsoft.Graph/namedLocations/inv | inventory change — not analyzed |
 `;
 
   let app: NestExpressApplication;
@@ -1745,6 +1753,18 @@ findings: 4
     expect(res.text).toContain('<td data-column="verdict">shifted</td>');
     expect(res.text).toContain('<th data-column="resource">Resource</th>');
     expect(res.text).not.toContain('data-verdict="shifted"');
+    // Severity: the drift set (high | medium | low | info) is tagged on row and
+    // cell, and a value outside it (the summary's critical) stays plain text.
+    for (const severity of ['high', 'medium', 'low', 'info']) {
+      expect(res.text).toContain(`<tr data-severity="${severity}">`);
+      expect(res.text).toMatch(
+        new RegExp(
+          `<td data-severity="${severity}" title="${severity}" data-column="severity">${severity}</td>`,
+        ),
+      );
+    }
+    expect(res.text).not.toContain('data-severity="critical"');
+    expect(res.text).toContain('<td data-column="severity">critical</td>');
 
     const landing = await get('/drifted').expect(200);
     expect(landing.text).toContain('href="/drifted/_drift"');

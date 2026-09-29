@@ -85,6 +85,12 @@ describe('Tailwind stylesheet build', () => {
     for (const verdict of ['added', 'changed', 'renamed', 'removed']) {
       expect(css).toMatch(new RegExp(`\\[data-verdict=["']${verdict}["']\\]`));
     }
+    // Severity has its own scale in this table, scoped so it outranks the summary's.
+    for (const severity of ['high', 'medium', 'low', 'info']) {
+      expect(css).toMatch(
+        new RegExp(`\\.findings-drift\\s+\\[data-severity=["']${severity}["']\\]`),
+      );
+    }
   });
 
   it('includes the section identity rules (icons, roles, dark lift)', () => {
