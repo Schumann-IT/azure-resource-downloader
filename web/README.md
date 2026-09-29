@@ -644,7 +644,10 @@ web/
   release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
   grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
   non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed:
-  a branch with no user- or operator-visible effect legitimately has none.
+  a branch with no user- or operator-visible effect legitimately has none. On GitHub the same gate runs as
+  the status check `branch-ready-web` on every pull request into `main` (the `branch-ready` workflow in
+  `.github/workflows/`), and branch protection requires it — see the
+  [monorepo README](../README.md#development-workflow).
 - It **refuses to run while `web/` has uncommitted changes**, before the tests and the build, so the verdict
   describes the commit that will be merged rather than the editor's current state. That preflight is a
   read-only `git status --porcelain`, scoped to `web/` so an unrelated edit in `../go` cannot block it. The

@@ -27,13 +27,6 @@ the only layer that actually gates.
 
 **Plan.**
 
-- ~~Add a job `web` with `name: branch-ready-web` to `.github/workflows/branch-ready.yml` once the Go entry has
-  created it. It uses the same workflow and the same `pull_request` trigger on `main`, with no `paths:`
-  filter. The job runs `actions/checkout` with `ref: ${{ github.head_ref }}` and `fetch-depth: 0`,
-  `actions/setup-node` with `node-version-file: web/package.json`, `cache: npm` and
-  `cache-dependency-path: web/package-lock.json`, and `npm ci` with `working-directory: web`. Its last step
-  runs `make branch-ready-web` from the repository root with `RELEASE_BRANCH: ${{ github.base_ref }}` in the
-  step's `env`.~~
 - Confirm in the runner that the gate needs no script change. `npm ci` must write only the gitignored
   `node_modules/`. `public/app.css` is gitignored and built after the clean-tree preflight.
   `test/readiness-git.spec.ts` sets its own git identity and `-b main`, so it runs on a bare runner. The
@@ -42,18 +35,7 @@ the only layer that actually gates.
   where `branch-ready-web` must report and pass. Only if one of these fails, fix `scripts/lib/git.js` or
   `scripts/lib/branch.js` and cover the fix in `test/readiness-git.spec.ts`.
 - Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
-  `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms. `CHANGELOG.md`
-  under `[Unreleased]`; `README.md` Development conventions naming the `branch-ready-web` status check.
-
-## Fixes
-
-Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
-JavaScript, one `markdown-it` instance, path safety) and none depends on a documentation regeneration. Each
-carries its own e2e or spec case and a `CHANGELOG.md` entry under `[Unreleased]`; purely internal ones say so.
-
-A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry is written. It stays here,
-struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
-deleted, and the remaining entries are renumbered.
+  `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms.
 
 ### 2. One severity vocabulary for the drift index table
 

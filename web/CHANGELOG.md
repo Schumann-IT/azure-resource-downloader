@@ -31,6 +31,15 @@ section of the [repository README](../README.md) for the procedure.
   the pull request title becomes the squash commit on `main`. Outside a git clone
   the new checks skip with a note, so the tooling stays usable there. The app itself is unchanged. See the
   **Development workflow** section of the [repository README](../README.md). (#30)
+- **The branch gate now runs on GitHub.** The `branch-ready` workflow runs `npm run branch-ready` (through
+  `make branch-ready-web`) on every pull request into `main` as the status check `branch-ready-web` — the pull
+  request's branch checked out by name with full history, Node from `package.json`'s `engines`, `npm ci` —
+  so the gate can be required by branch protection instead of relying on someone running it by hand. The
+  workflow has no path filter on purpose: a required check that never reports would block merging for good,
+  and the gate already skips its diff checks when `web/` is unchanged. **Requiring the check is a repository
+  setting made by hand**: branch protection on `main` must require `branch-ready-web` beside
+  `branch-ready-go` and require branches to be up to date before merging. The app itself is unchanged. See
+  the **Development workflow** section of the [repository README](../README.md).
 
 #### Tenant compare
 
