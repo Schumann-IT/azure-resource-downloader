@@ -200,13 +200,17 @@ branch with no user-visible effect legitimately has none. Every check is reporte
 gate **exits non-zero if any check failed**, so it can back a merge check. Details in the
 [go README](go/README.md#development) and the [web README](web/README.md#development-conventions).
 
-The same gates run on GitHub. The `branch-ready` workflow (`.github/workflows/branch-ready.yml`) runs
-`make branch-ready-go` and `make branch-ready-web` on every pull request into `main`, as the status checks
-`branch-ready-go` and `branch-ready-web`. It has no path filter on purpose — a required check that never
-reports would block merging for good, and each gate already skips its diff checks when its folder is
-unchanged. Branch protection on `main` (a repository setting made by hand: Settings → Branches) requires both
-checks and requires the branch to be up to date before merging, so a pull request cannot merge until the gates
-have passed on its head.
+The same gates run on GitHub, in two rhythms. The `branch-ready` workflow (`.github/workflows/branch-ready.yml`)
+runs each project's **pipeline** (`make -C go ci`; `npm test`, `npm run lint`, `npm run build`) as the status
+checks `ci-go` and `ci-web` on **every push**, and each project's **branch report** — the gate without its
+pipeline, `make branch-ready-report-go` / `-web`, seconds — as the status checks `branch-ready-go` and
+`branch-ready-web` on the **pull request**. The report checks are expected to be red while entries are still
+struck out and turn green once the branch is closed: they are the merge gate. A `changes` job runs a
+project's jobs only when the pull request touches that project, its archive, the root `Makefile` or the
+workflow; a skipped job counts as passed, so every check always reports (there is deliberately no path filter
+on the trigger — a required check that never reports would block merging for good). Branch protection on
+`main` requires all four checks and an up-to-date branch, applies to administrators, and merges are squash
+only with the pull request title as the commit subject — repository settings made by hand.
 
 Every commit on the branch follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 — `type(go|web)!: description`, no scope for repository-level commits — and the gate fails on any subject that
