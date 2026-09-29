@@ -3,15 +3,15 @@ title: Enforce the branch gate on GitHub
 project: web
 status: done
 started: 2026-09-29
-finished: 2026-09-29
+finished: 2026-09-30
 branch: feat/github-branch-gate
 pr: 31
 changelog: Unreleased
 ---
-## Enforce the branch gate on GitHub
+### 1. Enforce the branch gate on GitHub
 
-*Partially delivered on this branch: the workflow job and the documentation shipped; the runner verification
-and the branch-protection setting stay in the backlog until the pull request has run and the setting is made.*
+*Closed in two steps: the workflow job and its documentation on the first close, the runner verification and
+the branch-protection setting once pull request #31 had run and the setting was made.*
 
 **Goal.** Make the branch gate unbypassable: a pull request into `main` cannot be merged until
 `make branch-ready-web` has passed on it. Everything local — the start gate, `branch-ready`, the archive
@@ -27,23 +27,19 @@ the only layer that actually gates.
 
 **Plan.**
 
-- ✅ Add a job `web` with `name: branch-ready-web` to `.github/workflows/branch-ready.yml` once the Go entry has
-  created it. It uses the same workflow and the same `pull_request` trigger on `main`, with no `paths:`
-  filter. The job runs `actions/checkout` with `ref: ${{ github.head_ref }}` and `fetch-depth: 0`,
-  `actions/setup-node` with `node-version-file: web/package.json`, `cache: npm` and
-  `cache-dependency-path: web/package-lock.json`, and `npm ci` with `working-directory: web`. Its last step
-  runs `make branch-ready-web` from the repository root with `RELEASE_BRANCH: ${{ github.base_ref }}` in the
-  step's `env`.
-- ✅ `CHANGELOG.md` under `[Unreleased]`; `README.md` Development conventions naming the `branch-ready-web` status
-  check.
-- ↪ Confirm in the runner that the gate needs no script change. `npm ci` must write only the gitignored
+- ✅ Confirm in the runner that the gate needs no script change. `npm ci` must write only the gitignored
   `node_modules/`. `public/app.css` is gitignored and built after the clean-tree preflight.
   `test/readiness-git.spec.ts` sets its own git identity and `-b main`, so it runs on a bare runner. The
   branch check must read the pull request's branch name, and the merge-base must resolve through the
   `origin/$RELEASE_BRANCH` fallback in `scripts/lib/git.js`. Verify this on this branch's own pull request,
   where `branch-ready-web` must report and pass. Only if one of these fails, fix `scripts/lib/git.js` or
   `scripts/lib/branch.js` and cover the fix in `test/readiness-git.spec.ts`.
-  *(still open in the backlog as entry 1)*
-- ↪ Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
+- ✅ Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
   `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms.
-  *(still open in the backlog as entry 1)*
+- ✅ Run the `web` job only when the pull request touches something its gate judges: the `web` job takes
+  `needs: changes` (the `changes` job the Go entry adds) and `if: needs.changes.outputs.web == 'true'`, where
+  `web` is true for any change under `web/`, `.claude/archive/web/`, the root `Makefile` or the workflow file
+  itself. Job-level conditions, not a `paths:` filter on the trigger: a skipped job counts as passed for a
+  required status check and so keeps reporting. Every file under `web/` counts, because the gate also checks
+  the backlog, the changelog, the archive and the commit subjects, not only sources, templates and the lock
+  file.

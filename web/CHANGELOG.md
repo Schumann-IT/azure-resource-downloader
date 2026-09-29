@@ -31,15 +31,18 @@ section of the [repository README](../README.md) for the procedure.
   the pull request title becomes the squash commit on `main`. Outside a git clone
   the new checks skip with a note, so the tooling stays usable there. The app itself is unchanged. See the
   **Development workflow** section of the [repository README](../README.md). (#30)
-- **The branch gate now runs on GitHub.** The `branch-ready` workflow runs `npm run branch-ready` (through
-  `make branch-ready-web`) on every pull request into `main` as the status check `branch-ready-web` — the pull
-  request's branch checked out by name with full history, Node from `package.json`'s `engines`, `npm ci` —
-  so the gate can be required by branch protection instead of relying on someone running it by hand. The
-  workflow has no path filter on purpose: a required check that never reports would block merging for good,
-  and the gate already skips its diff checks when `web/` is unchanged. **Requiring the check is a repository
-  setting made by hand**: branch protection on `main` must require `branch-ready-web` beside
-  `branch-ready-go` and require branches to be up to date before merging. The app itself is unchanged. See
-  the **Development workflow** section of the [repository README](../README.md). (#31)
+- **The branch gate now runs on GitHub, split into two rhythms.** The `branch-ready` workflow runs the
+  pipeline — `npm test`, `npm run lint`, `npm run build` after `npm ci` — as the status check `ci-web` on
+  **every push**, so a red result arrives while the work is still in hand, and the branch report —
+  strikeouts, numbering, changelog, archive, commit subjects, `version` untouched — as the status check
+  `branch-ready-web` on the **pull request**, in seconds, through the new `npm run branch-ready:report` (the
+  gate without its pipeline; `npm run branch-ready` with the pipeline stays for offline use). Each job runs
+  only when the pull request touches `web/`, its archive, the root `Makefile` or the workflow; a skipped job
+  counts as passed, so the checks always report. The pull request's branch is checked out by name with full
+  history and Node comes from `package.json`'s `engines`. **Branch protection on `main` requires `ci-go`,
+  `ci-web`, `branch-ready-go` and `branch-ready-web`, with branches up to date and no bypass for
+  administrators; merges are squash only** — a repository setting, made by hand. The app itself is
+  unchanged. See the **Development workflow** section of the [repository README](../README.md). (#31)
 
 #### Tenant compare
 
