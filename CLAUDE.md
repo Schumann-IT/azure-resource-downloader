@@ -38,22 +38,25 @@ commits `main` takes directly are a changelog close and the release stamp.
 - `promote idea <title>` / `plan idea <title>` / `plan item N` → `/promote-idea`: plan mode seeded with the
   idea, the approved plan becomes the entry, commit. No implementation.
 - `implement item N` → `/implement-item`: the start gate first (`make -C go start-item N=<n>` /
-  `npm --prefix web run start-item -- <n>`), then the plan, striking items and writing the changelog as they
-  land; stop and ask for follow-ups. By default this runs the agent pipeline for one side.
+  `npm --prefix web run start-item -- <n>`), then the plan — code and tests, striking items as they land,
+  **no README or changelog yet**; stop so the user can verify. By default this runs the agent pipeline for
+  one side.
 - `implement pair go N web M` → `/implement-pair`: Opus plan review, one checkpoint with the user, two
   Sonnet implementers in parallel, Opus review, two Sonnet QA agents. The session commits per project;
   **agents never run git**.
-- `item N is done` / `drop item N` → `/item-done`: archive the entry to `.claude/archive/<project>/` (kept
-  forever, never auto-loaded — `/archive` lists and shows them), renumber, commit.
+- `item N is done` / `drop item N` → `/item-done`: **now** write the project's `README.md` and
+  `CHANGELOG.md` (from the entry, the diff and the reports), archive the entry to
+  `.claude/archive/<project>/` (kept forever, never auto-loaded — `/archive` lists and shows them),
+  renumber, commit all of it together.
 
-Three things travel with the code **in the same commit**, never as a follow-up:
+What travels with what:
 
-1. **`CHANGELOG.md`** of the project — every user- or operator-visible effect gets an entry under
-   `## [Unreleased]`; purely internal changes and tests get none. Format and grouping: `.claude/rules/changelog.md`.
-2. **`NEXT-ITERATIONS.md`** of the project — a delivered plan item is **struck out** (`~~…~~`), never deleted,
-   while the branch is open; a done entry is archived, not deleted. Lifecycle: `.claude/rules/next-iterations.md`.
-3. **`README.md`** of the project — routes, flags, settings, environment variables, scripts and supported types
-   are documented there, not in the changelog.
+1. **Implementation** = code, tests and the **struck-out** plan bullets in `NEXT-ITERATIONS.md` (`~~…~~`,
+   never deleted). Nothing else. Lifecycle: `.claude/rules/next-iterations.md`.
+2. **Done** = `CHANGELOG.md` (every user- or operator-visible effect under `## [Unreleased]`; internal
+   changes and tests get none — `.claude/rules/changelog.md`) + `README.md` (routes, flags, settings,
+   environment variables, scripts, supported types: the single source of truth) + the archive file, in one
+   commit. The gate refuses an archived entry whose changelog did not grow.
 
 Do **not** touch versions: `web/package.json`'s `version` and the changelog version headings are release
 concerns and are edited by hand only when the user asks.

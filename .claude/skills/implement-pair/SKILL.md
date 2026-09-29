@@ -61,10 +61,12 @@ its project, entry number, the findings for its side (own + cross-side marked fo
   (skip when the diff is empty).
 
 ## 7. Final report, then stop
-Per side: entry title, commit SHAs, bullets struck/open, review verdict, lint state, tests / build / race,
-user actions still owed (from the plan review), follow-ups added to the entry. End with:
-"Next: `item N is done` and `/close-branch` when you are ready." Do **not** archive, do not run
-`branch-ready`, do not merge or push.
+Per side: entry title, commit SHAs, bullets struck/open, **Surface changes** and **Deferred to done** from
+the implementer's report (verbatim — the done step writes `README.md` and `CHANGELOG.md` from them), review
+verdict, lint state, tests / build / race, user actions still owed (from the plan review), follow-ups added
+to the entry. End with: "Verify the work; then `item N is done` writes the README and changelog and
+archives the entry, and `/close-branch` runs the gate." Do **not** write documentation, do not archive, do
+not run `branch-ready`, do not merge or push.
 
 Single side (`go N` or `web M` alone, or `/implement-item N`): the same steps with one implementer and one
 QA agent; the plan review's other-side sections read `n/a`.

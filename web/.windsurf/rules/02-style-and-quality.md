@@ -109,10 +109,11 @@ environment variables, scripts, layout or the docs-root contract change. Deliber
 `NEXT-ITERATIONS.md`. Do not create additional Markdown files here.
 
 ## Changelog: update it with every change
-`CHANGELOG.md` is part of the change, not a follow-up. **Every** change that a user or operator can
-notice — routes, views, discovery/rendering behaviour, environment variables, scripts, dependencies,
-security boundaries, bug fixes — gets an entry in the same commit/edit, before you report the work as
-done. Purely internal edits that change no observable behaviour (a rename, a comment, a test-only
+`CHANGELOG.md` is part of the change, not something left to a release. **Every** change that a user or
+operator can notice — routes, views, discovery/rendering behaviour, environment variables, scripts,
+dependencies, security boundaries, bug fixes — gets an entry, written when the backlog entry is declared
+done (`item N is done`, see `06-next-iterations.md`): after the work has been verified, from the entry, the
+diff and the implementation notes, in the same commit as the entry's archive file. Purely internal edits that change no observable behaviour (a rename, a comment, a test-only
 addition) do not need one.
 
 Rules for entries:

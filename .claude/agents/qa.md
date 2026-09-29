@@ -41,6 +41,7 @@ it), and the base commit sha.
    A finding that breaks a test is reverted and reported. A **pre-existing** failing test → stop, Failure
    Handling Report (skill preloaded), `Status: blocked`.
 4. Every command runs from the repository root; **no git writes** (hook-enforced). The main session commits.
+   Never edit `README.md` or `CHANGELOG.md`: documentation is written when the user declares the item done.
 
 ## Report (fixed shape)
 ```

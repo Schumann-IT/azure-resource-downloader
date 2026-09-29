@@ -11,9 +11,9 @@ sanctioned Markdown file.
 |---|---|
 | anything that is **not** one of the phrases below (an idea, "add", "refine", "assess", a follow-up) | edit `NEXT-ITERATIONS.md` only — a new parked idea, a refinement, a follow-up bullet. **No code.** A one-line bug fix is a tiny entry (title, one-line goal, one plan bullet), not an exemption. |
 | `promote idea <title>` / `plan idea <title>` / `plan item N` | the promotion flow below (`/promote-idea`). Ends with a committed entry, never with code. |
-| `implement item N` | the start gate first — `make start-item N=<n>` in `go/`, `npm run start-item -- <n>` in `web/` — and refuse if it fails; then implement the plan bullet by bullet, striking each as it lands with its `CHANGELOG.md` entry in the same edit (`/implement-item`, which runs the agent pipeline below for one side; `implement item N inline` does it in the session). When the plan is delivered, **stop and ask for follow-ups**. |
+| `implement item N` | the start gate first — `make start-item N=<n>` in `go/`, `npm run start-item -- <n>` in `web/` — and refuse if it fails; then implement the plan bullet by bullet — code and tests, striking each bullet as it lands; **no `README.md` or `CHANGELOG.md`** yet (`/implement-item`, which runs the agent pipeline below for one side; `implement item N inline` does it in the session). When the plan is delivered, **stop**: the user verifies the work by hand and asks for follow-ups. |
 | `implement pair go N web M` (or one side) | `/implement-pair`: an Opus plan review of both entries (shared contract, naming, sequencing, one owner per file outside `go/` and `web/`), **one checkpoint** where the user approves the proposed refinements, then two Sonnet implementers in parallel, an Opus review of the diffs against the plans, and two Sonnet QA agents in parallel. The main session commits per project after implementation and after QA; **agents never run git** (a hook blocks it). Ends with a report; `item N is done` stays the user's call. |
-| `item N is done` | archive the entry (`/item-done`): move it — or, for a partially delivered entry, its struck bullets — to `.claude/archive/<project>/<finished-date>-<slug>.md`, renumber the rest `1..N`, commit. |
+| `item N is done` | close the entry (`/item-done`): **now** write the project's `README.md` and `CHANGELOG.md` from the plan, the diff and the implementation reports, then move the entry — or, for a partially delivered entry, its struck bullets — to `.claude/archive/<project>/<finished-date>-<slug>.md`, renumber the rest `1..N`, commit all of it together. |
 | `drop item N` | archive it with `status: dropped`, `changelog: none` and a one-line reason (`/item-done`). |
 | close the branch / release | `/close-branch`, `/release`. |
 
@@ -36,8 +36,12 @@ constrain ideas without being work items.
 ## Lifecycle
 - **Committed before implemented.** The start gate reads entry N from `HEAD`, not from the working copy.
 - **Strike out what ships; do not delete it.** Wrap delivered plan items in `~~…~~`, and the title once the
-  whole Plan is delivered. The `CHANGELOG.md` entry is part of the same edit. Follow-ups are new, unstruck
-  bullets on the same entry, or a new entry.
+  whole Plan is delivered. Follow-ups are new, unstruck bullets on the same entry, or a new entry.
+- **Documentation is written at done, not while implementing.** Implementation produces code, tests and
+  struck bullets; `README.md` and `CHANGELOG.md` are written by `item N is done`, after the user has
+  verified the work, from the entry (why), the diff (what) and the implementation reports (operator-visible
+  effects) — and committed together with the archive, which is what the branch gate checks. Documentation-
+  only bullets stay unstruck until then. Within a branch the README may trail the code; `main` never sees it.
 - **Done means archived, not deleted.** `item N is done` moves the entry to
   `.claude/archive/<project>/<finished-date>-<slug>.md` with a frontmatter — `title`, `project`, `status:
   done|dropped`, `started`, `finished`, `branch`, `changelog: Unreleased` (stamped to the version by the

@@ -1,6 +1,6 @@
 ---
 name: close-branch
-description: Close a feature or fix branch — make sure every finished entry is archived (nothing struck out left), confirm the changelog and README, commit, then run the branch-ready gate for each project the branch touched.
+description: Close a feature or fix branch — run the done step (README, CHANGELOG, archive) for every entry with struck bullets, confirm nothing is left struck out, commit, then run the branch-ready gate for each project the branch touched.
 disable-model-invocation: true
 ---
 
@@ -11,12 +11,14 @@ Run only when the user asks. Branch: `$ARGUMENTS` (or the current one). Follow t
 
 1. `git status` must be clean and the branch must not be `main`. Determine which projects the branch touched:
    `git diff --stat main...HEAD -- go web`.
-2. For each touched project's `NEXT-ITERATIONS.md`: nothing may be left struck out. A fully struck entry is
-   archived with `/item-done N`; a partially delivered entry has its struck bullets archived the same way and
-   keeps its open ones. Never delete an entry. Confirm the remaining entries are numbered `1..N`.
-   Do not touch parked ideas or standing decisions. Keep the two projects' files independent.
+2. For each touched project's `NEXT-ITERATIONS.md`: every entry with struck bullets goes through
+   `/item-done N` now — that step writes the README and changelog from the plan, the diff and the reports,
+   then archives (a fully struck entry whole; a partially delivered one only its struck bullets, keeping the
+   open ones). Ask the user before treating an entry with open code bullets as done. Never delete an entry.
+   Afterwards nothing is struck out and the remaining entries are numbered `1..N`. Do not touch parked ideas
+   or standing decisions. Keep the two projects' files independent.
 3. Confirm `## [Unreleased]` in that project's `CHANGELOG.md` records every user-visible effect of the branch
-   (compare against the diff); confirm `README.md` documents any new command, flag, setting, route or
+   (compare against the diff) and `README.md` documents every new command, flag, setting, route or
    variable. Confirm `web/package.json` `version` and the changelog version headings were not touched.
 4. Commit (`chore(<project>): close branch` or fold into the last feature commit if the user prefers).
 5. From the repository root run `make branch-ready-go` and/or `make branch-ready-web`. Each refuses on a dirty

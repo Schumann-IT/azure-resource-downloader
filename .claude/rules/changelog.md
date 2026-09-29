@@ -6,10 +6,14 @@ paths:
 
 # Changelog policy (both projects)
 
-`CHANGELOG.md` is part of the change, not a follow-up. **Every** change a user or operator can notice —
-commands, flags, settings, routes, views, behaviour, environment variables, scripts, dependencies, security
-boundaries, bug fixes — gets an entry in the same edit, before the work is reported done. Purely internal
-edits (a rename, a comment, a package move, a test-only addition) get none; when in doubt, add one.
+`CHANGELOG.md` is part of the change, not something left to a release. **Every** change a user or operator
+can notice — commands, flags, settings, routes, views, behaviour, environment variables, scripts,
+dependencies, security boundaries, bug fixes — gets an entry under `## [Unreleased]`. It is written **when
+the entry is declared done** (`item N is done`, `/item-done`), after the user has verified the work: from
+the entry's Goal and Notes, the diff and the implementation reports, in the same commit as the entry's
+archive file — never during implementation, and never later than the branch close (the gate refuses an
+archived entry without it). Purely internal edits (a rename, a comment, a package move, a test-only
+addition) get none; when in doubt, add one.
 
 ## Entries
 - Keep a Changelog + SemVer. Place new entries under `## [Unreleased]` in `### Added` / `### Changed` /

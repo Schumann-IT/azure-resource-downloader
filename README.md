@@ -152,30 +152,35 @@ refusal.
 
 ### 2. Implement from the entry
 
-Three things travel with the code in the same commit — none of them is a follow-up:
-
-- **`CHANGELOG.md`** — every user- or operator-visible effect gets an entry under `## [Unreleased]`, written
-  the way a squash-merged branch would read. Purely internal changes get none. Each project's rules spell out
-  the format (`go/.windsurf/rules/02-style-and-quality.md`, `web/.windsurf/rules/02-style-and-quality.md`).
-- **`NEXT-ITERATIONS.md`** — as plan items land, **strike them out** (`~~…~~`) rather than delete them, so a
-  reviewer sees what the branch set out to do beside what the diff does; strike the title once the whole plan
-  is delivered. Follow-ups discovered on the way are new, unstruck plan items or a new entry.
-- **`README.md` of the project** — the single source of truth for what the tool does today; routes, flags,
-  settings, environment variables and scripts are documented there, not in the changelog.
+Implementation is code, tests and the plan: as plan items land, **strike them out** in `NEXT-ITERATIONS.md`
+(`~~…~~`) rather than delete them, so a reviewer sees what the branch set out to do beside what the diff
+does; strike the title once the whole plan is delivered. Follow-ups discovered on the way are new, unstruck
+plan items or a new entry. `README.md` and `CHANGELOG.md` are **not** written at this point — see step 3 —
+so the work can be verified by hand first; documentation-only plan items stay unstruck until then.
 
 Do **not** touch the version: `web/package.json`'s `version` and the changelog's version headings are release
 concerns (step 4). Run the project's own checks as you go — `make -C go check` / `make -C go ci`, or `npm test`,
 `npm run lint` and `npm run build` in `web/`; all of them are read-only and leave the tree as they found it.
 
-### 3. Close the branch: archive what is done, then gate
+### 3. Close the branch: document and archive what is done, then gate
 
-When an entry is done it is **archived, never deleted**: the entry (or, for a partially delivered one, its
-struck plan items) moves with its full text to `.claude/archive/<project>/<finished-date>-<slug>.md`, with a
-frontmatter naming the title, `status: done` (or `dropped`, for an abandoned entry, with a one-line reason),
-the dates, the branch and `changelog: Unreleased` — the release stamps the version later. The remaining
-entries are renumbered `1..N`. The changelog records *what* shipped and *why*; the archive keeps *how*, and
-nothing under it is read unless asked for. Commit, then run the gate for each project the branch touched (or
-`make branch-ready` for both):
+Once the work is verified, an entry is declared done. That is when its documentation is written and it is
+**archived, never deleted**, in one commit:
+
+- **`CHANGELOG.md`** — every user- or operator-visible effect gets an entry under `## [Unreleased]`, written
+  the way a squash-merged branch would read, from the entry's goal, the diff and the implementation notes.
+  Purely internal changes get none. Each project's rules spell out the format
+  (`go/.windsurf/rules/02-style-and-quality.md`, `web/.windsurf/rules/02-style-and-quality.md`).
+- **`README.md` of the project** — the single source of truth for what the tool does today; routes, flags,
+  settings, environment variables and scripts are documented there, not in the changelog.
+- **The archive** — the entry (or, for a partially delivered one, its struck plan items) moves with its full
+  text to `.claude/archive/<project>/<finished-date>-<slug>.md`, with a frontmatter naming the title,
+  `status: done` (or `dropped`, for an abandoned entry, with a one-line reason), the dates, the branch and
+  `changelog: Unreleased` — the release stamps the version later. The remaining entries are renumbered
+  `1..N`. The changelog records *what* shipped and *why*; the archive keeps *how*, and nothing under it is
+  read unless asked for.
+
+Then run the gate for each project the branch touched (or `make branch-ready` for both):
 
 ```bash
 make branch-ready-go     # → make -C go branch-ready

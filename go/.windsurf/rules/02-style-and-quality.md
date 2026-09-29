@@ -113,7 +113,7 @@ globs: **/*.go
 
 ## Changelog Policy
 
-- **Every change must be reflected in `CHANGELOG.md`.** No code, flag, behavior, config, or dependency change is complete until its user-visible effect is recorded — treat the changelog update as part of the change, not a follow-up.
+- **Every change must be reflected in `CHANGELOG.md`.** No code, flag, behavior, config, or dependency change is complete until its user-visible effect is recorded. The entry is written when the backlog entry is declared done (`item N is done`, see `06-next-iterations.md`) — after the work has been verified, from the entry, the diff and the implementation notes, in the same commit as the entry's archive file — never left to a release.
 - Add entries under the `## [Unreleased]` section, in the appropriate Keep a Changelog group: `Added`, `Changed`, `Fixed`, or `Breaking`. Create the group under `Unreleased` if it does not exist yet.
 - Entries describe **behavior and intent** from the user's perspective (what changed and why it matters), not the commit or the files touched. Match the existing prose style: a bolded lead sentence, then the rationale.
 - The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html); a breaking change goes under `Breaking` and drives the next major.

@@ -32,9 +32,12 @@ The base commit sha (the state before implementation), the entries (`go N`, `web
   any root files. Read the changed code in context, not only the hunks.
 - For every **struck** plan bullet: find the evidence in the diff. For every **unstruck** bullet: confirm it
   is really undone. Mismatches go under *Plan vs diff*.
-- `CHANGELOG.md` (`[Unreleased]`, right subsection, no implementation detail, operator action in bold) and
-  `README.md` travelled with the code; tests exist for what changed; the required-coverage rules of the
-  side hold (`web-style.md` → e.g. `path-safety.ts` needs `test/path-safety.spec.ts`).
+- Tests exist for what changed, and the required-coverage rules of the side hold (`web-style.md` → e.g.
+  `path-safety.ts` needs `test/path-safety.spec.ts`).
+- `README.md` and `CHANGELOG.md` are **not** part of this stage: they are written when the user declares
+  the item done. An agent edit to either is a `should` finding ("revert; written at done"). Instead check
+  that the implementer's *Surface changes* section names every operator-visible effect you can see in the
+  diff — a missed effect is a `must` finding, because the done step writes the documentation from it.
 - The non-negotiables: one result per request and facts-only metadata (`go`), path safety / read-only /
   one renderer / no client-side JavaScript / no-restart freshness (`web`), no environment layer, no version
   bump, ledgers (`web/eslint-suppressions.json`, the `gocognit` baseline) untouched, nothing outside the

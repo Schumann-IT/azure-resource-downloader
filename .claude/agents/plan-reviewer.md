@@ -43,7 +43,9 @@ The orchestrator's message names the sides (`go N`, `web M`, or one of them) and
   checkout. The non-owner's bullet becomes "verify/extend the file the other side creates" and runs after.
 - **Bullets no agent can do** (a GitHub setting, a manual consent, a tenant export) → *User actions*,
   left in the plan unstruck.
-- **Missing bullets** for tests, `README.md`, `CHANGELOG.md` (rules: `.claude/rules/changelog.md`).
+- **Missing bullets** for tests. Do **not** propose `README.md` or `CHANGELOG.md` bullets: documentation
+  is written when the user declares the item done, from the plan, the diff and the implementer's report.
+  Existing documentation bullets are fine — the implementer leaves them unstruck for the done step.
 - **Regeneration-gated coupling** (Go templates / `promptSha256`): flag it and name the other
   regeneration-gated entries or ideas that should ride along.
 - **Single side**: the same questions against the codebase, and the contract with the *other* project's

@@ -54,4 +54,5 @@ paths:
 - Doc comment on every exported symbol; explain *why* where a constraint is non-obvious.
 - The only Markdown in `go/` is `README.md`, `CHANGELOG.md`, `NEXT-ITERATIONS.md`. New features and
   commands update `README.md` (usage, flags, settings, supported-types table); never add a new `.md`.
-- Every user-visible change records a `CHANGELOG.md` entry in the same edit (`.claude/rules/changelog.md`).
+- Every user-visible change records a `CHANGELOG.md` entry, written when the entry is declared done
+  (`.claude/rules/changelog.md`).

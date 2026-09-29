@@ -614,8 +614,8 @@ web/
   (`resolveWithinRoot`) with one extension per root; one `markdown-it` instance and one `shiki` highlighter,
   both built at module init; `html: true` stays on; no client-side JavaScript; regenerated files must appear
   without a restart; environment variables are the only configuration and `DOCS_ROOT` the only link to the CLI.
-- Every user- or operator-visible change gets an entry in [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`
-  in the same edit. Released sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `web/vX.Y.Z` tag, with `version`
+- Every user- or operator-visible change gets an entry in [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`,
+  written when its backlog entry is declared done. Released sections are `## [X.Y.Z] - YYYY-MM-DD` matching a `web/vX.Y.Z` tag, with `version`
   in `package.json` kept in step — both edited by hand. `npm run release-ready` only reports whether a release
   can be cut (changelog closed into an undated `## [X.Y.Z]` heading, `package.json` matching, nothing struck out
   in `NEXT-ITERATIONS.md`); branch/working-tree checks, date stamping, tagging and the GitHub release happen from
@@ -629,8 +629,10 @@ web/
   backlog (the working copy does not count) or when it has no outstanding plan item, and otherwise prints the
   entry's Goal and Plan. Exit `2` is a usage error, `1` a refusal.
 - Delivered plan items are **struck through** in `NEXT-ITERATIONS.md` while the branch is open, so it can be
-  reviewed against what its entries set out to do, and the `CHANGELOG.md` entry is written in the same edit.
-  When an entry is done it is **archived, never deleted**: moved with its full plan to
+  reviewed against what its entries set out to do. `README.md` and `CHANGELOG.md` are written when the entry
+  is declared done, after the work has been verified by hand — from the entry, the diff and the
+  implementation notes — in the same commit as the archive. When an entry is done it is **archived, never
+  deleted**: moved with its full plan to
   `../.claude/archive/web/<finished-date>-<slug>.md` (frontmatter: title, status `done` or `dropped`, dates,
   branch, and `changelog: Unreleased` until the release stamps the version), and the remaining entries are
   renumbered. The changelog records what shipped and why; the archive keeps how. Nothing under the archive is
