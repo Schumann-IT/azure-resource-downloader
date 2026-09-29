@@ -20,7 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { readChangelog, readStruckLines, readEntryNumbers } = require('./lib/changelog');
+const { readChangelog, readStruckLines, readEntryNumbers, unconventionalSubjects } = require('./lib/changelog');
 const { readBranchFacts } = require('./lib/branch');
 
 const root = path.resolve(__dirname, '..');
@@ -111,7 +111,7 @@ if (!awaitingRelease) {
   }
 }
 
-// 5–7. Branch checks, read-only git. Skipped outside a clone so the gate stays
+// 5–8. Branch checks, read-only git. Skipped outside a clone so the gate stays
 //      usable there.
 const releaseBranch = process.env.RELEASE_BRANCH ?? 'main';
 const facts = readBranchFacts({ root, releaseBranch, project: 'web' });
@@ -140,7 +140,20 @@ if (!facts.available) {
       );
     }
 
-    // 7. An entry archived as done must be recorded under [Unreleased]. Only
+    // 7. Every commit on the branch follows Conventional Commits (the squash
+    //    merge takes the pull request title, but the branch history is what a
+    //    reviewer reads). Merge commits are skipped.
+    const badSubjects = unconventionalSubjects(facts.subjects);
+    if (badSubjects.length > 0) {
+      fail(
+        'commit subject(s) on this branch do not follow Conventional Commits (type(go|web|release)!: lowercase description, no trailing period):',
+        badSubjects.map((s) => `   ${s}`).join('\n'),
+      );
+    } else {
+      ok('every commit subject on this branch follows Conventional Commits');
+    }
+
+    // 8. An entry archived as done must be recorded under [Unreleased]. Only
     //    files added on the branch count: a later touch of an archive file is
     //    not a "done" event.
     const bad = facts.archived.filter(({ status }) => status !== 'done' && status !== 'dropped').map(({ path: p }) => p);

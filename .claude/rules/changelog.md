@@ -48,3 +48,5 @@ addition) get none; when in doubt, add one.
   archived, the backlog touched, not on `main`, `version` untouched) and exit non-zero on any failure.
 - The release commit also stamps `changelog: X.Y.Z` into every archived entry of that project still marked
   `changelog: Unreleased` — never by hand.
+- When the branch's pull request exists, `/pull-request` appends ` (#N)` to each entry the branch added, so
+  a released changelog links every feature to the pull request that carried its plan.

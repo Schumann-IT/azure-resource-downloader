@@ -18,6 +18,7 @@ function readBranchFacts({ root, releaseBranch = 'main', project }) {
     backlogChanged: null,
     archived: [],
     baseUnreleasedCount: null,
+    subjects: [],
   };
   if (facts.base === null) return facts;
   const changed = (pathspec) => git(['diff', '--quiet', facts.base, 'HEAD', '--', pathspec], { cwd: root }).status !== 0;
@@ -35,6 +36,9 @@ function readBranchFacts({ root, releaseBranch = 'main', project }) {
       path: file,
       status: parseFrontmatter(git(['show', `HEAD:${file}`], { cwd: root }).stdout).status ?? '',
     }));
+  facts.subjects = git(['log', '--no-merges', '--format=%s', `${facts.base}..HEAD`], { cwd: root })
+    .stdout.split('\n')
+    .filter((line) => line !== '');
   const baseChangelog = showFile(root, facts.base, 'CHANGELOG.md');
   facts.baseUnreleasedCount = baseChangelog === null ? 0 : parseChangelog(baseChangelog).unreleasedItems.length;
   return facts;

@@ -25,6 +25,7 @@ const {
   planOpenItems,
   entryNumbers,
   parseFrontmatter,
+  unconventionalSubjects,
 } = changelog;
 
 const BACKLOG = [
@@ -200,6 +201,24 @@ describe('readiness readers', () => {
       expect(parsed.version).toBe('0.1.0');
       expect(parsed.awaitingRelease).toBe(false);
       expect(parseChangelog('## [Unreleased]\n\n## [0.1.0]\n- x\n').unreleasedItems).toEqual([]);
+    });
+
+    it('reports commit subjects that are not Conventional Commits', () => {
+      expect(
+        unconventionalSubjects([
+          'feat(go): add a thing',
+          'fix(web): repair a thing',
+          'chore: tidy',
+          'chore(release): go v0.4.0, web v0.4.0',
+          'feat(go)!: drop the flag',
+          'Feat(go): capitalised type',
+          'feat(api): unknown scope',
+          'feat(go): Trailing period.',
+          'update stuff',
+          'feat: ',
+          'feat(web): x',
+        ]),
+      ).toEqual(['Feat(go): capitalised type', 'feat(api): unknown scope', 'feat(go): Trailing period.', 'update stuff', 'feat: ']);
     });
 
     it('parses a leading frontmatter block and nothing else', () => {

@@ -106,6 +106,16 @@ plan_open_items_in() {
   entry_plan_in | grep -E '^- ' | grep -vE '^- ~~' || true
 }
 
+# Commit subjects on stdin that do not follow Conventional Commits 1.0.0 as this
+# repository applies it: `type(scope)!: description` with type in feat | fix |
+# docs | refactor | test | build | ci | chore | revert, scope `go`, `web` or
+# `release` (or none), a lowercase description and no trailing period. One
+# offending subject per output line; empty when all conform.
+CONVENTIONAL_SUBJECT='^(feat|fix|docs|refactor|test|build|ci|chore|revert)(\((go|web|release)\))?!?: [a-z0-9](.*[^. ])?$'
+unconventional_subjects_in() {
+  grep -vE "$CONVENTIONAL_SUBJECT" || true
+}
+
 # The value of `key:` in a leading `---` frontmatter block on stdin; empty when
 # there is no such block or key. Surrounding double quotes are removed.
 frontmatter_value_in() {

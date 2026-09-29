@@ -21,8 +21,9 @@ on `go/` — `DOCS_ROOT` pointing at an export tree is the only coupling.
 | this file | monorepo layout, workflow, gates, release |
 | `go/CLAUDE.md`, `web/CLAUDE.md` | per-project context, layout, non-negotiables, commands (loaded when working in that folder) |
 | `.claude/rules/*.md` | path-scoped detail: Go style, handlers, export safety; web style; changelog policy; backlog lifecycle |
-| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `implement-pair`, `item-done`, `archive`, `close-branch`, `release` |
-| `.claude/agents/*.md`, `.claude/hooks/` | the pipeline agents (`plan-reviewer`, `implementer`, `impl-reviewer`, `qa`) and the Bash guard they run under; launched only by `/implement-pair` |
+| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `implement-pair`, `item-done`, `archive`, `close-branch`, `pull-request`, `release` |
+| `.claude/agents/*.md`, `.claude/hooks/` | the pipeline agents (`plan-reviewer`, `implementer`, `impl-reviewer`, `qa`) and the Bash guard they run under; launched only by `/implement-pair`. `session-start.sh` reports at startup whether `gh` is logged in |
+| `.github/PULL_REQUEST_TEMPLATE.md` | the pull request description every PR follows; `/pull-request` fills it |
 | `go/.windsurf/rules/`, `web/.windsurf/rules/` | the Windsurf originals these files were migrated from, kept until that subscription ends. When a rule changes, change it in both places. |
 
 ## Development workflow
@@ -69,6 +70,9 @@ concerns and are edited by hand only when the user asks.
   failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, every entry archived
   as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on any failed check. **Commit first,
   then run**; fix, commit, rerun. Archiving done entries and running the gate is `/close-branch`.
+- `/pull-request` — after `/close-branch`: builds the title (Conventional Commits) and the description
+  from the template, shows both for editing, pushes, creates the PR with `gh`, links `#N` back into the
+  changelog entries and the archive files. Merging is done on GitHub (squash).
 - `make release-ready-go`, `make release-ready-web`, `make release-status` — reports. `make release` stamps
   dates and archive versions, commits, tags, pushes and creates GitHub releases; it runs only on `main` with
   a clean tree and only when the user asks — `/release`. Never tag, push or create a release on your own
@@ -96,8 +100,11 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
 - **Secrets.** Never log, print or commit tokens, client secrets, resolved OMA-URI values or `SONAR_TOKEN`.
 - **Agents never commit.** Git belongs to the main session; a subagent reports what should be committed.
   `.claude/hooks/agent-bash-guard.sh` enforces it for the pipeline agents.
-- **Commit messages** follow the existing history: `feat(go): …`, `fix(web): …`, `chore: …`; the release
-  script alone writes `release: go vX.Y.Z, web vX.Y.Z`.
+- **Commit messages** follow Conventional Commits strictly — `.claude/rules/commits.md`: `type(go|web)!:
+  description`, no scope for repository-level commits, `chore(release): …` from the release script only.
+  The branch gate fails on any other subject. Pull request titles obey the same rule (squash merges).
+- **GitHub needs `gh`.** `/pull-request` and `/release` check `gh auth status` first and stop without it;
+  the session-start hook says at startup whether it is logged in.
 
 ## Toolchain
 

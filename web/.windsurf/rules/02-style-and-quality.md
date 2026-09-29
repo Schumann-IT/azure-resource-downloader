@@ -158,3 +158,12 @@ Rules for entries:
   freshness), say explicitly how it is preserved.
 - **Deliberate scope cuts belong in `NEXT-ITERATIONS.md`** and are referenced from the changelog, not
   duplicated into it.
+
+## Commit messages
+Every commit follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification)
+strictly: `type(scope)!: description` with type in `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`,
+`chore`, `revert`; scope `go` or `web` for one project, `release` for the release commit, none for
+repository-level commits; a lowercase, imperative description without a trailing period. The workflow commits
+are `docs(<project>): plan <title>`, `feat|fix(<project>): <title>`, `docs(<project>): close <title>`,
+`chore(release): go vX.Y.Z, web vX.Y.Z`. The branch gate fails on any other subject, and the pull request title
+(the squash commit on `main`) follows the same rule.

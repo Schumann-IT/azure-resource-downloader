@@ -200,8 +200,14 @@ branch with no user-visible effect legitimately has none. Every check is reporte
 gate **exits non-zero if any check failed**, so it can back a merge check. Details in the
 [go README](go/README.md#development) and the [web README](web/README.md#development-conventions).
 
-Merge the branch into `main` once the gate is green. Nothing is tagged or published at this point; `main`
-accumulates `[Unreleased]` entries from every merged branch until someone decides to release. A project whose
+Every commit on the branch follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+— `type(go|web)!: description`, no scope for repository-level commits — and the gate fails on any subject that
+does not. Open the pull request once the gate is green: its title is the squash commit that lands on `main`
+and follows the same rule, and its description follows `.github/PULL_REQUEST_TEMPLATE.md` (summary, backlog
+entries, the changelog lines added, user actions, gate output, and the archived plans). Once the pull request
+exists, its number is appended to the changelog entries it carries (` (#N)`) and recorded in the archive files
+(`pr:`). Merge with squash-and-merge. Nothing is tagged or published at this point; `main` accumulates
+`[Unreleased]` entries from every merged branch until someone decides to release. A project whose
 `[Unreleased]` stays empty is simply never released.
 
 ### 4. Release
@@ -238,7 +244,7 @@ goals run no git at all, and the branch gates run only read-only git.
 
 Then, for every project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto
 that heading (`## [X.Y.Z] - YYYY-MM-DD`), stamps `changelog: X.Y.Z` into every archived entry of that project
-still marked `changelog: Unreleased`, and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog and
+still marked `changelog: Unreleased`, and commits (`chore(release): go vX.Y.Z, web vX.Y.Z`) — the only changelog and
 archive edits any tooling makes — then tags that commit `<project>/vX.Y.Z`, pushes the branch and the tags, and
 creates a GitHub release titled `<project> vX.Y.Z` whose notes are that changelog section. Projects whose
 newest heading is already dated are skipped; an undated heading whose tag already exists is refused.

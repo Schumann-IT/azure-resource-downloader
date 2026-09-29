@@ -36,6 +36,7 @@ implementation by hand before saying this; nothing here changes code.
    started: <date the entry first appeared: git log --reverse -S'<title>' -- <project>/NEXT-ITERATIONS.md>
    finished: <today>
    branch: <current branch>
+   pr: <left out; /pull-request adds it>
    changelog: Unreleased      # done; `none` for dropped
    ---
    ## <title>                  # number dropped
@@ -46,6 +47,6 @@ implementation by hand before saying this; nothing here changes code.
    from an earlier branch), leave the entry with its open bullets in the backlog.
 4. **Update the backlog**: remove the archived entry (or its struck bullets) and renumber the remaining
    entries `1..N` in file order (`web/`: within `## Features` then `## Fixes`).
-5. **Commit** `chore(<project>): close <title>` with the README, the changelog, the archive file and the
+5. **Commit** `docs(<project>): close <title>` with the README, the changelog, the archive file and the
    backlog together — the gate requires an archived entry's changelog line in the same branch. Report the
    archive path. `/close-branch` runs the gate.

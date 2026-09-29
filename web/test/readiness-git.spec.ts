@@ -107,13 +107,14 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     await fsp.writeFile(path.join(root, 'NEXT-ITERATIONS.md'), BACKLOG.replace(/## 2\. ~~Done entry~~[\s\S]*$/, ''));
     await fsp.writeFile(path.join(root, 'CHANGELOG.md'), CHANGELOG.replace('## [Unreleased]\n', '## [Unreleased]\n\n- **Done entry.** Shipped.\n'));
     run(['add', '.']);
-    run(['commit', '-q', '-m', 'done']);
+    run(['commit', '-q', '-m', 'docs(web): close done entry']);
 
     facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
     expect(facts.folderChanged).toBe(true);
     expect(facts.backlogChanged).toBe(true);
     expect(facts.archived).toEqual([{ path: '.claude/archive/web/2026-09-29-done-entry.md', status: 'done' }]);
     expect(facts.baseUnreleasedCount).toBe(0);
+    expect(facts.subjects).toEqual(['docs(web): close done entry']);
   });
 
   it('reports no merge base when the release branch does not exist', () => {

@@ -8,7 +8,8 @@ disable-model-invocation: true
 
 Argument: `$ARGUMENTS` = `go N web M` | `web M go N` | `go N` | `web M`. You are the **orchestrator**: you
 launch the agents defined in `.claude/agents/`, relay their fixed-shape reports, and you alone run git.
-`.claude/rules/next-iterations.md` applies throughout. Every command below runs from the repository root.
+`.claude/rules/next-iterations.md` and `.claude/rules/commits.md` apply throughout. Every command below runs
+from the repository root.
 
 ## 0. Preflight (no agents)
 - Current branch is not `main` (or `RELEASE_BRANCH`); `git status --porcelain -- go web` is empty.
@@ -25,7 +26,7 @@ actions, Open questions. Wait for **go**, amendments, or stop. Do not continue o
 ## 3. Refine and gate (orchestrator)
 - Apply the approved refinements with Edit — the reviewer supplied exact replacement text; keep the entry
   anatomy and numbering; touch nothing but the named bullets. `git diff --stat` must list only
-  `NEXT-ITERATIONS.md` files. Commit per project: `chore(go): refine <title>` / `chore(web): refine <title>`.
+  `NEXT-ITERATIONS.md` files. Commit per project: `docs(go): refine <title>` / `docs(web): refine <title>`.
   Skip when the verdict was `consistent` and the user changed nothing.
 - Start gates: `make -C go start-item N=<n>` and/or `npm --prefix web run start-item -- <m>`. Any ❌ →
   stop and show the gate output verbatim. Keep each gate's printed Goal + Plan.
@@ -49,7 +50,7 @@ Root-file ownership), the sequencing notes, and `BASE`.
 `Agent(subagent_type: "impl-reviewer", name: "impl-review", model: "opus")` with `BASE`, the entries, the
 Contract summary and both implementer reports verbatim.
 - A side `not-ready` → **one** fix loop: `SendMessage(to: "implementer-<side>", <its must-findings plus
-  the cross-side findings marked for it>)`; commit `feat(<side>): <title> — review fixes`; re-run the
+  the cross-side findings marked for it>)`; commit `refactor(<side>): review fixes for <title>`; re-run the
   reviewer once against the new HEAD. Still `not-ready` → stop and show the findings; QA is the user's call.
 
 ## 6. QA in parallel — `qa` (sonnet) ×1–2
@@ -57,7 +58,7 @@ One turn, both: `Agent(subagent_type: "qa", name: "qa-go", model: "sonnet")` and
 its project, entry number, the findings for its side (own + cross-side marked for it) and `BASE`.
 - `blocked` → relay, no commit for that side.
 - `green` → `git diff BASE..HEAD -- web/eslint-suppressions.json go/.golangci.yml` must be empty (a grown
-  ledger is a finding to report, not to commit); commit `feat(<side>): <title> — lint and review fixes`
+  ledger is a finding to report, not to commit); commit `refactor(<side>): review and lint fixes for <title>`
   (skip when the diff is empty).
 
 ## 7. Final report, then stop

@@ -114,7 +114,7 @@ for entry in $pending; do
   done
   subject="$subject${subject:+, }$p v$v"
 done
-git commit -q -m "release: $subject"
+git commit -q -m "chore(release): $subject"
 echo "📝 stamped $today into $(git diff-tree --no-commit-id --name-only -r HEAD | tr '\n' ' ')"
 
 echo "⬆️  Pushing $(git rev-parse --abbrev-ref HEAD)..."

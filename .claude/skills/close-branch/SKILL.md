@@ -20,9 +20,9 @@ Run only when the user asks. Branch: `$ARGUMENTS` (or the current one). Follow t
 3. Confirm `## [Unreleased]` in that project's `CHANGELOG.md` records every user-visible effect of the branch
    (compare against the diff) and `README.md` documents every new command, flag, setting, route or
    variable. Confirm `web/package.json` `version` and the changelog version headings were not touched.
-4. Commit (`chore(<project>): close branch` or fold into the last feature commit if the user prefers).
+4. Commit anything left (`docs(<project>): …`, per `.claude/rules/commits.md`).
 5. From the repository root run `make branch-ready-go` and/or `make branch-ready-web`. Each refuses on a dirty
    folder, runs the pipeline, and checks: no strikeouts, numbering, `[Unreleased]` written, not on `main`,
    the backlog changed on the branch, every entry archived as done grew `[Unreleased]` (web: `version`
    untouched). Exit non-zero on any ❌. Fix, commit, rerun until green. Report the final output verbatim.
-6. Do **not** merge, push or open a pull request unless the user asks; when asked, use `gh`.
+6. Do **not** merge, push or open a pull request here; that is `/pull-request`, on the user's request.

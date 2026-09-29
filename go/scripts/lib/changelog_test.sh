@@ -151,6 +151,11 @@ assert_eq "frontmatter unquotes" "Quoted title" "$(printf '%s\n' "$fm" | frontma
 assert_eq "frontmatter missing key" "" "$(printf '%s\n' "$fm" | frontmatter_value_in branch)"
 assert_eq "no frontmatter block" "" "$(printf 'status: done\n' | frontmatter_value_in status)"
 
+# commit subjects
+subjects=$(printf '%s\n' 'feat(go): add a thing' 'fix(web): repair a thing' 'chore: tidy' 'docs(go): plan the audit entry' 'chore(release): go v0.4.0, web v0.4.0' 'feat(go)!: drop the flag' 'Feat(go): capitalised type' 'feat(api): unknown scope' 'feat(go): Trailing period.' 'update stuff' 'feat: ')
+assert_eq "unconventional subjects" $'Feat(go): capitalised type\nfeat(api): unknown scope\nfeat(go): Trailing period.\nupdate stuff\nfeat: ' "$(printf '%s\n' "$subjects" | unconventional_subjects_in)"
+assert_eq "all conventional" "" "$(printf 'feat(web): x\nrevert: y\n' | unconventional_subjects_in)"
+
 echo ""
 if [[ "$failed" -gt 0 ]]; then
   echo "❌ scripts/lib/changelog.sh: $failed of $((passed + failed)) assertions failed" >&2

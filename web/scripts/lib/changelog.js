@@ -131,6 +131,16 @@ function planOpenItems(section) {
   return entryPlan(section).filter((line) => line.startsWith('- ') && !line.startsWith('- ~~'));
 }
 
+// Conventional Commits 1.0.0 as this repository applies it: `type(scope)!:
+// description` with a fixed type set, scope `go`, `web` or `release` (or none),
+// a lowercase description and no trailing period.
+const CONVENTIONAL_SUBJECT = /^(feat|fix|docs|refactor|test|build|ci|chore|revert)(\((go|web|release)\))?!?: [a-z0-9](.*[^. ])?$/;
+
+// The commit subjects that do not conform; `[]` when all do.
+function unconventionalSubjects(subjects) {
+  return subjects.filter((subject) => !CONVENTIONAL_SUBJECT.test(subject));
+}
+
 // `key: value` pairs of a leading `---` frontmatter block; `{}` when there is no
 // such block or it is unterminated. Surrounding double quotes are removed.
 function parseFrontmatter(text) {
@@ -163,4 +173,5 @@ module.exports = {
   entryPlan,
   planOpenItems,
   parseFrontmatter,
+  unconventionalSubjects,
 };

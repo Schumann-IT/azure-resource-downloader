@@ -92,7 +92,7 @@ else
   fi
 fi
 
-# 4–6. Branch checks, read-only git. Skipped outside a clone so the gate stays
+# 4–7. Branch checks, read-only git. Skipped outside a clone so the gate stays
 #      usable there.
 rb="${RELEASE_BRANCH:-main}"
 if ! command -v git >/dev/null 2>&1 || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -122,7 +122,18 @@ else
       ok "$next changed on this branch"
     fi
 
-    # 6. An entry archived as done must be recorded under [Unreleased]. Only
+    # 6. Every commit on the branch follows Conventional Commits (the squash
+    #    merge takes the pull request title, but the branch history is what a
+    #    reviewer reads). Merge commits are skipped.
+    bad_subjects=$(git log --no-merges --format=%s "$base"..HEAD | unconventional_subjects_in)
+    if [[ -n "$bad_subjects" ]]; then
+      fail "commit subject(s) on this branch do not follow Conventional Commits (type(go|web|release)!: lowercase description, no trailing period):"
+      printf '%s\n' "$bad_subjects" | sed 's|^|   |' >&2
+    else
+      ok "every commit subject on this branch follows Conventional Commits"
+    fi
+
+    # 7. An entry archived as done must be recorded under [Unreleased]. Only
     #    files ADDED on the branch count: a later touch of an archive file is not
     #    a "done" event. Archive file names are <date>-<slug>.md, never with
     #    spaces, so the unquoted loop is safe.
