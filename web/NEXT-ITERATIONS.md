@@ -34,8 +34,8 @@ the only layer that actually gates.
   `origin/$RELEASE_BRANCH` fallback in `scripts/lib/git.js`. Verify this on this branch's own pull request,
   where `branch-ready-web` must report and pass. Only if one of these fails, fix `scripts/lib/git.js` or
   `scripts/lib/branch.js` and cover the fix in `test/readiness-git.spec.ts`.~~
-- Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
-  `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms.
+- ~~Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
+  `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms.~~
 - ~~Run the `web` job only when the pull request touches something its gate judges: the `web` job takes
   `needs: changes` (the `changes` job the Go entry adds) and `if: needs.changes.outputs.web == 'true'`, where
   `web` is true for any change under `web/`, `.claude/archive/web/`, the root `Makefile` or the workflow file
@@ -71,8 +71,8 @@ pipeline.
   `RELEASE_BRANCH: ${{ github.base_ref }}`. The `changes` job and the header are the Go entry's.~~
 - Verify on this branch's pull request: `ci-web` green on push and on the pull request; `branch-ready-web` red
   on the strikeout check only while entries are struck, green after the close.
-- Branch protection on `main` requires `ci-web` and `branch-ready-web` beside the Go checks (by hand). Leave
-  unstruck until the user confirms.
+- ~~Branch protection on `main` requires `ci-web` and `branch-ready-web` beside the Go checks (by hand). Leave
+  unstruck until the user confirms.~~
 - `CHANGELOG.md` under `[Unreleased]` (amending the entry about the GitHub gate); `README.md` Development
   conventions naming `npm run branch-ready:report` and the two CI jobs.
 

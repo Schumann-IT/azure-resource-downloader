@@ -147,9 +147,9 @@ the only layer that actually gates.
   fallback, and `git describe --match 'go/v*'` must find the tags. Verify this on this branch's own pull
   request, where `branch-ready-go` must report and pass. Only if one of these fails, fix
   `scripts/branch-ready.sh` and cover the fix in `scripts/lib/changelog_test.sh`.~~
-- Enable branch protection on `main` requiring the `branch-ready-go` and `branch-ready-web` status checks and
+- ~~Enable branch protection on `main` requiring the `branch-ready-go` and `branch-ready-web` status checks and
   requiring branches to be up to date before merging (the jobs gate the pull request's head, not the merge
-  result). This is a repository setting done by hand; leave the bullet unstruck until the user confirms it.
+  result). This is a repository setting done by hand; leave the bullet unstruck until the user confirms it.~~
 - ~~Run the `go` job only when the pull request touches something its gate judges. A first job `changes`
   (checkout with full history, `git diff --name-only origin/<base>...HEAD`) exposes the outputs `go` and
   `web`; the `go` job takes `needs: changes` and `if: needs.changes.outputs.go == 'true'`, where `go` is true
@@ -194,8 +194,8 @@ the pipeline.
   two rhythms and that branch protection requires `ci-go`, `ci-web`, `branch-ready-go`, `branch-ready-web`.~~
 - Verify on this branch's pull request: `ci-go` green on push and on the pull request; `branch-ready-go` red on
   the strikeout check only while entries are struck, green after the close.
-- Branch protection on `main` requires all four checks (by hand; replaces the two-check setting of the
-  previous entry). Leave unstruck until the user confirms.
+- ~~Branch protection on `main` requires all four checks (by hand; replaces the two-check setting of the
+  previous entry). Leave unstruck until the user confirms.~~
 - `CHANGELOG.md` under `[Unreleased]` (amending the entry about the GitHub gate); `README.md` Development
   section naming `make branch-ready-report` and the two CI jobs; root `README.md` step 3.
 
