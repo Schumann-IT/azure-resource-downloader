@@ -150,14 +150,14 @@ the only layer that actually gates.
 - Enable branch protection on `main` requiring the `branch-ready-go` and `branch-ready-web` status checks and
   requiring branches to be up to date before merging (the jobs gate the pull request's head, not the merge
   result). This is a repository setting done by hand; leave the bullet unstruck until the user confirms it.
-- Run the `go` job only when the pull request touches something its gate judges. A first job `changes`
+- ~~Run the `go` job only when the pull request touches something its gate judges. A first job `changes`
   (checkout with full history, `git diff --name-only origin/<base>...HEAD`) exposes the outputs `go` and
   `web`; the `go` job takes `needs: changes` and `if: needs.changes.outputs.go == 'true'`, where `go` is true
   for any change under `go/`, `.claude/archive/go/`, the root `Makefile` (it defines the gate targets) or the
   workflow file itself. Job-level conditions, not a `paths:` filter on the trigger: a skipped job counts as
   passed for a required status check and so keeps reporting. Sources alone would be too narrow — the gate
   also checks the backlog, the changelog, the archive and the commit subjects — so every file under `go/`
-  counts. Cover the rule with a comment in the workflow naming both lists.
+  counts. Cover the rule with a comment in the workflow naming both lists.~~
 
 ## Parked ideas
 

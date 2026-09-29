@@ -2,9 +2,13 @@ name: branch-ready
 
 # Enforces the branch gate on every pull request into main. The job names are
 # the status checks branch protection requires (branch-ready-go, branch-ready-web).
-# There is deliberately no `paths:` filter: a required check that never reports
-# blocks the merge for good, and each gate skips its diff checks when its folder
-# is unchanged.
+# There is deliberately no `paths:` filter on the trigger: a required check that
+# never reports blocks the merge for good. Instead the `changes` job decides per
+# project whether its gate job runs — a skipped job counts as passed for a
+# required check, so both checks always report. A gate job runs when the pull
+# request touches anything its gate judges, not only sources:
+#   go:  go/**, .claude/archive/go/**, the root Makefile, this workflow
+#   web: web/**, .claude/archive/web/**, the root Makefile, this workflow
 on:
   pull_request:
     branches: [main]
@@ -13,8 +17,34 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          files=$(git diff --name-only "origin/$BASE...HEAD")
+          go=false
+          web=false
+          if printf '%s\n' "$files" | grep -qE '^(go/|\.claude/archive/go/|Makefile$|\.github/workflows/branch-ready\.yml$)'; then go=true; fi
+          if printf '%s\n' "$files" | grep -qE '^(web/|\.claude/archive/web/|Makefile$|\.github/workflows/branch-ready\.yml$)'; then web=true; fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "go=$go web=$web"
+
   go:
     name: branch-ready-go
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +68,8 @@ jobs:
 
   web:
     name: branch-ready-web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
