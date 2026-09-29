@@ -30,6 +30,18 @@ This project is released independently of the documentation browser in `web/`: i
   `make test-scripts`, part of `make check`. Outside a git clone the new checks skip with a note, so the
   tooling stays usable there. See the **Development workflow** section of the
   [repository README](../README.md). (#30)
+- **The branch gate now runs on GitHub, split into two rhythms.** The `branch-ready` workflow runs the
+  pipeline — `make -C go ci`: format, lint, tests, build — as the status check `ci-go` on **every push**, so a
+  red result arrives while the work is still in hand, and the branch report — strikeouts, numbering,
+  changelog, archive, commit subjects — as the status check `branch-ready-go` on the **pull request**, in
+  seconds, through the new `make branch-ready-report` (the gate without its pipeline; `make branch-ready`
+  with the pipeline stays for offline use). Each job runs only when the pull request touches `go/`, its
+  archive, the root `Makefile` or the workflow; a skipped job counts as passed, so the checks always report.
+  The pull request's branch is checked out by name with full history, Go comes from `go.mod` and
+  golangci-lint is pinned to the version used locally. **Branch protection on `main` requires `ci-go`,
+  `ci-web`, `branch-ready-go` and `branch-ready-web`, with branches up to date and no bypass for
+  administrators; merges are squash only** — a repository setting, made by hand. See the **Development
+  workflow** section of the [repository README](../README.md). (#31)
 
 ### Breaking
 

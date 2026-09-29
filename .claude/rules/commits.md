@@ -1,6 +1,8 @@
 # Commit messages (every commit, every skill)
 
-Agents never commit; the session does, and the branch gate checks every subject on the branch. Follow
+Agents never commit — except the pipeline's plan reviewer, which commits only `NEXT-ITERATIONS.md` files
+as `docs(<project>): refine <title>`; everything else the session commits — and the branch gate checks
+every subject on the branch. Follow
 [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification) strictly:
 
 ```

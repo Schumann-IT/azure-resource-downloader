@@ -12,8 +12,8 @@ Merges are squash-and-merge, so the **title becomes the commit on `main`** and m
 
 1. **Preflight, fail fast.** `gh auth status` must succeed — otherwise stop with "run `gh auth login`".
    Branch ≠ `main`; `git status --porcelain` empty; `origin` exists. Base = `git merge-base HEAD main`.
-   If the gates have not run on this commit in this conversation, run `make branch-ready-go` /
-   `-web` for the touched projects now; a ❌ stops here.
+   `/close-branch` must have run on this commit (report green, CI green); otherwise run
+   `make branch-ready-report-go` / `-web` now and check the push run with `gh`; a ❌ stops here.
 2. **Gather the facts** (all read-only): the projects touched (`git diff --stat <base>..HEAD -- go web`);
    the archive files added on the branch (`git diff --name-only --diff-filter=A <base>..HEAD --
    .claude/archive`) and, from their frontmatter, the entries closed; entries still open but advanced
@@ -34,6 +34,7 @@ Merges are squash-and-merge, so the **title becomes the commit on `main`** and m
    "<title>" --body-file <scratchpad file>`. Record the number `N` from the output.
 7. **Link back.** Add `pr: N` to the frontmatter of each archive file added on the branch (after
    `branch:`), and append ` (#N)` to the last line of each changelog bullet the branch added under
-   `[Unreleased]`. Commit `docs: link pull request #N`, push, and confirm the gate still passes with
-   `make branch-ready-<project>` (a doc-only commit; the subject is conventional).
+   `[Unreleased]`. Commit `docs: link pull request #N`, push, then wait for the pull request's checks
+   (`gh pr checks N --watch`): `branch-ready-go` / `branch-ready-web` are the merge gate and must be green,
+   `ci-*` must be green or skipped.
 8. Report the URL, the title, and what was linked. Do not merge; merging is the user's action on GitHub.

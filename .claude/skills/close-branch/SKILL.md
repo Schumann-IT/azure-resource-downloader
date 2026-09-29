@@ -1,6 +1,6 @@
 ---
 name: close-branch
-description: Close a feature or fix branch — run the done step (README, CHANGELOG, archive) for every entry with struck bullets, confirm nothing is left struck out, commit, then run the branch-ready gate for each project the branch touched.
+description: Close a feature or fix branch — run the done step (README, CHANGELOG, archive) for every entry with struck bullets, confirm nothing is left struck out, commit, run the branch report locally, push and wait for the CI pipelines to be green.
 disable-model-invocation: true
 ---
 
@@ -21,8 +21,14 @@ Run only when the user asks. Branch: `$ARGUMENTS` (or the current one). Follow t
    (compare against the diff) and `README.md` documents every new command, flag, setting, route or
    variable. Confirm `web/package.json` `version` and the changelog version headings were not touched.
 4. Commit anything left (`docs(<project>): …`, per `.claude/rules/commits.md`).
-5. From the repository root run `make branch-ready-go` and/or `make branch-ready-web`. Each refuses on a dirty
-   folder, runs the pipeline, and checks: no strikeouts, numbering, `[Unreleased]` written, not on `main`,
-   the backlog changed on the branch, every entry archived as done grew `[Unreleased]` (web: `version`
-   untouched). Exit non-zero on any ❌. Fix, commit, rerun until green. Report the final output verbatim.
-6. Do **not** merge, push or open a pull request here; that is `/pull-request`, on the user's request.
+5. From the repository root run `make branch-ready-report-go` and/or `make branch-ready-report-web`: the
+   clean-tree preflight and the branch report without the pipeline (no strikeouts, numbering, `[Unreleased]`
+   written, not on `main`, the backlog changed on the branch, Conventional Commits, every entry archived as
+   done grew `[Unreleased]`; web: `version` untouched). Exit non-zero on any ❌. Fix, commit, rerun until
+   green. Report the final output verbatim.
+6. Push (`git push -u origin <branch>`) and wait for the push run of the `branch-ready` workflow: `ci-go` and
+   `ci-web` must pass or be skipped. A red pipeline → the fix round of `/implement-pair` stage 6 (fixer agent,
+   commit, push, wait), at most twice; then report. Only when both are green is the branch closed. `gh auth
+   status` must succeed for this; without `gh`, run the full local gates `make branch-ready-go` / `-web`
+   instead and say so.
+7. Do **not** merge or open a pull request here; that is `/pull-request`, on the user's request.

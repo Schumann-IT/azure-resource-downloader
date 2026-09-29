@@ -574,7 +574,8 @@ web/
 
 - Run everything through the npm scripts from this folder (`npm run build`, `npm run start:dev`,
   `npm run start:prod`, `npm test`, `npm run lint`, `npm run lint:fix`, `npm run lint:baseline`,
-  `npm run lint:prune`, `npm run start-item -- <n>`, `npm run branch-ready`, `npm run release-ready`). The Go
+  `npm run lint:prune`, `npm run start-item -- <n>`, `npm run branch-ready`, `npm run branch-ready:report`,
+  `npm run release-ready`). The Go
   `Makefile` in `../go` does not apply here.
 - `eslint.config.mjs` is the single lint truth. `npm run lint` reports and is part of both readiness gates;
   `npm run lint:fix` rewrites files and is deliberately in neither, since a gate must not change the tree.
@@ -644,7 +645,11 @@ web/
   release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
   grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
   non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed:
-  a branch with no user- or operator-visible effect legitimately has none.
+  a branch with no user- or operator-visible effect legitimately has none. On GitHub the pipeline (tests, lint,
+  build) runs as the status check `ci-web` on every push and the report half (`npm run branch-ready:report`:
+  preflight and branch report, no pipeline) as the status check `branch-ready-web` on the pull request (the
+  `branch-ready` workflow in `.github/workflows/`); branch protection requires both — see the
+  [monorepo README](../README.md#development-workflow).
 - It **refuses to run while `web/` has uncommitted changes**, before the tests and the build, so the verdict
   describes the commit that will be merged rather than the editor's current state. That preflight is a
   read-only `git status --porcelain`, scoped to `web/` so an unrelated edit in `../go` cannot block it. The

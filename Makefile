@@ -1,4 +1,5 @@
 .PHONY: help release release-status release-ready-go release-ready-web branch-ready branch-ready-go branch-ready-web \
+	branch-ready-report branch-ready-report-go branch-ready-report-web \
 	sonarqube-start sonarqube-stop sonarqube-clean sonarqube-preflight \
 	sonarqube-analyze sonarqube-analyze-go sonarqube-analyze-web \
 	sonarqube-report sonarqube-report-go sonarqube-report-web
@@ -46,6 +47,19 @@ branch-ready-web:
 
 # Both gates; a branch touching one project only can run just that one.
 branch-ready: branch-ready-go branch-ready-web
+
+# The report half of each gate without its pipeline (clean tree + branch
+# report, seconds). CI runs the pipelines on every push (ci-go, ci-web) and
+# these on the pull request (branch-ready-go, branch-ready-web): together they
+# are the merge gate. Locally, closing a branch runs these once CI is green;
+# the full gates above stay for offline use.
+branch-ready-report-go:
+	@$(MAKE) -C go branch-ready-report
+
+branch-ready-report-web:
+	@npm --prefix web run branch-ready:report
+
+branch-ready-report: branch-ready-report-go branch-ready-report-web
 
 # Readiness of both projects (prerequisites), then check branch + working tree,
 # stamp the date onto every undated version heading, commit, tag, push and
@@ -140,6 +154,7 @@ help:
 	@echo "  make branch-ready-go    - Gate: is a go/ branch ready to ship? (clean tree, ci, entries archived, backlog touched, changelog written, not on main)"
 	@echo "  make branch-ready-web   - Gate: is a web/ branch ready to ship? (same, plus package.json version untouched)"
 	@echo "  make branch-ready       - Both gates"
+	@echo "  make branch-ready-report-go / -web / branch-ready-report - The gates without their pipelines (what CI runs on the pull request)"
 	@echo ""
 	@echo "  make release-ready-go   - Report whether go/ is ready to release (changelog closed, no strikeouts)"
 	@echo "  make release-ready-web  - Report whether web/ is ready to release (same, plus package.json version)"

@@ -1,73 +1,77 @@
 ---
 name: implement-pair
-description: "Implement two backlog entries that ship together (go N and web M) — or a single one — through the agent pipeline: Opus plan review, one refinement checkpoint, parallel Sonnet implementation, Opus implementation review, parallel Sonnet QA. The main session orchestrates and owns git; agents never commit. Triggered by 'implement pair go N web M', 'implement pair go N' or 'implement item N'."
+description: "Implement two backlog entries that ship together (go N and web M) — or a single one — through the agent pipeline: an Opus plan review that refines and commits the backlog (asking the user only for real decisions), parallel Sonnet/Opus implementation, per-side Opus review, parallel Sonnet QA, one push with CI as the authority. The main session orchestrates and owns git. Triggered by 'implement pair go N web M', 'implement pair go N' or 'implement item N'."
 disable-model-invocation: true
 ---
 
 # Implement a pair (or one entry) through the agent pipeline
 
 Argument: `$ARGUMENTS` = `go N web M` | `web M go N` | `go N` | `web M`. You are the **orchestrator**: you
-launch the agents defined in `.claude/agents/`, relay their fixed-shape reports, and you alone run git.
-`.claude/rules/next-iterations.md` and `.claude/rules/commits.md` apply throughout. Every command below runs
-from the repository root.
+launch the agents defined in `.claude/agents/`, relay their fixed-shape reports, ask the user the decisions
+the plan reviewer raises, and run git — the plan reviewer's backlog commits are the only exception.
+`.claude/rules/next-iterations.md` and `.claude/rules/commits.md` apply throughout. Every command below
+runs from the repository root. Single side: the same steps with one agent per stage.
 
 ## 0. Preflight (no agents)
+- `gh auth status` succeeds (CI is the authority; without it stop: "run `gh auth login`").
 - Current branch is not `main` (or `RELEASE_BRANCH`); `git status --porcelain -- go web` is empty.
 - Each named entry exists in its `NEXT-ITERATIONS.md` (working copy). Record the sides and titles.
 
-## 1. Plan review — `plan-reviewer` (opus)
-`Agent(subagent_type: "plan-reviewer", name: "plan-review", model: "opus")` with: the sides (`go N`,
-`web M`), the branch, and "produce the fixed report". Foreground; wait for it.
+## 1. Plan review — `plan-reviewer` (opus), the decision loop
+`Agent(subagent_type: "plan-reviewer", name: "plan-review", model: "opus")` with the sides and the branch.
+- `refined` / `consistent` → confirm with `git log --oneline -3` that its commits touch only
+  `NEXT-ITERATIONS.md` files and carry `docs(<project>): refine …` subjects. Continue.
+- `needs-decision` → one `AskUserQuestion` call, one question per `D<n>`: the reviewer's options with the
+  recommended one first and marked, plus "Stop the pipeline". Every answer a choice → `SendMessage(to:
+  "plan-review", <the answers, verbatim>)` and wait for its next report, which is either another
+  `needs-decision` (ask again, only the new questions) or `refined` / `consistent`. Repeat until a pass
+  raises no decision. Any "stop", or no answer → print the open decisions and **stop**: the pipeline failed
+  by design; the user answers in the backlog and reruns.
+No other checkpoint exists.
 
-## 2. Checkpoint — the only pause
-Show the user the report verbatim: Contract summary, Root-file ownership, Sequencing, Refinements, User
-actions, Open questions. Wait for **go**, amendments, or stop. Do not continue on your own.
+## 2. Gates (orchestrator)
+`make -C go start-item N=<n>` and/or `npm --prefix web run start-item -- <m>`; any ❌ → stop with the output
+verbatim. Read from each entry's Notes: `Implementer` (tier), `Owner` (root files, sequencing).
+`BASE=$(git rev-parse HEAD)`.
 
-## 3. Refine and gate (orchestrator)
-- Apply the approved refinements with Edit — the reviewer supplied exact replacement text; keep the entry
-  anatomy and numbering; touch nothing but the named bullets. `git diff --stat` must list only
-  `NEXT-ITERATIONS.md` files. Commit per project: `docs(go): refine <title>` / `docs(web): refine <title>`.
-  Skip when the verdict was `consistent` and the user changed nothing.
-- Start gates: `make -C go start-item N=<n>` and/or `npm --prefix web run start-item -- <m>`. Any ❌ →
-  stop and show the gate output verbatim. Keep each gate's printed Goal + Plan.
-- `BASE=$(git rev-parse HEAD)`.
+## 3. Implement in parallel — `implementer` ×1–2
+In **one** turn launch both: `Agent(subagent_type: "implementer", name: "implementer-go", model: <the
+entry's Implementer note>)` and `…"implementer-web"…`, each prompt carrying only the project, the entry
+number and `BASE` (the entry holds the rest). If the `Owner` note sequences one side after the other's root
+file, launch the dependent side after the owner's report.
+- `partial` (turn budget) → one `SendMessage(to: "implementer-<side>", "continue, then report")`.
+- `blocked` → relay the Failure Handling Report; commit only a *delivered* other side; stop.
+- `delivered` → commit that side: `git add <project>/ <root files its Owner note lists>` then
+  `feat(<project>): <title>` (`fix(web): …` for an entry under `## Fixes`). `git status --porcelain` must
+  be empty afterwards; anything left is a scope leak — report it, do not commit it. **Do not push.**
 
-## 4. Implement in parallel — `implementer` (sonnet) ×1–2
-In **one** turn launch both (foreground): `Agent(subagent_type: "implementer", name: "implementer-go",
-model: "sonnet")` and `…name: "implementer-web"…`. Each prompt carries: the project, the entry number, the
-gate's Goal + Plan verbatim, the Contract summary verbatim, the root files that side owns (from
-Root-file ownership), the sequencing notes, and `BASE`.
-- If Sequencing makes one side depend on a root file the other side creates, launch the dependent side
-  after the owner's report (or `SendMessage` it the "verify/extend" bullet once the owner is done).
-- `Status: partial` (turn budget) → one `SendMessage(to: "implementer-<side>", "continue, then report")`.
-- `Status: blocked` → relay its Failure Handling Report to the user; commit only a *delivered* other side
-  (below); stop.
-- `Status: delivered` → commit that side: `git add <project>/ <root files it owns>` then
-  `feat(<project>): <title>` (`fix(web): …` for an entry under `## Fixes`). Afterwards `git status
-  --porcelain` must be empty; anything left is a scope leak — report it, do not commit it.
+## 4. Review in parallel — `impl-reviewer` ×1–2 (opus)
+One turn: `Agent(subagent_type: "impl-reviewer", name: "review-go", model: "opus")` and `…"review-web"…`,
+each with its project, entry number, `BASE` and that side's implementer report verbatim.
+- A side `not-ready` → **one** fix loop on that side only: `SendMessage(to: "implementer-<side>", <its
+  must-findings>)`, commit `refactor(<side>): review fixes for <title>`, re-run that side's reviewer once.
+  Still `not-ready` → stop with the findings. The other side proceeds regardless.
 
-## 5. Implementation review — `impl-reviewer` (opus)
-`Agent(subagent_type: "impl-reviewer", name: "impl-review", model: "opus")` with `BASE`, the entries, the
-Contract summary and both implementer reports verbatim.
-- A side `not-ready` → **one** fix loop: `SendMessage(to: "implementer-<side>", <its must-findings plus
-  the cross-side findings marked for it>)`; commit `refactor(<side>): review fixes for <title>`; re-run the
-  reviewer once against the new HEAD. Still `not-ready` → stop and show the findings; QA is the user's call.
+## 5. QA in parallel — `qa` ×1–2 (sonnet)
+One turn: `Agent(subagent_type: "qa", name: "qa-go", model: "sonnet")` and `…"qa-web"…`, each with its
+project, entry number, its side's `should` findings and `BASE`. No git in the agents.
+- Any `blocked` → relay, commit nothing, leave the tree for the user, stop.
+- All `fixed` / `nothing-to-fix` → `git diff BASE..HEAD -- web/eslint-suppressions.json go/.golangci.yml`
+  must be empty and `git status --porcelain` must list only files inside the sides' folders (a grown ledger
+  or a stray file is a finding to report, not to commit). Commit per side that has changes:
+  `refactor(<side>): review and ci fixes for <title>`.
 
-## 6. QA in parallel — `qa` (sonnet) ×1–2
-One turn, both: `Agent(subagent_type: "qa", name: "qa-go", model: "sonnet")` and `…"qa-web"…`, each with
-its project, entry number, the findings for its side (own + cross-side marked for it) and `BASE`.
-- `blocked` → relay, no commit for that side.
-- `green` → `git diff BASE..HEAD -- web/eslint-suppressions.json go/.golangci.yml` must be empty (a grown
-  ledger is a finding to report, not to commit); commit `refactor(<side>): review and lint fixes for <title>`
-  (skip when the diff is empty).
+## 6. Push and CI
+`git push -u origin <branch>`; find the push run (`gh run list --branch <branch> --event push --commit
+$(git rev-parse HEAD) --json databaseId,status,conclusion --limit 1`), wait for it (`gh run watch <id>
+--exit-status`), read the jobs (`gh run view <id> --json jobs`): `ci-go` / `ci-web` must be `success` or
+`skipped`. A failed job → `gh run view <id> --log-failed`, one more QA round on that side with the log
+excerpt, commit, push, wait. Still red → stop with the log.
 
 ## 7. Final report, then stop
 Per side: entry title, commit SHAs, bullets struck/open, **Surface changes** and **Deferred to done** from
 the implementer's report (verbatim — the done step writes `README.md` and `CHANGELOG.md` from them), review
-verdict, lint state, tests / build / race, user actions still owed (from the plan review), follow-ups added
-to the entry. End with: "Verify the work; then `item N is done` writes the README and changelog and
+verdict, QA state, the CI run URL and result, user actions still owed (from the plan review), follow-ups
+added to the entry. End with: "Verify the work; then `item N is done` writes the README and changelog and
 archives the entry, and `/close-branch` runs the gate." Do **not** write documentation, do not archive, do
-not run `branch-ready`, do not merge or push.
-
-Single side (`go N` or `web M` alone, or `/implement-item N`): the same steps with one implementer and one
-QA agent; the plan review's other-side sections read `n/a`.
+not run `branch-ready`, do not merge.

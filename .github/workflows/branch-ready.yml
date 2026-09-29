@@ -1,0 +1,140 @@
+name: branch-ready
+
+# Two rhythms, one file. The pipelines (ci-go, ci-web: format, lint, tests,
+# build) run on every push, so a red result arrives while the work is still in
+# hand. The branch reports (branch-ready-go, branch-ready-web: strikeouts,
+# numbering, changelog, archive, commit subjects) run on the pull request in
+# seconds and are the merge gate; they are expected to be red while entries are
+# still struck and turn green once the branch is closed. Branch protection on
+# main requires all four. Check runs are attached to the commit, so the push
+# runs count on the pull request too.
+#
+# There is deliberately no `paths:` filter on the trigger: a required check that
+# never reports blocks the merge for good. Instead the `changes` job decides per
+# project whether its jobs run — a skipped job counts as passed for a required
+# check, so every check always reports. A project's jobs run when the push or
+# pull request touches anything its gate judges, not only sources:
+#   go:  go/**, .claude/archive/go/**, the root Makefile, this workflow
+#   web: web/**, .claude/archive/web/**, the root Makefile, this workflow
+# A push to main runs both pipelines whatever changed.
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: |
+          if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BASE" ]; then
+            go=true
+            web=true
+          else
+            files=$(git diff --name-only "origin/$BASE...HEAD")
+            go=false
+            web=false
+            if printf '%s\n' "$files" | grep -qE '^(go/|\.claude/archive/go/|Makefile$|\.github/workflows/branch-ready\.yml$)'; then go=true; fi
+            if printf '%s\n' "$files" | grep -qE '^(web/|\.claude/archive/web/|Makefile$|\.github/workflows/branch-ready\.yml$)'; then web=true; fi
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "go=$go web=$web"
+
+  ci-go:
+    name: ci-go
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      # The action runs golangci-lint itself (it does not honour install-only), so
+      # point it at the Go module: that run is the same lint make lint-check performs.
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+          working-directory: go
+      - name: make -C go ci
+        run: make -C go ci
+
+  ci-web:
+    name: ci-web
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/package.json
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: npm test
+        working-directory: web
+        run: npm test
+      - name: npm run lint
+        working-directory: web
+        run: npm run lint
+      - name: npm run build
+        working-directory: web
+        run: npm run build
+
+  branch-ready-go:
+    name: branch-ready-go
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: make branch-ready-report-go
+        env:
+          RELEASE_BRANCH: ${{ github.base_ref }}
+        run: make branch-ready-report-go
+
+  branch-ready-web:
+    name: branch-ready-web
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/package.json
+      - name: make branch-ready-report-web
+        env:
+          RELEASE_BRANCH: ${{ github.base_ref }}
+        run: make branch-ready-report-web

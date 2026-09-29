@@ -1223,6 +1223,7 @@ make test-scripts    # tests for the readers behind the readiness reports and th
 make start-item N=2  # gate: may entry 2 of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)
 make release-ready   # report whether a release can be cut (changes nothing); tag + publish via ../Makefile
 make branch-ready    # gate: clean tree, ci, then is this feature/fix branch ready to ship? (changes nothing)
+make branch-ready-report  # the same gate without the pipeline: what CI runs on the pull request
 ```
 
 ### Linting and the editor
@@ -1305,7 +1306,11 @@ Conventions that CI and review expect:
   grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
   non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed: a
   branch with no user-visible effect legitimately has none. There is no version check — this project's version
-  is the `go/vX.Y.Z` tag, not a file.
+  is the `go/vX.Y.Z` tag, not a file. On GitHub the pipeline (`make ci`) runs as the status check `ci-go` on
+  every push and the report half (`make branch-ready-report`: preflight and branch report, no pipeline) as
+  the status check `branch-ready-go` on the pull request (the `branch-ready` workflow in
+  `.github/workflows/`); branch protection requires both — see the
+  [monorepo README](../README.md#development-workflow).
 - It **refuses to run while `go/` has uncommitted changes**, before `make ci`, so the verdict describes the
   commit that will be merged rather than the editor's current state. That preflight is a read-only
   `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it. The branch

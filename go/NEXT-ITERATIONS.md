@@ -119,32 +119,6 @@ unexplained one.
   `CHANGELOG.md` under `[Unreleased]`; and the drift-tree lifecycle rule in
   `.windsurf/rules/04-security-and-ops.md` naming the new root file as swept, never pruned.
 
-## 2. Enforce the branch gate on GitHub
-
-**Goal.** Make the branch gate unbypassable: a pull request into `main` cannot be merged until
-`make branch-ready-go` has passed on it. Everything local — the start gate, `branch-ready`, the archive
-checks — is a report a `git commit` by hand can walk past; branch protection with a required status check is
-the only layer that actually gates.
-
-> **Scope.** A GitHub Actions workflow at the repository root running `make branch-ready-go` on pull requests
-> that touch `go/` (Go per `go.mod`, golangci-lint v2 pinned, a checkout deep enough for `git merge-base` and
-> `git describe`), and branch protection on `main` requiring it. The web half is the mirror entry in
-> `../web/NEXT-ITERATIONS.md`; one workflow file can carry both jobs. A `pre-commit` hook refusing commits on
-> `main` is deliberately not part of this: the release flow commits on `main`.
->
-> **Not regeneration-gated.**
-
-**Plan.**
-
-- `.github/workflows/branch-ready.yml`: a `go` job on `pull_request` (paths `go/**`, `.claude/archive/go/**`)
-  that checks out with full history, installs the Go version from `go.mod` and golangci-lint v2, and runs
-  `make branch-ready-go` from the repository root with `RELEASE_BRANCH` set to the pull request's base.
-- Verify the gate's clean-tree preflight and merge-base detection behave in the runner (detached HEAD on a
-  merge ref: the branch check must read the head ref, not `HEAD`).
-- Enable branch protection on `main` requiring the job (a repository setting, done by hand; document the
-  setting in the root `README.md` Development workflow).
-- `CHANGELOG.md` under `[Unreleased]`; root `README.md` step 3 naming the status check.
-
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them

@@ -42,9 +42,11 @@ commits `main` takes directly are a changelog close and the release stamp.
   `npm --prefix web run start-item -- <n>`), then the plan — code and tests, striking items as they land,
   **no README or changelog yet**; stop so the user can verify. By default this runs the agent pipeline for
   one side.
-- `implement pair go N web M` → `/implement-pair`: Opus plan review, one checkpoint with the user, two
-  Sonnet implementers in parallel, Opus review, two Sonnet QA agents. The session commits per project;
-  **agents never run git**.
+- `implement pair go N web M` → `/implement-pair`: one Opus plan reviewer refines and commits the backlog
+  (it asks you only for decisions that change what ships, and reviews again after each answer), then per
+  side in parallel: implementer (tier from the entry), Opus reviewer, Sonnet QA. The session commits per
+  project, pushes once after QA and waits for CI. **Agents never push; only the plan reviewer commits, and
+  only the backlog files.**
 - `item N is done` / `drop item N` → `/item-done`: **now** write the project's `README.md` and
   `CHANGELOG.md` (from the entry, the diff and the reports), archive the entry to
   `.claude/archive/<project>/` (kept forever, never auto-loaded — `/archive` lists and shows them),
@@ -67,9 +69,14 @@ concerns and are edited by hand only when the user asks.
 - `make branch-ready-go`, `make branch-ready-web`, `make branch-ready` — each refuses while its own folder has
   uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`
   (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not
-  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, every entry archived
-  as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on any failed check. **Commit first,
-  then run**; fix, commit, rerun. Archiving done entries and running the gate is `/close-branch`.
+  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, Conventional
+  Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on
+  any failed check. **Commit first, then run**; fix, commit, rerun. The `-report` variants
+  (`make branch-ready-report-go` / `-web`) run the same checks without the pipeline.
+- **CI is the quality authority.** The `branch-ready` workflow runs the pipelines (`ci-go`, `ci-web`) on
+  every push and the branch reports (`branch-ready-go`, `branch-ready-web`) on the pull request; branch
+  protection requires all four. Locally: implementers run build and tests before anything is committed, no
+  agent runs lint, and `/close-branch` runs the report targets, pushes and waits for CI to be green.
 - `/pull-request` — after `/close-branch`: builds the title (Conventional Commits) and the description
   from the template, shows both for editing, pushes, creates the PR with `gh`, links `#N` back into the
   changelog entries and the archive files. Merging is done on GitHub (squash).
@@ -98,7 +105,8 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
   Produce a Failure Handling Report with proposed, unapplied patches first (`/test-failure-report`); never
   weaken or delete an assertion to go green, and apply neither option without explicit confirmation.
 - **Secrets.** Never log, print or commit tokens, client secrets, resolved OMA-URI values or `SONAR_TOKEN`.
-- **Agents never commit.** Git belongs to the main session; a subagent reports what should be committed.
+- **Agents never commit** — except the plan reviewer, which commits only `NEXT-ITERATIONS.md` files. Git
+  otherwise belongs to the main session; a subagent reports what should be committed.
   `.claude/hooks/agent-bash-guard.sh` enforces it for the pipeline agents.
 - **Commit messages** follow Conventional Commits strictly — `.claude/rules/commits.md`: `type(go|web)!:
   description`, no scope for repository-level commits, `chore(release): …` from the release script only.
@@ -109,4 +117,5 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
 ## Toolchain
 
 Go per `go/go.mod` (currently 1.26; the READMEs still say 1.24+), Node.js >= 20, Azure CLI (`az login`),
-golangci-lint v2, `gh` for releases. No CI exists: every gate is local.
+golangci-lint v2, `gh` for releases. The `branch-ready` workflow runs both gates on every pull request into
+`main`; branch protection requires them, so the local gates and the CI gate are the same scripts.
