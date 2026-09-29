@@ -45,8 +45,8 @@ used from this folder.
 gates) · `npm run lint:fix`, `npm run lint:baseline`, `npm run lint:prune` (rewrite files; in no gate) ·
 `npm run start-item -- <n>` (gate before implementing entry n) · `npm run branch-ready` (gate) ·
 `npm run release-ready` (report). No Prettier exists; do not reference it. Workflow procedures:
-`/promote-idea`, `/implement-item`, `/item-done`, `/close-branch`; finished entries live in
-`../.claude/archive/web/` (`/archive`).
+`/promote-idea`, `/implement-item`, `/implement-pair` (a go/web pair through the agent pipeline),
+`/item-done`, `/close-branch`; finished entries live in `../.claude/archive/web/` (`/archive`).
 The server resolves `views/` and `public/` from `process.cwd()`, so it runs from `web/`.
 
 ## Non-negotiables

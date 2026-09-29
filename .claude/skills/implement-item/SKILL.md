@@ -1,13 +1,21 @@
 ---
 name: implement-item
-description: Implement a numbered NEXT-ITERATIONS.md entry after its start gate passes, striking plan items and writing the changelog as they land, then stop for follow-ups. Triggered by "implement item N".
+description: "Implement a numbered NEXT-ITERATIONS.md entry after its start gate passes — by default through the agent pipeline (/implement-pair with one side), or inline in this session with 'implement item N inline'. Triggered by 'implement item N'."
 disable-model-invocation: true
 ---
 
 # Implement entry N
 
-Argument: `$ARGUMENTS` = N, optionally prefixed by the project (`go 2`, `web 1`); ask when the project is
-ambiguous. `.claude/rules/next-iterations.md` and the project's `CLAUDE.md` apply.
+Argument: `$ARGUMENTS` = N, optionally prefixed by the project (`go 2`, `web 1`) and optionally followed by
+`inline`; ask when the project is ambiguous. `.claude/rules/next-iterations.md` and the project's
+`CLAUDE.md` apply.
+
+**Default: the agent pipeline.** Follow `.claude/skills/implement-pair/SKILL.md` with the single side
+`<project> N` — plan review, the refinement checkpoint, one implementer, implementation review, one QA
+agent; you orchestrate and commit, agents never do. Use the inline procedure below only when the user says
+`inline` (or when agents are unavailable).
+
+## Inline procedure
 
 1. **Start gate first, and obey it.** `make -C go start-item N=<n>` or `npm --prefix web run start-item -- <n>`
    from the repository root. On ❌ stop and report the reason (on `main` → create a branch; dirty tree → the

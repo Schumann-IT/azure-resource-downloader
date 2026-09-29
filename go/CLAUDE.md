@@ -131,4 +131,5 @@ file > built-in default`. **There is no environment layer** — `viper.Automatic
   zero-config path working.
 
 Procedures: `/new-handler`, `/add-command`, `/add-config-option`; workflow: `/promote-idea`, `/implement-item`,
-`/item-done`, `/close-branch`. Finished entries: `../.claude/archive/go/` (`/archive`).
+`/implement-pair` (a go/web pair through the agent pipeline), `/item-done`, `/close-branch`. Finished
+entries: `../.claude/archive/go/` (`/archive`).

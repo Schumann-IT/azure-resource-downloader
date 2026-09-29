@@ -21,7 +21,8 @@ on `go/` — `DOCS_ROOT` pointing at an export tree is the only coupling.
 | this file | monorepo layout, workflow, gates, release |
 | `go/CLAUDE.md`, `web/CLAUDE.md` | per-project context, layout, non-negotiables, commands (loaded when working in that folder) |
 | `.claude/rules/*.md` | path-scoped detail: Go style, handlers, export safety; web style; changelog policy; backlog lifecycle |
-| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `item-done`, `archive`, `close-branch`, `release` |
+| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `implement-pair`, `item-done`, `archive`, `close-branch`, `release` |
+| `.claude/agents/*.md`, `.claude/hooks/` | the pipeline agents (`plan-reviewer`, `implementer`, `impl-reviewer`, `qa`) and the Bash guard they run under; launched only by `/implement-pair` |
 | `go/.windsurf/rules/`, `web/.windsurf/rules/` | the Windsurf originals these files were migrated from, kept until that subscription ends. When a rule changes, change it in both places. |
 
 ## Development workflow
@@ -38,7 +39,10 @@ commits `main` takes directly are a changelog close and the release stamp.
   idea, the approved plan becomes the entry, commit. No implementation.
 - `implement item N` → `/implement-item`: the start gate first (`make -C go start-item N=<n>` /
   `npm --prefix web run start-item -- <n>`), then the plan, striking items and writing the changelog as they
-  land; stop and ask for follow-ups.
+  land; stop and ask for follow-ups. By default this runs the agent pipeline for one side.
+- `implement pair go N web M` → `/implement-pair`: Opus plan review, one checkpoint with the user, two
+  Sonnet implementers in parallel, Opus review, two Sonnet QA agents. The session commits per project;
+  **agents never run git**.
 - `item N is done` / `drop item N` → `/item-done`: archive the entry to `.claude/archive/<project>/` (kept
   forever, never auto-loaded — `/archive` lists and shows them), renumber, commit.
 
@@ -87,6 +91,8 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
   Produce a Failure Handling Report with proposed, unapplied patches first (`/test-failure-report`); never
   weaken or delete an assertion to go green, and apply neither option without explicit confirmation.
 - **Secrets.** Never log, print or commit tokens, client secrets, resolved OMA-URI values or `SONAR_TOKEN`.
+- **Agents never commit.** Git belongs to the main session; a subagent reports what should be committed.
+  `.claude/hooks/agent-bash-guard.sh` enforces it for the pipeline agents.
 - **Commit messages** follow the existing history: `feat(go): …`, `fix(web): …`, `chore: …`; the release
   script alone writes `release: go vX.Y.Z, web vX.Y.Z`.
 
