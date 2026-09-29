@@ -25,10 +25,12 @@ jobs:
         with:
           go-version-file: go/go.mod
           cache-dependency-path: go/go.sum
+      # The action runs golangci-lint itself (it does not honour install-only), so
+      # point it at the Go module: that run is the same lint make lint-check performs.
       - uses: golangci/golangci-lint-action@v8
         with:
-          install-only: true
           version: v2.11.4
+          working-directory: go
       - name: make branch-ready-go
         env:
           RELEASE_BRANCH: ${{ github.base_ref }}
