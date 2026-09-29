@@ -109,4 +109,5 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
 ## Toolchain
 
 Go per `go/go.mod` (currently 1.26; the READMEs still say 1.24+), Node.js >= 20, Azure CLI (`az login`),
-golangci-lint v2, `gh` for releases. No CI exists: every gate is local.
+golangci-lint v2, `gh` for releases. The `branch-ready` workflow runs both gates on every pull request into
+`main`; branch protection requires them, so the local gates and the CI gate are the same scripts.
