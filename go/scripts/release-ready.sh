@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Release-readiness report for go/. It changes nothing — no file edits, no
-# commits, no tags — and runs no git command at all. Closing the changelog
+# commits, no tags — and runs no git command at all (the archive listing at the
+# end reads the filesystem). Closing the changelog
 # (`## [Unreleased]` emptied into a new, undated `## [X.Y.Z]` section) is done by
 # hand; this script only reports whether that state has been reached. The
 # release date is stamped onto that heading by the root release script.
@@ -82,6 +83,16 @@ else
   else
     ok "$changelog has an empty [Unreleased] section"
   fi
+fi
+
+# Archived entries the release will stamp: their `changelog: Unreleased` becomes
+# `changelog: $version` in the release commit (scripts/release.sh at the
+# repository root). A report line, not a check.
+archive_dir="../.claude/archive/go"
+stale=$(grep -l '^changelog: Unreleased$' "$archive_dir"/*.md 2>/dev/null || true)
+if [[ -n "$stale" ]]; then
+  echo "ℹ️  $(printf '%s\n' "$stale" | wc -l | tr -d ' ') archived entry(ies) still say 'changelog: Unreleased' — 'make release' stamps them to $version:"
+  printf '%s\n' "$stale" | sed 's|^|   |'
 fi
 
 echo ""

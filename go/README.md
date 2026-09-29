@@ -1145,7 +1145,7 @@ go/
 ├── Makefile                      build / test / lint targets (the only supported way to run them)
 ├── .golangci.yml                 the linter set `make lint` and GoLand both run
 ├── CHANGELOG.md                  Keep a Changelog; released sections match go/vX.Y.Z tags
-├── NEXT-ITERATIONS.md            outstanding work and parked ideas
+├── NEXT-ITERATIONS.md            outstanding work and parked ideas (done entries are archived to ../.claude/archive/go/)
 └── .windsurf/rules/              editor / AI-assistant rules for this folder
 ```
 
@@ -1215,10 +1215,12 @@ make lint            # golangci-lint --fix: applies the fixes it can, rewrites f
 make lint-check      # golangci-lint without --fix: reports only
 make fmt             # rewrites files
 make fmt-check       # reports unformatted files, rewrites nothing
-make check           # fmt-check + lint-check + test — modifies nothing, so it can report on a commit as-is
+make check           # fmt-check + lint-check + test + test-scripts — modifies nothing, so it can report on a commit as-is
 make ci              # check + build (the default goal)
 make deps            # download + tidy
 make test-coverage   # coverage.html
+make test-scripts    # tests for the readers behind the readiness reports and the start gate
+make start-item N=2  # gate: may entry 2 of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)
 make release-ready   # report whether a release can be cut (changes nothing); tag + publish via ../Makefile
 make branch-ready    # gate: clean tree, ci, then is this feature/fix branch ready to ship? (changes nothing)
 ```
@@ -1282,23 +1284,37 @@ Conventions that CI and review expect:
 - `README.md` is the single source of truth for what the tool does today; `NEXT-ITERATIONS.md` holds
   outstanding work and parked ideas; no other documentation Markdown lives in this folder (the embedded
   `generate_prompt_template.md` is program input, not documentation).
-- Delivered work is **struck through** in `NEXT-ITERATIONS.md` rather than deleted, so a branch can be
-  reviewed against what its entries set out to do. Clearing them out and renumbering the rest is part of
-  closing the branch, which is what `make branch-ready` gates; `make release-ready` repeats the strikeout check
-  at release time as a backstop.
+- **Work starts from the backlog.** Every change is a numbered entry in `NEXT-ITERATIONS.md`, committed before
+  it is implemented — a one-line fix included, as a tiny entry. `make start-item N=<n>` is the gate: it refuses
+  on the release branch, on a dirty `go/`, when entry `N` is not in **`HEAD`'s** backlog (the working copy does
+  not count) or when it has no outstanding plan item, and otherwise prints the entry's Goal and Plan. Exit `2`
+  is a usage error, `1` a refusal.
+- Delivered plan items are **struck through** in `NEXT-ITERATIONS.md` while the branch is open, so it can be
+  reviewed against what its entries set out to do, and the `CHANGELOG.md` entry is written in the same edit.
+  When an entry is done it is **archived, never deleted**: moved with its full plan to
+  `../.claude/archive/go/<finished-date>-<slug>.md` (frontmatter: title, status `done` or `dropped`, dates,
+  branch, and `changelog: Unreleased` until the release stamps the version), and the remaining entries are
+  renumbered. The changelog records what shipped and why; the archive keeps how. Nothing under the archive is
+  read unless asked for. An abandoned entry is archived as `dropped` with a one-line reason.
 - `make branch-ready` (or `make branch-ready-go` from the repository root) reports whether a feature or fix
-  branch is ready to ship: `make ci` passes, the struck-out `NEXT-ITERATIONS.md` entries have been cleared out
-  and the rest renumbered contiguously, and `## [Unreleased]` records the work. It edits nothing, and unlike
-  `release-ready` it reports every check and **exits non-zero if any of them failed**, so it can gate a merge.
-  An empty `[Unreleased]` is reported, not failed: a branch with no user-visible effect legitimately has none.
-  There is no version check — this project's version is the `go/vX.Y.Z` tag, not a file.
+  branch is ready to ship: `make ci` passes, nothing is left struck out in `NEXT-ITERATIONS.md` (done entries
+  archived) and the rest is numbered contiguously, `## [Unreleased]` records the work, the branch is not the
+  release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
+  grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
+  non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed: a
+  branch with no user-visible effect legitimately has none. There is no version check — this project's version
+  is the `go/vX.Y.Z` tag, not a file.
 - It **refuses to run while `go/` has uncommitted changes**, before `make ci`, so the verdict describes the
   commit that will be merged rather than the editor's current state. That preflight is a read-only
-  `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it; outside a clone it
-  says so and waves the run through. `release-ready` runs no git at all, and `ci` runs only the read-only
-  `fmt-check`/`lint-check`, so nothing between the preflight and the verdict can change the tree.
+  `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it. The branch
+  checks run further read-only git (`rev-parse`, `merge-base`, `diff`, `show`) against the merge-base with the
+  release branch (`RELEASE_BRANCH`, default `main`); outside a clone every git-backed check says so and is
+  skipped. `release-ready` runs no git at all — it only adds a line listing the archived entries the release
+  will stamp — and `ci` runs only the read-only `fmt-check`/`lint-check`, so nothing between the preflight
+  and the verdict can change the tree.
 
-Editor and AI-assistant rules live in `.windsurf/rules/` and apply to this folder only:
+Editor and AI-assistant rules live in `.windsurf/rules/` and apply to this folder only (Claude Code reads the
+same rules from `CLAUDE.md`, `../.claude/rules/` and the procedures in `../.claude/skills/`):
 
 | File | Covers |
 |---|---|
@@ -1307,7 +1323,7 @@ Editor and AI-assistant rules live in `.windsurf/rules/` and apply to this folde
 | `03-commands.md` | Makefile usage, recipes for new handlers / commands / transformations / config options |
 | `04-security-and-ops.md` | Credentials, secrets, configuration precedence, output layout, metadata and prune rules |
 | `05-azure-conventions.md` | Resource type naming, API versions, display names, Graph SDK usage |
-| `06-next-iterations.md` | How `NEXT-ITERATIONS.md` entries and parked ideas are managed |
+| `06-next-iterations.md` | How `NEXT-ITERATIONS.md` entries and parked ideas are managed, and the workflow from entry to archive |
 
 ## Known limitations
 
