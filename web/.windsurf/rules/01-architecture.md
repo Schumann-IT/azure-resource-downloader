@@ -58,8 +58,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 ### Changelog
 - **Every change is reflected in `CHANGELOG.md`.** Any change a user or operator can notice (routes,
   views, discovery/rendering behaviour, environment variables, scripts, dependencies, security
-  boundaries, bug fixes) is only complete once it has an entry under `## [Unreleased]`, written in the
-  same edit — never as a follow-up. Details of format and released sections: `02-style-and-quality.md`.
+  boundaries, bug fixes) is only complete once it has an entry under `## [Unreleased]`, written when
+  the backlog entry is declared done — never left to a release. Details of format and released sections:
+  `02-style-and-quality.md`.
 
 ### Read-only
 - The app **never writes, moves or deletes anything** under the docs root, and never calls Azure.

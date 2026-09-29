@@ -1,88 +1,86 @@
 ---
 trigger: glob
-description: How to structure and manage entries in NEXT-ITERATIONS.md
+description: How to structure and manage entries in NEXT-ITERATIONS.md, and the workflow from entry to archive
 globs: NEXT-ITERATIONS.md
 ---
 
-# Managing NEXT-ITERATIONS.md
+# Managing `NEXT-ITERATIONS.md` (both projects)
 
-`NEXT-ITERATIONS.md` (in `go/`) tracks **outstanding work and parked ideas**. `README.md` is the single source
-of truth for what the tool does today; `CHANGELOG.md` is the historical record of what shipped. Shipped work
-stays here only as a struck-out entry until the branch is closed (see Lifecycle); nothing shipped survives a
-merge.
+Each project's `NEXT-ITERATIONS.md` is **the only way work enters the codebase**: outstanding work as numbered
+entries, parked ideas, and (in `web/`) standing decisions. `README.md` says what the tool does today;
+`CHANGELOG.md` records what shipped and why; the archive under `../.claude/archive/go/` keeps how. It is a
+sanctioned Markdown file.
 
-This is a sanctioned Markdown file (alongside `README.md` and `CHANGELOG.md`) and is exempt from the "no
-separate Markdown files" documentation rule.
+## What a request lets you do
+
+| The user says | You may |
+|---|---|
+| anything that is **not** one of the phrases below (an idea, "add", "refine", "assess", a follow-up) | edit `NEXT-ITERATIONS.md` only — a new parked idea, a refinement, a follow-up bullet. **No code.** A one-line bug fix is a tiny entry (title, one-line goal, one plan bullet), not an exemption. |
+| `promote idea <title>` / `plan idea <title>` / `plan item N` | the promotion flow below (`/promote-idea`). Ends with a committed entry, never with code. |
+| `implement item N` | the start gate first — `make start-item N=<n>` in `go/`, `npm run start-item -- <n>` in `web/` — and refuse if it fails; then implement the plan bullet by bullet — code and tests, striking each bullet as it lands; **no `README.md` or `CHANGELOG.md`** yet (`/implement-item`, which runs the agent pipeline below for one side; `implement item N inline` does it in the session). When the plan is delivered, **stop**: the user verifies the work by hand and asks for follow-ups. |
+| `implement pair go N web M` (or one side) | `/implement-pair`: an Opus plan review of both entries (shared contract, naming, sequencing, one owner per file outside `go/` and `web/`), **one checkpoint** where the user approves the proposed refinements, then two Sonnet implementers in parallel, an Opus review of the diffs against the plans, and two Sonnet QA agents in parallel. The main session commits per project after implementation and after QA; **agents never run git** (a hook blocks it). Ends with a report; `item N is done` stays the user's call. This pipeline exists in Claude Code only; elsewhere implement the two entries one after the other. |
+| `item N is done` | close the entry (`/item-done`): **now** write the project's `README.md` and `CHANGELOG.md` from the plan, the diff and the implementation reports, then move the entry — or, for a partially delivered entry, its struck bullets — to `../.claude/archive/go/<finished-date>-<slug>.md`, renumber the rest `1..N`, commit all of it together. |
+| `drop item N` | archive it with `status: dropped`, `changelog: none` and a one-line reason (`/item-done`). |
+| close the branch / release | `/close-branch`, `/release`. |
+
+The start gate cannot gate its own creation; nothing else is exempt.
 
 ## Entry anatomy
+Each numbered work entry is a `## N. Title` section (`web/` nests them as `### N.` under `## Features` /
+`## Fixes`):
+- **Title** — the substantive change in sentence case; common consequences (e.g. "requires regeneration")
+  belong in the Goal or Plan, not the title.
+- **Goal** (required, exactly one) — a `**Goal.**` paragraph in user/intent terms.
+- **Notes** (optional) — one blockquote directly after the Goal, every line starting with `>`; rationale,
+  scope, caveats, hash impact, cross-references; labelled notes separated by a bare `>` line.
+- **Plan** (required) — a `**Plan.**` bulleted list of concrete, implementable work items (tests and
+  documentation included). No outstanding work → the entry is done and gets archived.
 
-Each numbered entry is a `## N. Title` section with these parts, in this order:
-
-- **Title** — name the substantive change or objective in sentence case. Do **not** put a common
-  consequence in the title (e.g. that the change requires a documentation regeneration) — that belongs in
-  the Goal or Plan.
-- **Goal** (required, exactly one) — a `**Goal.**` bolded lead paragraph stating the objective in
-  user/intent terms, not implementation.
-- **Notes** (optional) — a single blockquote placed directly after the Goal; **every line starts with `>`**.
-  Holds rationale, scope, caveats, hash impact, and cross-references. Separate labelled notes with a bare `>`
-  line between them.
-- **Plan** (required) — a `**Plan.**` block: a bulleted list of concrete, implementable work items. If there
-  is no outstanding work, the entry does not belong here (see Lifecycle).
-
-Ideas do **not** live inside an entry — see Parked ideas.
+Ideas never live inside an entry. `web/` also keeps a `## Standing decisions` section for decisions that
+constrain ideas without being work items.
 
 ## Lifecycle
-
-- **Strike out what ships; do not delete it.** When work lands, wrap the delivered plan items in `~~…~~`,
-  and the entry's title too once the whole Plan is delivered. The entry stays in place, struck, so a
-  reviewer of the branch can see what it set out to do beside what the diff does. Writing the
-  `CHANGELOG.md` entry is still part of the same edit — striking out is not a substitute for it.
-- **Deleting is part of closing the branch / cutting the release, not of implementing.** Only then are the
-  struck-out entries removed and the rest renumbered. `make branch-ready` is the gate for that step — it
-  fails while any strikeout is left, and also checks that the remaining entries are numbered contiguously;
-  `make release-ready` repeats the strikeout check at release time as a backstop. A strikeout is work that
-  shipped and is still waiting to be cleared out (and, if it was missed, recorded in `CHANGELOG.md`).
-- **A partially delivered entry keeps its unstruck items.** Strike only the plan items that are actually
-  done; what is left unstruck is the outstanding work, and the entry survives the release with those items.
-- **Numbering is presentational.** Renumber the remaining entries to stay contiguous (`1..N`) after a
-  removal, which means numbers shift at branch close. Do **not** rely on `See NEXT-ITERATIONS.md §N` as a
-  stable anchor from other files — describe the work instead. Stale `§N` references already in released
-  `CHANGELOG.md` sections are history: leave them as-is.
-- **Keep entries self-contained.** An entry must not depend on another entry it might outlive. Restate what
-  it needs rather than pointing at a sibling `§N`.
+- **Committed before implemented.** The start gate reads entry N from `HEAD`, not from the working copy.
+- **Strike out what ships; do not delete it.** Wrap delivered plan items in `~~…~~`, and the title once the
+  whole Plan is delivered. Follow-ups are new, unstruck bullets on the same entry, or a new entry.
+- **Documentation is written at done, not while implementing.** Implementation produces code, tests and
+  struck bullets; `README.md` and `CHANGELOG.md` are written by `item N is done`, after the user has
+  verified the work, from the entry (why), the diff (what) and the implementation reports (operator-visible
+  effects) — and committed together with the archive, which is what the branch gate checks. Documentation-
+  only bullets stay unstruck until then. Within a branch the README may trail the code; `main` never sees it.
+- **Done means archived, not deleted.** `item N is done` moves the entry to
+  `../.claude/archive/go/<finished-date>-<slug>.md` with a frontmatter — `title`, `project`, `status:
+  done|dropped`, `started`, `finished`, `branch`, `changelog: Unreleased` (stamped to the version by the
+  release; `none` for dropped) — followed by the entry verbatim with the `~~` removed, delivered bullets
+  prefixed `✅` and follow-ups that stayed behind prefixed `↪` naming the entry they moved to. A partially
+  delivered entry keeps its unstruck items here and only its struck ones are archived (the archive file
+  accumulates across branches). Archived entries lose their number.
+- **The gates check it.** `branch-ready` fails while any strikeout is left, when numbering has a gap, when the
+  backlog did not change on a branch that changed the project, and when an entry archived as done did not
+  grow `[Unreleased]`; `release-ready` repeats the strikeout check and lists the archive files it will stamp.
+- **Numbering is presentational**; never cite `§N` from other files — describe the work. Stale `§N`
+  references in released changelog sections are history.
+- **Entries are self-contained**: restate what an entry needs rather than pointing at a sibling.
+- Nothing under `.claude/archive/` is loaded automatically. Read an archived entry when the user asks
+  (`/archive list|show|search`) or when reworking the area it describes.
 
 ## Parked ideas
+- A trailing `## Parked ideas` area; each idea is `### Idea: <title>` stating what it is, **why it is parked**
+  and the explicit **revisit conditions**.
+- **Promotion is a review, not a copy.** In Claude Code, `/promote-idea <title>` locates the block, enters
+  plan mode seeded with it, and on approval transcribes the plan file into the entry anatomy — Context →
+  Goal and Notes (with the reconciled revisit conditions), work steps and verification → Plan bullets —
+  as the next number, deletes the `### Idea` block, and commits `chore(<project>): plan <title>`. Elsewhere:
+  draft the entry from the idea, review it with the user, commit. Implementation stays a separate
+  `implement item N`.
 
-- A trailing `## Parked ideas` area collects ideas that are deliberately not scheduled, kept here rather than
-  in a work entry so they survive as the entries around them ship and are removed.
-- Each idea is a `### Idea: <title>` subsection stating what it is, **why it is parked**, and the explicit
-  **revisit conditions** that would make it worth doing.
-- **Promotion.** When a parked idea is picked up, **move it into a new numbered work entry and refine it**:
-  rewrite it as a proper entry (`**Goal.**`, optional Notes, `**Plan.**` with concrete work items),
-  reconciling its rationale and revisit conditions against what is true now, and delete the `### Idea` block.
-  A promotion is a review, not a mechanical copy.
-
-## Batching regeneration-gated work
-
-A full documentation regeneration is expensive, so **regeneration-gated work must be batched**. Whenever a plan
-or promotion involves a change that forces re-generating the documentation, **proactively remind the user to
-also plan and implement any other pending regeneration-gated ideas in the same batch**, so they share a single
-regeneration attempt instead of each forcing its own.
-
-- **What counts as regeneration-gated.** A change is regeneration-gated when it edits
-  `internal/models/documentation_prompt.tmpl` or any per-type override template
-  (`internal/handlers/{graph,arm}/*_prompt.tmpl`), or otherwise changes what an LLM must write into
-  per-resource documents and therefore moves a type's `promptSha256`. Cheap, offline changes that ride the
-  non-hashed `docs/generate.md` (e.g. taxonomy hint vocabulary) are **not** regeneration-gated and carry no
-  reminder.
-- **When to remind.** At planning time and at promotion time — before committing to a regeneration-gated entry,
-  survey the other entries and Parked ideas for ones that are also regeneration-gated and surface them so the
-  user can decide whether to fold them into the same regeneration.
-- **State the coupling in the entry.** A regeneration-gated entry's Notes should say so, and a parked idea that
-  is regeneration-gated should record that it is only worth doing while riding a regeneration already scheduled
-  for another reason.
+## Batching regeneration-gated work (Go)
+A change is regeneration-gated when it edits `go/internal/models/documentation_prompt.tmpl` or any per-type
+`*_prompt.tmpl`, or otherwise moves a type's `promptSha256`. Such work **must be batched**: when planning or
+promoting one, survey the other entries and parked ideas for regeneration-gated ones and remind the user so
+they share one regeneration. State the coupling in the entry's Notes. Changes riding the non-hashed
+`docs/generate.md` or `drift/analyze.md` templates are not gated and carry no reminder.
 
 ## On any edit
-
-- Reflect any user-visible effect in `CHANGELOG.md` per the Changelog Policy — adding, refining, or removing
-  an entry that corresponds to real work is itself a change worth recording when it ships.
+Reflect any user-visible effect in `CHANGELOG.md`; adding, refining or removing an entry that corresponds to
+real work is itself worth recording when it ships.

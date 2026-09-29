@@ -4,12 +4,11 @@
 # be open in the editor. It runs before `make ci`, so a dirty tree costs nothing
 # to discover.
 #
-# This is the one git command in go/'s readiness tooling (the Makefile's
-# `git describe` for the version stamp aside), it is read-only
-# (`git status --porcelain`), and it is scoped to go/ so an unrelated edit in
-# web/ cannot block this project's gate. `release-ready` still runs no git at
-# all, and the repository-wide branch and working-tree checks still live only in
-# the root release script.
+# It is read-only (`git status --porcelain`) and scoped to go/, so an unrelated
+# edit in web/ cannot block this project's gate. The branch report and the start
+# gate run further read-only git (`rev-parse`, `merge-base`, `diff`, `show`);
+# `release-ready` still runs no git at all, and the repository-wide branch and
+# working-tree checks still live only in the root release script.
 #
 # A missing git or a checkout that is not a repository is reported and waved
 # through rather than failed: the gate must stay usable outside a clone.

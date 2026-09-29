@@ -1,234 +1,13 @@
 # Next iterations — deliberately out of scope
 
-Outstanding work and parked ideas for the Go CLI. Each numbered entry is a unit of planned work; **once its
-plan ships in full, the entry is removed** and its history lives in `CHANGELOG.md`. Ideas that are
-deliberately not scheduled collect under *Parked ideas* at the end, so they persist as the entries around them
-ship. `README.md` stays the single source of truth for what the tool *does today*.
+Outstanding work and parked ideas for the Go CLI. Each numbered entry is a unit of planned work: it is written
+and committed here before it is implemented, its plan items are struck through as they land, and **once it is
+done it is archived** — moved with its full plan to `../.claude/archive/go/`, so the *how* survives for later
+review while `CHANGELOG.md` records the what and why. Ideas that are deliberately not scheduled collect under
+*Parked ideas* at the end, so they persist as the entries around them ship. `README.md` stays the single source
+of truth for what the tool *does today*.
 
-## 1. ~~Make configuration the single source of truth, with per-tenant profiles selected by domain~~
-
-**Goal.** Give every setting exactly one home, and make switching between tenants a single visible argument.
-Today a value can arrive from a flag, an `AZURE_RD_*` variable or a config file, and the tenant-scoped ones
-(`client-id`, `tenant-id`, `subscription`, the selection filters) are spread across all three — so nothing
-prevents one tenant's app registration being paired with another tenant's export, and working across several
-tenants means long command lines or a private shell wrapper. Reduce the command line to the few flags that
-genuinely belong there, move everything else into the config file, split that file into a shared **base** and
-per-tenant **profiles** selected by `--domain`, and delete the environment layer entirely.
-
-> **The option model.** Every option lands in exactly one of four places, and the rule for which is
-> statable rather than case-by-case:
->
-> - **Bootstrap flags** — `--config`, `--config-dir`. Not configurable, because they say where the
->   configuration is.
-> - **Selector flag** — `--domain`. Not a setting: the thing that picks which profile applies.
-> - **Invocation flags, absent from the config file** — `--dry-run`, `--log-level`, `--debug`, plus the three
->   whose meaning is **per command**: `--out`, `--prompt` and `--exit-code`. Viper's namespace is flat, so a
->   single `out:` key cannot carry three different defaults (`docs/generate.md`, `docs/index.yaml`,
->   `drift/analyze.md`), `prompt:` cannot name three different templates, and `exit-code:` cannot mean both
->   "drift was found" and "documentation is stale". They stay on the command line, where each command gives
->   them one unambiguous meaning. `--resource-id` and `--resource-group` are also invocation flags with **no
->   config key at all**: they are ad-hoc selection ("re-download this one resource"), and a persistent
->   profile entry would silently scope every future run of that tenant — the stale-entry footgun outweighs
->   the partition purity, and the wrong-tenant risk is minimal since an ARM resource id embeds its
->   subscription and fails as not-found. `dry-run` and `log-level` are **removed from `config.example.yaml`**
->   so every option keeps exactly one home.
-> - **Config-backed options.** Everything else. Two keep an invocation override — `--output` (redirect a run
->   elsewhere to compare; it changes *where* bytes land, never *which*) and `--type` (scope one run without
->   editing a file, the common ad-hoc case). The flag **replaces** the config value wholesale for that run —
->   never an intersection with it, which could silently select nothing — exactly the flag-beats-config
->   semantics both have today. The rest are
->   config-only: `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`,
->   `transformers`, `taxonomy`, plus the tenant-scoped set below.
->
-> **Moving `--prune` and `--resolve-secrets` into the file is a safety improvement, not tidying.** They are
-> the tool's only destructive switch and its only write-plaintext-secrets switch; requiring them to be
-> written down — reviewable, diffable, attributable — rather than typed ad-hoc is strictly better.
->
-> **The base/profile partition is enforced, not documented.** Config-backed options split in two:
->
-> - **Tenant-scoped — profile only**: `tenant-id`, `client-id`, `subscription`, `filters`, and the audit
->   workspace once that entry lands. These name things that exist inside one tenant, so a value from one
->   tenant is meaningless or harmful in another.
-> - **General — base only**: `output`, `type`, `transformers`, `taxonomy`, `workers`, `workers-by-api`,
->   `timeout`, `resolve-secrets`, `no-prompt`, `prune`.
->
-> A key on the wrong side is a **fatal error naming the offender**, in both directions.
->
-> **Three placements carry real risk and are why this is enforced rather than advised.** `transformers` is
-> hashed into `transformConfigSha256`: a per-tenant override silently makes an export non-comparable with
-> its own baseline and with every other tenant, the failure this codebase is least able to detect. `output`
-> is the export root and the tenant is already a subdirectory of it (`<output>/<tenant>/`), so a per-profile
-> root breaks the layout every `docs` command and `detectSingleExportDomain` assume. `filters` sits on the
-> tenant side for the mirror-image reason: it is hashed into `filtersSha256`, which gates drift
-> comparability, so it must be stable *per tenant* — in a shared file, editing one tenant's naming
-> convention invalidates every tenant's baseline at once.
->
-> **The environment layer goes away completely.** `viper.AutomaticEnv`, `SetEnvPrefix`, the
-> `SetEnvKeyReplacer` and every `AZURE_RD_*` variable are removed; the rule text in `.windsurf/rules/` that
-> currently forbids removing the replacer is deleted as part of this change rather than violated by it.
-> `LOG_LEVEL` is unaffected — the logger reads it directly, not through viper. Precedence collapses from
-> four layers to two: flag > config > default for the two config-backed flags, config > default for
-> everything else. **`cmdutil.BindFlags` disappears with it**, and with it the standing requirement to call
-> it as the first statement of every `RunE` — a rule that can no longer be forgotten because there is
-> nothing to call. The cost is real and belongs in the migration note: a CI pipeline can no longer inject
-> configuration through the environment and must write a config file.
->
-> **This is a breaking change to the command-line surface**, in two respects — flags removed, and
-> environment variables no longer read. It belongs under `Breaking` in `CHANGELOG.md` and drives the next
-> major. The zero-config path must keep working exactly as it does now: `azure-rd resource download` with no
-> file, no flags and an `az login` session still performs a full export with the built-in defaults.
->
-> **The chicken-and-egg that shapes the profile design.** Config must be read *before* authentication,
-> because it supplies the credentials used to authenticate — but for `resource download` the tenant domain
-> is only known *after* authentication resolves it. So a profile can only ever be selected by an
-> **explicitly passed** `--domain`, never by the auth-resolved tenant. That is a statable rule
-> (`--config-dir` requires `--domain`), and it means the commands that lack `--domain` today must gain it —
-> including root, whose `--debug` report must be able to show the profile a run would use.
->
-> **A missing profile is fatal, never a fallback.** `--config-dir` with a domain that has no file must fail
-> the way a mistyped `--config` already does. Falling back to defaults would run with the wrong (empty)
-> configuration while looking like it worked.
->
-> **Implement this before the drift-attribution work** (the entry that adds per-tenant Log Analytics audit
-> attribution): that entry's workspace setting is tenant-scoped and is far simpler to express once profiles
-> exist — a plain key in the tenant's own file rather than a domain-keyed map inside a shared one.
-
-**Plan.**
-
-*The flag surface (breaking)*
-
-- ~~Reduce the command line to the model above: keep `--config`, `--config-dir`, `--domain`, `--dry-run`,
-  `--log-level`, `--debug`, `--output`, `--out`, `--prompt`, `--exit-code`, `--type`, `--resource-id` and
-  `--resource-group`; remove `--subscription`, `--client-id`, `--tenant-id`, `--workers`, `--timeout`,
-  `--resolve-secrets`, `--no-prompt` and `--prune`. Drop the `resource-id` and `resource-group` **config
-  keys** in the same pass — they become flag-only.~~
-- ~~Delete what the removal makes dead: `cmdutil.AddAzureAuthFlags` / `AddPersistentAzureAuthFlags`,
-  `AddWorkersFlag` / `AddPersistentWorkersFlag`, `AddTimeoutFlag` and `RequireAuthFlagPair`
-  (`AddSelectionFlags` survives whole — all three selection flags stay). The client-id/tenant-id pairing
-  becomes profile validation, which is the only place it can be checked against the tenant it belongs to.~~
-- ~~Bind only the two config-backed flags explicitly (`viper.BindPFlag` for `output` and `type`), and delete
-  `cmdutil.BindFlags` along with every `BindFlags(cmd)` call in a `RunE`. The remaining flags are read from
-  the command's own flag set, never through viper — which is what stops a sibling command's identically
-  named flag leaking through the global singleton, the defect `BindFlags` existed to work around.~~
-- ~~Replace the "was it set explicitly" checks that `cmd.Flags().Changed(...)` provided for removed flags with
-  `viper.IsSet(...)`. `--workers` is the one that matters: the per-API defaults apply unless the operator
-  set a count deliberately (`WorkersExplicit`), so losing that distinction would silently override the
-  Microsoft Graph and ARM defaults with a single number.~~
-- ~~Keep the interactive dedicated-app prompt working when a selected type needs one and no profile supplies
-  it, and have it print the **profile snippet to save** rather than only the values, so the answer lands in
-  the single source of truth instead of a shell history entry.~~
-
-*Removing the environment layer (breaking)*
-
-- ~~Remove `viper.SetEnvPrefix`, `viper.AutomaticEnv` and `viper.SetEnvKeyReplacer` from `initConfig`, and
-  delete every `AZURE_RD_*` reference from `config.example.yaml`, `README.md` and the rule files — including
-  the invariant that currently forbids removing the replacer, which this change retires.~~
-- ~~Leave `LOG_LEVEL` alone: it is read directly by the logger and is not part of the viper surface.~~
-
-*Profiles and layering*
-
-- ~~Add `--config-dir` as a root persistent flag beside `--config`. It is the fifth global flag and needs its
-  justification recorded: it is part of the config-loading mechanism root already owns, and it must be
-  resolved in `initConfig` before any command runs, so it cannot live on a group.~~
-- ~~Resolve and layer in `initConfig`. The base is `<config-dir>/base.yaml` **by convention** when the
-  directory holds one, or the file named by `--config`, which wins when both are present. Then read the leaf
-  command's explicitly passed `--domain` (root's hook already receives the leaf command, and flags are
-  parsed by the time it runs), join it to the config directory as `<domain>.yaml`, and merge it over the
-  base with `MergeInConfig`. Log both files and the domain that selected the profile, extending the existing
-  "Using config file" line. The convention exists so the everyday invocation is two flags
-  (`--config-dir ~/.azure-rd --domain cb-gmbh.com`) rather than three; with the environment layer gone there
-  is no way to set the directory once per shell, so this is what keeps the command line short.~~
-- ~~Exclude `base.yaml` from profile resolution and from the `--domain` completion candidates. A real Entra
-  default domain always contains a dot, so the name cannot collide with a tenant, but the exclusion should
-  be explicit rather than incidental.~~
-- ~~Do **not** default the config directory (e.g. to `~/.azure-rd`). Auto-discovery was deliberately removed
-  from this tool once already; a run must state which configuration it used.~~
-- ~~Define the key partition in **one** exported table (tenant-scoped vs general), and validate both files
-  against it: a general key in a profile and a tenant-scoped key in a base file are each a fatal error
-  naming the key and the file. That table is the single truth the documentation, the stub file and the tests
-  all read from — never a second hand-maintained list. Validate each file **before** merging: after
-  `MergeInConfig` the merged state no longer records which file a key came from, so validation on the merge
-  result cannot name the offender — or catch a key present legally in one file and illegally in the other.~~
-- ~~Validate the domain as a **single path segment** before joining it — no separator, no `..`, not empty — so
-  a flag value can never escape the config directory.~~
-- ~~Fail loudly and helpfully when the profile is absent: name the path that was looked for and list the
-  `*.yaml` files the directory does contain, which doubles as the answer to "which tenants do I have?".~~
-- ~~Fail when `--config-dir` is given without `--domain`, stating the reason (the tenant is not known until
-  after authentication, and the profile supplies the credentials that authentication needs).~~
-- ~~Ship `config.example.domain.yaml`: a commented stub listing **every** tenant-scoped key
-  (`tenant-id`, `client-id`, `subscription`, `filters`) with empty values, carrying the same no-op promise
-  `config.example.yaml` does — copying it to `<config-dir>/<domain>.yaml` unmodified must behave exactly
-  like having no profile.~~
-- ~~Rework `config.example.yaml` in the same change: drop the tenant-scoped keys (`subscription`, `client-id`,
-  `tenant-id`, `filters`) and the now flag-only ones (`dry-run`, `log-level`, `resource-id`,
-  `resource-group`), add the options that lost their flags, replace every "Equivalent to --x / AZURE_RD_X"
-  note with the new home, and point at the domain stub. The no-op promise still holds and gets easier to
-  verify.~~
-- ~~Ship `workers` **commented out** in the example, unlike today's active `workers: 5`. It is now the one
-  option whose mere presence changes behaviour — setting it is the explicit choice that overrides the
-  per-API defaults (Graph 5, ARM 20) — so an active value in the example would silently opt every copier out
-  of ARM's 20. This is a real difference from the flag, which had to be passed to count as explicit.~~
-
-*Tenant resolution cleanup*
-
-- ~~Replace the three divergent policies with one shared resolver: `runprep.Prepare` resolves and on failure
-  **keeps the flat base output path**, `cmd/docs`' `resolveExportDir` treats `--domain` as offline-or-detect,
-  and `resource drift` does its own declared-vs-resolved cross-check. Only the third is right. One resolver
-  returns the tenant directory, the domain to cross-check against, and an explicit state: *declared and
-  verified*, *declared but unverifiable* (offline, or resolution failed), or *resolved only*.~~
-- ~~Delete the flat fallback in `runprep`. Writing `<output>/resources/` in a layout where everything else
-  looks for `<output>/<domain>/resources/` produces an export that `docs` and `detectSingleExportDomain` can
-  never find again. With a declared domain, use it and mark it unverified; with neither, refuse — exactly as
-  `resource drift` already does.~~
-- ~~Keep the auth-resolved tenant as **validation, not as the source**: the declared domain is intent, the
-  resolved domain is ground truth, and a mismatch aborts before anything is written. Removing resolution
-  would let a typo silently create a second export directory for the same tenant, which nothing would ever
-  notice.~~
-- ~~Add `--domain` to `resource download`, `resource types` and `resource list` with those same semantics, and
-  to root for the `--debug` report, so the resolver has one input everywhere and profiles are usable on a
-  download.~~
-
-*Discovery*
-
-- ~~Register a completion function for `--domain` (`cmd.RegisterFlagCompletionFunc`, returning
-  `ShellCompDirectiveNoFileComp`) offering the config directory's `*.yaml` basenames and the export
-  directories under `--output`. It must stay local and cheap — never an Azure call on a Tab press — and must
-  not assume config has been loaded, since the hidden `__complete` invocation is not guaranteed to run the
-  hooks; read `--config-dir` and `--output` from the flag values directly.~~
-- ~~Report the resolved selection in `azure-rd --debug`: config directory, domain, base file, profile file —
-  beside the existing config-file line, so an operator can confirm a switch without running anything that
-  writes.~~
-
-*Verification and documentation*
-
-- ~~Tests: the `base.yaml` convention, including `--config` overriding it and a directory without one;
-  `base.yaml` excluded from profile resolution and completion; base+profile merge order and precedence (the
-  surviving flags still beat both); partition validation
-  rejecting a key on either wrong side; the missing-profile error including the candidate listing;
-  path-segment validation rejecting separators and traversal; `--config-dir` without `--domain`; the stub
-  file loading as a true no-op; the resolver's three states including the removed flat fallback; the
-  `--domain` cross-check aborting a download against the wrong tenant; completion candidates from a fixture
-  directory; `viper.IsSet`-based explicit-worker detection preserving the per-API defaults; and a test that
-  a set `AZURE_RD_*` variable is **ignored**, so the env layer cannot creep back in unnoticed.~~
-- ~~Invert the flag-surface tests in `cmd/resource_test.go` and `cmd/docs_test.go`: they currently assert the
-  removed flags are present. They must assert the full surviving set and that every removed flag is **gone**
-  from every command — the same both-directions check they already make, retargeted.~~
-- ~~Pin the zero-config path with a test: no config file, no flags, defaults only must still resolve a full
-  export as today **when tenant resolution succeeds**. The failure edge changes deliberately (refuse instead
-  of writing flat — see the resolver cleanup), so the test pins the promise that actually survives. It is
-  the one most at risk in a refactor this wide.~~
-- ~~Documentation: a README section on working with several tenants (directory layout, base vs profile, the
-  partition and why it is enforced, the `--domain` switch and its cross-check, installing shell completion),
-  a configuration-reference section replacing the flag-centric one, and a migration table mapping every
-  removed flag and `AZURE_RD_*` variable to its new home.~~
-- ~~Update the rule files this change contradicts: the flag-placement and `cmdutil.BindFlags` requirements in
-  `.windsurf/rules/03-commands.md`, and the config-precedence, env-variable and env-key-replacer invariants
-  in `.windsurf/rules/04-security-and-ops.md`. Leaving them in place would keep describing a surface that no
-  longer exists.~~
-- ~~`CHANGELOG.md` under **`Breaking`**, stating in bold that existing scripts and pipelines must move the
-  removed flags and environment variables into a config file.~~
-
-## 2. Attribute each drift finding to an actor and a time, from the tenant's Log Analytics audit tables
+## 1. Attribute each drift finding to an actor and a time, from the tenant's Log Analytics audit tables
 
 **Goal.** Answer *who changed this, and when* for every drifted resource. A drift observation today says a
 resource's bytes moved somewhere between the baseline and the observation; the change record that names the
@@ -340,10 +119,71 @@ unexplained one.
   `CHANGELOG.md` under `[Unreleased]`; and the drift-tree lifecycle rule in
   `.windsurf/rules/04-security-and-ops.md` naming the new root file as swept, never pruned.
 
+## 2. Enforce the branch gate on GitHub
+
+**Goal.** Make the branch gate unbypassable: a pull request into `main` cannot be merged until
+`make branch-ready-go` has passed on it. Everything local — the start gate, `branch-ready`, the archive
+checks — is a report a `git commit` by hand can walk past; branch protection with a required status check is
+the only layer that actually gates.
+
+> **Scope.** A GitHub Actions workflow at the repository root running `make branch-ready-go` on pull requests
+> that touch `go/` (Go per `go.mod`, golangci-lint v2 pinned, a checkout deep enough for `git merge-base` and
+> `git describe`), and branch protection on `main` requiring it. The web half is the mirror entry in
+> `../web/NEXT-ITERATIONS.md`; one workflow file can carry both jobs. A `pre-commit` hook refusing commits on
+> `main` is deliberately not part of this: the release flow commits on `main`.
+>
+> **Not regeneration-gated.**
+
+**Plan.**
+
+- `.github/workflows/branch-ready.yml`: a `go` job on `pull_request` (paths `go/**`, `.claude/archive/go/**`)
+  that checks out with full history, installs the Go version from `go.mod` and golangci-lint v2, and runs
+  `make branch-ready-go` from the repository root with `RELEASE_BRANCH` set to the pull request's base.
+- Verify the gate's clean-tree preflight and merge-base detection behave in the runner (detached HEAD on a
+  merge ref: the branch check must read the head ref, not `HEAD`).
+- Enable branch protection on `main` requiring the job (a repository setting, done by hand; document the
+  setting in the root `README.md` Development workflow).
+- `CHANGELOG.md` under `[Unreleased]`; root `README.md` step 3 naming the status check.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
-ship and are removed. Each records why it is parked and what would make it worth doing.
+ship and are archived. Each records why it is parked and what would make it worth doing.
+
+### Idea: emit `summary:` in the generated document frontmatter
+
+The prompt template's *Frontmatter (required)* section lists `source`, `sourceSha256`, `promptSha256`,
+`platformGroup`, `functionGroup` and `generatedAt` — and never asks for `summary:`. The plumbing on both
+sides is complete: `docFrontmatter` has a `Summary` field, `GenerateIndex` copies it into each `index.yaml`
+resource, and the browser renders it as per-item context when present — so it is absent from every
+document by construction, not by model behaviour, and the web idea *a name filter and per-item context in
+the sidebar* is blocked on this one template line. **Not planned — parked deliberately**, because the change
+is **regeneration-gated**: the line itself rides `generate_prompt_template.md`, which is not hashed, but no
+existing document carries the field, so filling it means regenerating every document anyway. It must not
+ship alone.
+
+**Revisit when** a documentation regeneration is scheduled for another reason; fold it in with the other
+regeneration-gated ideas below (per-finding severity, taxonomy bootstrap) so they share one regeneration.
+When promoted: one frontmatter line plus its rule text in the template, and a note that `platformGroup` /
+`functionGroup` — already required by the template but empty in the reference exports, which predate it —
+fill in on the same regeneration with no further change.
+
+### Idea: version the drift observation, and name `drift/` a Go → web contract
+
+`drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
+`drift/<key>.md` and `drift/index.md` are read by the browser, joined by the shared `<type>/<name>` key,
+gated on `baseline.generatedAt` and verified by hash — exactly the shape of the `index.yaml` contract, with
+the same obligations: a change to the observation schema, to the per-finding frontmatter (`verdict`,
+`severity`, `observedAt`, `baselineGeneratedAt`) or to the index's `severities:` line is a cross-project
+change. The observation carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to
+need. **Not planned — parked deliberately**: nothing has broken, and adding the field alone is cheap but
+pointless until a consumer branches on it.
+
+**Revisit when** the observation schema or the per-finding frontmatter next changes for another reason: add
+`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and name `drift/`
+beside `index.yaml` in both projects' rules as a versioned contract. Related, web-only: the drift index
+table uses `high / medium / low / info` while the tenant summary's Findings table uses
+`critical / high / medium` (see the web backlog's *Fixes*).
 
 ### Idea: routine dependency updates, and consolidating on one Microsoft Graph SDK
 
@@ -359,9 +199,9 @@ real: the two generated SDKs dominate compile time and binary size, and one of t
 
 - **A dependency bump is not hash-neutral by construction.** A Graph SDK update can change which properties a
   model carries and therefore the YAML bytes the export writes — moving `sourceSha256` for resources that did
-  not change in the tenant, which reads as mass drift and forces documentation regeneration. Until the drift
-  command exists there is no cheap way to *prove* a bump content-neutral; after it ships, "update, re-download
-  a fixture tenant, drift must report zero findings" becomes the standard verification, and updates get cheap.
+  not change in the tenant, which reads as mass drift and forces documentation regeneration. `resource drift`
+  is the verification tool: "update, run drift against a fixture tenant, it must report zero findings" is the
+  standard check, so a bump is provable content-neutral before it lands.
 - **Moving the seven v1.0 types to beta trades a stability contract for uniformity.** v1.0 responses are
   contractually stable; beta responses may change shape at Microsoft's discretion. Today the most stable,
   most-referenced types (groups, conditional access) deliberately sit on the stable endpoint. Consolidation
@@ -370,8 +210,8 @@ real: the two generated SDKs dominate compile time and binary size, and one of t
   their YAML (beta models carry extra properties), so their `sourceSha256` values move and their documents
   regenerate — a one-time cost that should ride a regeneration scheduled for another reason, not force its own.
 
-**Revisit when** the drift command has shipped (it is the verification tool this work lacks), and either a
-security advisory forces an SDK bump anyway or build time becomes a felt cost. If consolidation is picked up:
+**Revisit when** a security advisory forces an SDK bump anyway, or build time becomes a felt cost. If
+consolidation is picked up:
 move the seven handlers one at a time, verify each with a fixture-tenant drift run, expect and batch the
 one-time hash movement, and only then drop the v1.0 module. If beta churn is the worry instead, the same
 investigation can conclude the opposite consolidation is wiser once Microsoft ports the Intune endpoints to

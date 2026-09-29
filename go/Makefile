@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-race test-coverage run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready
+.PHONY: build install clean test test-race test-coverage test-scripts run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready start-item
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -126,32 +126,47 @@ loc:
 	@cloc .
 	@echo "✅ LOC analysis complete"
 
+# Tests for the readers behind the readiness reports and the start gate
+# (scripts/lib/changelog.sh). Plain bash over heredoc fixtures; no files, no git.
+test-scripts:
+	@scripts/lib/changelog_test.sh
+
+# Start gate: may implementation of NEXT-ITERATIONS.md entry N begin? Refuses on
+# the release branch, on a dirty go/ tree, when entry N is not in HEAD's backlog
+# (the entry must be committed before it is implemented) or has no outstanding
+# plan item; otherwise prints the entry's Goal and Plan. Read-only git only.
+# Usage: make start-item N=2
+start-item:
+	@scripts/start-item.sh "$(N)"
+
 # Release readiness: report whether a release can be cut (no struck-out
 # NEXT-ITERATIONS entries, CHANGELOG.md closed with an empty [Unreleased] and an
-# undated `## [X.Y.Z]` heading). Every check is reported; fails only if all
-# fail. Changes nothing and runs no git — branch/working-tree checks, date
-# stamping, tagging and publishing happen at the repository root
-# (`make release`), which runs this first.
+# undated `## [X.Y.Z]` heading; lists archived entries the release will stamp).
+# Every check is reported; fails only if all fail. Changes nothing and runs no
+# git — branch/working-tree checks, date stamping, tagging and publishing happen
+# at the repository root (`make release`), which runs this first.
 release-ready: ci
 	@scripts/release-ready.sh
 
 # Is a feature or fix branch ready to ship? Refuses while go/ has uncommitted
 # changes (so the verdict describes the commit that will be merged), runs `ci`,
 # then reports: no struck-out NEXT-ITERATIONS entries left, entries numbered
-# 1..N, work recorded under [Unreleased]. Edits nothing, but unlike
-# `release-ready` it exits non-zero if ANY check failed, so it can gate a merge.
-# Not a release target and not a prerequisite of one. The preflight must run
-# before `ci`; `ci` itself is read-only (fmt-check/lint-check), so the tree the
-# report sees is the tree the preflight approved.
+# 1..N, work recorded under [Unreleased], not on the release branch, the backlog
+# touched on this branch, every entry archived as done recorded in the changelog.
+# Edits nothing and runs only read-only git, but unlike `release-ready` it exits
+# non-zero if ANY check failed, so it can gate a merge. Not a release target and
+# not a prerequisite of one. The preflight must run before `ci`; `ci` itself is
+# read-only (fmt-check/lint-check), so the tree the report sees is the tree the
+# preflight approved.
 branch-ready:
 	@scripts/working-tree-clean.sh
 	@$(MAKE) --no-print-directory ci
 	@scripts/branch-ready.sh
 
-# Check code quality (fmt-check + lint-check + test). Read-only: nothing here
-# rewrites a file, so `check`, `ci` and `release-ready` leave the working tree
-# as found.
-check: fmt-check lint-check test
+# Check code quality (fmt-check + lint-check + test + test-scripts). Read-only:
+# nothing here rewrites a file, so `check`, `ci` and `release-ready` leave the
+# working tree as found.
+check: fmt-check lint-check test test-scripts
 	@echo "✅ All checks passed"
 
 # Run all quality checks and build (useful for CI/CD)
@@ -169,6 +184,7 @@ help:
 	@echo "  make test           - Run tests"
 	@echo "  make test-race      - Run tests with the race detector"
 	@echo "  make test-coverage  - Run tests with coverage report"
+	@echo "  make test-scripts   - Test the readers behind the readiness reports and the start gate"
 	@echo "  make deps           - Download and tidy dependencies"
 	@echo "  make run            - Run the application"
 	@echo "  make fmt            - Format code (rewrites files)"
@@ -176,11 +192,12 @@ help:
 	@echo "  make lint           - Verify .golangci.yml, then lint and auto-fix (rewrites files; requires golangci-lint)"
 	@echo "  make lint-check     - Verify .golangci.yml, then report lint findings without fixing them"
 	@echo "  make loc            - Count lines of code (requires cloc)"
+	@echo "  make start-item N=<n> - Gate: may entry N of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)"
 	@echo "  make release-ready  - Report whether a release can be cut (tag/publish from the repo root)"
-	@echo "  make branch-ready   - Gate: is this feature/fix branch ready to ship? (clean tree, ci, changelog written, strikeouts cleared)"
+	@echo "  make branch-ready   - Gate: is this feature/fix branch ready to ship? (clean tree, ci, changelog written, entries archived, backlog touched)"
 	@echo ""
 	@echo "Composite targets:"
-	@echo "  make check          - Run fmt-check + lint-check + test (modifies nothing)"
+	@echo "  make check          - Run fmt-check + lint-check + test + test-scripts (modifies nothing)"
 	@echo "  make ci             - Run check + build (for CI/CD)"
 	@echo ""
 	@echo "  make help           - Display this help message"

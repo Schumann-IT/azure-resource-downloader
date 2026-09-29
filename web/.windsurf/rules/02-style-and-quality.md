@@ -16,6 +16,8 @@ Run everything from this folder (npm scripts, not raw binaries):
 - `npm run lint` — ESLint, reports only; part of both readiness gates
 - `npm run lint:fix` — ESLint with `--fix`; rewrites files, so it is in neither gate
 - `npm run lint:baseline` / `npm run lint:prune` — rewrite `eslint-suppressions.json`; in neither gate either
+- `npm run start-item -- <n>` — gate: may entry n of `NEXT-ITERATIONS.md` be implemented? (branch, clean
+  tree, entry committed, plan open)
 - `npm run branch-ready` — clean-tree preflight, tests + lint + build, then report whether this feature/fix
   branch is ready to ship
 
@@ -107,10 +109,11 @@ environment variables, scripts, layout or the docs-root contract change. Deliber
 `NEXT-ITERATIONS.md`. Do not create additional Markdown files here.
 
 ## Changelog: update it with every change
-`CHANGELOG.md` is part of the change, not a follow-up. **Every** change that a user or operator can
-notice — routes, views, discovery/rendering behaviour, environment variables, scripts, dependencies,
-security boundaries, bug fixes — gets an entry in the same commit/edit, before you report the work as
-done. Purely internal edits that change no observable behaviour (a rename, a comment, a test-only
+`CHANGELOG.md` is part of the change, not something left to a release. **Every** change that a user or
+operator can notice — routes, views, discovery/rendering behaviour, environment variables, scripts,
+dependencies, security boundaries, bug fixes — gets an entry, written when the backlog entry is declared
+done (`item N is done`, see `06-next-iterations.md`): after the work has been verified, from the entry, the
+diff and the implementation notes, in the same commit as the entry's archive file. Purely internal edits that change no observable behaviour (a rename, a comment, a test-only
 addition) do not need one.
 
 Rules for entries:
@@ -140,11 +143,13 @@ Rules for entries:
   never edits these files: it only reports whether a release can be cut (empty `[Unreleased]`,
   `package.json` matching, no struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no
   git command. `npm run branch-ready` is its counterpart for a feature/fix branch and asks the opposite
-  questions (`[Unreleased]` **written**, strikeouts cleared and entries renumbered, `version` **untouched**);
-  it also changes nothing, but it reports every check and exits non-zero if **any** of them failed, so it can
-  gate a merge. It is the one place in this project's tooling that runs git: a read-only
-  `git status --porcelain` scoped to `web/`, as a **preflight** that refuses to report on uncommitted changes
-  (so the verdict describes the commit that will be merged) and degrades to a skip outside a clone. The
+  questions (`[Unreleased]` **written**, done entries archived and the rest renumbered, the backlog touched on
+  the branch, not on the release branch, `version` **untouched**); it also changes nothing, but it reports
+  every check and exits non-zero if **any** of them failed, so it can gate a merge. Its git is read-only and
+  goes through `scripts/lib/git.js`: a `git status --porcelain` scoped to `web/` as a **preflight** that
+  refuses to report on uncommitted changes (so the verdict describes the commit that will be merged), then
+  `rev-parse`, `merge-base`, `diff` and `show` for the branch checks; all of it degrades to a skip outside a
+  clone. `npm run start-item -- <n>` is the gate before implementing entry n (see `06-next-iterations.md`). The
   repository-wide branch and working-tree checks, date stamping, tagging and the GitHub release happen from
   the repository root; the procedure lives in the **Development workflow** section of `../README.md`. The earlier
   `RC1`/`RC2` naming is retired, so do not reintroduce it.
@@ -153,3 +158,12 @@ Rules for entries:
   freshness), say explicitly how it is preserved.
 - **Deliberate scope cuts belong in `NEXT-ITERATIONS.md`** and are referenced from the changelog, not
   duplicated into it.
+
+## Commit messages
+Every commit follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification)
+strictly: `type(scope)!: description` with type in `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`,
+`chore`, `revert`; scope `go` or `web` for one project, `release` for the release commit, none for
+repository-level commits; a lowercase, imperative description without a trailing period. The workflow commits
+are `docs(<project>): plan <title>`, `feat|fix(<project>): <title>`, `docs(<project>): close <title>`,
+`chore(release): go vX.Y.Z, web vX.Y.Z`. The branch gate fails on any other subject, and the pull request title
+(the squash commit on `main`) follows the same rule.
