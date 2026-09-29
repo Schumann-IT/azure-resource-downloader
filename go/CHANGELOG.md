@@ -38,7 +38,7 @@ This project is released independently of the documentation browser in `web/`: i
   skips its diff checks when `go/` is unchanged. **Requiring the check is a repository setting made by
   hand**: branch protection on `main` must require `branch-ready-go` and `branch-ready-web` and require
   branches to be up to date before merging. See the **Development workflow** section of the
-  [repository README](../README.md).
+  [repository README](../README.md). (#31)
 
 ### Breaking
 

@@ -39,7 +39,7 @@ section of the [repository README](../README.md) for the procedure.
   and the gate already skips its diff checks when `web/` is unchanged. **Requiring the check is a repository
   setting made by hand**: branch protection on `main` must require `branch-ready-web` beside
   `branch-ready-go` and require branches to be up to date before merging. The app itself is unchanged. See
-  the **Development workflow** section of the [repository README](../README.md).
+  the **Development workflow** section of the [repository README](../README.md). (#31)
 
 #### Tenant compare
 

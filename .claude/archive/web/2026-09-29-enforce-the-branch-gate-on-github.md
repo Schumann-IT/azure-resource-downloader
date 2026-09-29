@@ -5,6 +5,7 @@ status: done
 started: 2026-09-29
 finished: 2026-09-29
 branch: feat/github-branch-gate
+pr: 31
 changelog: Unreleased
 ---
 ## Enforce the branch gate on GitHub
