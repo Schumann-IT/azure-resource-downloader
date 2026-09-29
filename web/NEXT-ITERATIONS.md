@@ -21,25 +21,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
 deleted, and the remaining entries are renumbered.
 
-### 1. One severity vocabulary for the drift index table
-
-**Goal.** Give every severity value in a drift index table the same treatment the tenant summary's Findings
-table gets, so a reader is not left guessing why `high` rows carry an icon and `low` rows do not.
-
-> **Why.** Two vocabularies exist by design: the tenant summary uses `critical / high / medium`, the drift
-> analysis `high / medium / low / info` (`info` reserved for tool-fed inventory rows). The table tagging in
-> `findings-table.ts` knows only the summary's set, so in `drift/index.md` the `low` and `info` rows fall
-> back to the plain word — graceful (an unknown value must never become a wrong icon) but visibly uneven in
-> the one table where all four appear. The drift page header in `drift-view.ts` already maps all four.
-> Web-only: unifying on the Go side would touch the summary template (regeneration-gated) for no gain.
-
-**Plan.**
-
-- Give drift index tables their own closed severity set (`high`, `medium`, `low`, `info`) in
-  `findings-table.ts`, keyed by which document is being rendered, or unify the two sets into one map with the
-  summary's values first; unknown values keep falling back to the plain word.
-- A case in `test/section-hooks.spec.ts` or `test/docs.e2e.spec.ts` rendering a drift index with all four
-  values; `CHANGELOG.md` under `[Unreleased]` → `### Fixed`.
+None scheduled.
 
 ## Standing decisions
 

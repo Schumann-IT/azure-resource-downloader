@@ -84,6 +84,21 @@ section of the [repository README](../README.md) for the procedure.
   as a whole line removed and another added. The page counts the differences and links each one to the next,
   with plain links rather than a script.
 
+### Fixed
+
+#### Drift view
+
+- **The drift index table now treats every severity the same way the tenant summary's Findings table does.**
+  Before, only `high` and `medium` rows got an icon, because the table tagging knew only the summary's
+  vocabulary (`critical / high / medium`); the drift analysis writes `high / medium / low / info`, so `low`
+  and `info` rows fell back to the plain word in the one table where all four appear. Each table now keeps
+  its own closed set: a drift index table (Severity first, with a Verdict column) tags all four, coloured on
+  the drift page's own scale — `high` red, `medium` amber, `low` blue, `info` neutral — so a drift `high` no
+  longer reads amber in the table but red in the page badge; `critical` stays plain there, and `low` / `info`
+  stay plain in the summary table, whose look is unchanged. A value outside a table's set is never given a
+  wrong icon. The `data-severity` hook stays the lowercase word. Nothing changes on the CLI side and no
+  documentation is regenerated. (#32)
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

@@ -427,7 +427,10 @@ contract in its `doc-prompt.md`), which makes the heading text a machine contrac
   `::after` content on the block's own `<summary>` — decorative only, since the same fact is in the prose.
 - **The metadata table** each document opens with is classed `.doc-metadata` (the first table after the H1,
   so an extra heading before it does not break the match). The summary's **Findings** table is classed
-  `.findings` with a `data-severity` per row, so severity can be coloured.
+  `.findings` with a `data-severity` per row, so severity can be coloured; the drift index's Findings table
+  (Severity first, with a Verdict column) is additionally classed `.findings-drift` and tagged against the
+  drift analysis's own set, `high / medium / low / info`, on the drift page's colour scale. Each table keeps
+  its closed set: a value outside it stays plain text rather than getting a wrong icon.
 
 None of this reaches the Confluence export: `<div>` and `<section>` unwrap and the attributes are on no
 element allowlist, so an exported page is unaffected.
@@ -533,7 +536,7 @@ web/
 │       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
-│       ├── findings-table.ts            # the summary's Findings table → .findings + data-severity
+│       ├── findings-table.ts            # the summary's and the drift index's Findings tables → .findings(-drift) + data-severity
 │       ├── section-hooks.ts             # heading slugs, data-section, marker blocks, metadata table
 │       ├── path-safety.ts               # the security boundary
 │       ├── drift-observation.ts         # drift/metadata.yaml parsing + the one drift decision
