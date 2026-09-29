@@ -507,6 +507,8 @@ built in a temp directory and removed afterwards.
 | `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
 | `test/export.spec.ts` | The exporter's pure modules: page titles, the allowlist serialiser, href rewriting, the format (space, page plan, provenance, overview and its axis index in all three modes), `parseExportIndexMode`, and the shared `<details>` fixture. |
 | `test/styles-build.spec.ts` | Compiles `src/styles.css` with the local Tailwind CLI and asserts the custom rules survive. |
+| `test/readiness-readers.spec.ts` | The `CHANGELOG.md`, `NEXT-ITERATIONS.md` and archive-frontmatter readers behind the readiness reports and the start gate. |
+| `test/readiness-git.spec.ts` | The start gate and the branch facts against a throwaway `git init` repository (skipped without git). |
 
 Required coverage for a change: `path-safety.ts` → `path-safety.spec.ts`; `tenant-index.ts` →
 `tenant-index.spec.ts`; routes, discovery, rendering, highlighting or link rewriting → `docs.e2e.spec.ts`;
@@ -553,10 +555,14 @@ web/
 ├── public/                              # favicon.svg; app.css (generated, gitignored)
 ├── test/                                # *.spec.ts
 ├── scripts/
+│   ├── start-item.js                    # npm run start-item -- N: may entry N of the backlog be implemented?
 │   ├── branch-ready.js                  # npm run branch-ready: is this feature/fix branch ready to ship?
 │   ├── working-tree-clean.js            # its preflight: refuse to report on uncommitted changes
-│   ├── release-ready.js                 # npm run release-ready: can a release be cut? (both change nothing)
-│   └── lib/changelog.js                 # CHANGELOG.md / NEXT-ITERATIONS.md readers both reports share
+│   ├── release-ready.js                 # npm run release-ready: can a release be cut? (all change nothing)
+│   └── lib/
+│       ├── changelog.js                 # CHANGELOG.md / NEXT-ITERATIONS.md / archive-frontmatter readers all three share
+│       ├── branch.js                    # the git facts behind branch-ready's branch checks
+│       └── git.js                       # the one place the tooling shells out (read-only git)
 ├── .env.example                         # every variable at its default
 ├── eslint.config.mjs                    # the rule set `npm run lint` and WebStorm both run
 ├── eslint-suppressions.json             # the pre-existing findings it exempts (npm run lint:baseline)
@@ -568,7 +574,8 @@ web/
 
 - Run everything through the npm scripts from this folder (`npm run build`, `npm run start:dev`,
   `npm run start:prod`, `npm test`, `npm run lint`, `npm run lint:fix`, `npm run lint:baseline`,
-  `npm run lint:prune`). The Go `Makefile` in `../go` does not apply here.
+  `npm run lint:prune`, `npm run start-item -- <n>`, `npm run branch-ready`, `npm run release-ready`). The Go
+  `Makefile` in `../go` does not apply here.
 - `eslint.config.mjs` is the single lint truth. `npm run lint` reports and is part of both readiness gates;
   `npm run lint:fix` rewrites files and is deliberately in neither, since a gate must not change the tree.
   **WebStorm needs no setup**: its default *Automatic ESLint configuration* runs the ESLint in this folder's
@@ -601,7 +608,8 @@ web/
   another reason. Growing it is a decision to take deliberately, not a routine.
 - The architecture invariants and style/testing requirements live in `.windsurf/rules/` **in this folder**
   (`01-architecture.md`, `02-style-and-quality.md`, `06-next-iterations.md`); the Go rules in `../go` do not
-  apply.
+  apply. Claude Code reads the same rules from `CLAUDE.md`, `../.claude/rules/` and the procedures in
+  `../.claude/skills/`.
 - Non-negotiables worth knowing before touching the code: read-only (no route mutates anything); one path guard
   (`resolveWithinRoot`) with one extension per root; one `markdown-it` instance and one `shiki` highlighter,
   both built at module init; `html: true` stays on; no client-side JavaScript; regenerated files must appear
@@ -615,21 +623,33 @@ web/
   [`../go/CHANGELOG.md`](../go/CHANGELOG.md) instead.
 - This README is the single source of truth for what the browser does today; deliberate scope cuts go in
   [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md). No other Markdown files live here.
-- Delivered work is **struck through** in `NEXT-ITERATIONS.md` rather than deleted, so a branch can be
-  reviewed against what its entries set out to do. Clearing them out and renumbering the rest is part of
-  closing the branch and cutting the release, which is why `release-ready` reports any that are left.
+- **Work starts from the backlog.** Every change is a numbered entry in `NEXT-ITERATIONS.md`, committed
+  before it is implemented — a one-line fix included, as a tiny entry under *Fixes*. `npm run start-item -- <n>`
+  is the gate: it refuses on the release branch, on a dirty `web/`, when entry `n` is not in **`HEAD`'s**
+  backlog (the working copy does not count) or when it has no outstanding plan item, and otherwise prints the
+  entry's Goal and Plan. Exit `2` is a usage error, `1` a refusal.
+- Delivered plan items are **struck through** in `NEXT-ITERATIONS.md` while the branch is open, so it can be
+  reviewed against what its entries set out to do, and the `CHANGELOG.md` entry is written in the same edit.
+  When an entry is done it is **archived, never deleted**: moved with its full plan to
+  `../.claude/archive/web/<finished-date>-<slug>.md` (frontmatter: title, status `done` or `dropped`, dates,
+  branch, and `changelog: Unreleased` until the release stamps the version), and the remaining entries are
+  renumbered. The changelog records what shipped and why; the archive keeps how. Nothing under the archive is
+  read unless asked for. An abandoned entry is archived as `dropped` with a one-line reason.
 - `npm run branch-ready` (or `make branch-ready-web` from the repository root) reports whether a feature or
-  fix branch is ready to ship: tests and build pass, the struck-out `NEXT-ITERATIONS.md` entries have been
-  cleared out and the rest renumbered contiguously, `## [Unreleased]` records the work, and `version` is
-  untouched — bumping it and closing the changelog belong to the release. It edits nothing, and unlike
-  `release-ready` it reports every check and **exits non-zero if any of them failed**, so it can gate a
-  merge. An empty `[Unreleased]` is reported, not failed: a branch with no user- or operator-visible effect
-  legitimately has none.
+  fix branch is ready to ship: tests, lint and build pass, nothing is left struck out in `NEXT-ITERATIONS.md`
+  (done entries archived) and the rest is numbered contiguously, `## [Unreleased]` records the work,
+  `version` is untouched — bumping it and closing the changelog belong to the release — the branch is not the
+  release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
+  grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
+  non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed:
+  a branch with no user- or operator-visible effect legitimately has none.
 - It **refuses to run while `web/` has uncommitted changes**, before the tests and the build, so the verdict
-  describes the commit that will be merged rather than the editor's current state. That preflight is the only
-  git this project's tooling runs — read-only `git status --porcelain`, scoped to `web/` so an unrelated edit
-  in `../go` cannot block it. Outside a clone (no git, no repository) it says so and waves the run through.
-  `release-ready` runs no git at all.
+  describes the commit that will be merged rather than the editor's current state. That preflight is a
+  read-only `git status --porcelain`, scoped to `web/` so an unrelated edit in `../go` cannot block it. The
+  branch checks and the start gate run further read-only git (`rev-parse`, `merge-base`, `diff`, `show`)
+  against the merge-base with the release branch (`RELEASE_BRANCH`, default `main`), all through
+  `scripts/lib/git.js`; outside a clone (no git, no repository) every git-backed check says so and is skipped.
+  `release-ready` runs no git at all — it only adds a line listing the archived entries the release will stamp.
 
 ## Known limitations
 

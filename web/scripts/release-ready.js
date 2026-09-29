@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Release-readiness report for web/. It changes nothing — no file edits, no
-// commits, no tags — and runs no git command at all. Closing the changelog
+// commits, no tags — and runs no git command at all (the archive listing at the
+// end reads the filesystem). Closing the changelog
 // (`## [Unreleased]` emptied into a new, undated `## [X.Y.Z]` section) and
 // bumping `version` in package.json are done by hand; this script only reports
 // whether that state has been reached. The release date is stamped onto that
@@ -16,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { readChangelog, readStruckLines } = require('./lib/changelog');
+const { readChangelog, readStruckLines, parseFrontmatter } = require('./lib/changelog');
 
 const root = path.resolve(__dirname, '..');
 const changelogPath = path.join(root, 'CHANGELOG.md');
@@ -60,15 +61,15 @@ if (!awaitingRelease) {
 console.log(`🚀 newest changelog version ${version} is closed and awaiting release (web/v${version})`);
 
 // 1. No struck-out entries in NEXT-ITERATIONS.md. A strikeout marks work that
-//    shipped and is waiting to be cleared out, which is part of cutting the
-//    release rather than of implementing.
+//    shipped and is still waiting to be archived ("item N is done");
+//    `npm run branch-ready` gates that at branch close, this is the backstop.
 if (!fs.existsSync(nextPath)) {
   fail('NEXT-ITERATIONS.md not found');
 } else {
   const struck = readStruckLines(nextPath);
   if (struck.length > 0) {
     fail(
-      'NEXT-ITERATIONS.md has struck-out entries — delete them (and check CHANGELOG.md records the work):',
+      'NEXT-ITERATIONS.md has struck-out entries — archive them (say "item N is done") and check CHANGELOG.md records the work:',
       struck.map(({ line, n }) => `${n}:${line}`).join('\n'),
     );
   } else {
@@ -95,6 +96,21 @@ if (pkgVersion !== version) {
   fail(`package.json says ${pkgVersion} but CHANGELOG.md says ${version} — run 'npm version ${version} --no-git-tag-version' and commit`);
 } else {
   ok(`package.json version ${pkgVersion} matches CHANGELOG.md`);
+}
+
+// Archived entries the release will stamp: their `changelog: Unreleased` becomes
+// `changelog: <version>` in the release commit (scripts/release.sh at the
+// repository root). A report line, not a check.
+const archiveDir = path.join(root, '..', '.claude', 'archive', 'web');
+const stale = fs.existsSync(archiveDir)
+  ? fs
+      .readdirSync(archiveDir)
+      .filter((name) => name.endsWith('.md'))
+      .filter((name) => parseFrontmatter(fs.readFileSync(path.join(archiveDir, name), 'utf8')).changelog === 'Unreleased')
+  : [];
+if (stale.length > 0) {
+  console.log(`ℹ️  ${stale.length} archived entry(ies) still say 'changelog: Unreleased' — 'make release' stamps them to ${version}:`);
+  console.log(stale.map((name) => `   ../.claude/archive/web/${name}`).join('\n'));
 }
 
 console.log('');

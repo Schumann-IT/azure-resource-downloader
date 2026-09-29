@@ -1,9 +1,4 @@
 {
-  "scripts/working-tree-clean.js": {
-    "sonarjs/no-os-command-from-path": {
-      "count": 1
-    }
-  },
   "src/docs/export/confluence.ts": {
     "sonarjs/cognitive-complexity": {
       "count": 1

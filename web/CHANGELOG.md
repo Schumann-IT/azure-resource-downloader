@@ -15,6 +15,21 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Added
 
+#### Release workflow
+
+- **Work starts from the backlog, and the tooling now says so.** Every change begins as a numbered entry in
+  `NEXT-ITERATIONS.md`, committed before it is implemented: `npm run start-item -- <n>` is the gate that
+  checks this — not on the release branch, a clean `web/`, entry `n` present in `HEAD`'s backlog with an
+  outstanding plan item — and prints the entry's Goal and Plan. When an entry is done it is no longer deleted
+  but **archived** with its full plan to `.claude/archive/web/` at the repository root, so how something was
+  built stays reviewable while this changelog keeps the what and why; the release stamps each archived entry
+  with the version that shipped it. `npm run branch-ready` gained three read-only git checks on top of the
+  existing ones: the branch is not the release branch, the backlog changed on it, and every entry archived as
+  done on it is recorded under `[Unreleased]`. **A branch that changes `web/` without touching
+  `NEXT-ITERATIONS.md` now fails `npm run branch-ready`** — a small fix gets a small entry. Outside a git clone
+  the new checks skip with a note, so the tooling stays usable there. The app itself is unchanged. See the
+  **Development workflow** section of the [repository README](../README.md).
+
 #### Tenant compare
 
 - **Two exports can now be put side by side — stage against prod — to see which resources are configured the
