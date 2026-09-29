@@ -596,8 +596,8 @@ web/
   from other plugins is not covered at all. Closing either gap is a separate decision — a dependency and a
   slower lint, respectively. Analysis itself is described in the **Static analysis** section of the
   [repository README](../README.md).
-- **The code that predates those rules is baselined, not exempted.** `eslint-suppressions.json` records the 16
-  findings that existed when the rules were switched on as a count per file and per rule — ESLint's own bulk
+- **The code that predates those rules is baselined, not exempted.** `eslint-suppressions.json` records the 14
+  findings still left from when the rules were switched on as a count per file and per rule — ESLint's own bulk
   suppressions — so `npm run lint` passes and both readiness gates are usable, while **new code is held to the
   full rule set**: a second violation of a suppressed rule in a suppressed file exceeds the recorded count and
   reports. That is why the baseline is a file of counts rather than `off` entries in `eslint.config.mjs`, which

@@ -440,8 +440,8 @@ route may mutate anything under the docs root, however the client is built.
 
 ### Idea: Clear the ESLint suppressions baseline
 
-Pay off the 16 findings in `eslint-suppressions.json` — the ones that existed in 9 files when the sonarjs rules
-were switched on — a rule at a time, pruning after each, until the file, the `lint:baseline` / `lint:prune`
+Pay off the 14 findings in `eslint-suppressions.json` — what is left, in 9 files, of the ones that existed
+when the sonarjs rules were switched on — a rule at a time, pruning after each, until the file, the `lint:baseline` / `lint:prune`
 scripts and the paragraphs describing them can be deleted. **Parked** because the baseline already delivers the
 property that mattered: every rule stays enabled, `npm run lint` and both readiness gates are usable, and new
 code — including new code in the baselined files — is held to the full set, since one more violation of a
@@ -462,11 +462,12 @@ are refactors the existing suite covers and are internal, carrying no `CHANGELOG
 a difference: `cognitive-complexity` (4: `confluence.ts`, `export/html-allowlist.ts`, `section-hooks.ts`,
 `tenant-index.ts`), split along the seams those functions already have and keeping the pure/Nest-free split
 intact; `misplaced-loop-counter` in `page-name.ts`, a `while` written as a `for`; `no-nested-template-literals`
-in `confluence.ts`; and `prefer-specific-assertions` in two specs. Two are decisions rather than fixes, and
-either way they move **out** of the baseline: `updated-loop-counter` in `findings-table.ts` (the scan assigns
-`i = close` to skip a matched table's body — deliberate and documented in place) and `no-os-command-from-path`
-in `scripts/working-tree-clean.js` (the preflight resolves `git` through `PATH`); if accepted, each becomes an
-`eslint-disable-next-line` at its site, because a baseline must not be where a standing choice hides. Deleting
+in `confluence.ts`; and `prefer-specific-assertions` in two specs. One is a decision rather than a fix, and
+either way it moves **out** of the baseline: `updated-loop-counter` in `findings-table.ts` (the scan assigns
+`i = close` to skip a matched table's body — deliberate and documented in place); if accepted, it becomes an
+`eslint-disable-next-line` at its site, because a baseline must not be where a standing choice hides — exactly
+what happened to `no-os-command-from-path`, which left the ledger when the git calls moved into
+`scripts/lib/git.js` behind one directive with its reason. Deleting
 the file and the two scripts is the last step and is the only operator-visible part, so that one does get a
 `CHANGELOG.md` entry.
 
