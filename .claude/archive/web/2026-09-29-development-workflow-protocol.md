@@ -5,6 +5,7 @@ status: done
 started: 2026-09-29
 finished: 2026-09-29
 branch: chore/claude-setup
+pr: 30
 changelog: Unreleased
 ---
 ### Development workflow protocol: start gate, branch gate, plan archive

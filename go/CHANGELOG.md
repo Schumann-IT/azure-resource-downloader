@@ -29,7 +29,7 @@ This project is released independently of the documentation browser in `web/`: i
   becomes the squash commit on `main`. The readers behind the reports are tested by
   `make test-scripts`, part of `make check`. Outside a git clone the new checks skip with a note, so the
   tooling stays usable there. See the **Development workflow** section of the
-  [repository README](../README.md).
+  [repository README](../README.md). (#30)
 
 ### Breaking
 

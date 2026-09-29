@@ -30,7 +30,7 @@ section of the [repository README](../README.md) for the procedure.
   commit whose subject does not follow Conventional Commits** (`type(go|web|release)!: description`), since
   the pull request title becomes the squash commit on `main`. Outside a git clone
   the new checks skip with a note, so the tooling stays usable there. The app itself is unchanged. See the
-  **Development workflow** section of the [repository README](../README.md).
+  **Development workflow** section of the [repository README](../README.md). (#30)
 
 #### Tenant compare
 
