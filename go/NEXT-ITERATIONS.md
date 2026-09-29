@@ -126,24 +126,41 @@ unexplained one.
 checks — is a report a `git commit` by hand can walk past; branch protection with a required status check is
 the only layer that actually gates.
 
-> **Scope.** A GitHub Actions workflow at the repository root running `make branch-ready-go` on pull requests
-> that touch `go/` (Go per `go.mod`, golangci-lint v2 pinned, a checkout deep enough for `git merge-base` and
-> `git describe`), and branch protection on `main` requiring it. The web half is the mirror entry in
-> `../web/NEXT-ITERATIONS.md`; one workflow file can carry both jobs. A `pre-commit` hook refusing commits on
-> `main` is deliberately not part of this: the release flow commits on `main`.
+> **Scope.** A GitHub Actions workflow at the repository root running `make branch-ready-go` on every pull
+> request into `main` (Go per `go.mod`, golangci-lint v2 pinned at the version used locally, the pull
+> request's branch checked out by name with full history so `git rev-parse --abbrev-ref HEAD`,
+> `git merge-base` and `git describe` work), and branch protection on `main` requiring it. The workflow has
+> no `paths:` filter: a required check that never reports blocks the merge for good, and the gate already
+> skips its diff checks when `go/` is unchanged; running both pipelines on every pull request costs a few
+> minutes and is accepted. Fork pull requests are out of scope (single-maintainer repository). The web half
+> is the mirror entry in `../web/NEXT-ITERATIONS.md`; one workflow file carries both jobs, and this entry
+> creates it. A `pre-commit` hook refusing commits on `main` is deliberately not part of this: the release
+> flow commits on `main`.
 >
 > **Not regeneration-gated.**
 
 **Plan.**
 
-- `.github/workflows/branch-ready.yml`: a `go` job on `pull_request` (paths `go/**`, `.claude/archive/go/**`)
-  that checks out with full history, installs the Go version from `go.mod` and golangci-lint v2, and runs
-  `make branch-ready-go` from the repository root with `RELEASE_BRANCH` set to the pull request's base.
-- Verify the gate's clean-tree preflight and merge-base detection behave in the runner (detached HEAD on a
-  merge ref: the branch check must read the head ref, not `HEAD`).
-- Enable branch protection on `main` requiring the job (a repository setting, done by hand; document the
-  setting in the root `README.md` Development workflow).
-- `CHANGELOG.md` under `[Unreleased]`; root `README.md` step 3 naming the status check.
+- `.github/workflows/branch-ready.yml` (this entry creates it; the web entry adds its job afterwards):
+  `name: branch-ready`, trigger `pull_request` with `branches: [main]` and no `paths:` filter,
+  `permissions: contents: read`. It has a job `go` with `name: branch-ready-go` on `ubuntu-latest`. That job
+  runs `actions/checkout` with `ref: ${{ github.head_ref }}` and `fetch-depth: 0`, `actions/setup-go` with
+  `go-version-file: go/go.mod` and `cache-dependency-path: go/go.sum`, and `golangci/golangci-lint-action`
+  with `install-only: true` and `version: v2.11.4` (the version used locally, built with Go 1.26.1; if the
+  prebuilt binary is older than `go.mod`'s Go, use `install-mode: goinstall`). Its last step runs
+  `make branch-ready-go` from the repository root with `RELEASE_BRANCH: ${{ github.base_ref }}` in the step's
+  `env`.
+- Confirm in the runner that the gate needs no script change. The clean-tree preflight must see a fresh
+  `go/` (`make ci` writes only the gitignored `azure-rd`, after the preflight). The branch check must read
+  the pull request's branch name. The merge-base must resolve through the existing `origin/$RELEASE_BRANCH`
+  fallback, and `git describe --match 'go/v*'` must find the tags. Verify this on this branch's own pull
+  request, where `branch-ready-go` must report and pass. Only if one of these fails, fix
+  `scripts/branch-ready.sh` and cover the fix in `scripts/lib/changelog_test.sh`.
+- Enable branch protection on `main` requiring the `branch-ready-go` and `branch-ready-web` status checks and
+  requiring branches to be up to date before merging (the jobs gate the pull request's head, not the merge
+  result). This is a repository setting done by hand; leave the bullet unstruck until the user confirms it.
+- `CHANGELOG.md` under `[Unreleased]`; root `README.md` Development workflow step 3 naming the `branch-ready`
+  workflow, its `branch-ready-go` / `branch-ready-web` status checks and the branch-protection setting.
 
 ## Parked ideas
 
