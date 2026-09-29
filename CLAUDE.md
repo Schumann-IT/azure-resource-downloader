@@ -42,10 +42,11 @@ commits `main` takes directly are a changelog close and the release stamp.
   `npm --prefix web run start-item -- <n>`), then the plan — code and tests, striking items as they land,
   **no README or changelog yet**; stop so the user can verify. By default this runs the agent pipeline for
   one side.
-- `implement pair go N web M` → `/implement-pair`: Opus plan review, one checkpoint with the user, two
-  Sonnet implementers in parallel (build and tests locally), a push with CI as the quality authority, Opus
-  review, two Sonnet fixers for findings and red pipelines. The session commits per project and waits for
-  CI; **agents never run git or lint**.
+- `implement pair go N web M` → `/implement-pair`: one Opus plan reviewer refines and commits the backlog
+  (it asks you only for decisions that change what ships, and reviews again after each answer), then per
+  side in parallel: implementer (tier from the entry), Opus reviewer, Sonnet QA. The session commits per
+  project, pushes once after QA and waits for CI. **Agents never push; only the plan reviewer commits, and
+  only the backlog files.**
 - `item N is done` / `drop item N` → `/item-done`: **now** write the project's `README.md` and
   `CHANGELOG.md` (from the entry, the diff and the reports), archive the entry to
   `.claude/archive/<project>/` (kept forever, never auto-loaded — `/archive` lists and shows them),
@@ -104,7 +105,8 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
   Produce a Failure Handling Report with proposed, unapplied patches first (`/test-failure-report`); never
   weaken or delete an assertion to go green, and apply neither option without explicit confirmation.
 - **Secrets.** Never log, print or commit tokens, client secrets, resolved OMA-URI values or `SONAR_TOKEN`.
-- **Agents never commit.** Git belongs to the main session; a subagent reports what should be committed.
+- **Agents never commit** — except the plan reviewer, which commits only `NEXT-ITERATIONS.md` files. Git
+  otherwise belongs to the main session; a subagent reports what should be committed.
   `.claude/hooks/agent-bash-guard.sh` enforces it for the pipeline agents.
 - **Commit messages** follow Conventional Commits strictly — `.claude/rules/commits.md`: `type(go|web)!:
   description`, no scope for repository-level commits, `chore(release): …` from the release script only.
