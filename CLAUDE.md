@@ -21,7 +21,7 @@ on `go/` — `DOCS_ROOT` pointing at an export tree is the only coupling.
 | this file | monorepo layout, workflow, gates, release |
 | `go/CLAUDE.md`, `web/CLAUDE.md` | per-project context, layout, non-negotiables, commands (loaded when working in that folder) |
 | `.claude/rules/*.md` | path-scoped detail: Go style, handlers, export safety; web style; changelog policy; backlog lifecycle |
-| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`, `close-branch`, `release` |
+| `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `item-done`, `archive`, `close-branch`, `release` |
 | `go/.windsurf/rules/`, `web/.windsurf/rules/` | the Windsurf originals these files were migrated from, kept until that subscription ends. When a rule changes, change it in both places. |
 
 ## Development workflow
