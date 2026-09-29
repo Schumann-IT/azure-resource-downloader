@@ -173,10 +173,71 @@ unexplained one.
   `CHANGELOG.md` under `[Unreleased]`; and the drift-tree lifecycle rule in
   `.windsurf/rules/04-security-and-ops.md` naming the new root file as swept, never pruned.
 
+## 3. Enforce the branch gate on GitHub
+
+**Goal.** Make the branch gate unbypassable: a pull request into `main` cannot be merged until
+`make branch-ready-go` has passed on it. Everything local — the start gate, `branch-ready`, the archive
+checks — is a report a `git commit` by hand can walk past; branch protection with a required status check is
+the only layer that actually gates.
+
+> **Scope.** A GitHub Actions workflow at the repository root running `make branch-ready-go` on pull requests
+> that touch `go/` (Go per `go.mod`, golangci-lint v2 pinned, a checkout deep enough for `git merge-base` and
+> `git describe`), and branch protection on `main` requiring it. The web half is the mirror entry in
+> `../web/NEXT-ITERATIONS.md`; one workflow file can carry both jobs. A `pre-commit` hook refusing commits on
+> `main` is deliberately not part of this: the release flow commits on `main`.
+>
+> **Not regeneration-gated.**
+
+**Plan.**
+
+- `.github/workflows/branch-ready.yml`: a `go` job on `pull_request` (paths `go/**`, `.claude/archive/go/**`)
+  that checks out with full history, installs the Go version from `go.mod` and golangci-lint v2, and runs
+  `make branch-ready-go` from the repository root with `RELEASE_BRANCH` set to the pull request's base.
+- Verify the gate's clean-tree preflight and merge-base detection behave in the runner (detached HEAD on a
+  merge ref: the branch check must read the head ref, not `HEAD`).
+- Enable branch protection on `main` requiring the job (a repository setting, done by hand; document the
+  setting in the root `README.md` Development workflow).
+- `CHANGELOG.md` under `[Unreleased]`; root `README.md` step 3 naming the status check.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
-ship and are removed. Each records why it is parked and what would make it worth doing.
+ship and are archived. Each records why it is parked and what would make it worth doing.
+
+### Idea: emit `summary:` in the generated document frontmatter
+
+The prompt template's *Frontmatter (required)* section lists `source`, `sourceSha256`, `promptSha256`,
+`platformGroup`, `functionGroup` and `generatedAt` — and never asks for `summary:`. The plumbing on both
+sides is complete: `docFrontmatter` has a `Summary` field, `GenerateIndex` copies it into each `index.yaml`
+resource, and the browser renders it as per-item context when present — so it is absent from every
+document by construction, not by model behaviour, and the web idea *a name filter and per-item context in
+the sidebar* is blocked on this one template line. **Not planned — parked deliberately**, because the change
+is **regeneration-gated**: the line itself rides `generate_prompt_template.md`, which is not hashed, but no
+existing document carries the field, so filling it means regenerating every document anyway. It must not
+ship alone.
+
+**Revisit when** a documentation regeneration is scheduled for another reason; fold it in with the other
+regeneration-gated ideas below (per-finding severity, taxonomy bootstrap) so they share one regeneration.
+When promoted: one frontmatter line plus its rule text in the template, and a note that `platformGroup` /
+`functionGroup` — already required by the template but empty in the reference exports, which predate it —
+fill in on the same regeneration with no further change.
+
+### Idea: version the drift observation, and name `drift/` a Go → web contract
+
+`drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
+`drift/<key>.md` and `drift/index.md` are read by the browser, joined by the shared `<type>/<name>` key,
+gated on `baseline.generatedAt` and verified by hash — exactly the shape of the `index.yaml` contract, with
+the same obligations: a change to the observation schema, to the per-finding frontmatter (`verdict`,
+`severity`, `observedAt`, `baselineGeneratedAt`) or to the index's `severities:` line is a cross-project
+change. The observation carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to
+need. **Not planned — parked deliberately**: nothing has broken, and adding the field alone is cheap but
+pointless until a consumer branches on it.
+
+**Revisit when** the observation schema or the per-finding frontmatter next changes for another reason: add
+`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and name `drift/`
+beside `index.yaml` in both projects' rules as a versioned contract. Related, web-only: the drift index
+table uses `high / medium / low / info` while the tenant summary's Findings table uses
+`critical / high / medium` (see the web backlog's *Fixes*).
 
 ### Idea: routine dependency updates, and consolidating on one Microsoft Graph SDK
 
@@ -192,9 +253,9 @@ real: the two generated SDKs dominate compile time and binary size, and one of t
 
 - **A dependency bump is not hash-neutral by construction.** A Graph SDK update can change which properties a
   model carries and therefore the YAML bytes the export writes — moving `sourceSha256` for resources that did
-  not change in the tenant, which reads as mass drift and forces documentation regeneration. Until the drift
-  command exists there is no cheap way to *prove* a bump content-neutral; after it ships, "update, re-download
-  a fixture tenant, drift must report zero findings" becomes the standard verification, and updates get cheap.
+  not change in the tenant, which reads as mass drift and forces documentation regeneration. `resource drift`
+  is the verification tool: "update, run drift against a fixture tenant, it must report zero findings" is the
+  standard check, so a bump is provable content-neutral before it lands.
 - **Moving the seven v1.0 types to beta trades a stability contract for uniformity.** v1.0 responses are
   contractually stable; beta responses may change shape at Microsoft's discretion. Today the most stable,
   most-referenced types (groups, conditional access) deliberately sit on the stable endpoint. Consolidation
@@ -203,8 +264,8 @@ real: the two generated SDKs dominate compile time and binary size, and one of t
   their YAML (beta models carry extra properties), so their `sourceSha256` values move and their documents
   regenerate — a one-time cost that should ride a regeneration scheduled for another reason, not force its own.
 
-**Revisit when** the drift command has shipped (it is the verification tool this work lacks), and either a
-security advisory forces an SDK bump anyway or build time becomes a felt cost. If consolidation is picked up:
+**Revisit when** a security advisory forces an SDK bump anyway, or build time becomes a felt cost. If
+consolidation is picked up:
 move the seven handlers one at a time, verify each with a fixture-tenant drift run, expect and batch the
 one-time hash movement, and only then drop the v1.0 module. If beta churn is the worry instead, the same
 investigation can conclude the opposite consolidation is wiser once Microsoft ports the Intune endpoints to
