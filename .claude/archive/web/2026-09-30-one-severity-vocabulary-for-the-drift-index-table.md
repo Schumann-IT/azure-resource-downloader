@@ -5,6 +5,7 @@ status: done
 started: 2026-09-29
 finished: 2026-09-30
 branch: fix/drift-severity-vocabulary
+pr: 32
 changelog: Unreleased
 ---
 ## One severity vocabulary for the drift index table

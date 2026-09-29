@@ -97,7 +97,7 @@ section of the [repository README](../README.md) for the procedure.
   longer reads amber in the table but red in the page badge; `critical` stays plain there, and `low` / `info`
   stay plain in the summary table, whose look is unchanged. A value outside a table's set is never given a
   wrong icon. The `data-severity` hook stays the lowercase word. Nothing changes on the CLI side and no
-  documentation is regenerated.
+  documentation is regenerated. (#32)
 
 ## [0.3.0] - 2026-09-28
 
