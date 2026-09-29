@@ -141,12 +141,12 @@ the only layer that actually gates.
 
 **Plan.**
 
-- Confirm in the runner that the gate needs no script change. The clean-tree preflight must see a fresh
+- ~~Confirm in the runner that the gate needs no script change. The clean-tree preflight must see a fresh
   `go/` (`make ci` writes only the gitignored `azure-rd`, after the preflight). The branch check must read
   the pull request's branch name. The merge-base must resolve through the existing `origin/$RELEASE_BRANCH`
   fallback, and `git describe --match 'go/v*'` must find the tags. Verify this on this branch's own pull
   request, where `branch-ready-go` must report and pass. Only if one of these fails, fix
-  `scripts/branch-ready.sh` and cover the fix in `scripts/lib/changelog_test.sh`.
+  `scripts/branch-ready.sh` and cover the fix in `scripts/lib/changelog_test.sh`.~~
 - Enable branch protection on `main` requiring the `branch-ready-go` and `branch-ready-web` status checks and
   requiring branches to be up to date before merging (the jobs gate the pull request's head, not the merge
   result). This is a repository setting done by hand; leave the bullet unstruck until the user confirms it.
