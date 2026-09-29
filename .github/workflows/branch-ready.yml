@@ -1,0 +1,35 @@
+name: branch-ready
+
+# Enforces the branch gate on every pull request into main. The job names are
+# the status checks branch protection requires (branch-ready-go, branch-ready-web).
+# There is deliberately no `paths:` filter: a required check that never reports
+# blocks the merge for good, and each gate skips its diff checks when its folder
+# is unchanged.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: branch-ready-go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          install-only: true
+          version: v2.11.4
+      - name: make branch-ready-go
+        env:
+          RELEASE_BRANCH: ${{ github.base_ref }}
+        run: make branch-ready-go

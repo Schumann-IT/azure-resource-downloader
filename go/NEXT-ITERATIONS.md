@@ -141,7 +141,7 @@ the only layer that actually gates.
 
 **Plan.**
 
-- `.github/workflows/branch-ready.yml` (this entry creates it; the web entry adds its job afterwards):
+- ~~`.github/workflows/branch-ready.yml` (this entry creates it; the web entry adds its job afterwards):
   `name: branch-ready`, trigger `pull_request` with `branches: [main]` and no `paths:` filter,
   `permissions: contents: read`. It has a job `go` with `name: branch-ready-go` on `ubuntu-latest`. That job
   runs `actions/checkout` with `ref: ${{ github.head_ref }}` and `fetch-depth: 0`, `actions/setup-go` with
@@ -149,7 +149,7 @@ the only layer that actually gates.
   with `install-only: true` and `version: v2.11.4` (the version used locally, built with Go 1.26.1; if the
   prebuilt binary is older than `go.mod`'s Go, use `install-mode: goinstall`). Its last step runs
   `make branch-ready-go` from the repository root with `RELEASE_BRANCH: ${{ github.base_ref }}` in the step's
-  `env`.
+  `env`.~~
 - Confirm in the runner that the gate needs no script change. The clean-tree preflight must see a fresh
   `go/` (`make ci` writes only the gitignored `azure-rd`, after the preflight). The branch check must read
   the pull request's branch name. The merge-base must resolve through the existing `origin/$RELEASE_BRANCH`
