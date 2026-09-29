@@ -200,6 +200,14 @@ branch with no user-visible effect legitimately has none. Every check is reporte
 gate **exits non-zero if any check failed**, so it can back a merge check. Details in the
 [go README](go/README.md#development) and the [web README](web/README.md#development-conventions).
 
+The same gates run on GitHub. The `branch-ready` workflow (`.github/workflows/branch-ready.yml`) runs
+`make branch-ready-go` and `make branch-ready-web` on every pull request into `main`, as the status checks
+`branch-ready-go` and `branch-ready-web`. It has no path filter on purpose — a required check that never
+reports would block merging for good, and each gate already skips its diff checks when its folder is
+unchanged. Branch protection on `main` (a repository setting made by hand: Settings → Branches) requires both
+checks and requires the branch to be up to date before merging, so a pull request cannot merge until the gates
+have passed on its head.
+
 Every commit on the branch follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 — `type(go|web)!: description`, no scope for repository-level commits — and the gate fails on any subject that
 does not. Open the pull request once the gate is green: its title is the squash commit that lands on `main`

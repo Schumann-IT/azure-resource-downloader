@@ -1305,7 +1305,9 @@ Conventions that CI and review expect:
   grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
   non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed: a
   branch with no user-visible effect legitimately has none. There is no version check — this project's version
-  is the `go/vX.Y.Z` tag, not a file.
+  is the `go/vX.Y.Z` tag, not a file. On GitHub the same gate runs as the status check `branch-ready-go` on
+  every pull request into `main` (the `branch-ready` workflow in `.github/workflows/`), and branch protection
+  requires it — see the [monorepo README](../README.md#development-workflow).
 - It **refuses to run while `go/` has uncommitted changes**, before `make ci`, so the verdict describes the
   commit that will be merged rather than the editor's current state. That preflight is a read-only
   `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it. The branch

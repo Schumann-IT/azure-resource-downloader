@@ -30,6 +30,15 @@ This project is released independently of the documentation browser in `web/`: i
   `make test-scripts`, part of `make check`. Outside a git clone the new checks skip with a note, so the
   tooling stays usable there. See the **Development workflow** section of the
   [repository README](../README.md). (#30)
+- **The branch gate now runs on GitHub.** A `branch-ready` workflow runs `make branch-ready-go` on every pull
+  request into `main` as the status check `branch-ready-go` — the pull request's branch checked out by name
+  with full history, Go from `go.mod`, golangci-lint pinned to the version used locally — so the gate can be
+  required by branch protection instead of relying on someone running it by hand. The workflow has no path
+  filter on purpose: a required check that never reports would block merging for good, and the gate already
+  skips its diff checks when `go/` is unchanged. **Requiring the check is a repository setting made by
+  hand**: branch protection on `main` must require `branch-ready-go` and `branch-ready-web` and require
+  branches to be up to date before merging. See the **Development workflow** section of the
+  [repository README](../README.md).
 
 ### Breaking
 
