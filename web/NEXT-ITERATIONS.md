@@ -36,6 +36,13 @@ the only layer that actually gates.
   `scripts/lib/branch.js` and cover the fix in `test/readiness-git.spec.ts`.
 - Branch protection on `main` is one repository setting shared with the Go entry, done by hand: require
   `branch-ready-web` beside `branch-ready-go`. Leave it unstruck until the user confirms.
+- Run the `web` job only when the pull request touches something its gate judges: the `web` job takes
+  `needs: changes` (the `changes` job the Go entry adds) and `if: needs.changes.outputs.web == 'true'`, where
+  `web` is true for any change under `web/`, `.claude/archive/web/`, the root `Makefile` or the workflow file
+  itself. Job-level conditions, not a `paths:` filter on the trigger: a skipped job counts as passed for a
+  required status check and so keeps reporting. Every file under `web/` counts, because the gate also checks
+  the backlog, the changelog, the archive and the commit subjects, not only sources, templates and the lock
+  file.
 
 ### 2. One severity vocabulary for the drift index table
 
