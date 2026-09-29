@@ -61,15 +61,13 @@ Examples:
 }
 
 func runGenerateIndex(cmd *cobra.Command, _ []string) error {
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
 	baseOutput := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
-	domain := viper.GetString("domain")
-	outPath := viper.GetString("out")
+	domain := cmdutil.DeclaredDomain(cmd)
+	outPath, _ := cmd.Flags().GetString("out")
 
 	// Grouping is driven entirely by the config file's `taxonomy:` section; read
 	// it with UnmarshalKey so mapstructure's case-insensitive matching survives
@@ -84,8 +82,7 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Resolve the export directory and the domain to cross-check metadata against.
-	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
-		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
+	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain)
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to index: %w", err))
 	}

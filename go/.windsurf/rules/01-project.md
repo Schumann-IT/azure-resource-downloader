@@ -4,17 +4,19 @@ trigger: always_on
 
 # Project Context
 - **Language**: Go 1.24, Module mode
-- **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (written by default; skip with `--no-prompt`)
+- **Target**: CLI tool that downloads Azure resources, transforms them into clean YAML, and generates per-resource-type AI documentation prompts (written by default; skip with the `no-prompt` setting)
 - **Architecture**: Async pipeline pattern with worker pools
 - **Repo layout**:
     - `cmd/`                    → Cobra CLI commands (root; `resource` parent with `download`/`drift`/`types`/`list` in `cmd/resource/`; `docs` parent with `generate-prompt`/`generate-index`/`analyze-drift` in `cmd/docs/`); shared flag groups in `../../internal/cmdutil`, interactive sign-in prompt in `prompt.go`
+    - `internal/config/`        → The configuration surface: the key partition (general vs tenant-scoped vs flag-only), base+profile resolution and merging, built-in defaults
+    - `internal/tenantdir/`     → The one resolver for "which tenant directory does this run act on" (declared vs signed-in domain, refusal on mismatch)
     - `internal/models/`        → Core types, interfaces, config structs
     - `internal/pipeline/`      → 3-stage async pipeline (fetcher, transformer, writer)
     - `internal/handlers/`      → Handler registry (package handlers); ARM handlers in `arm/`, Microsoft Graph handlers in `graph/`
     - `internal/azure/`         → Azure SDK wrappers and utilities (auth, listing pagers, permission-error detection, ID resolver)
     - `internal/transform/`     → Transformation utilities (cleaner, sanitizer, base64 decoding)
-    - `internal/docs/`          → Export metadata (`resources/metadata.yaml`): facts, partial-run merge, `--prune`; plus the `docs generate-prompt` engine (staleness vs document frontmatter, referenced-groups, template splice → `docs/generate.md`)    
-    - `internal/runprep/`       → The run preparation shared by `resource download` and `resource drift` (config reading, session verify, dedicated-app probe/prompt, auth, tenant/output resolution, registry, fetch requests)
+    - `internal/docs/`          → Export metadata (`resources/metadata.yaml`): facts, partial-run merge, pruning; plus the `docs generate-prompt` engine (staleness vs document frontmatter, referenced-groups, template splice → `docs/generate.md`)    
+    - `internal/runprep/`       → The run preparation shared by `resource download` and `resource drift` (config reading, session verify, dedicated-app probe/prompt, auth, tenant/output resolution via `internal/tenantdir`, registry, fetch requests)
     - `internal/drift/`         → The `resource drift` engine: comparability preflight, verdicts (added/changed/renamed/removed), field deltas, the `drift/` observation tree; plus the `docs analyze-drift` engine (observation preflight, payload verification, template splice → `drift/analyze.md`)
     - `internal/logger/`        → Structured logging (charmbracelet/log wrapper)
     - `internal/retry/`         → Exponential backoff for transient Azure API failures
@@ -45,7 +47,7 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Extensibility: Add new resource types by implementing interface + registering
 
 ## Worker Pool Pattern
-- Configurable concurrency with API-specific defaults (Microsoft Graph: 5, ARM: 20; see `internal/models/api.go`), overridable via `--workers` / `workers` / `workers-by-api`
+- Configurable concurrency with API-specific defaults (Microsoft Graph: 5, ARM: 20; see `internal/models/api.go`), overridable via the `workers` / `workers-by-api` settings
 - Uses `sync.WaitGroup` + goroutines + channels
 - Context-aware cancellation — see the accounting invariant below
 
@@ -53,6 +55,7 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Every download writes `<output>/<tenant>/resources/metadata.yaml` describing the **export directory**
 - It records **facts only** (hashes, display names, `@odata.type`, assignment targets, artifact names) — never decisions that depend on a rule you might revise, so revising one never requires re-downloading a tenant
 - `--prune` is the only delete path in the codebase; see `04-security-and-ops.md`
+  (the setting is `prune`, config-only — it has no flag)
 
 # Non-negotiables
 - Every exported function gets a doc comment
@@ -71,5 +74,5 @@ Input → Fetcher Stage → Transformer Stage → Writer Stage → Output
 - Pipeline stages communicate via channels only (no shared state)
 - Use `sync.RWMutex` for thread-safe registry access
 - **Every request produces exactly one result.** A pipeline stage that stops early on `ctx.Done()` MUST keep draining its input channel and emit one `Cancelled` result per remaining item — never `return` and abandon the queue. `Pipeline.Execute` fails loudly when `len(summary.Results) != summary.TotalResources`.
-  - This is not bookkeeping: a request that produces no result is indistinguishable from a resource deleted in the tenant, so with `--prune` a dropped request would delete a live file. Any new stage must preserve it, and `internal/pipeline/pipeline_test.go` covers it.
+  - This is not bookkeeping: a request that produces no result is indistinguishable from a resource deleted in the tenant, so with `prune` enabled a dropped request would delete a live file. Any new stage must preserve it, and `internal/pipeline/pipeline_test.go` covers it.
 - `Transform()` MUST set a meaningful `DisplayName` — see `05-azure-conventions.md`

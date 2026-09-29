@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"azure-resource-downloader/internal/cmdutil"
@@ -15,10 +14,10 @@ import (
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
 	"azure-resource-downloader/internal/runprep"
+	"azure-resource-downloader/internal/tenantdir"
 	"azure-resource-downloader/internal/version"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // Exit codes for resource drift, carried to the root Execute via
@@ -31,9 +30,9 @@ const (
 )
 
 // NewDriftCommand builds the `resource drift` command: has the tenant changed
-// since the last download? It shares the authentication, selection and
-// --workers flags declared on the `resource` parent and the run preparation
-// with download, so the two can never diverge in auth or selection semantics.
+// since the last download? It shares the selection flags and --domain declared
+// on the `resource` parent and the run preparation with download, so the two
+// can never diverge in auth or selection semantics.
 func NewDriftCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "drift",
@@ -80,56 +79,39 @@ Examples:
 		RunE: runDrift,
 	}
 
-	// The authentication and selection flags and --workers are inherited from
-	// the `resource` parent. --timeout and --resolve-secrets are declared here
-	// like on download: drift fetches individual resources and must transform
-	// them exactly as the baseline was written, or the comparability preflight
-	// refuses.
-	cmdutil.AddTimeoutFlag(cmd)
-	cmd.Flags().Bool("resolve-secrets", false, "resolve masked Intune OMA-URI secrets during the comparison; must match the setting the export was downloaded with")
-	cmd.Flags().String("domain", "", "export tenant domain (folder name under --output) to compare against; refused when it differs from the signed-in tenant")
+	// The selection flags and --domain are inherited from the `resource` parent.
+	// Only --exit-code is declared here: it changes this invocation's exit status
+	// and nothing else, and its meaning is command-specific (drift found), so it
+	// cannot be one shared configuration key. The settings that must match how
+	// the baseline was written — the transformers, the filters, secret resolution
+	// — are configuration precisely so they cannot be typed differently here than
+	// they were for the download; the comparability preflight refuses otherwise.
 	cmd.Flags().Bool("exit-code", false, "exit non-zero (3) when drift was found, for CI gating")
 
 	return cmd
 }
 
 func runDrift(cmd *cobra.Command, args []string) error {
-	// Bind the flags that apply to this command (its own and those inherited
-	// from the resource group and root) to viper before reading any values, so
-	// the flag > env > config > default precedence holds without a sibling
-	// command stealing the binding.
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
-	domain := viper.GetString("domain")
-	exitCode := viper.GetBool("exit-code")
+	exitCode, _ := cmd.Flags().GetBool("exit-code")
 
 	// The preparation shared with `resource download`: configuration, session
 	// verification, the dedicated-app probe and prompt, authentication, tenant
-	// resolution and the handler registry.
-	prep, err := runprep.Prepare(ctx, runprep.Options{WorkersExplicit: cmd.Flags().Changed("workers")})
+	// resolution and the handler registry. It also decides which export this run
+	// compares against and refuses rather than compare the wrong tenant — drift
+	// against another tenant's export is all noise. Those refusals are
+	// "cannot answer", not failures, so they carry the distinct exit code.
+	prep, err := runprep.Prepare(ctx, runprep.Options{Domain: cmdutil.DeclaredDomain(cmd)})
 	if err != nil {
+		if errors.Is(err, tenantdir.ErrMismatch) || errors.Is(err, tenantdir.ErrUnresolved) {
+			return cmdutil.WithExitCode(driftExitCannotAnswer, err)
+		}
 		return err
 	}
-
-	// Resolve which export this run compares against, and refuse rather than
-	// compare the wrong tenant: drift against another tenant's export is all
-	// noise. --domain acts as an assertion here, not an offline escape —
-	// nothing about drift is answerable without fetching.
 	expectDomain := prep.Tenant
-	switch {
-	case domain != "" && prep.Tenant != "" && !strings.EqualFold(domain, prep.Tenant):
-		return cmdutil.WithExitCode(driftExitCannotAnswer,
-			fmt.Errorf("refusing to compare the wrong export: --domain is %q but the signed-in tenant is %q", domain, prep.Tenant))
-	case prep.Tenant == "" && domain != "":
-		expectDomain = domain
-	case prep.Tenant == "" && domain == "":
-		return cmdutil.WithExitCode(driftExitCannotAnswer,
-			errors.New("cannot resolve the tenant domain for this session; pass --domain to name the export to compare against"))
-	}
-	tenantDir := filepath.Join(prep.BaseOutput, expectDomain)
+	tenantDir := prep.Output
 
 	// Load the baseline and run the comparability preflight before fetching
 	// anything: an unanswerable run must refuse cheaply, not after a full

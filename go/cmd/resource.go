@@ -11,6 +11,7 @@ import (
 	"azure-resource-downloader/internal/cmdutil"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // newResourceCommand builds the `resource` parent command with its subcommands
@@ -29,33 +30,31 @@ subcommand resolves them identically. All are optional: with no selection, a
 command covers every registered resource type.
 
 Authentication reuses your 'az login' session by default. To reach Microsoft
-Graph/Intune types that need scopes the Azure CLI app cannot provide, sign in to
-a dedicated app registration with --client-id/--tenant-id (device-code flow).`,
-		// Cobra validates flag groups against the flag set of the command it
-		// runs, so a required-together pairing declared on this parent would not
-		// constrain the subcommand that actually executes. Enforce it here
-		// instead, where the inherited flags are visible on cmd.
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return cmdutil.RequireAuthFlagPair(cmd)
-		},
+Graph/Intune types that need scopes the Azure CLI app cannot provide, put a
+dedicated app registration's client-id and tenant-id in the tenant's
+configuration profile (see config.example.domain.yaml).`,
 	}
 
 	// Shared flags live on the group, not on each subcommand. Only groups every
-	// subcommand honours belong here: the authentication flags serve download's,
-	// drift's and list's sign-in and types' (lazy, non-interactive) credential;
-	// the selection flags scope what download and drift fetch, what list
-	// enumerates and what types shows and counts; --workers bounds the listing
-	// concurrency all four share. --timeout stays on download and drift: it
-	// wraps each resource fetch, which only those two perform, so a sibling
-	// advertising it would ignore it.
-	//
-	// The auth group is deliberately a second registration: root declares the
-	// same flags locally for `azure-rd --debug` (see root.go's init). Both are
-	// needed — root's copy serves --debug, this one serves the group's
-	// subcommands — and neither is redundant.
-	cmdutil.AddPersistentAzureAuthFlags(cmd)
+	// subcommand honours belong here: --domain names the tenant all four act on
+	// (and selects its configuration profile), and the selection flags scope
+	// what download and drift fetch, what list enumerates and what types shows
+	// and counts. Everything else these commands need — credentials, worker
+	// counts, timeouts, the write-path switches — comes from the configuration
+	// file, which is the single source of truth for it.
 	cmdutil.AddPersistentSelectionFlags(cmd)
-	cmdutil.AddPersistentWorkersFlag(cmd)
+	cmd.PersistentFlags().String("domain", "", "tenant domain to act on: selects <config-dir>/<domain>.yaml and the export under <output>; refused when it differs from the signed-in tenant")
+	cmdutil.RegisterDomainCompletion(cmd)
+
+	// Bind the group's config-backed and flag-only selection flags to viper
+	// once. A single global binding is safe because each of these flags is
+	// declared exactly once in the whole command tree, so no sibling command can
+	// steal the binding — which is why the former per-execution re-binding is
+	// gone. --domain is deliberately NOT bound: root and every docs subcommand
+	// declare their own, so the value must be read from the running command.
+	_ = viper.BindPFlag("type", cmd.PersistentFlags().Lookup("type"))
+	_ = viper.BindPFlag("resource-id", cmd.PersistentFlags().Lookup("resource-id"))
+	_ = viper.BindPFlag("resource-group", cmd.PersistentFlags().Lookup("resource-group"))
 
 	cmd.AddCommand(resource.NewDownloadCommand())
 	cmd.AddCommand(resource.NewDriftCommand())

@@ -114,10 +114,10 @@ the [monorepo README](../README.md#development-workflow). Its counterpart for a 
 
 ```bash
 # 1. Sign in and export everything. Graph types prompt once for the app
-#    registration's client id (and tenant id); pass them to skip the prompt.
+#    registration's client id (and tenant id); it prints the profile snippet to
+#    save so the next run does not ask again.
 az login
 ./azure-rd resource download --output ../output
-./azure-rd resource download --output ../output --client-id <app-id> --tenant-id <tenant-id>
 
 # 2. Decide what to document (offline; --domain is the export folder name)
 ./azure-rd docs generate-prompt --output ../output --domain contoso.onmicrosoft.com
@@ -131,21 +131,26 @@ az login
 ./azure-rd docs generate-prompt --output ../output --domain contoso.onmicrosoft.com --dry-run --exit-code
 ```
 
-Set `AZURE_RD_OUTPUT=../output` once instead of repeating `--output`; the monorepo layout expects the export
-tree at the repo root, which is also the browser's default `DOCS_ROOT`.
+Put `output: ../output` in a base config file instead of repeating `--output`; the monorepo layout expects the
+export tree at the repo root, which is also the browser's default `DOCS_ROOT`. With several tenants, keep one
+profile per tenant and select it by domain — see [Configuration](#configuration--precedence).
 
 ## Commands
 
 Commands are grouped by the noun they act on: `resource …` for a tenant's Azure resources, `docs …` for the
 generated documentation of an export.
 
-Only four flags are global (`--config`, `--output`, `--dry-run`, `--log-level`). Everything else belongs to a
-command or its group and must follow it: `azure-rd resource download --type X`, not
-`azure-rd --type X resource download`. The authentication flags (`--subscription`, `--client-id`,
-`--tenant-id`), the selection flags (`--type`, `--resource-id`, `--resource-group`) and `--workers` are
-declared once on the `resource` group, so every subcommand under it accepts them; `--timeout` stays on
-`download` and `drift`, the two commands that fetch individual resources. `--help` on any command lists its
-flags; this section explains what they do.
+**Almost everything is configuration, not a flag** — see [Configuration](#configuration--precedence). The
+command line carries only what belongs there: `--config` and `--config-dir` (where the configuration is),
+`--domain` (which tenant), and the switches that change one invocation without changing what is produced
+(`--dry-run`, `--log-level`, `--output`/`--out`, `--type`, `--resource-id`, `--resource-group`, `--prompt`,
+`--exit-code`).
+
+The global flags are `--config`, `--config-dir`, `--output`, `--dry-run` and `--log-level`. Everything else
+belongs to a command or its group and must follow it: `azure-rd resource download --type X`, not
+`azure-rd --type X resource download`. The selection flags (`--type`, `--resource-id`, `--resource-group`) and
+`--domain` are declared once on the `resource` group, so every subcommand under it accepts them. `--help` on
+any command lists its flags; this section explains what they do.
 
 ### `resource download`
 
@@ -158,19 +163,21 @@ azure-rd resource download --type Microsoft.Graph/deviceCompliancePolicies \
 azure-rd resource download --resource-group my-rg            # one ARM resource group (the group itself)
 azure-rd resource download --resource-id /subscriptions/…/storageAccounts/acct   # explicit ids
 azure-rd resource download --dry-run                         # list what would be downloaded
-azure-rd resource download --prune                           # also delete files for resources gone from the tenant
+azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com   # a named tenant
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--type` (repeatable) | Restrict to these resource types. Selection precedence: `--resource-id` > `--resource-group` > `--type` > everything. |
-| `--resource-id`, `--resource-group` | Explicit ARM selection. A run scoped this way covers no *type*, so it never marks anything absent (see [metadata](#export-metadata-metadatayaml)). |
-| `--subscription` | ARM subscription. Default: the CLI session's default subscription. With none at all, Graph types still download and ARM types are skipped with a warning. |
-| `--client-id`, `--tenant-id` | Sign in to a dedicated app registration by device code instead of reusing the CLI token. Prompted interactively when a selected type needs it and they are not set. |
-| `--workers`, `--timeout` | Concurrency and per-operation timeout; see [Concurrency](#concurrency-retries-and-timeouts). |
-| `--no-prompt` | Do not write the per-type `doc-prompt.md` files. Documents of a type can then not be generated until a run without it. |
-| `--resolve-secrets` | Decrypt Intune OMA-URI secrets and write them **in plaintext**. Off by default; see [Security notes](#security-notes). |
-| `--prune` | After a complete, failure-free run, delete files under `resources/` for resources this run established are gone. The only delete path in the tool; see [prune](#prune). |
+| `--type` (repeatable) | Restrict to these resource types for this run, replacing the configured `type` list. Selection precedence: `--resource-id` > `--resource-group` > `--type` > everything. |
+| `--resource-id`, `--resource-group` | Explicit ARM selection. A run scoped this way covers no *type*, so it never marks anything absent (see [metadata](#export-metadata-metadatayaml)). Command-line only: a forgotten entry in a file would silently scope every later run. |
+| `--domain` | Assert which tenant to act on, and select its configuration profile. Refused when it differs from the signed-in tenant, so a typo cannot write one tenant's export under another's name. |
+| `--output` | Redirect this run's export root, e.g. to download elsewhere and compare. |
+
+Everything else a download needs is configuration: `subscription`, `client-id` and `tenant-id` in the tenant's
+profile; `workers`, `timeout`, `resolve-secrets`, `no-prompt` and `prune` in the base file. `resolve-secrets`
+writes Intune OMA-URI secrets **in plaintext** (see [Security notes](#security-notes)) and `prune` is the tool's
+only delete path (see [prune](#prune)) — both are settings rather than flags so the decision is recorded in a
+file you can review, not typed ad-hoc.
 
 **Exit codes:** `0` when no resource *failed* — resources skipped for missing permissions, filtered out, or
 types that could not be listed do not fail the run; they are reported in the summary. `1` on any failed
@@ -181,7 +188,7 @@ nothing was cancelled and every request produced a result — an incomplete run 
 
 **Interrupts:** Ctrl+C cancels the run cleanly — listing and fetching stop, in-flight requests are drained and
 reported as cancelled in the summary, and the run is recorded as incomplete (so it can never mark a resource
-absent or feed `--prune`). A second Ctrl+C force-quits.
+absent or feed a prune). A second Ctrl+C force-quits.
 
 **What a run prints:** per-type counts as listing finishes, progress every 10 %, then a summary with
 successful / skipped / filtered / cancelled / failed counts, the types that could not be listed (with the
@@ -205,8 +212,11 @@ azure-rd resource drift --exit-code                       # exit 3 when drift wa
 | Flag | Meaning |
 |---|---|
 | `--domain` | Assert which export folder to compare against. Refused when it differs from the signed-in tenant — drift against another tenant's export is all noise. |
-| `--resolve-secrets`, `--timeout`, `--workers` | As on `download`. `--resolve-secrets` must match the setting the export was downloaded with, or the comparability preflight refuses. |
 | `--exit-code` | Exit `3` when drift was found (default: drift is a report, not a failure). |
+
+The settings that must match how the baseline was written — `transformers`, `filters`, `resolve-secrets` — are
+configuration precisely so they cannot be typed differently here than they were for the download; the
+comparability preflight refuses when the recorded hashes disagree.
 
 **The export is the baseline and stays untouched.** Drift writes nothing under `resources/` or `docs/` and
 never prunes; its only output is the `<tenant>/drift/` tree (see [Output layout](#output-layout)): an
@@ -293,7 +303,7 @@ without one.
 ```bash
 azure-rd resource list                                    # everything the tenant contains
 azure-rd resource list --type Microsoft.Graph/groups     # one type only
-azure-rd resource list --client-id … --tenant-id …       # with a dedicated app for Graph/Intune scopes
+azure-rd resource list --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com   # a named tenant
 ```
 
 ```
@@ -391,7 +401,7 @@ records every finding — scope is applied when the prompt is rendered, never by
 
 There are no per-type drift templates. The prompt instructs the agent to read each finding type's
 `doc-prompt.md` as the type-specific lens for judging impact, and flags types whose spec is missing (an
-export run with `--no-prompt`) so reduced confidence is stated rather than hidden. The finished prompt —
+export run with `no-prompt` set) so reduced confidence is stated rather than hidden. The finished prompt —
 like `docs/generate.md` — no longer carries the template's explanatory header comment or the ` (template)`
 H1 suffix; a `--prompt` override template must now also carry the `inventory` marked block.
 
@@ -406,8 +416,10 @@ observation, or an unreadable `--prompt` template.
 anything: tool version, authentication method (CLI session or device-code app), config file in use, the
 signed-in user (UPN, tenant id, object id), the resolved subscription (or that ARM types would be skipped), the
 tenant's default domain and the resulting output directory, and the number of registered type handlers. Run it
-when a type is unexpectedly skipped or the export lands in the wrong folder. It accepts
-`--client-id`/`--tenant-id`/`--subscription` to inspect that session instead of the CLI one.
+when a type is unexpectedly skipped or the export lands in the wrong folder. It also reports which
+configuration this invocation resolved — config directory, base file, profile, domain — so a tenant switch can
+be confirmed without running anything that writes; pass `--config-dir` and `--domain` to inspect that tenant's
+profile and the session it names.
 
 To see which app and scopes a CLI token actually carries:
 
@@ -427,7 +439,7 @@ Two credential paths exist; both yield one delegated token used for ARM and Micr
 | Path | When | How |
 |---|---|---|
 | **Azure CLI session** (default) | Only ARM types selected (resource groups, storage accounts, VMs) | Reuses the `az login` token via `azidentity.AzureCLICredential`. No app registration involved. |
-| **Device-code sign-in to your app registration** | Any `Microsoft.Graph/*` type selected | `--client-id` + `--tenant-id` (or `AZURE_RD_CLIENT_ID`/`AZURE_RD_TENANT_ID`, or the config file). The tool prints a device code and URL; sign in in a browser as the same user. |
+| **Device-code sign-in to your app registration** | Any `Microsoft.Graph/*` type selected | `client-id` + `tenant-id` in the tenant's configuration profile. The tool prints a device code and URL; sign in in a browser as the same user. When a selected type needs an app and the profile has none, the run asks interactively and prints the snippet to save. |
 
 Why the second path is unavoidable for Graph: the delegated Intune and policy scopes
 (`DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `Policy.Read.All`, …) are not
@@ -437,13 +449,13 @@ the flags are unset, the tool lists the affected types with the scopes each need
 id and tenant id** (the tenant defaults to the CLI session's tenant; press Enter to accept). Refusing the prompt
 aborts the run — a partial export that silently skipped every Graph type would be worse than stopping.
 
-Unless `--client-id` is set, `resource download` **verifies the CLI session before anything else — including
+Unless the profile sets `client-id`, `resource download` **verifies the CLI session before anything else — including
 the dedicated-app prompt** — and fails immediately with `run 'az login' first` when there is none. Without that
-check, a missing session would only compound into warnings — subscription and tenant resolution degrade
-deliberately for permission-poor identities, and each type's listing is skipped individually — ending in "No
-resources to download" instead of naming the cause, after prompting for an app registration the operator may
-not have been asked about otherwise. Passing `--client-id`/`--tenant-id` explicitly skips the check: the
-device-code sign-in needs no CLI session, because its first token request *is* the sign-in.
+check, a missing session would only compound into warnings — subscription resolution degrades deliberately for
+permission-poor identities, and each type's listing is skipped individually — ending in "No resources to
+download" instead of naming the cause, after prompting for an app registration the operator may not have been
+asked about otherwise. A profile that names a `client-id` skips the check: the device-code sign-in needs no CLI
+session, because its first token request *is* the sign-in.
 
 Once signed in, the token's scopes decide what is read. A type whose scope the token lacks is **skipped with a
 warning**, never a failure: its listing is recorded as "could not be listed", the run is marked incomplete,
@@ -452,8 +464,11 @@ a CLI token actually carries.
 
 The tenant's **Entra default domain** (e.g. `contoso.onmicrosoft.com`) is resolved through the ARM Tenants API
 for the signed-in identity (preferring the configured tenant, then the subscription's tenant) and becomes the
-export folder name `output/<domain>/`. If it cannot be resolved, output falls back to the base directory with a
-warning.
+export folder name `output/<domain>/`. When `--domain` is also given, the two must agree — a mismatch aborts
+before anything is written, so one tenant's export can never land under another's name. When neither can be
+established the run **refuses**: there is deliberately no fallback to the bare output directory, because an
+export written to `output/resources/` does not match the layout every other command looks for and would be
+invisible from the moment it was written.
 
 ### Create the app registration
 
@@ -468,7 +483,7 @@ ARM="797f4846-ba00-4fd7-ba43-dac1f8f63013"
 ARM_USER_IMP="41094075-9dad-400e-a0bd-54e686782033"      # user_impersonation (delegated)
 
 # Delegated Microsoft Graph scopes covering every supported resource type.
-# DeviceManagementConfiguration.ReadWrite.All is only needed for --resolve-secrets;
+# DeviceManagementConfiguration.ReadWrite.All is only needed for resolve-secrets;
 # all other scopes are read-only.
 GRAPH_SCOPES=(
   Policy.Read.All
@@ -510,17 +525,23 @@ echo "Client ID: $APP_ID"
 echo "Tenant ID: $(az account show --query tenantId -o tsv)"
 ```
 
-Then run with it:
+Then record it in the tenant's profile (`<config-dir>/<domain>.yaml`) and run:
 
-```bash
-azure-rd resource download --client-id "$APP_ID" --tenant-id "<tenant-id>"
+```yaml
+client-id: "<the APP_ID printed above>"
+tenant-id: "<tenant-id>"
 ```
 
-> **Pass `--client-id` to `azure-rd`, not to `az login`.** Tokens from `az account get-access-token` are always
+```bash
+azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com
+```
+
+> **Give the app to `azure-rd`, not to `az login`.** Tokens from `az account get-access-token` are always
 > minted for the Azure CLI first-party app (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) — even after
 > `az login --client-id <app>` — so the extra Graph scopes never appear in them. Only the tool's own
-> `--client-id`/`--tenant-id` (device-code sign-in) produce a token for your app. Also check `$APP_ID` is
-> actually set: an empty value silently falls back to the CLI session and every Graph type is skipped.
+> device-code sign-in, driven by the profile's `client-id`/`tenant-id`, produces a token for your app. Also
+> check the value is actually set: an empty one silently falls back to the CLI session and every Graph type is
+> skipped.
 
 To add a scope later (a new resource type, or one you dropped), resolve it the same way and re-consent:
 
@@ -536,31 +557,77 @@ path (ARM-only runs), refresh the session with `az logout && az login --scope ht
 
 ## Configuration & precedence
 
-Every option can come from four places. Highest wins, silently:
+**The configuration file is the single source of truth.** Every setting has exactly one home, and the command
+line carries only what genuinely belongs there:
 
 ```
-CLI flag  >  AZURE_RD_* environment variable  >  --config file  >  built-in default
+CLI flag  >  tenant profile  >  base config file  >  built-in default
 ```
 
-- **Environment variables** are the flag name upper-cased with `AZURE_RD_` prefixed and `-` → `_`:
-  `AZURE_RD_OUTPUT`, `AZURE_RD_SUBSCRIPTION`, `AZURE_RD_CLIENT_ID`, `AZURE_RD_TENANT_ID`, `AZURE_RD_WORKERS`,
-  `AZURE_RD_TIMEOUT`, `AZURE_RD_LOG_LEVEL`, …
-- **The config file is read only when `--config <path>` is given.** There is no auto-discovery of
-  `~/.azure-rd.yaml`; a mistyped path is a fatal error rather than a silent fallback to defaults.
-- [`config.example.yaml`](config.example.yaml) is the **reference schema**: every key with its built-in
-  default and a comment describing the alternatives. It carries a guarantee — loading it unmodified behaves
-  byte-for-byte like running with no config file, including every hash in `metadata.yaml` — so copy it and
-  change only what you need. Options that exist **only** in the config file (no flag): `workers-by-api`,
-  `transformers`, `filters`, `taxonomy`.
-- [`config-tailored-intune.yaml`](config-tailored-intune.yaml) is a worked, opinionated configuration for an
+There is **no environment layer**: `AZURE_RD_*` variables are not read at all. They used to outrank the config
+file, so a variable exported for one tenant silently applied to the next — and a wrong value does not fail
+loudly, it produces a confident, wrong result. (`LOG_LEVEL` still works, because the logger reads it directly.)
+
+### Base file and tenant profiles
+
+Configuration splits in two, and the split is **enforced**: a key on the wrong side is a fatal error naming it.
+
+| | Where | Settings |
+|---|---|---|
+| **General** | base file | `output`, `type`, `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`, `transformers`, `taxonomy` |
+| **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters` |
+
+The split is not bookkeeping. `transformers` is hashed into `transformConfigSha256`, so a per-tenant override
+would make an export non-comparable with its own baseline and with every other tenant; `output` is the export
+root and the tenant is already a subdirectory of it; `filters` is hashed into `filtersSha256`, which gates
+drift comparability, so it must be stable *per tenant* rather than shared.
+
+- **`--config <path>`** names the base file. A mistyped path is a fatal error, never a silent fallback.
+- **`--config-dir <dir>`** holds one `<domain>.yaml` per tenant plus an optional **`base.yaml`**, which is
+  picked up as the base file by convention — so the everyday invocation is two flags. It **requires
+  `--domain`**: configuration is read before authentication (it supplies the credentials authentication
+  needs), so the profile cannot be chosen by the tenant a run later resolves to. A domain with no profile is a
+  fatal error listing the ones that exist.
+- [`config.example.yaml`](config.example.yaml) and
+  [`config.example.domain.yaml`](config.example.domain.yaml) are the **reference schemas** for the two files.
+  Both carry the same guarantee — loading either unmodified behaves byte-for-byte like running without it,
+  including every hash in `metadata.yaml` — so copy and change only what you need.
+- [`config-tailored-intune.yaml`](config-tailored-intune.yaml) is a worked, opinionated **base** file for an
   Intune-centred tenant: secrets resolved, the cleaning and id-resolution transformers dropped, and a full
-  `taxonomy:` (programmes, platform and scope axes) for `docs generate-index`. Use it as a starting point,
-  not as a default — it changes the recorded hashes.
+  `taxonomy:` for `docs generate-index`. A starting point, not a default — it changes the recorded hashes.
+
+### Working with several tenants
+
+```
+~/.azure-rd/
+  base.yaml                      # general settings, shared by every tenant
+  contoso.onmicrosoft.com.yaml   # one profile per tenant, named after its domain
+  fabrikam.onmicrosoft.com.yaml
+```
 
 ```bash
-azure-rd resource download --config ./azure-rd.yaml
-AZURE_RD_OUTPUT=../output AZURE_RD_LOG_LEVEL=debug azure-rd resource download
+azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com
+azure-rd resource drift    --config-dir ~/.azure-rd --domain fabrikam.onmicrosoft.com --exit-code
 ```
+
+The profile's file name **is** the tenant's Entra default domain, which is also the export directory name
+(`<output>/<domain>/`). The tool cross-checks it against the tenant you are actually signed in to and refuses
+on mismatch, so a typo can never write one tenant's data under another tenant's directory. `--domain`
+completes from the profiles in `--config-dir` and the exports under `--output`, so `azure-rd resource download
+--config-dir ~/.azure-rd --domain <Tab>` answers *which tenants do I have?* — install completions with
+`azure-rd completion zsh` (or `bash`, `fish`, `powershell`).
+
+### Where each setting went
+
+If you have scripts or pipelines on an older version:
+
+| Was | Now |
+|---|---|
+| `--subscription`, `--client-id`, `--tenant-id` | `subscription`, `client-id`, `tenant-id` in the **tenant profile** |
+| `--workers`, `--timeout` | `workers`, `timeout` in the **base file** |
+| `--resolve-secrets`, `--no-prompt`, `--prune` | same keys in the **base file** — the destructive and secret-writing switches are deliberately written down rather than typed |
+| `AZURE_RD_*` (any) | the matching config key; the environment is no longer read |
+| `--type`, `--resource-id`, `--resource-group`, `--output`, `--domain`, `--dry-run`, `--log-level`, `--out`, `--prompt`, `--exit-code` | unchanged — these stayed on the command line |
 
 ## Output layout
 
@@ -663,7 +730,7 @@ notListed:
   empty: [Microsoft.Graph/vppTokens]     # listed successfully to zero resources
 ```
 
-Rules the tool holds itself to, because `--prune` is built on them:
+Rules the tool holds itself to, because pruning is built on them:
 
 - **Merge, never truncate.** A `--type`-scoped run updates only the types it covered and leaves every other
   entry (and its `lastCoveredAt`) untouched. An entry is never removed while its file exists on disk.
@@ -682,19 +749,19 @@ Rules the tool holds itself to, because `--prune` is built on them:
 
 ### Prune
 
-`--prune` is the **only** delete path inside the export (`resources/`); the single other delete in the tool is
+`prune` is the **only** delete path inside the export (`resources/`); the single other delete in the tool is
 a `resource drift` run clearing its own `drift/` tree before rebuilding it. After the merge, prune deletes the
 YAML (and sidecar artifacts) of every entry marked `presentInTenant: false` within a type this run covered, drops the entry, and
 sets `run.pruned: true`. It refuses to run — and says why — unless the run is complete and had no failed
 resources. It never leaves `resources/`, never deletes `metadata.yaml`, removes a type's `doc-prompt.md` only
 when the type emptied out entirely, and **never touches `docs/`**: a pruned resource leaves its document behind
-as an orphan, which `generate-prompt` reports and leaves in place. Every deletion is logged, with a total.
-`--dry-run --prune` lists exactly what a real run would delete, from the same selection.
+as an orphan, which `generate-prompt` reports and leaves in place. Every deletion is logged, with a total. With
+`prune: true` configured, `--dry-run` lists exactly what a real run would delete, from the same selection.
 
 ## Per-type documentation prompts (`doc-prompt.md`)
 
 Every resource type directory receives a `doc-prompt.md` — the **specification** an AI must follow to
-document a resource of that type. It is written on every run unless `--no-prompt` is given, and its hash is
+document a resource of that type. It is written on every run unless `no-prompt` is configured, and its hash is
 recorded as the type's `promptSha256`, so editing a template invalidates exactly the documents of the affected
 types on the next `generate-prompt`.
 
@@ -740,8 +807,8 @@ template and writes `docs/generate.md`.
 
 **Scope.** Every resource of every type is in scope except two bulk directory types:
 `Microsoft.Graph/windowsAutopilotDeviceIdentities` (never documented) and `Microsoft.Graph/groups`, which are
-documented **only when referenced by an assignment**. A type whose `doc-prompt.md` is missing (a `--no-prompt`
-export) is reported and skipped — no document of that type can be produced. Resources marked
+documented **only when referenced by an assignment**. A type whose `doc-prompt.md` is missing (an export run
+with `no-prompt` set) is reported and skipped — no document of that type can be produced. Resources marked
 `presentInTenant: false` are reported as orphans and never regenerated or deleted. The finished
 `docs/generate.md` carries none of the template's self-description: the explanatory header comment and the
 ` (template)` H1 suffix are stripped at render time (marker comments stay).
@@ -866,7 +933,7 @@ no subscription is available.
 | Type | Notes |
 |---|---|
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | Settings Catalog, full settings tree via `$expand=settings`. Also carries Apple **DDM** policies (`technologies` contains `appleRemoteManagement`). |
-| `Microsoft.Graph/deviceConfigurations` | Legacy profiles, polymorphic incl. Custom/OMA-URI. `--resolve-secrets` additionally needs `DeviceManagementConfiguration.ReadWrite.All`. |
+| `Microsoft.Graph/deviceConfigurations` | Legacy profiles, polymorphic incl. Custom/OMA-URI. `resolve-secrets` additionally needs `DeviceManagementConfiguration.ReadWrite.All`. |
 | `Microsoft.Graph/deviceCompliancePolicies` | Classic per-platform policies, `$expand=scheduledActionsForRule($expand=scheduledActionConfigurations)`; notification template references are recorded as facts. |
 | `Microsoft.Graph/compliancePolicies` | Settings Catalog based (Linux), `$expand=settings,scheduledActionsForRule(…)`, named via `name`. |
 | `Microsoft.Graph/groupPolicyConfigurations` | Administrative Templates; `definitionValues?$expand=definition` child collection attached. |
@@ -979,13 +1046,13 @@ case-insensitively.
 channels. Type **listing** runs before it, concurrently across types.
 
 - **Workers.** The right count depends on the API, not the type: Microsoft Graph throttles hard, ARM does not.
-  Defaults are 5 for Graph and 20 for ARM (`workers-by-api`, config-only). Precedence: `--workers` flag →
-  `workers-by-api` → `workers` (config/env, default 5) → API default. When a run covers exactly one API the API
-  default wins over a configured `workers`; only the flag overrides it. More Graph workers usually make a run
-  *slower* once throttling and backoff kick in.
+  Defaults are 5 for Graph and 20 for ARM (`workers-by-api`). Precedence: `workers-by-api` → `workers` → API
+  default. Setting `workers` at all is the signal that you want one count for every API, which is why the
+  example file leaves it commented out; when a run covers exactly one API the API-specific count wins. More
+  Graph workers usually make a run *slower* once throttling and backoff kick in.
 - **Retries.** Transient failures (HTTP 429, 503, timeouts) are retried up to 5 times with exponential backoff.
   Permission errors (403, missing scopes) are never retried: the resource is skipped with a warning.
-- **Timeout.** `--timeout` (default 300 s) applies **per operation** — around each resource fetch including its
+- **Timeout.** `timeout` (default 300 s) applies **per operation** — around each resource fetch including its
   retries — not to the whole run, so a large tenant needs no larger value.
 - **Accounting.** Every request produces exactly one result, including on cancellation (`Cancelled`). The
   pipeline fails loudly if the counts disagree, because a silently dropped request would later look like a
@@ -998,8 +1065,8 @@ channels. Type **listing** runs before it, concurrently across types.
 - `download --dry-run` **lists** instead of downloading: it performs the per-type listing (so it still signs in
   and talks to Azure), then reports the set of resources a real run would fetch, the types it could not list and
   the types that listed empty, and whether that set is complete. No resource is fetched, transformed or
-  written, and `metadata.yaml` is not updated. With `--prune` it lists exactly the files a real run would
-  delete, from the same selection.
+  written, and `metadata.yaml` is not updated. With `prune: true` configured it lists exactly the files a real
+  run would delete, from the same selection.
 - `resource drift --dry-run` still **fetches and compares in full** — nothing about drift is answerable
   without the tenant's current bytes — but withholds the `drift/` tree entirely (clearing nothing): an
   observation from an earlier run stays on disk and is reported as not refreshed.
@@ -1010,8 +1077,9 @@ channels. Type **listing** runs before it, concurrently across types.
 
 ## Logging
 
-Structured key/value logging (charmbracelet/log). `--log-level` (or `log-level` in the config,
-`AZURE_RD_LOG_LEVEL`, or the plain `LOG_LEVEL` env var) selects `debug`, `info` (default), `warn` or `error`.
+Structured key/value logging (charmbracelet/log). `--log-level` (or the plain `LOG_LEVEL` environment
+variable, which the logger reads directly) selects `debug`, `info` (default), `warn` or `error`. It is
+flag-only: verbosity belongs to one invocation, so it has no config key.
 `debug` shows per-resource fetch/transform/write lines, retry attempts, sanitised names and the full error behind
 every summarised warning; `info` shows listing counts, progress every 10 %, pipeline metrics and the summary.
 
@@ -1024,7 +1092,7 @@ Secrets are never logged: tokens, client secrets and resolved OMA-URI values are
 - **Secrets in output.** ARM handlers drop `adminPassword`, access keys and connection strings before writing.
   Graph returns most secrets already masked (`****`, `encryptedValueToken`); the tool keeps them masked and the
   documentation prompts instruct the model to treat masked values as expected, not as findings.
-- **`--resolve-secrets`** is the one deliberate exception: it resolves masked Intune OMA-URI secrets in
+- **`resolve-secrets`** is the one deliberate exception: it resolves masked Intune OMA-URI secrets in
   `Microsoft.Graph/deviceConfigurations` through `getOmaSettingPlainTextValue` and writes them **in plaintext**.
   It is off by default, logs a warning when on, needs `DeviceManagementConfiguration.ReadWrite.All` in the token
   (delegated — the Intune backend rejects app-only tokens for this call), and degrades per setting: a value that
@@ -1032,7 +1100,7 @@ Secrets are never logged: tokens, client secrets and resolved OMA-URI values are
 - **Credential-shaped free text.** Descriptions and decoded payloads sometimes contain pasted credentials the
   service does not mask. The prompts require the model to redact such values in the documentation and flag
   them under `Security`; the literal stays only in the YAML.
-- **Files** are written `0644`, directories `0755`. The tool deletes only under `--prune`, only under
+- **Files** are written `0644`, directories `0755`. The tool deletes only with `prune` configured, only under
   `resources/`, and only what a complete run proved gone.
 
 ## Architecture
@@ -1089,7 +1157,7 @@ Design points that everything else leans on:
   metadata; ARM types implement the interface directly. Handlers also declare whether they need a dedicated app
   and whether they have an assignments concept.
 - **Pipeline stages share nothing but channels**, and every request yields exactly one result — the invariant
-  that keeps `--prune` safe.
+  that keeps pruning safe.
 - **Facts vs decisions.** `metadata.yaml` and the resource YAML hold facts; classification (taxonomy),
   staleness and grouping are computed from them at `docs` time.
 - **Deterministic output** at every layer: sorted keys and scalar lists, id-decided file names, wall-clock-free

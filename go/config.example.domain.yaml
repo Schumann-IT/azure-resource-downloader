@@ -1,0 +1,81 @@
+# Example TENANT PROFILE for azure-rd.
+#
+# Copy it to <config-dir>/<tenant-domain>.yaml, e.g.:
+#   cp config.example.domain.yaml ~/.azure-rd/contoso.onmicrosoft.com.yaml
+# and select it by domain:
+#   azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com
+#
+# The file name IS the tenant's Entra default domain — the same name the export
+# directory uses (<output>/<domain>/). The tool cross-checks it against the
+# tenant you are actually signed in to and refuses on mismatch, so a typo can
+# never write one tenant's configuration into another tenant's export.
+#
+# A profile holds TENANT-SCOPED settings only: things that exist inside one
+# tenant, where a value from another tenant is meaningless or harmful. General
+# settings (output, transformers, workers, timeout, taxonomy, …) belong in the
+# base configuration file — see config.example.yaml. Putting a general setting
+# here is a fatal error naming the key, and vice versa; the partition is
+# enforced, not advisory.
+#
+# The profile is merged OVER the base file. Every key below is empty, so copying
+# this file unmodified behaves exactly like having no profile at all.
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+# Azure subscription ID.
+# Empty = the default subscription of your 'az login' session. With no
+# subscription at all, Microsoft Graph types still download and ARM types are
+# skipped with a warning.
+subscription: ""
+
+# Dedicated app registration for device-code sign-in.
+# Empty = reuse the existing Azure CLI session (the same delegated token serves
+# both ARM and Microsoft Graph). Set BOTH values to sign in to your own app
+# registration instead — needed for the Microsoft Graph/Intune scopes the Azure
+# CLI first-party app cannot provide (e.g. DeviceManagementConfiguration.*,
+# Policy.Read.All). If a selected resource type requires one and these are
+# empty, the run asks for them interactively and prints the snippet to paste
+# here, so the answer lands in this file rather than in a shell history entry.
+client-id: ""     # app (client) ID
+tenant-id: ""     # Entra tenant ID (required together with client-id)
+
+# ---------------------------------------------------------------------------
+# Filters — WHICH resources of a type to keep (config-only)
+# ---------------------------------------------------------------------------
+# Restrict which resources are downloaded per resource type by matching one or
+# more properties against a regular expression (Go RE2 syntax).
+#
+# Structure: filters.<resourceType>.<propertyPath>: <regex>
+#   <resourceType>  a registered handler type (case-insensitive)
+#   <propertyPath>  dot-separated path into the resource's raw properties
+#                   (e.g. displayName or properties.subnet.id)
+#   <regex>         a Go regular expression matched against the value
+#
+# A resource is downloaded only when EVERY listed property regex for its type
+# matches (logical AND). Types without a filter are unaffected. Filters are
+# evaluated after fetch, so the resource is still read from Azure — it is simply
+# never written.
+#
+# This setting is tenant-scoped for two reasons: the patterns encode THIS
+# tenant's naming convention, and the filter configuration is hashed into the
+# export metadata, where it gates drift comparability. In a shared file, editing
+# one tenant's convention would invalidate every tenant's baseline at once.
+#
+# The default is no filters. Leave this key commented out entirely: an empty or
+# valueless "filters:" is not a valid filter map and is reported as ignored.
+#
+# filters:
+#   # only export device configurations whose displayName starts with "GBL_"
+#   Microsoft.Graph/deviceConfigurations:
+#     displayName: "GBL_.*"
+#
+#   # combine multiple properties (both must match)
+#   Microsoft.Graph/groups:
+#     displayName: "^IT-.*"
+#     mailEnabled: "true"
+#
+#   # anchor a regex for an exact prefix on storage accounts
+#   Microsoft.Storage/storageAccounts:
+#     name: "^prod"

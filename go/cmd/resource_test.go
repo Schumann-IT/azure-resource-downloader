@@ -1,17 +1,16 @@
 package cmd
 
 import (
-	"strings"
+	"path/filepath"
 	"testing"
 
-	"azure-resource-downloader/internal/cmdutil"
+	"azure-resource-downloader/internal/config"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-// subcommand returns the named subcommand of the resource group, failing the
-// test when it is absent.
+// subcommand returns the named subcommand of the given parent, failing the test
+// when it is absent.
 func subcommand(t *testing.T, parent *cobra.Command, name string) *cobra.Command {
 	t.Helper()
 	for _, sub := range parent.Commands() {
@@ -23,17 +22,25 @@ func subcommand(t *testing.T, parent *cobra.Command, name string) *cobra.Command
 	return nil
 }
 
-// TestResourceGroupSharesAuthFlags guards the point of the grouping: the
-// authentication and selection flags and --workers are declared once on the
-// parent and visible to every subcommand (all three honour them), while flags
-// only download honours stay off the siblings. A command must never advertise a
-// flag it ignores.
-func TestResourceGroupSharesAuthFlags(t *testing.T) {
+// removedFlags are the flags that became configuration settings when the config
+// file became the single source of truth. Each was a second way to say the same
+// thing, and the dangerous way: a flag outranks the tenant's profile, so one
+// tenant's credentials could be paired with another tenant's export, and a
+// destructive or secret-writing switch could be typed instead of reviewed.
+var removedFlags = []string{
+	"subscription", "client-id", "tenant-id",
+	"workers", "timeout", "resolve-secrets", "no-prompt", "prune",
+}
+
+// TestResourceGroupSharesFlags guards the grouping in both directions: the flags
+// every subcommand honours are declared once on the parent and visible to all of
+// them, and no subcommand offers a flag it would ignore.
+func TestResourceGroupSharesFlags(t *testing.T) {
 	resourceCmd := newResourceCommand()
 
 	for _, name := range []string{"download", "drift", "types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
-		for _, flag := range []string{"subscription", "client-id", "tenant-id", "type", "resource-id", "resource-group", "workers"} {
+		for _, flag := range []string{"type", "resource-id", "resource-group", "domain"} {
 			// InheritedFlags is what a subcommand gets from its parents, and
 			// asking for it is also what merges those flags into Flags() before
 			// execution.
@@ -46,133 +53,107 @@ func TestResourceGroupSharesAuthFlags(t *testing.T) {
 		}
 	}
 
-	// --timeout wraps each resource fetch (download and drift only) and the
-	// remaining switches are download-only concerns, so types and list must not
-	// offer them.
-	for _, name := range []string{"types", "list"} {
-		sub := subcommand(t, resourceCmd, name)
-		for _, flag := range []string{"timeout", "prune", "no-prompt", "resolve-secrets"} {
-			if sub.Flags().Lookup(flag) != nil {
-				t.Errorf("resource %s offers --%s but ignores it", name, flag)
-			}
-		}
-	}
-
-	download := subcommand(t, resourceCmd, "download")
-	for _, flag := range []string{"type", "resource-id", "resource-group", "workers", "timeout", "prune", "no-prompt", "resolve-secrets"} {
-		if download.Flags().Lookup(flag) == nil {
-			t.Errorf("resource download is missing --%s", flag)
-		}
-	}
-
-	// Drift fetches and transforms like a download, so it honours --timeout and
-	// --resolve-secrets; its own switches are --domain and --exit-code. It must
-	// not offer the write-path switches it ignores (prune, no-prompt).
+	// --exit-code gates CI on drift being found, which only drift decides.
 	driftCmd := subcommand(t, resourceCmd, "drift")
-	for _, flag := range []string{"timeout", "resolve-secrets", "domain", "exit-code"} {
-		if driftCmd.Flags().Lookup(flag) == nil {
-			t.Errorf("resource drift is missing --%s", flag)
+	if driftCmd.Flags().Lookup("exit-code") == nil {
+		t.Error("resource drift is missing --exit-code")
+	}
+	for _, name := range []string{"download", "types", "list"} {
+		sub := subcommand(t, resourceCmd, name)
+		if sub.Flags().Lookup("exit-code") != nil {
+			t.Errorf("resource %s offers --exit-code but ignores it", name)
 		}
 	}
-	for _, flag := range []string{"prune", "no-prompt"} {
-		if driftCmd.Flags().Lookup(flag) != nil {
-			t.Errorf("resource drift offers --%s but ignores it", flag)
+}
+
+// TestRemovedFlagsAreGone is the other half of making configuration the single
+// source of truth: the settings that moved into the config file must not be
+// offered anywhere on the command line. A leftover flag would keep outranking
+// the tenant profile, which is exactly the defect the move removes.
+func TestRemovedFlagsAreGone(t *testing.T) {
+	resourceCmd := newResourceCommand()
+	docsCmd := NewCommand()
+
+	commands := map[string]*cobra.Command{
+		"root":     rootCmd,
+		"resource": resourceCmd,
+		"docs":     docsCmd,
+	}
+	for _, name := range []string{"download", "drift", "types", "list"} {
+		commands["resource "+name] = subcommand(t, resourceCmd, name)
+	}
+	for _, name := range []string{"generate-prompt", "generate-index", "analyze-drift"} {
+		commands["docs "+name] = subcommand(t, docsCmd, name)
+	}
+
+	for label, cmd := range commands {
+		for _, flag := range removedFlags {
+			if cmd.Flags().Lookup(flag) != nil {
+				t.Errorf("%s still offers --%s; it is a configuration setting now", label, flag)
+			}
 		}
 	}
 }
 
-// TestResourceAuthFlagPairEnforced guards the client-id/tenant-id contract
-// across the parent/child boundary. Cobra validates flag groups against the
-// flag set of the command it runs, so MarkFlagsRequiredTogether on the parent
-// would not constrain a subcommand: the group enforces the pairing in its
-// persistent pre-run instead, and this test is what keeps that from being
-// dropped as redundant.
-func TestResourceAuthFlagPairEnforced(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{name: "neither flag", args: []string{"list"}, wantErr: false},
-		{name: "client-id without tenant-id", args: []string{"list", "--client-id", "app-id"}, wantErr: true},
-		{name: "tenant-id without client-id", args: []string{"list", "--tenant-id", "tenant"}, wantErr: true},
-		{name: "both flags", args: []string{"list", "--client-id", "app-id", "--tenant-id", "tenant"}, wantErr: false},
+// TestSurvivingGlobalFlags pins the flags that deliberately stayed on the
+// command line: the two that locate the configuration, and the ones that change
+// only this invocation's verbosity, side effects or destination.
+func TestSurvivingGlobalFlags(t *testing.T) {
+	for _, flag := range []string{"config", "config-dir", "output", "dry-run", "log-level"} {
+		if rootCmd.PersistentFlags().Lookup(flag) == nil {
+			t.Errorf("root is missing the global --%s", flag)
+		}
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			viper.Reset()
-			t.Cleanup(viper.Reset)
-
-			resourceCmd := newResourceCommand()
-			// Replace the subcommand's action: this test is about flag
-			// validation, which runs before RunE, not about listing resources.
-			list := subcommand(t, resourceCmd, "list")
-			list.RunE = func(cmd *cobra.Command, args []string) error { return nil }
-
-			resourceCmd.SetArgs(tt.args)
-			resourceCmd.SetOut(nil)
-			resourceCmd.SilenceUsage = true
-			resourceCmd.SilenceErrors = true
-
-			err := resourceCmd.Execute()
-			if tt.wantErr && err == nil {
-				t.Error("expected an error for a half-specified device-code pair, got none")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
+	// --debug and --domain serve root's own diagnostic report, so they must not
+	// be inherited by every command.
+	for _, flag := range []string{"debug", "domain"} {
+		if rootCmd.Flags().Lookup(flag) == nil {
+			t.Errorf("root is missing --%s", flag)
+		}
+		if rootCmd.PersistentFlags().Lookup(flag) != nil {
+			t.Errorf("--%s must be local to root, not persistent", flag)
+		}
 	}
 }
 
-// TestBindFlagsBindsInheritedFlags guards the binding helper against the
-// failure the grouping introduces: a flag declared once on a command group is
-// inherited by its subcommands rather than local to them, so binding only local
-// flags would drop it from the flag > env > config > default chain. The symptom
-// is one-directional and easy to miss — the flag keeps working on the command
-// line while the config file and AZURE_RD_* silently stop applying — so this
-// asserts both directions through a real execution.
-func TestBindFlagsBindsInheritedFlags(t *testing.T) {
-	run := func(t *testing.T, args ...string) string {
-		t.Helper()
-		viper.Reset()
-		t.Cleanup(viper.Reset)
+// TestDomainCompletionListsProfilesAndExports guards the discovery path: tab
+// completion on --domain answers "which tenants do I have?" from the config
+// directory and the existing exports, locally and with no network call. It also
+// pins the base-file exclusion — base.yaml is configuration, never a tenant.
+func TestDomainCompletionListsProfilesAndExports(t *testing.T) {
+	configDir := t.TempDir()
+	write(t, filepath.Join(configDir, config.BaseFileName), "")
+	write(t, filepath.Join(configDir, "contoso.example.com.yaml"), "")
 
-		// A config file supplies the value the flag must be able to override.
-		viper.SetConfigType("yaml")
-		if err := viper.ReadConfig(strings.NewReader("subscription: sub-from-config\n")); err != nil {
-			t.Fatalf("reading test config: %v", err)
-		}
+	outputDir := t.TempDir()
+	exportMeta := filepath.Join(outputDir, "fabrikam.example.com", "resources")
+	mkdirAll(t, exportMeta)
+	write(t, filepath.Join(exportMeta, "metadata.yaml"), "tenant: fabrikam.example.com\n")
 
-		resourceCmd := newResourceCommand()
-		list := subcommand(t, resourceCmd, "list")
+	resourceCmd := newResourceCommand()
+	download := subcommand(t, resourceCmd, "download")
+	// Make the flags resolvable on the command that is completing: the
+	// completion function reads them directly, because the hidden __complete
+	// invocation is not guaranteed to have loaded any configuration.
+	download.Flags().String("config-dir", configDir, "")
+	download.Flags().String("output", outputDir, "")
 
-		var got string
-		list.RunE = func(cmd *cobra.Command, args []string) error {
-			cmdutil.BindFlags(cmd)
-			got = viper.GetString("subscription")
-			return nil
-		}
-
-		resourceCmd.SetArgs(append([]string{"list"}, args...))
-		resourceCmd.SilenceUsage = true
-		resourceCmd.SilenceErrors = true
-		if err := resourceCmd.Execute(); err != nil {
-			t.Fatalf("executing resource list: %v", err)
-		}
-		return got
+	complete, ok := download.GetFlagCompletionFunc("domain")
+	if !ok {
+		t.Fatal("no completion function registered for --domain")
 	}
+	got, directive := complete(download, nil, "")
 
-	t.Run("config applies when the flag is not set", func(t *testing.T) {
-		if got := run(t); got != "sub-from-config" {
-			t.Errorf("subscription = %q, want %q; a group-declared flag must still resolve from the config file", got, "sub-from-config")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want NoFileComp (a tenant domain is not a file)", directive)
+	}
+	want := []string{"contoso.example.com", "fabrikam.example.com"}
+	if len(got) != len(want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("candidates = %v, want %v (sorted, base.yaml excluded)", got, want)
 		}
-	})
-
-	t.Run("flag wins over config", func(t *testing.T) {
-		if got := run(t, "--subscription", "sub-from-flag"); got != "sub-from-flag" {
-			t.Errorf("subscription = %q, want %q; the flag must outrank the config file", got, "sub-from-flag")
-		}
-	})
+	}
 }

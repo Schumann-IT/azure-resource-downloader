@@ -1,84 +1,43 @@
 // Package cmdutil holds CLI helpers shared by the root command package and its
 // subcommand packages (e.g. cmd/docs). It exists so a subcommand living in its
-// own directory can reuse the flag-group and viper-binding helpers without
-// importing package cmd, which would create an import cycle (package cmd must
-// import the subcommand packages to register them).
+// own directory can reuse the flag-group helpers, the exit-code plumbing and the
+// interactive prompts without importing package cmd, which would create an
+// import cycle (package cmd must import the subcommand packages to register
+// them).
+//
+// It holds no viper-binding helper: with configuration as the single source of
+// truth, each surviving flag is declared exactly once in the command tree and is
+// bound (or read) at that one site, so there is nothing left to re-bind per
+// execution.
 package cmdutil
 
 import (
-	"errors"
+	"os"
+	"path/filepath"
+	"sort"
+
+	"azure-resource-downloader/internal/config"
+	"azure-resource-downloader/internal/docs"
+	"azure-resource-downloader/internal/models"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
-// Built-in defaults shared by the flag definitions so a single change here can
-// never silently invert value-sniffing logic elsewhere.
+// Built-in defaults for settings that no longer have a flag. They are defined
+// by the config package, which owns the configuration surface, and re-exported
+// here so command code has one obvious place to reach for them.
 const (
-	DefaultWorkerCount    = 5
-	DefaultTimeoutSeconds = 300
+	DefaultWorkerCount    = config.DefaultWorkerCount
+	DefaultTimeoutSeconds = config.DefaultTimeoutSeconds
 )
 
-// AddAzureAuthFlags registers the Azure authentication flags locally on cmd:
-// --subscription, --client-id and --tenant-id. client-id and tenant-id are
-// marked required-together to enforce the device-code contract their help text
-// documents.
-func AddAzureAuthFlags(cmd *cobra.Command) {
-	defineAzureAuthFlags(cmd.Flags())
-	cmd.MarkFlagsRequiredTogether("client-id", "tenant-id")
-}
-
-// AddPersistentAzureAuthFlags registers the same authentication flags on cmd's
-// persistent flag set, so every subcommand of a command group inherits one
-// definition instead of declaring its own copy.
-//
-// The required-together pairing is deliberately NOT declared here: Cobra
-// validates flag groups against a command's own flag set, so marking it on the
-// parent would not constrain the subcommand that actually runs. Enforce it with
-// RequireAuthFlagPair in the group's persistent pre-run instead.
-func AddPersistentAzureAuthFlags(cmd *cobra.Command) {
-	defineAzureAuthFlags(cmd.PersistentFlags())
-}
-
-// defineAzureAuthFlags is the single definition of the authentication flags'
-// names, defaults and usage strings, so a local and a persistent registration
-// can never drift into two spellings of the same flag.
-func defineAzureAuthFlags(f *pflag.FlagSet) {
-	f.String("subscription", "", "Azure subscription ID (default: your az login default subscription)")
-	f.String("client-id", "", "app registration (client) ID for device-code sign-in; use to obtain Graph scopes the az login app lacks (e.g. DeviceManagementConfiguration.ReadWrite.All)")
-	f.String("tenant-id", "", "Entra tenant ID for device-code sign-in (required with --client-id)")
-}
-
-// RequireAuthFlagPair reports an error when exactly one of --client-id and
-// --tenant-id is set on cmd, reproducing MarkFlagsRequiredTogether for flags a
-// command inherits from its parent rather than declares itself.
-func RequireAuthFlagPair(cmd *cobra.Command) error {
-	clientID := cmd.Flags().Lookup("client-id")
-	tenantID := cmd.Flags().Lookup("tenant-id")
-	if clientID == nil || tenantID == nil {
-		return nil
-	}
-	if clientID.Changed != tenantID.Changed {
-		return errors.New("if any flags in the group [client-id tenant-id] are set they must all be set; missing " +
-			missingAuthFlagName(clientID.Changed))
-	}
-	return nil
-}
-
-// missingAuthFlagName names the half of the client-id/tenant-id pair that was
-// left unset, given whether client-id was the one provided.
-func missingAuthFlagName(clientIDSet bool) string {
-	if clientIDSet {
-		return "[tenant-id]"
-	}
-	return "[client-id]"
-}
-
-// AddSelectionFlags registers the download selection triad locally on cmd:
-// --resource-id, --type and --resource-group. All three choose what to
-// download and are declared identically so each can also be set via config or
-// an AZURE_RD_* env var.
+// AddSelectionFlags registers the selection triad locally on cmd:
+// --resource-id, --type and --resource-group. These stay on the command line
+// because scoping a single run is the ad-hoc case: --type narrows the
+// configured type list for this invocation, and the two ARM selectors have no
+// config key at all, so a stale entry in a tenant profile can never silently
+// scope every future run.
 func AddSelectionFlags(cmd *cobra.Command) {
 	defineSelectionFlags(cmd.Flags())
 }
@@ -91,51 +50,78 @@ func AddPersistentSelectionFlags(cmd *cobra.Command) {
 
 // defineSelectionFlags is the single definition of the selection triad.
 func defineSelectionFlags(f *pflag.FlagSet) {
-	f.StringSlice("resource-id", []string{}, "explicit Azure resource ID to download; repeatable")
-	f.StringSlice("type", []string{}, "resource type to download; repeatable, acts as a filter (default: all registered types)")
-	f.String("resource-group", "", "download resources in this resource group")
+	f.StringSlice("resource-id", []string{}, "explicit Azure resource ID to act on; repeatable")
+	f.StringSlice("type", []string{}, "resource type to act on; repeatable, narrows the configured types for this run (default: all registered types)")
+	f.String("resource-group", "", "act on resources in this resource group")
 }
 
-// AddWorkersFlag registers --workers locally on cmd. Workers bound the
-// concurrency of both the per-type listing calls and the per-resource fetches,
-// so every command that lists or downloads honours it.
-func AddWorkersFlag(cmd *cobra.Command) {
-	defineWorkersFlag(cmd.Flags())
-}
-
-// AddPersistentWorkersFlag registers --workers on cmd's persistent flag set,
-// for a command group whose every subcommand honours it (at minimum for the
-// listing concurrency).
-func AddPersistentWorkersFlag(cmd *cobra.Command) {
-	defineWorkersFlag(cmd.PersistentFlags())
-}
-
-// AddTimeoutFlag registers --timeout locally on cmd. It stays local to the
-// commands that fetch individual resources: the per-operation timeout wraps
-// each resource fetch, so a command that only lists would advertise it and
-// ignore it.
-func AddTimeoutFlag(cmd *cobra.Command) {
-	cmd.Flags().Int("timeout", DefaultTimeoutSeconds, "per-operation timeout in seconds (applied around each resource fetch)")
-}
-
-// defineWorkersFlag is the single definition of the --workers flag.
-func defineWorkersFlag(f *pflag.FlagSet) {
-	f.Int("workers", DefaultWorkerCount, "number of concurrent workers; when not set explicitly, per-API defaults apply (Microsoft Graph 5, ARM 20)")
-}
-
-// BindFlags binds every flag that applies to cmd to viper so each value can
-// also be supplied via the config file or an AZURE_RD_* environment variable
-// (precedence: flag > env > config > default). Binding happens per-execution to
-// avoid the global viper singleton picking up a sibling command's identically
-// named flag.
+// DeclaredDomain returns cmd's --domain value only when it was actually passed
+// on the command line. Only an explicit value may select a configuration
+// profile or assert which tenant a run acts on: a flag's zero default would
+// otherwise read as "the tenant named empty string", and for a download the
+// real tenant is not known until after authentication.
 //
-// It binds inherited flags as well as locally declared ones: a flag a command
-// group declares once on its parent still has to resolve through env and config
-// for the subcommand that reads it. Binding only local flags would leave such a
-// flag working on the command line while silently ignoring AZURE_RD_* and the
-// config file — a failure invisible to anything that only tests flags.
-func BindFlags(cmd *cobra.Command) {
-	cmd.Flags().VisitAll(func(f *pflag.Flag) {
-		_ = viper.BindPFlag(f.Name, f)
-	})
+// Every caller goes through this one reader rather than viper, because --domain
+// is declared separately on root, on the resource group and on each docs
+// subcommand, so a global binding could resolve to a sibling's copy.
+func DeclaredDomain(cmd *cobra.Command) string {
+	flag := cmd.Flags().Lookup("domain")
+	if flag == nil || !flag.Changed {
+		return ""
+	}
+	return flag.Value.String()
+}
+
+// RegisterDomainCompletion offers the tenant domains a run could act on as
+// shell completions for cmd's --domain flag: the profiles in --config-dir and
+// the export directories under --output. Every command that declares --domain
+// registers it, so tab completion answers "which tenants do I have?" the same
+// way everywhere.
+//
+// It stays local and cheap — never an Azure call on a Tab press — and reads the
+// flags directly rather than through viper, because the hidden __complete
+// invocation is not guaranteed to have loaded any configuration.
+func RegisterDomainCompletion(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("domain",
+		func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			dir, _ := cmd.Flags().GetString("config-dir")
+			output, _ := cmd.Flags().GetString("output")
+
+			seen := map[string]bool{}
+			var candidates []string
+			for _, domain := range append(config.ProfileCandidates(dir), ExportDomains(output)...) {
+				if seen[domain] {
+					continue
+				}
+				seen[domain] = true
+				candidates = append(candidates, domain)
+			}
+			sort.Strings(candidates)
+			return candidates, cobra.ShellCompDirectiveNoFileComp
+		})
+}
+
+// ExportDomains lists the tenant directories that already hold an export under
+// baseOutput. Like the profile listing it never fails: these are completion
+// candidates, so an unreadable directory simply contributes none.
+func ExportDomains(baseOutput string) []string {
+	if baseOutput == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(baseOutput)
+	if err != nil {
+		return nil
+	}
+	var domains []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		metaPath := filepath.Join(baseOutput, entry.Name(), models.ResourcesDirName, docs.MetadataFileName)
+		if info, err := os.Stat(metaPath); err == nil && !info.IsDir() {
+			domains = append(domains, entry.Name())
+		}
+	}
+	sort.Strings(domains)
+	return domains
 }

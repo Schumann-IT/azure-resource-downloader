@@ -1,7 +1,6 @@
 package docs
 
 import (
-	"azure-resource-downloader/internal/cmdutil"
 	"context"
 	"errors"
 	"fmt"
@@ -10,9 +9,11 @@ import (
 	"time"
 
 	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/cmdutil"
 	docsengine "azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/tenantdir"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -73,21 +74,18 @@ Examples:
 }
 
 func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
 	baseOutput := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
-	domain := viper.GetString("domain")
-	outPath := viper.GetString("out")
-	promptPath := viper.GetString("prompt")
-	exitCode := viper.GetBool("exit-code")
+	domain := cmdutil.DeclaredDomain(cmd)
+	outPath, _ := cmd.Flags().GetString("out")
+	promptPath, _ := cmd.Flags().GetString("prompt")
+	exitCode, _ := cmd.Flags().GetBool("exit-code")
 
 	// Resolve the export directory and the domain to cross-check metadata against.
-	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
-		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
+	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain)
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to document: %w", err))
 	}
@@ -142,33 +140,43 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// resolveExportDir decides which export directory to document and the domain to
-// cross-check metadata.yaml against. With --domain it runs offline; otherwise it
-// authenticates to resolve the tenant domain, falling back to a single export
-// directory under baseOutput when auth or resolution fails.
-func resolveExportDir(ctx context.Context, baseOutput, domain, sub, clientID, tenantID string) (tenantDir, expectDomain string, err error) {
+// resolveExportDir decides which export directory to act on and the domain to
+// cross-check metadata.yaml against, through the resolver every command shares.
+// An explicit --domain runs offline; otherwise it authenticates (with the
+// credentials the tenant's profile supplies) to resolve the tenant domain, and
+// failing that falls back to the single export directory under baseOutput —
+// which is then treated as a declaration, not as a confirmed tenant.
+func resolveExportDir(ctx context.Context, baseOutput, domain string) (tenantDir, expectDomain string, err error) {
 	log := logger.Default
 
-	if domain != "" {
-		return filepath.Join(baseOutput, domain), domain, nil
+	resolved := ""
+	if domain == "" {
+		if azureClient, aerr := azure.NewClient(ctx, viper.GetString("subscription"),
+			viper.GetString("client-id"), viper.GetString("tenant-id")); aerr != nil {
+			log.Warn("Authentication failed; falling back to a single export directory (pass --domain to run offline)",
+				"reason", azure.ErrorSummary(aerr))
+		} else if d, derr := azureClient.GetTenantDomain(ctx); derr != nil {
+			log.Warn("Could not resolve tenant domain; falling back to a single export directory",
+				"reason", azure.ErrorSummary(derr))
+		} else {
+			resolved = d
+		}
+
+		if resolved == "" {
+			d, derr := detectSingleExportDomain(baseOutput)
+			if derr != nil {
+				return "", "", derr
+			}
+			log.Info("Defaulting to the only export directory found", "domain", d)
+			domain = d
+		}
 	}
 
-	if azureClient, aerr := azure.NewClient(ctx, sub, clientID, tenantID); aerr != nil {
-		log.Warn("Authentication failed; falling back to a single export directory (pass --domain to run offline)",
-			"reason", azure.ErrorSummary(aerr))
-	} else if d, derr := azureClient.GetTenantDomain(ctx); derr != nil {
-		log.Warn("Could not resolve tenant domain; falling back to a single export directory",
-			"reason", azure.ErrorSummary(derr))
-	} else {
-		return filepath.Join(baseOutput, d), d, nil
+	target, err := tenantdir.Resolve(baseOutput, domain, resolved)
+	if err != nil {
+		return "", "", err
 	}
-
-	d, derr := detectSingleExportDomain(baseOutput)
-	if derr != nil {
-		return "", "", derr
-	}
-	log.Info("Defaulting to the only export directory found", "domain", d)
-	return filepath.Join(baseOutput, d), d, nil
+	return target.Dir, target.Domain, nil
 }
 
 // detectSingleExportDomain returns the single sub-directory of baseOutput that

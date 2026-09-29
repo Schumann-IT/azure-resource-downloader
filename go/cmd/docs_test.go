@@ -4,13 +4,14 @@ import "testing"
 
 // TestDocsGroupFlagSurface guards the docs group's flag surface in both
 // directions, like the resource group's test: every subcommand offers the
-// shared export flags it honours (--domain/--out plus the auth group, declared
-// per subcommand through one helper), and no subcommand offers a sibling's flag
-// it would ignore.
+// shared export flags it honours (--domain and --out, declared per subcommand
+// through one helper), and no subcommand offers a sibling's flag it would
+// ignore. The credentials these commands may need to resolve the tenant domain
+// come from the tenant's configuration profile, not from flags.
 func TestDocsGroupFlagSurface(t *testing.T) {
 	docsCmd := NewCommand()
 
-	shared := []string{"domain", "out", "subscription", "client-id", "tenant-id"}
+	shared := []string{"domain", "out"}
 	for _, name := range []string{"generate-prompt", "generate-index", "analyze-drift"} {
 		sub := subcommand(t, docsCmd, name)
 		for _, flag := range shared {

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"azure-resource-downloader/internal/azure"
-	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
@@ -39,7 +38,8 @@ refused is reported as unknown — never as 0, which would mean "listed and foun
 nothing".
 
 Selection flags narrow the map offline and the counting online. This command
-writes nothing, so --dry-run changes nothing.
+writes nothing, so --dry-run changes nothing. The credentials it probes with
+come from the tenant's configuration profile.
 
 Examples:
   # The full supported-type map (works offline)
@@ -52,12 +52,6 @@ Examples:
 }
 
 func runTypes(cmd *cobra.Command, args []string) error {
-	// Bind the flags that apply to this command (inherited from the resource
-	// group and root) to viper before reading any values so the
-	// flag > env > config > default precedence holds without a sibling command
-	// stealing the binding.
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
@@ -65,8 +59,7 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	selectedTypes := viper.GetStringSlice("type")
 	resourceGroup := viper.GetString("resource-group")
 	resourceIDs := viper.GetStringSlice("resource-id")
-	workersFlag := viper.GetInt("workers")
-	workersExplicit := cmd.Flags().Changed("workers")
+	workersFlag, workersExplicit := runprep.WorkersFromConfig()
 
 	// This command has no output artifact, so there is nothing for --dry-run to
 	// withhold; say so instead of silently ignoring the flag.
@@ -103,7 +96,7 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	// Enrich with tenant counts when — and only when — a session is available
 	// without interaction. Failing to obtain one is not an error: the offline
 	// map is complete and correct on its own terms.
-	workerConfig := runprep.BuildWorkerConfig(workersExplicit)
+	workerConfig := runprep.BuildWorkerConfig()
 	counts, unknown, omitReason := tenantCounts(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"),
 		types, runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 

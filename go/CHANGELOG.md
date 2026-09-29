@@ -11,6 +11,34 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+### Breaking
+
+#### Command-line surface and configuration
+
+- **The configuration file is now the single source of truth, and the command line carries only what belongs
+  there.** Every setting used to be reachable from a flag, an `AZURE_RD_*` variable and the config file at
+  once, with the flag winning silently — so one tenant's credentials could be paired with another tenant's
+  export, and the destructive and secret-writing switches could be typed instead of reviewed. Identity,
+  tuning and the write-path switches moved into the file; the flags that duplicated them and the entire
+  environment layer are gone. What stays on the command line is what locates the configuration, selects the
+  tenant, or changes one invocation without changing what is produced. **Scripts and pipelines that passed
+  the removed flags or exported `AZURE_RD_*` must move those values into a configuration file** — the
+  README's configuration section lists where each one went. A run with no configuration at all still behaves
+  exactly as before.
+- **Per-tenant configuration profiles, selected by domain.** A config directory holds one `<domain>.yaml` per
+  tenant plus an optional shared `base.yaml`, so switching tenants is `--config-dir <dir> --domain <domain>`
+  instead of a long path or a private shell wrapper. The split between general and tenant-scoped settings is
+  **enforced**: a key on the wrong side is a fatal error naming it, which is what keeps a per-tenant
+  transformer or output root — each of which silently breaks comparability or the export layout — from being
+  expressible at all. `--domain` completes from the profiles and the existing exports, so tab completion
+  answers which tenants are configured. See the **Configuration** section of `README.md`.
+- **A run now refuses when it cannot establish which tenant it acts on.** The declared `--domain` is intent
+  and the signed-in tenant is ground truth; they are cross-checked, a mismatch aborts before anything is
+  written, and `--domain` is accepted by every resource command rather than drift alone. The previous
+  fallback — writing the export to the bare output directory when the tenant domain could not be resolved —
+  is removed: that layout is invisible to every other command, so the export was lost from the moment it was
+  written.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
