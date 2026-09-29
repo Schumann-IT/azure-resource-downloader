@@ -24,7 +24,9 @@ This project is released independently of the documentation browser in `web/`: i
   the version that shipped it. `make branch-ready` gained three read-only git checks on top of the existing
   ones: the branch is not the release branch, the backlog changed on it, and every entry archived as done on
   it is recorded under `[Unreleased]`. **A branch that changes `go/` without touching `NEXT-ITERATIONS.md` now
-  fails `make branch-ready`** — a small fix gets a small entry. The readers behind the reports are tested by
+  fails `make branch-ready`** — a small fix gets a small entry — **and so does a commit whose subject does
+  not follow Conventional Commits** (`type(go|web|release)!: description`), since the pull request title
+  becomes the squash commit on `main`. The readers behind the reports are tested by
   `make test-scripts`, part of `make check`. Outside a git clone the new checks skip with a note, so the
   tooling stays usable there. See the **Development workflow** section of the
   [repository README](../README.md).

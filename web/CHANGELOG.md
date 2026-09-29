@@ -26,7 +26,9 @@ section of the [repository README](../README.md) for the procedure.
   with the version that shipped it. `npm run branch-ready` gained three read-only git checks on top of the
   existing ones: the branch is not the release branch, the backlog changed on it, and every entry archived as
   done on it is recorded under `[Unreleased]`. **A branch that changes `web/` without touching
-  `NEXT-ITERATIONS.md` now fails `npm run branch-ready`** — a small fix gets a small entry. Outside a git clone
+  `NEXT-ITERATIONS.md` now fails `npm run branch-ready`** — a small fix gets a small entry — **and so does a
+  commit whose subject does not follow Conventional Commits** (`type(go|web|release)!: description`), since
+  the pull request title becomes the squash commit on `main`. Outside a git clone
   the new checks skip with a note, so the tooling stays usable there. The app itself is unchanged. See the
   **Development workflow** section of the [repository README](../README.md).
 
