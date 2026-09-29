@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -14,6 +13,7 @@ import (
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/runprep"
+	"azure-resource-downloader/internal/tenantdir"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,9 +21,9 @@ import (
 
 // NewListCommand builds the `resource list` command: what does the tenant
 // actually contain, per resource, without downloading anything. It shares the
-// authentication, selection and --workers flags declared on the `resource`
-// parent, and enumerates through the same listing path a download uses to build
-// its fetch requests, so the two can never disagree about what is in scope.
+// selection flags and --domain declared on the `resource` parent, and enumerates
+// through the same listing path a download uses to build its fetch requests, so
+// the two can never disagree about what is in scope.
 func NewListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -51,19 +51,13 @@ Examples:
   # One type only
   azure-rd resource list --type "Microsoft.Graph/groups"
 
-  # With a dedicated app registration for Graph/Intune scopes
-  azure-rd resource list --client-id "<app-id>" --tenant-id "<tenant-id>"`,
+  # A tenant selected by domain, with its profile from a config directory
+  azure-rd resource list --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com`,
 		RunE: runList,
 	}
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	// Bind the flags that apply to this command (inherited from the resource
-	// group and root) to viper before reading any values so the
-	// flag > env > config > default precedence holds without a sibling command
-	// stealing the binding.
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
@@ -74,8 +68,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	resourceIDs := viper.GetStringSlice("resource-id")
 	selectedTypes := viper.GetStringSlice("type")
 	resourceGroup := viper.GetString("resource-group")
-	workersFlag := viper.GetInt("workers")
-	workersExplicit := cmd.Flags().Changed("workers")
+	declaredDomain := cmdutil.DeclaredDomain(cmd)
+	workersFlag, workersExplicit := runprep.WorkersFromConfig()
 
 	// This command has no output artifact, so there is nothing for --dry-run to
 	// withhold; say so instead of silently ignoring the flag.
@@ -95,7 +89,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 		if err := azure.VerifySession(ctx, probeCred); err != nil {
 			log.Debug("Session verification failed", "error", err)
-			return fmt.Errorf("not signed in to Azure; run 'az login' first or pass --client-id/--tenant-id for device-code sign-in (%s)",
+			return fmt.Errorf("not signed in to Azure; run 'az login' first, or set client-id and tenant-id in the tenant's configuration profile for device-code sign-in (%s)",
 				azure.ErrorSummary(err))
 		}
 	}
@@ -113,7 +107,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Enumerate through the exact listing path a download uses to build its
 	// fetch requests: scope, filters and the treatment of unlistable types are
 	// shared code, not a parallel implementation.
-	workerConfig := runprep.BuildWorkerConfig(workersExplicit)
+	workerConfig := runprep.BuildWorkerConfig()
 	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub,
 		runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 	if err != nil {
@@ -123,7 +117,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Display names come from a fetch and a transform, so a listing alone
 	// cannot show them. Joining them from an existing export's recorded facts
 	// is legitimate; fetching merely to prettify a listing is not.
-	names, exportFound := exportNames(ctx, azureClient, output)
+	names, exportFound := exportNames(ctx, azureClient, output, declaredDomain)
 
 	// Group per type, deterministically ordered.
 	byType := map[string][]string{}
@@ -180,26 +174,31 @@ func runList(cmd *cobra.Command, args []string) error {
 }
 
 // exportNames joins the listing against an existing export for the tenant: it
-// resolves the tenant domain, reads <output>/<tenant>/resources/metadata.yaml
-// and returns recorded display names keyed by lowercased resource id. Every
-// failure degrades to "no names" — the ids are the listing's substance, the
-// names are recorded convenience.
-func exportNames(ctx context.Context, azureClient *azure.Client, baseOutput string) (map[string]string, bool) {
+// decides the tenant directory through the shared resolver, reads its
+// resources/metadata.yaml and returns recorded display names keyed by
+// lowercased resource id. Every failure degrades to "no names" — the ids are the
+// listing's substance, the names are recorded convenience — with one exception:
+// a declared --domain that contradicts the signed-in tenant is a refusal
+// everywhere else, so here it must not be papered over either and is reported.
+func exportNames(ctx context.Context, azureClient *azure.Client, baseOutput, declaredDomain string) (map[string]string, bool) {
 	log := logger.Default
 
-	tenantDomain, err := azureClient.GetTenantDomain(ctx)
+	resolvedDomain, err := azureClient.GetTenantDomain(ctx)
 	if err != nil {
 		log.Debug("Tenant domain resolution failed", "error", err)
-		log.Warn("Could not resolve the tenant domain; display names from an existing export are not shown",
-			"reason", azure.ErrorSummary(err))
+		log.Warn("Could not resolve the tenant domain from the session", "reason", azure.ErrorSummary(err))
+	}
+	target, err := tenantdir.Resolve(baseOutput, declaredDomain, resolvedDomain)
+	if err != nil {
+		log.Warn("Display names from an existing export are not shown", "reason", err.Error())
 		return nil, false
 	}
 
-	tenantDir := filepath.Join(baseOutput, tenantDomain)
+	tenantDir := target.Dir
 	meta, err := docs.LoadExportMetadata(tenantDir)
 	if err != nil {
 		if errors.Is(err, docs.ErrNoMetadata) {
-			log.Debug("No export metadata for tenant", "tenant", tenantDomain)
+			log.Debug("No export metadata for tenant", "tenant", target.Domain)
 		} else {
 			log.Warn("Could not read the export metadata; display names are not shown", "error", err)
 		}

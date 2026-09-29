@@ -64,21 +64,18 @@ Examples:
 }
 
 func runAnalyzeDrift(cmd *cobra.Command, _ []string) error {
-	cmdutil.BindFlags(cmd)
-
 	ctx := cmd.Context()
 	log := logger.Default
 
 	baseOutput := viper.GetString("output")
 	dryRun := viper.GetBool("dry-run")
-	domain := viper.GetString("domain")
-	outPath := viper.GetString("out")
-	promptPath := viper.GetString("prompt")
+	domain := cmdutil.DeclaredDomain(cmd)
+	outPath, _ := cmd.Flags().GetString("out")
+	promptPath, _ := cmd.Flags().GetString("prompt")
 
 	// Resolve the export directory and the domain to cross-check the
 	// observation and metadata against.
-	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain,
-		viper.GetString("subscription"), viper.GetString("client-id"), viper.GetString("tenant-id"))
+	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain)
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to analyze: %w", err))
 	}

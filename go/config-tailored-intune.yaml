@@ -1,28 +1,30 @@
-dry-run: false
+# A worked, opinionated BASE configuration for an Intune-centred tenant.
+#
+# Load it with --config, or copy it to <config-dir>/base.yaml. It holds general
+# settings only: the tenant's own identity (subscription, client-id, tenant-id)
+# and its filters belong in <config-dir>/<domain>.yaml — see
+# config.example.domain.yaml.
+#
+# Unlike config.example.yaml this is NOT a no-op: it resolves secrets, drops two
+# transformers and defines a taxonomy, so it changes the exported bytes and the
+# recorded hashes. Use it as a starting point, not as a default.
+#
+# --dry-run and --log-level are command-line switches and deliberately have no
+# key here: they belong to one invocation, not to a configuration.
 
+# WARNING: writes decrypted Intune OMA-URI secrets to disk in plaintext.
 resolve-secrets: true
 
 prune: false
-
-log-level: "info"
 
 transformers:
   - name: name-sanitization
   - name: base64-decode
 
-# filters:
-#   # only export device configurations whose displayName starts with "GBL_"
-#   Microsoft.Graph/deviceConfigurations:
-#     displayName: "GBL_.*"
-#
-#   # combine multiple properties (both must match)
-#   Microsoft.Graph/groups:
-#     displayName: "^IT-.*"
-#     mailEnabled: "true"
-#
-#   # anchor a regex for an exact prefix on storage accounts
-#   Microsoft.Storage/storageAccounts:
-#     name: "^prod"
+# Per-resource-type filters are TENANT-SCOPED and belong in the tenant's profile
+# (<config-dir>/<domain>.yaml), not here: the patterns encode one tenant's naming
+# convention, and the filter configuration is hashed into the export metadata
+# where it gates drift comparability. See config.example.domain.yaml.
 
 taxonomy:
   version: 1

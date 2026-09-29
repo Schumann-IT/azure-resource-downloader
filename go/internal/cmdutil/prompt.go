@@ -18,12 +18,16 @@ import (
 // requirements map (type -> declared permissions) is shown so the user knows
 // which types drove the request.
 //
-// defaultClientID (typically from AZURE_RD_CLIENT_ID / config) and
+// defaultClientID (from the tenant's configuration profile) and
 // defaultTenantID (typically the Azure CLI session tenant) pre-fill each
 // prompt: the user may press Enter to accept the shown default. It reads from
 // in; when no input is available (e.g. a non-interactive run) it falls back to
 // the defaults, and only errors when a required value has neither input nor a
 // default.
+//
+// On success it prints the profile snippet to save, because these two values are
+// tenant-scoped configuration: answering the prompt every run, or passing them
+// some other way, is exactly what the single source of truth removes.
 func PromptForDedicatedApp(requirements map[string][]string, in io.Reader, defaultClientID, defaultTenantID string) (clientID, tenantID string, err error) {
 	log := logger.Default
 
@@ -42,7 +46,7 @@ func PromptForDedicatedApp(requirements map[string][]string, in io.Reader, defau
 		}
 	}
 	fmt.Fprintln(os.Stderr, "Enter the app registration to sign in with (press Enter to accept a shown [default]).")
-	fmt.Fprintln(os.Stderr, "To skip this prompt next time, pass --client-id/--tenant-id or export AZURE_RD_CLIENT_ID/AZURE_RD_TENANT_ID.")
+	fmt.Fprintln(os.Stderr, "To skip this prompt next time, save the values in the tenant's configuration profile.")
 
 	reader := bufio.NewReader(in)
 
@@ -56,8 +60,10 @@ func PromptForDedicatedApp(requirements map[string][]string, in io.Reader, defau
 	}
 
 	if clientID == "" || tenantID == "" {
-		return "", "", errors.New("both client ID and tenant ID are required (pass --client-id/--tenant-id or set AZURE_RD_CLIENT_ID/AZURE_RD_TENANT_ID)")
+		return "", "", errors.New("both client ID and tenant ID are required; set client-id and tenant-id in the tenant's configuration profile (<config-dir>/<domain>.yaml)")
 	}
+
+	fmt.Fprintf(os.Stderr, "\nSave these in the tenant's profile (<config-dir>/<domain>.yaml) to skip this prompt:\n\nclient-id: %q\ntenant-id: %q\n\n", clientID, tenantID)
 	return clientID, tenantID, nil
 }
 
@@ -82,7 +88,7 @@ func promptLine(reader *bufio.Reader, label, def string) (string, error) {
 			case def != "":
 				return def, nil
 			default:
-				return "", fmt.Errorf("no input available for %q (run interactively or pass --client-id/--tenant-id)", label)
+				return "", fmt.Errorf("no input available for %q (run interactively, or set client-id and tenant-id in the tenant's configuration profile)", label)
 			}
 		}
 		return "", fmt.Errorf("failed to read input: %w", err)

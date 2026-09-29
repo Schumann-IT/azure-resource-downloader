@@ -1,5 +1,7 @@
 ---
 trigger: always_on
+description: 
+globs: 
 ---
 
 # Makefile Usage Policy
@@ -87,20 +89,24 @@ make check
 
 ## "Add a CLI command"
 1. Prefer adding the command to an existing group over a new top-level verb. The surface is grouped by noun: `resource` (commands acting on a tenant's Azure resources) and `docs` (commands acting on an export's documentation). Both parents live in package `cmd` (`cmd/resource.go`, `cmd/docs.go`) and each subcommand is a separate package in its own directory (`cmd/resource/`, `cmd/docs/`) exposing an exported constructor (e.g. `NewDownloadCommand`, `NewGeneratePromptCommand`) that the parent attaches — a subcommand package must NOT import package `cmd` (import cycle), so it takes shared helpers from `../../internal/cmdutil`, and anything else it shares with root (e.g. the tool version) lives in its own `internal/` package.
-2. Register flags where they are honoured:
-   - **Used by every subcommand of the group** → once on the parent, via the persistent variants in `../../internal/cmdutil` (`AddPersistentAzureAuthFlags`, `AddPersistentSelectionFlags`, `AddPersistentWorkersFlag`). Promote a group to the parent only when *all* its subcommands honour it; until then it stays on the ones that do. The `resource` group holds auth, selection and `--workers` this way.
-   - **Used by this command only** → the local variants (`AddAzureAuthFlags`, `AddSelectionFlags`, `AddWorkersFlag`, `AddTimeoutFlag`) plus command-specific flags on the command's `Flags()` (NOT on `rootCmd.PersistentFlags()`; see "Add config option")
-   - Cobra validates flag groups (`MarkFlagsRequiredTogether`) against the flag set of the command it runs, so a pairing cannot be declared on a parent for its children. Enforce it in the group's `PersistentPreRunE` instead — see `cmdutil.RequireAuthFlagPair`, used by `newResourceCommand`.
-3. **Call `cmdutil.BindFlags(cmd)` as the first statement of `RunE`**, before reading any value. It binds every flag that applies to the command — its own *and* those inherited from its group and root — to Viper per-execution, so the global Viper singleton cannot pick up a sibling command's identically named flag. Skipping this silently breaks the flag > env > config > default precedence for that command. Do not narrow it back to local flags only: a group-declared flag would keep working on the command line while silently ignoring `AZURE_RD_*` and the config file.
-4. Implement `RunE` function with:
-   - Configuration loading via Viper (after `cmdutil.BindFlags`)
+2. **Default to a configuration setting, not a flag.** The config file is the single source of truth; a new flag has to earn its place by being one of these:
+   - **Bootstrap** — it says where the configuration is (`--config`, `--config-dir`). There should never be a third.
+   - **Selector** — `--domain`, which picks the tenant and its profile. Declare it where the command needs it (persistently on `resource`, per subcommand on `docs`, locally on root for `--debug`) and register completion with `cmdutil.RegisterDomainCompletion`.
+   - **Invocation-scoped** — it changes this run's verbosity, side effects or destination without changing *what* is produced (`--dry-run`, `--log-level`, `--output`/`--out`), or its meaning is **per command** so one flat config key could not carry it (`--prompt`, `--exit-code`), or it is ad-hoc selection whose persistence would be a trap (`--type`, `--resource-id`, `--resource-group`).
+   Anything else is a config key — see "Add config option".
+3. Register a flag where it is honoured: on the group parent (via the persistent variants in `../../internal/cmdutil`) only when *every* subcommand honours it, otherwise on the command's own `Flags()`.
+4. **Read flag values from the command, not from Viper**, unless the flag is config-backed. Only `--output` and `--type` are bound (`viper.BindPFlag`, at their single declaration site); a flag declared in more than one place — `--domain`, `--out`, `--prompt`, `--exit-code` — MUST be read with `cmd.Flags().Get*` or `cmdutil.DeclaredDomain(cmd)`, because a global binding could resolve to a sibling command's copy. There is no `BindFlags` helper any more and none should be reintroduced: it existed only because every flag was config- and env-backed.
+5. Implement `RunE` function with:
+   - Configuration read from Viper (already loaded by root's `PersistentPreRunE`)
    - Azure client initialization
    - Handler registry setup
    - Pipeline execution
    - Error handling and user-friendly output
-5. Add examples in command's `Long` description
-6. Update README.md with new command usage
-7. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
+6. Add examples in command's `Long` description
+7. Update README.md with new command usage
+8. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
+
+**A command that acts on a tenant takes `--domain` and resolves its directory through `internal/tenantdir`.** Never join `<output>` and a domain by hand: the resolver is the one place that cross-checks the declared domain against the signed-in tenant, refuses a mismatch, refuses when neither is known (there is deliberately no flat-output fallback) and reports whether the domain was verified.
 
 **Do not add a flag to a command that ignores it.** Persistent flags were deliberately narrowed for this reason: `list` previously advertised `--type` and `--resource-group` and silently ignored them. Hoisting a flag onto a group parent is the same mechanism and can reintroduce the same defect, so the test in `cmd/resource_test.go` asserts both directions: every subcommand sees the group's shared flags, and no subcommand offers one it ignores.
 
@@ -115,24 +121,26 @@ make check
 
 ## "Add config option"
 1. Add field to `models.PipelineConfig` struct
-2. Declare the flag in the right place:
-   - **Command-specific** (the normal case) → on that command's `Flags()`, or in the matching group helper in `../../internal/cmdutil` if more than one command needs it
-   - **Group-wide** → the group parent's `PersistentFlags`, via the persistent helpers in `../../internal/cmdutil`, and only once *every* subcommand of that group honours it (the `resource` group holds the authentication flags this way)
-   - **Global** → `cmd/root.go` → `PersistentFlags`, and only if *every* command genuinely needs it. Root currently holds only `--config`, `--output`, `--dry-run` and `--log-level`; adding a fifth needs a reason
-3. Binding: local flags are bound automatically by `cmdutil.BindFlags(cmd)` in the command's `RunE` — do NOT add a manual `viper.BindPFlag()` for them. Only the four global flags are bound explicitly in `root.go`'s `init()`
-4. Give the flag a default via a named constant if any logic branches on "was it set explicitly" — never compare a value against a duplicated literal; use `cmd.Flags().Changed("<name>")` (see `cmdutil.DefaultWorkerCount` in `../../internal/cmdutil`)
+2. **Register the key in `internal/config`'s `keyScopes` table** — the single truth for the configuration partition — on the correct side:
+   - **`ScopeTenant`** (profile only, `<config-dir>/<domain>.yaml`): it names something that exists inside one tenant, so a value from another tenant is meaningless or harmful (`subscription`, `client-id`, `tenant-id`, `filters`).
+   - **`ScopeGeneral`** (base file only): it describes behaviour, tuning or the export format (`output`, `type`, `workers`, `timeout`, `transformers`, `taxonomy`, …).
+   - **`ScopeFlagOnly`**: it is not configuration at all. List it anyway, so a file still carrying it gets a migration message naming the flag instead of "not a known setting".
+   A key absent from the table is rejected as unknown, which is what turns a typo into an error. Placement is not cosmetic: a setting hashed into `transformConfigSha256` or `filtersSha256`, or one that decides the export layout, breaks comparability or invisibly relocates the export if it lands on the wrong side.
+3. Give it a default: add it to `config.SetDefaults` if the zero value is wrong. **Do not register a default for a key whose mere presence is meaningful** — `viper.IsSet` is how that is detected (see `workers`, where a default would silently flatten the per-API counts).
+4. Read it with `viper.Get*`. If logic branches on "was it set explicitly", use `viper.IsSet` — never compare against a duplicated literal; the named defaults live in `internal/config` (re-exported by `cmdutil`).
 5. Use in pipeline/command
-6. Update `config.example.yaml` (see the invariant below — this is mandatory for ANY option change)
-7. Document in README.md
+6. Update **both** example files (see the invariant below — mandatory for ANY option change)
+7. Document in README.md, including the partition table and the migration table if a setting moved
 8. Add a `CHANGELOG.md` entry under `## [Unreleased]` (see Changelog Policy in `02-style-and-quality.md`)
 
-**`config.example.yaml` must be updated on ANY change to a config option — not only when adding one.** This includes adding, renaming, removing, or re-defaulting an option, or changing what an existing value does. The file is the single reference schema for configuration, and it carries an explicit promise in its own header: **loading it unmodified must behave byte-for-byte identically to running with no config file at all.** Therefore:
-- Every active key sets the tool's **built-in default**, so loading the file is a true no-op. Add the key with its default value; if a key has no usable default (credentials, selection filters) leave it empty; if a value is dangerous to leave enabled, document it **commented out**.
+**`config.example.yaml` (general) and `config.example.domain.yaml` (tenant-scoped) must be updated on ANY change to a config option — not only when adding one.** This includes adding, renaming, removing, re-scoping or re-defaulting an option, or changing what an existing value does. They are the reference schemas, and each carries an explicit promise in its own header: **loading it unmodified must behave byte-for-byte identically to running without it.** Therefore:
+- Every active key sets the tool's **built-in default**, so loading the file is a true no-op. Add the key with its default value; if a key has no usable default (credentials, filters) leave it empty; if a value is dangerous to leave enabled, or if its mere presence changes behaviour (`workers`), document it **commented out**.
 - **Never write an active value that changes observable output OR any recorded fact** versus running with no config. In particular, do not spell out sub-settings whose only effect is to change a hash — e.g. the `transformers` entries are bare names (empty settings) because writing their defaults explicitly would change `transformConfigSha256` in `resources/metadata.yaml` even though the transformation is identical. Illustrate such options in **comments** instead.
-- Every option must still be **illustrated by a comment** describing what it does, its non-default alternatives, and the equivalent CLI flag / `AZURE_RD_*` env var where one exists.
+- Every option must still be **illustrated by a comment** describing what it does, its non-default alternatives, and — for the two config-backed flags — the flag that overrides it for one run.
+- A key must appear in the file matching its scope; `cmd/config_test.go` asserts that every key in the partition table is mentioned in the right example file, so a new option cannot ship undocumented.
 - When in doubt, verify the no-op guarantee: a `download`/`docs` run with `--config config.example.yaml` must produce the same files and the same `resources/metadata.yaml` (including all hashes) as the same run without `--config`.
 
-Hyphenated keys work as `AZURE_RD_*` env vars only because of `viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))` in `initConfig`. Do not remove it — without it `log-level` resolves to `AZURE_RD_LOG-LEVEL`, which no shell can export, and every hyphenated override silently stops working.
+**There is no environment layer.** `viper.AutomaticEnv`, `SetEnvPrefix` and `SetEnvKeyReplacer` were removed, and no `AZURE_RD_*` variable is read: an environment value outranked the config file, so one left over from another tenant's run applied silently — and a wrong value here does not fail loudly, it produces a confident, wrong result. Do not reintroduce them. `LOG_LEVEL` is unaffected; the logger reads it directly.
 
 # Output shape
 - Provide full file paths and complete code blocks

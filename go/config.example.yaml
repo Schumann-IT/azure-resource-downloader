@@ -1,39 +1,36 @@
-# Example configuration file for azure-rd
-# Save it anywhere and load it explicitly with --config, e.g.:
-#   azure-rd resource download --config ~/.azure-rd.yaml
-# Without --config no config file is read and the built-in defaults apply.
+# Example BASE configuration file for azure-rd.
 #
-# Precedence (highest to lowest): CLI flag > AZURE_RD_* env var > this file >
-# built-in default. A higher source silently overrides a lower one (no warning).
-# An unset flag does NOT clobber a configured value with the flag's default.
+# Load it explicitly with --config, e.g.:
+#   azure-rd resource download --config ~/.azure-rd/base.yaml
+# or place it as base.yaml inside a config directory, where it is picked up by
+# convention alongside the per-tenant profiles:
+#   cp config.example.yaml ~/.azure-rd/base.yaml
+#   azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com
+# Without either, no config file is read and the built-in defaults apply.
 #
-# Every value below is set to the tool's built-in default, so loading this file
-# unmodified behaves exactly like running with no config at all. Change what you
-# need; the comments describe what each key does and what a non-default value
-# means. Keys that have NO usable default (credentials, selection filters) are
-# present with empty values; a few that are dangerous to leave enabled are
-# documented but commented out — those are called out where they appear.
-
-# ---------------------------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------------------------
-
-# Azure subscription ID.
-# Empty = use the default subscription from your 'az login' session. With no
-# subscription at all, Microsoft Graph types still download and ARM types are
-# skipped with a warning.
-# Equivalent to --subscription / AZURE_RD_SUBSCRIPTION.
-subscription: ""
-
-# Dedicated app registration for device-code sign-in.
-# Empty = reuse the existing Azure CLI session (same delegated token for ARM and
-# Microsoft Graph). Set BOTH values to sign in to your own app registration
-# instead — needed for Microsoft Graph/Intune scopes the Azure CLI app cannot
-# provide. If a selected resource type requires one and these are empty, the run
-# prompts for them interactively.
-# Equivalent to --client-id / --tenant-id.
-client-id: ""     # app (client) ID
-tenant-id: ""     # Entra tenant ID (required together with client-id)
+# This file holds GENERAL settings only: behaviour, tuning and the export
+# format. TENANT-SCOPED settings (subscription, credentials, per-tenant
+# filters) belong in a profile — see config.example.domain.yaml. Putting a
+# tenant-scoped key here is a fatal error naming the key, and vice versa; the
+# partition is enforced, not advisory, because a per-tenant transformer or
+# output root silently breaks comparability and the export layout.
+#
+# Precedence (highest to lowest): CLI flag > tenant profile > this file >
+# built-in default. There is no environment layer: AZURE_RD_* variables are NOT
+# read, so a value exported for one tenant can never leak into another tenant's
+# run. (LOG_LEVEL still sets log verbosity, because the logger reads it
+# directly.)
+#
+# Only two settings here also have a flag, for the ad-hoc cases: --output
+# (redirect one run elsewhere to compare) and --type (narrow one run). The flag
+# replaces the configured value for that invocation.
+#
+# Every active value below is the tool's built-in default, so loading this file
+# unmodified behaves exactly like running with no config at all — same output
+# files and the same resources/metadata.yaml, including every hash. Change what
+# you need; the comments describe what each key does and what a non-default
+# value means. Settings that are dangerous or output-changing to leave enabled
+# are documented but commented out — those are called out where they appear.
 
 # ---------------------------------------------------------------------------
 # Output
@@ -44,30 +41,32 @@ tenant-id: ""     # Entra tenant ID (required together with client-id)
 # also holds the export metadata (resources/metadata.yaml) and the per-type
 # doc-prompt.md files. Anything you place elsewhere under <output> is left
 # untouched (and never pruned).
-# Equivalent to --output / AZURE_RD_OUTPUT.
+#
+# This is base-only on purpose: the tenant is already a subdirectory of it, so a
+# per-tenant root would break the layout every docs command looks for.
+# Override for a single run with --output (e.g. to download elsewhere and diff);
+# that changes WHERE bytes land, never WHICH bytes are produced.
 output: "./output"
-
-# Preview mode: run everything but write nothing to disk.
-# Under dry-run the export metadata is not written and --prune deletes nothing;
-# a dry run with prune enabled instead lists the files a real run would remove.
-# Equivalent to --dry-run.
-dry-run: false
 
 # ---------------------------------------------------------------------------
 # Concurrency and timeouts
 # ---------------------------------------------------------------------------
 
-# Worker count for the download pipeline.
+# General worker count for the download pipeline.
 #
-# How this value is actually used:
-#   - Downloading exactly ONE --type: the API-specific count below wins and this
-#     value is ignored. Only the --workers FLAG overrides an API-specific count.
-#   - Downloading several types or a full export: this value is used.
+# LEAVE THIS COMMENTED OUT unless you really want one number for every API: its
+# mere PRESENCE is the signal that you chose a count deliberately, which
+# overrides the per-API defaults below for mixed runs. Writing the default here
+# would silently opt you out of ARM's 20.
+#
+# How the value is used when set:
+#   - Acting on exactly ONE type: the API-specific count below wins.
+#   - Several types or a full export: this value is used.
 # To raise concurrency for a specific API, set workers-by-api instead.
-# Equivalent to --workers / AZURE_RD_WORKERS.
-workers: 5
+#
+# workers: 5
 
-# Per-API worker counts (config-only; there is no CLI flag).
+# Per-API worker counts.
 # Microsoft Graph has strict rate limits, ARM is far more generous. More workers
 # can SLOW a run down once throttling and exponential backoff kick in.
 workers-by-api:
@@ -77,31 +76,25 @@ workers-by-api:
 # Per-operation timeout in seconds.
 # Applied around each individual resource fetch INCLUDING its retries — it is
 # not a whole-run budget, so a large tenant does not need a larger value.
-# Equivalent to --timeout / AZURE_RD_TIMEOUT.
 timeout: 300
 
 # ---------------------------------------------------------------------------
-# Selection — WHAT to download
+# Selection — WHAT to act on
 # ---------------------------------------------------------------------------
-# If none of the three keys below is set, every registered resource type is
-# downloaded (a full export). Run 'azure-rd resource types' to see the registered types.
 
-# Explicit Azure resource IDs. Equivalent to repeating --resource-id.
-# Example:
-#   resource-id:
-#     - "/subscriptions/<sub>/resourceGroups/my-rg/providers/Microsoft.Storage/storageAccounts/acct"
-resource-id: []
-
-# Resource type filter. Equivalent to repeating --type.
+# Resource type filter. Empty = every registered resource type (a full export).
+# Run 'azure-rd resource types' to see the registered types.
+#
+# Narrow a single run with --type (repeatable), which replaces this list for
+# that invocation only. The two ARM selectors --resource-id and
+# --resource-group are command-line only and have no key here: they are ad-hoc
+# ("re-download this one resource"), and a forgotten entry in a file would
+# silently scope every later run.
 # Example:
 #   type:
 #     - Microsoft.Resources/resourceGroups
 #     - Microsoft.Storage/storageAccounts
 type: []
-
-# Download the named resource group itself (ARM only).
-# Equivalent to --resource-group.
-resource-group: ""
 
 # ---------------------------------------------------------------------------
 # Download behaviour
@@ -111,7 +104,11 @@ resource-group: ""
 # WARNING: when true, decrypted secret values are written to the output files on
 # disk in the clear. Requires DeviceManagementConfiguration.ReadWrite.All in the
 # token. Leave false unless you specifically need the secret values.
-# Equivalent to --resolve-secrets.
+#
+# This has no flag on purpose: writing secrets to disk should be a decision
+# recorded in a file you can review and diff, not something typed ad-hoc. It
+# also changes the exported bytes, so a drift run must resolve secrets exactly
+# as the baseline did — one setting, read by both, cannot disagree.
 resolve-secrets: false
 
 # Skip the per-type documentation prompts. Prompts ARE written by default.
@@ -122,7 +119,6 @@ resolve-secrets: false
 # with best-practice guidance, Microsoft Learn links and fully expanded embedded
 # payloads (e.g. configurationXml, omaSettings). Paste a prompt together with a
 # resource YAML from the same directory into an LLM to generate documentation.
-# Equivalent to --no-prompt.
 no-prompt: false
 
 # Delete resource files that are no longer in the tenant.
@@ -132,23 +128,15 @@ no-prompt: false
 # entries. It refuses to run for an incomplete run or one with failures, only
 # considers types this run fully listed, and never leaves resources/.
 # Under --dry-run it deletes nothing and lists what it would remove.
-# Equivalent to --prune.
+#
+# This is the tool's only delete path inside an export, and it has no flag for
+# the same reason resolve-secrets does not: a destructive switch belongs in a
+# file you can review, not on a command line. Keep a second base file if you
+# prune only occasionally.
 prune: false
 
 # ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-
-# Log verbosity. One of: debug, info, warn, error.
-#   debug - maximum verbosity (all messages)
-#   info  - normal operation (progress, metrics, warnings, errors)
-#   warn  - warnings and errors only
-#   error - errors only
-# Equivalent to --log-level / AZURE_RD_LOG_LEVEL (LOG_LEVEL is also honoured).
-log-level: "info"
-
-# ---------------------------------------------------------------------------
-# Transformers (config-only; there is no CLI flag)
+# Transformers
 # ---------------------------------------------------------------------------
 # The list below IS the built-in default pipeline, written out explicitly. Each
 # entry is a bare name, so it carries NO per-transformer settings and the tool
@@ -226,41 +214,15 @@ transformers:
 #     - base64-decode
 
 # ---------------------------------------------------------------------------
-# Filters (config-only; there is no CLI flag)
+# Filters — see config.example.domain.yaml
 # ---------------------------------------------------------------------------
-# Restrict which resources are downloaded per resource type by matching one or
-# more properties against a regular expression (Go RE2 syntax).
-#
-# Structure: filters.<resourceType>.<propertyPath>: <regex>
-#   <resourceType>  a registered handler type (case-insensitive)
-#   <propertyPath>  dot-separated path into the resource's raw properties
-#                   (e.g. displayName or properties.subnet.id)
-#   <regex>         a Go regular expression matched against the value
-#
-# A resource is downloaded only when EVERY listed property regex for its type
-# matches (logical AND). Types without a filter are unaffected. Filters are
-# evaluated after fetch, so the resource is still read from Azure — it is simply
-# never written.
-#
-# The default is no filters. Leave this key commented out entirely: an empty or
-# valueless "filters:" is not a valid filter map and is reported as ignored.
-#
-# filters:
-#   # only export device configurations whose displayName starts with "GBL_"
-#   Microsoft.Graph/deviceConfigurations:
-#     displayName: "GBL_.*"
-#
-#   # combine multiple properties (both must match)
-#   Microsoft.Graph/groups:
-#     displayName: "^IT-.*"
-#     mailEnabled: "true"
-#
-#   # anchor a regex for an exact prefix on storage accounts
-#   Microsoft.Storage/storageAccounts:
-#     name: "^prod"
+# Per-resource-type property filters are TENANT-SCOPED and belong in a tenant
+# profile, not here: the patterns encode one tenant's naming convention, and the
+# filter configuration is hashed into the export metadata where it gates drift
+# comparability. A `filters:` key in this file is rejected, naming the key.
 
 # ---------------------------------------------------------------------------
-# Taxonomy — grouping for 'docs generate-index' (config-only; there is no CLI flag)
+# Taxonomy — grouping for 'docs generate-index'
 # ---------------------------------------------------------------------------
 # Classifies each exported resource along one or more AXES — independent facets
 # such as PROGRAMME (real-world initiatives: CIS hardening, Defender, VPN, update

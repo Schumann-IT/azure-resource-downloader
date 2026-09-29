@@ -38,6 +38,4 @@ output/
 Thumbs.db
 
 # Config files (may contain sensitive data)
-.azure-rd.yaml
-.azure-rd.yml
-
+.config
