@@ -61,14 +61,14 @@ pipeline.
 
 **Plan.**
 
-- `package.json`: a `branch-ready:report` script running only `scripts/working-tree-clean.js` and
+- ~~`package.json`: a `branch-ready:report` script running only `scripts/working-tree-clean.js` and
   `scripts/branch-ready.js` (no tests, lint or build). It needs Node but no `npm ci`: the scripts use
-  built-ins only.
-- `.github/workflows/branch-ready.yml`: job `ci-web` (`name: ci-web`, on push and pull request, `if` web
+  built-ins only.~~
+- ~~`.github/workflows/branch-ready.yml`: job `ci-web` (`name: ci-web`, on push and pull request, `if` web
   changed): checkout by name with full history, Node from `web/package.json`, `npm ci`, then `npm test`,
   `npm run lint` and `npm run build` in `web/`. Job `branch-ready-web` (pull requests only, `if` web changed):
   checkout and Node only, then `npm --prefix web run branch-ready:report` with
-  `RELEASE_BRANCH: ${{ github.base_ref }}`. The `changes` job and the header are the Go entry's.
+  `RELEASE_BRANCH: ${{ github.base_ref }}`. The `changes` job and the header are the Go entry's.~~
 - Verify on this branch's pull request: `ci-web` green on push and on the pull request; `branch-ready-web` red
   on the strikeout check only while entries are struck, green after the close.
 - Branch protection on `main` requires `ci-web` and `branch-ready-web` beside the Go checks (by hand). Leave

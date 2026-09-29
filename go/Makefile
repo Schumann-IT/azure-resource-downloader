@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-race test-coverage test-scripts run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready start-item
+.PHONY: build install clean test test-race test-coverage test-scripts run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready branch-ready-report start-item
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -163,6 +163,15 @@ branch-ready:
 	@$(MAKE) --no-print-directory ci
 	@scripts/branch-ready.sh
 
+# The report half of `branch-ready` without the pipeline: the clean-tree
+# preflight and the branch report only, in seconds. CI runs the pipeline on
+# every push (the ci-go job) and this on the pull request (the branch-ready-go
+# job, the merge gate); locally it is what closing a branch runs once CI is
+# green. `branch-ready` with the full pipeline stays for offline use.
+branch-ready-report:
+	@scripts/working-tree-clean.sh
+	@scripts/branch-ready.sh
+
 # Check code quality (fmt-check + lint-check + test + test-scripts). Read-only:
 # nothing here rewrites a file, so `check`, `ci` and `release-ready` leave the
 # working tree as found.
@@ -195,6 +204,7 @@ help:
 	@echo "  make start-item N=<n> - Gate: may entry N of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)"
 	@echo "  make release-ready  - Report whether a release can be cut (tag/publish from the repo root)"
 	@echo "  make branch-ready   - Gate: is this feature/fix branch ready to ship? (clean tree, ci, changelog written, entries archived, backlog touched)"
+	@echo "  make branch-ready-report - The same gate without the pipeline (what CI runs on the pull request)"
 	@echo ""
 	@echo "Composite targets:"
 	@echo "  make check          - Run fmt-check + lint-check + test + test-scripts (modifies nothing)"

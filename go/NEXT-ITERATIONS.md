@@ -181,17 +181,17 @@ the pipeline.
 
 **Plan.**
 
-- `Makefile`: a `branch-ready-report` target running only the clean-tree preflight and `scripts/branch-ready.sh`
+- ~~`Makefile`: a `branch-ready-report` target running only the clean-tree preflight and `scripts/branch-ready.sh`
   (no `ci`), with the `help` line; root `Makefile` gains `branch-ready-report-go`, `-web` and
   `branch-ready-report` beside the full targets, and the comments say which is the local full gate and which
-  the CI merge gate.
-- `.github/workflows/branch-ready.yml`: trigger on `push` (every branch) and `pull_request` into `main`. The
+  the CI merge gate.~~
+- ~~`.github/workflows/branch-ready.yml`: trigger on `push` (every branch) and `pull_request` into `main`. The
   `changes` job diffs against `origin/<base>` where `<base>` is the pull request's base branch or `main` on a
   push. Job `ci-go` (`name: ci-go`, on both events, `if` go changed): checkout by name with full history,
   Go from `go.mod`, golangci-lint v2.11.4 via the action pointed at `go/`, then `make -C go ci` with
   `RELEASE_BRANCH` set. Job `branch-ready-go` (pull requests only, `if` go changed): checkout only, then
   `make branch-ready-report-go` with `RELEASE_BRANCH: ${{ github.base_ref }}`. The header comment states the
-  two rhythms and that branch protection requires `ci-go`, `ci-web`, `branch-ready-go`, `branch-ready-web`.
+  two rhythms and that branch protection requires `ci-go`, `ci-web`, `branch-ready-go`, `branch-ready-web`.~~
 - Verify on this branch's pull request: `ci-go` green on push and on the pull request; `branch-ready-go` red on
   the strikeout check only while entries are struck, green after the close.
 - Branch protection on `main` requires all four checks (by hand; replaces the two-check setting of the

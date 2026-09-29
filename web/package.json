@@ -21,6 +21,7 @@
     "lint:prune": "eslint . --prune-suppressions",
     "start-item": "node scripts/start-item.js",
     "branch-ready": "node scripts/working-tree-clean.js && npm run test && npm run lint && npm run build && node scripts/branch-ready.js",
+    "branch-ready:report": "node scripts/working-tree-clean.js && node scripts/branch-ready.js",
     "release-ready": "npm run test && npm run lint && npm run build && node scripts/release-ready.js"
   },
   "dependencies": {
