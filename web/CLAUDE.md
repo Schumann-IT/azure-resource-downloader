@@ -35,14 +35,18 @@ used from this folder.
   `export-index-mode.ts`, `html-allowlist.ts`, `page-name.ts`).
 - `views/` + `views/partials/` Handlebars templates; `public/` (`favicon.svg`; `app.css` is generated and
   gitignored); `test/` `*.spec.ts` only; `scripts/` readiness reports; `eslint.config.mjs` (single lint truth);
-  `eslint-suppressions.json` (debt ledger); `.env.example`.
+  `eslint-suppressions.json` (debt ledger); `.env.example`. `scripts/lib/git.js` is the one place the tooling
+  shells out (read-only git); every other script goes through it.
 
 ## Commands — always the npm scripts, from this folder
 
 `npm install` · `npm run build` (CSS + `nest build`) · `npm run start:dev` (Tailwind watch + Nest watch) ·
 `npm run start:prod` · `npm test` (Jest with `--experimental-vm-modules`) · `npm run lint` (reports; in both
 gates) · `npm run lint:fix`, `npm run lint:baseline`, `npm run lint:prune` (rewrite files; in no gate) ·
-`npm run branch-ready` (gate) · `npm run release-ready` (report). No Prettier exists; do not reference it.
+`npm run start-item -- <n>` (gate before implementing entry n) · `npm run branch-ready` (gate) ·
+`npm run release-ready` (report). No Prettier exists; do not reference it. Workflow procedures:
+`/promote-idea`, `/implement-item`, `/item-done`, `/close-branch`; finished entries live in
+`../.claude/archive/web/` (`/archive`).
 The server resolves `views/` and `public/` from `process.cwd()`, so it runs from `web/`.
 
 ## Non-negotiables

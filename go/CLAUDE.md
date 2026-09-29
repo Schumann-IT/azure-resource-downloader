@@ -57,8 +57,8 @@ repo-wide rules: `../CLAUDE.md`. Path-scoped detail loads automatically from `..
 | `make lint-check` (reports), `make lint` (rewrites) | `golangci-lint run` |
 | `make fmt-check` (reports), `make fmt` (rewrites) | `gofmt`, `go fmt` |
 | `make deps` | `go mod tidy` |
-| `make check` = fmt-check + lint-check + test; `make ci` = check + build (default goal) | |
-| `make branch-ready` (gate), `make release-ready` (report) | editing versions or tags by hand |
+| `make check` = fmt-check + lint-check + test + test-scripts; `make ci` = check + build (default goal) | |
+| `make start-item N=<n>` (gate before implementing entry n), `make branch-ready` (gate), `make release-ready` (report) | editing versions or tags by hand |
 
 Run `make test-race` in addition to `make test` whenever the diff touches goroutines, channels, `select`,
 `sync`/`atomic`, `internal/pipeline/`, `Registry.BuildFetchRequests` or any state shared across goroutines.
@@ -130,4 +130,5 @@ file > built-in default`. **There is no environment layer** — `viper.Automatic
 - With no configuration and no flags a run still performs a full export with the built-in defaults; keep that
   zero-config path working.
 
-Procedures: `/new-handler`, `/add-command`, `/add-config-option`.
+Procedures: `/new-handler`, `/add-command`, `/add-config-option`; workflow: `/promote-idea`, `/implement-item`,
+`/item-done`, `/close-branch`. Finished entries: `../.claude/archive/go/` (`/archive`).

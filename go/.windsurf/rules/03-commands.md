@@ -23,6 +23,8 @@ When providing instructions or examples:
 - ✅ `make check` — Run fmt-check + lint-check + test; modifies nothing
 - ✅ `make ci` — Run check + build (default goal; for CI/CD pipelines)
 - ✅ `make test-race` — Run tests with the Go race detector
+- ✅ `make test-scripts` — Test the readers behind the readiness reports and the start gate (part of `check`)
+- ✅ `make start-item N=<n>` — Gate: may entry N of `NEXT-ITERATIONS.md` be implemented? (branch, clean tree, entry committed, plan open)
 - ✅ `make branch-ready` — Clean-tree preflight, `ci`, then report whether this feature/fix branch is ready to ship (gate: fails on any ❌)
 - ✅ `make release-ready` — `ci`, then report whether a release can be cut (report: fails only if all ❌)
 

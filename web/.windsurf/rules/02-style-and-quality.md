@@ -16,6 +16,8 @@ Run everything from this folder (npm scripts, not raw binaries):
 - `npm run lint` — ESLint, reports only; part of both readiness gates
 - `npm run lint:fix` — ESLint with `--fix`; rewrites files, so it is in neither gate
 - `npm run lint:baseline` / `npm run lint:prune` — rewrite `eslint-suppressions.json`; in neither gate either
+- `npm run start-item -- <n>` — gate: may entry n of `NEXT-ITERATIONS.md` be implemented? (branch, clean
+  tree, entry committed, plan open)
 - `npm run branch-ready` — clean-tree preflight, tests + lint + build, then report whether this feature/fix
   branch is ready to ship
 
@@ -140,11 +142,13 @@ Rules for entries:
   never edits these files: it only reports whether a release can be cut (empty `[Unreleased]`,
   `package.json` matching, no struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no
   git command. `npm run branch-ready` is its counterpart for a feature/fix branch and asks the opposite
-  questions (`[Unreleased]` **written**, strikeouts cleared and entries renumbered, `version` **untouched**);
-  it also changes nothing, but it reports every check and exits non-zero if **any** of them failed, so it can
-  gate a merge. It is the one place in this project's tooling that runs git: a read-only
-  `git status --porcelain` scoped to `web/`, as a **preflight** that refuses to report on uncommitted changes
-  (so the verdict describes the commit that will be merged) and degrades to a skip outside a clone. The
+  questions (`[Unreleased]` **written**, done entries archived and the rest renumbered, the backlog touched on
+  the branch, not on the release branch, `version` **untouched**); it also changes nothing, but it reports
+  every check and exits non-zero if **any** of them failed, so it can gate a merge. Its git is read-only and
+  goes through `scripts/lib/git.js`: a `git status --porcelain` scoped to `web/` as a **preflight** that
+  refuses to report on uncommitted changes (so the verdict describes the commit that will be merged), then
+  `rev-parse`, `merge-base`, `diff` and `show` for the branch checks; all of it degrades to a skip outside a
+  clone. `npm run start-item -- <n>` is the gate before implementing entry n (see `06-next-iterations.md`). The
   repository-wide branch and working-tree checks, date stamping, tagging and the GitHub release happen from
   the repository root; the procedure lives in the **Development workflow** section of `../README.md`. The earlier
   `RC1`/`RC2` naming is retired, so do not reintroduce it.

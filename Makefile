@@ -31,10 +31,13 @@ release-ready-go:
 release-ready-web:
 	@npm --prefix web run release-ready
 
-# Is a feature or fix branch ready to ship? Each project's gate reports only,
-# but unlike the release targets above it exits non-zero if any check failed, so
-# it can gate a merge, and it refuses to run while its own folder has
-# uncommitted changes. Not release targets and not prerequisites of one.
+# Is a feature or fix branch ready to ship? Each project's gate reports only
+# (read-only git: the branch, its merge-base with RELEASE_BRANCH, the backlog and
+# archive diffs), but unlike the release targets above it exits non-zero if any
+# check failed, so it can gate a merge, and it refuses to run while its own
+# folder has uncommitted changes. Not release targets and not prerequisites of
+# one. The start gate for one entry is per project: `make -C go start-item N=<n>`
+# / `npm --prefix web run start-item -- <n>`.
 branch-ready-go:
 	@$(MAKE) -C go branch-ready
 
@@ -134,14 +137,14 @@ sonarqube-report: sonarqube-report-go sonarqube-report-web
 help:
 	@echo "Azure Resource Downloader - monorepo targets:"
 	@echo ""
-	@echo "  make branch-ready-go    - Gate: is a go/ branch ready to ship? (clean tree, ci, strikeouts cleared, changelog written)"
+	@echo "  make branch-ready-go    - Gate: is a go/ branch ready to ship? (clean tree, ci, entries archived, backlog touched, changelog written, not on main)"
 	@echo "  make branch-ready-web   - Gate: is a web/ branch ready to ship? (same, plus package.json version untouched)"
 	@echo "  make branch-ready       - Both gates"
 	@echo ""
 	@echo "  make release-ready-go   - Report whether go/ is ready to release (changelog closed, no strikeouts)"
 	@echo "  make release-ready-web  - Report whether web/ is ready to release (same, plus package.json version)"
 	@echo "  make release-status     - Run readiness, then show which projects have an undated version heading"
-	@echo "  make release            - Run readiness, check branch + tree, then stamp date, commit, tag, push, GitHub release (needs gh)"
+	@echo "  make release            - Run readiness, check branch + tree, then stamp date + archive versions, commit, tag, push, GitHub release (needs gh)"
 	@echo ""
 	@echo "  make sonarqube-start    - Start the local SonarQube stack and wait until it is UP"
 	@echo "  make sonarqube-stop     - Stop the local SonarQube stack"
@@ -156,5 +159,6 @@ help:
 	@echo "  SONAR_TOKEN=<token>     - Analysis token; required by the analyze targets"
 	@echo ""
 	@echo "Build, test and lint each project from its own folder: 'make -C go help', 'npm --prefix web run'."
+	@echo "Start gate for one backlog entry: 'make -C go start-item N=<n>' / 'npm --prefix web run start-item -- <n>'."
 
 .DEFAULT_GOAL := help

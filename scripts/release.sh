@@ -7,8 +7,10 @@
 # targets, so they are not repeated here. Publishing checks that the checkout is
 # on the release branch with a clean working tree (these two checks live ONLY
 # here), then stamps today's date onto each pending heading
-# (`## [X.Y.Z] - YYYY-MM-DD`), commits, tags that commit, pushes the branch and
-# the tags, and creates one GitHub release per project with that changelog
+# (`## [X.Y.Z] - YYYY-MM-DD`), stamps the same version into every archived
+# backlog entry of that project still marked `changelog: Unreleased`
+# (.claude/archive/<project>/*.md), commits, tags that commit, pushes the branch
+# and the tags, and creates one GitHub release per project with that changelog
 # section as notes. Projects whose newest version is already dated are skipped,
 # so the script is safe to run when only one project changed.
 # See README.md#development-workflow (step 4, Release).
@@ -96,8 +98,9 @@ fi
 
 set -e
 
-# Stamp the release date onto each pending heading and commit — the only edit
-# this workflow makes to a changelog.
+# Stamp the release date onto each pending heading, and the version into the
+# archived entries that shipped under it, then commit — the only edits this
+# workflow makes to a changelog or an archive file.
 today=$(date +%Y-%m-%d)
 subject=""
 for entry in $pending; do
@@ -105,6 +108,10 @@ for entry in $pending; do
   v=${entry#*:}
   sed -i.bak "s/^## \[$v\]\$/## [$v] - $today/" "$p/CHANGELOG.md" && rm -f "$p/CHANGELOG.md.bak"
   git add "$p/CHANGELOG.md"
+  for f in $(grep -l '^changelog: Unreleased$' .claude/archive/"$p"/*.md 2>/dev/null || true); do
+    sed -i.bak "s/^changelog: Unreleased\$/changelog: $v/" "$f" && rm -f "$f.bak"
+    git add "$f"
+  done
   subject="$subject${subject:+, }$p v$v"
 done
 git commit -q -m "release: $subject"

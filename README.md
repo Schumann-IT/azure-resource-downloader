@@ -109,6 +109,7 @@ azure-resource-downloader/
 ├── go/          azure-rd CLI (Go 1.24) — see go/README.md
 ├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
 ├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
+├── .claude/     Claude Code rules and skills; archive/<project>/ keeps every finished backlog entry with its plan
 ├── Makefile     branch-ready gates and release entry points for both projects (see Development workflow)
 ├── scripts/     release.sh — tags and publishes prepared releases
 └── README.md    this file
@@ -120,39 +121,61 @@ the path-scoped files in `.claude/rules/` and the procedures in `.claude/skills/
 
 ## Development workflow
 
-Work happens on branches and ships in four steps: change, check the branch, merge, release. The first three are
-per branch and gated by tooling that only *reports*; the fourth is run from `main` when there is something to
-publish. Each project has its own SemVer line, tagged with a folder prefix so the two never collide and each
-project's `git describe` finds only its own tags:
+Work happens on branches and ships in four steps: plan, implement, close the branch, release. Every change —
+a feature, a fix, a one-line correction — **starts as a numbered entry** in the project's `NEXT-ITERATIONS.md`,
+committed before it is implemented, and ends as an **archived** entry whose full plan is kept for later
+review. The first three steps are per branch and gated by tooling that only *reports*; the fourth is run from
+`main` when there is something to publish. Each project has its own SemVer line, tagged with a folder prefix so
+the two never collide and each project's `git describe` finds only its own tags:
 
 | Project | Tag pattern | Version source |
 |---|---|---|
 | `go/` | `go/vX.Y.Z` | `git describe --match 'go/v*'` at build time — `make build` stamps it into `--version` and into every `resources/metadata.yaml` (`toolVersion`) |
 | `web/` | `web/vX.Y.Z` | `version` in `web/package.json` |
 
-### 1. Make changes in a branch
+### 1. Plan: the entry comes first
 
-Branch off `main`, one feature or fix per branch, in whichever project(s) it touches. Three things travel with
-the code in the same commit — none of them is a follow-up:
+Branch off `main`, one feature or fix per branch, in whichever project(s) it touches. Before any code, the
+work is an entry in that project's `NEXT-ITERATIONS.md` — a `**Goal.**`, optional notes, and a `**Plan.**`
+of concrete items (the anatomy is in each project's rules). A parked idea is *promoted* into an entry
+rather than copied; a trivial fix gets a tiny entry. **Commit the entry.** The start gate checks exactly
+that:
 
-- **`CHANGELOG.md`** — every user- or operator-visible effect gets an entry under `## [Unreleased]`, written the
-  way a squash-merged branch would read. Purely internal changes get none. Each project's rules spell out the
-  format (`go/.windsurf/rules/02-style-and-quality.md`, `web/.windsurf/rules/02-style-and-quality.md`).
-- **`NEXT-ITERATIONS.md`** — when a branch delivers a planned entry, **strike it out** (`~~…~~`) rather than
-  delete it, so a reviewer sees what the branch set out to do beside what the diff does. Struck entries are
-  cleared out at branch close (step 2), not while implementing.
+```bash
+make -C go start-item N=2            # go/: may entry 2 be implemented?
+npm --prefix web run start-item -- 1 # web/: may entry 1 be implemented?
+```
+
+Each refuses on `main`, on a dirty project folder, when entry `N` is not in **`HEAD`'s** backlog or has no
+outstanding plan item — and otherwise prints the entry's Goal and Plan. Exit `2` is a usage error, `1` a
+refusal.
+
+### 2. Implement from the entry
+
+Three things travel with the code in the same commit — none of them is a follow-up:
+
+- **`CHANGELOG.md`** — every user- or operator-visible effect gets an entry under `## [Unreleased]`, written
+  the way a squash-merged branch would read. Purely internal changes get none. Each project's rules spell out
+  the format (`go/.windsurf/rules/02-style-and-quality.md`, `web/.windsurf/rules/02-style-and-quality.md`).
+- **`NEXT-ITERATIONS.md`** — as plan items land, **strike them out** (`~~…~~`) rather than delete them, so a
+  reviewer sees what the branch set out to do beside what the diff does; strike the title once the whole plan
+  is delivered. Follow-ups discovered on the way are new, unstruck plan items or a new entry.
 - **`README.md` of the project** — the single source of truth for what the tool does today; routes, flags,
-  environment variables and scripts are documented there, not in the changelog.
+  settings, environment variables and scripts are documented there, not in the changelog.
 
 Do **not** touch the version: `web/package.json`'s `version` and the changelog's version headings are release
-concerns (step 4). Run the project's own checks as you go — `make -C go check` / `make -C go ci`, or
-`npm test` and `npm run build` in `web/`; all of them are read-only and leave the tree as they found it.
+concerns (step 4). Run the project's own checks as you go — `make -C go check` / `make -C go ci`, or `npm test`,
+`npm run lint` and `npm run build` in `web/`; all of them are read-only and leave the tree as they found it.
 
-### 2. Check branch readiness before merging
+### 3. Close the branch: archive what is done, then gate
 
-Once the work is done, close the branch: delete the struck-out `NEXT-ITERATIONS.md` entries, renumber the
-remaining ones `1..N`, make sure `## [Unreleased]` records the work, commit, then run the gate for each project
-the branch touched (or `make branch-ready` for both):
+When an entry is done it is **archived, never deleted**: the entry (or, for a partially delivered one, its
+struck plan items) moves with its full text to `.claude/archive/<project>/<finished-date>-<slug>.md`, with a
+frontmatter naming the title, `status: done` (or `dropped`, for an abandoned entry, with a one-line reason),
+the dates, the branch and `changelog: Unreleased` — the release stamps the version later. The remaining
+entries are renumbered `1..N`. The changelog records *what* shipped and *why*; the archive keeps *how*, and
+nothing under it is read unless asked for. Commit, then run the gate for each project the branch touched (or
+`make branch-ready` for both):
 
 ```bash
 make branch-ready-go     # → make -C go branch-ready
@@ -160,16 +183,17 @@ make branch-ready-web    # → npm --prefix web run branch-ready
 ```
 
 Each gate first **refuses to run while its own folder has uncommitted changes** — a read-only
-`git status --porcelain` scoped to that folder, so the verdict describes the commit that will be merged and an
-edit in the sibling project cannot block it. It then runs the project's own pipeline (`go/`: `make ci`; `web/`:
-tests and build) and reports whether the branch cleared its struck-out entries, renumbered the rest and wrote
-its `## [Unreleased]` entry; `web/` also checks that `version` was left alone (`go/` has no version file — its
-version is the tag). An empty `[Unreleased]` is reported, not failed: a branch with no user-visible effect
-legitimately has none. Every check is reported, nothing is edited, and the gate **exits non-zero if any check
-failed**, so it can back a merge check. Details in the [go README](go/README.md#development) and the
-[web README](web/README.md#development-conventions).
-
-### 3. Merge
+`git status --porcelain` scoped to that folder, so the verdict describes the commit that will be merged and
+an edit in the sibling project cannot block it. It then runs the project's own pipeline (`go/`: `make ci`;
+`web/`: tests, lint and build) and reports: nothing left struck out in `NEXT-ITERATIONS.md`, the remaining
+entries numbered `1..N`, `## [Unreleased]` written, the branch is not `main`, `NEXT-ITERATIONS.md` changed on
+the branch (every change starts as an entry), and every entry archived as done on the branch grew
+`## [Unreleased]`; `web/` also checks that `version` was left alone (`go/` has no version file — its version
+is the tag). The branch checks use read-only git (`rev-parse`, `merge-base` against `RELEASE_BRANCH`, `diff`,
+`show`) and are skipped with a note outside a clone. An empty `[Unreleased]` is reported, not failed: a
+branch with no user-visible effect legitimately has none. Every check is reported, nothing is edited, and the
+gate **exits non-zero if any check failed**, so it can back a merge check. Details in the
+[go README](go/README.md#development) and the [web README](web/README.md#development-conventions).
 
 Merge the branch into `main` once the gate is green. Nothing is tagged or published at this point; `main`
 accumulates `[Unreleased]` entries from every merged branch until someone decides to release. A project whose
@@ -196,24 +220,23 @@ make release-ready-web   # → npm --prefix web run release-ready
 Both first run the project's own pipeline, then look at `CHANGELOG.md`. If its newest version heading is not an
 undated `## [X.Y.Z]` — there is none, or it already carries a date — nothing has been closed and the goal
 reports **no release needed** and succeeds. Otherwise it checks that `NEXT-ITERATIONS.md` has no struck-out
-entries (the backstop for step 2) and that `## [Unreleased]` is empty; `web/` additionally checks that
-`package.json` carries that version. Every check is run and reported — passing ones with ✅, failing ones with
-❌ and what to do about it — and the goal exits non-zero only when *all* checks fail, so it is a report to read,
-not a gate that stops on the first problem.
+entries (the backstop for step 3) and that `## [Unreleased]` is empty; `web/` additionally checks that
+`package.json` carries that version; both list the archived entries the release will stamp. Every check is run
+and reported — passing ones with ✅, failing ones with ❌ and what to do about it — and the goal exits non-zero
+only when *all* checks fail, so it is a report to read, not a gate that stops on the first problem.
 
 **Publish** — `make release` (and `make release-status`) run both `release-ready` goals first as make
 prerequisites, so a project whose pipeline fails stops the release before anything happens. Then the publisher
 verifies the repository state: the current branch must be `main` (override with `RELEASE_BRANCH=<name>`) and
 the working tree clean, since it tags and pushes `HEAD`. These two checks live only here — the `release-ready`
-goals run no git at all, and the only other git the readiness tooling runs is each `branch-ready` goal's
-folder-scoped clean-tree preflight (`go/`'s `make build` additionally runs a read-only `git describe` for the
-version stamp).
+goals run no git at all, and the branch gates run only read-only git.
 
 Then, for every project whose newest changelog heading is an undated `## [X.Y.Z]`, it stamps today's date onto
-that heading (`## [X.Y.Z] - YYYY-MM-DD`) and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog edit any
-tooling makes — then tags that commit `<project>/vX.Y.Z`, pushes the branch and the tags, and creates a GitHub
-release titled `<project> vX.Y.Z` whose notes are that changelog section. Projects whose newest heading is
-already dated are skipped; an undated heading whose tag already exists is refused.
+that heading (`## [X.Y.Z] - YYYY-MM-DD`), stamps `changelog: X.Y.Z` into every archived entry of that project
+still marked `changelog: Unreleased`, and commits (`release: go vX.Y.Z, web vX.Y.Z`) — the only changelog and
+archive edits any tooling makes — then tags that commit `<project>/vX.Y.Z`, pushes the branch and the tags, and
+creates a GitHub release titled `<project> vX.Y.Z` whose notes are that changelog section. Projects whose
+newest heading is already dated are skipped; an undated heading whose tag already exists is refused.
 
 ```bash
 make release-status  # readiness of both projects, then: which have an undated version heading

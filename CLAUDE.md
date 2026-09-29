@@ -29,12 +29,25 @@ on `go/` — `DOCS_ROOT` pointing at an export tree is the only coupling.
 Work happens on branches off `main`, one feature or fix per branch. Never implement on `main`: the only
 commits `main` takes directly are a changelog close and the release stamp.
 
+**The backlog is the only way work enters the codebase.** What a request lets you do
+(`.claude/rules/next-iterations.md` has the full protocol):
+
+- Anything that is not `implement item N` (an idea, a promotion, a refinement, a follow-up, an assessment) →
+  edit that project's `NEXT-ITERATIONS.md` only. No code. A one-line fix is a tiny entry, not an exemption.
+- `promote idea <title>` / `plan idea <title>` / `plan item N` → `/promote-idea`: plan mode seeded with the
+  idea, the approved plan becomes the entry, commit. No implementation.
+- `implement item N` → `/implement-item`: the start gate first (`make -C go start-item N=<n>` /
+  `npm --prefix web run start-item -- <n>`), then the plan, striking items and writing the changelog as they
+  land; stop and ask for follow-ups.
+- `item N is done` / `drop item N` → `/item-done`: archive the entry to `.claude/archive/<project>/` (kept
+  forever, never auto-loaded — `/archive` lists and shows them), renumber, commit.
+
 Three things travel with the code **in the same commit**, never as a follow-up:
 
 1. **`CHANGELOG.md`** of the project — every user- or operator-visible effect gets an entry under
    `## [Unreleased]`; purely internal changes and tests get none. Format and grouping: `.claude/rules/changelog.md`.
-2. **`NEXT-ITERATIONS.md`** of the project — a delivered entry or plan item is **struck out** (`~~…~~`), never
-   deleted, while the branch is open. Lifecycle: `.claude/rules/next-iterations.md`.
+2. **`NEXT-ITERATIONS.md`** of the project — a delivered plan item is **struck out** (`~~…~~`), never deleted,
+   while the branch is open; a done entry is archived, not deleted. Lifecycle: `.claude/rules/next-iterations.md`.
 3. **`README.md`** of the project — routes, flags, settings, environment variables, scripts and supported types
    are documented there, not in the changelog.
 
@@ -44,13 +57,15 @@ concerns and are edited by hand only when the user asks.
 ### Gates and release (run from the repository root; all of them only report)
 
 - `make branch-ready-go`, `make branch-ready-web`, `make branch-ready` — each refuses while its own folder has
-  uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`,
-  entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not failed), `web/` `version`
-  untouched. Exit non-zero on any failed check. **Commit first, then run**; fix, commit, rerun. Clearing the
-  struck entries is the branch-close step — `/close-branch`.
+  uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`
+  (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not
+  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, every entry archived
+  as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on any failed check. **Commit first,
+  then run**; fix, commit, rerun. Archiving done entries and running the gate is `/close-branch`.
 - `make release-ready-go`, `make release-ready-web`, `make release-status` — reports. `make release` stamps
-  dates, commits, tags, pushes and creates GitHub releases; it runs only on `main` with a clean tree and only
-  when the user asks — `/release`. Never tag, push or create a release on your own initiative.
+  dates and archive versions, commits, tags, pushes and creates GitHub releases; it runs only on `main` with
+  a clean tree and only when the user asks — `/release`. Never tag, push or create a release on your own
+  initiative.
 - `make sonarqube-*` — optional local SonarQube; gates nothing, never analyses `output/`.
 
 Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in `web/`: `npm test`,
@@ -66,8 +81,8 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
 - **Documentation policy.** Per project exactly three Markdown files: `README.md`, `CHANGELOG.md`,
   `NEXT-ITERATIONS.md`. No `CONTRIBUTING.md`, `docs/` folders or ad-hoc notes; new information goes into the
   project README. The embedded templates (`go/internal/docs/generate_prompt_template.md`,
-  `go/internal/drift/analyze_drift_template.md`) are program input, not documentation. `todo.md` at the root
-  is a hand-refreshed cross-project reading of both backlogs; the two `NEXT-ITERATIONS.md` stay authoritative.
+  `go/internal/drift/analyze_drift_template.md`) are program input, not documentation. Finished backlog
+  entries live under `.claude/archive/<project>/`; read them only on request or when reworking the same area.
 - **Failing tests: analyse, do not auto-fix.** Assume the tests are right and the implementation is wrong.
   Produce a Failure Handling Report with proposed, unapplied patches first (`/test-failure-report`); never
   weaken or delete an assertion to go green, and apply neither option without explicit confirmation.

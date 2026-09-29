@@ -39,5 +39,8 @@ edits (a rename, a comment, a package move, a test-only addition) get none; when
   **by hand, and only when the user asks** (`/release`). The date is stamped by the root release script,
   never by hand. The old `RC1`/`RC2` naming is retired.
 - `make release-ready` / `npm run release-ready` only report (empty `[Unreleased]`, no strikeouts, newest
-  heading undated, web `package.json` matching). `make branch-ready` / `npm run branch-ready` ask the
-  opposite (`[Unreleased]` written, strikeouts cleared, `version` untouched) and exit non-zero on any failure.
+  heading undated, web `package.json` matching; they list the archived entries the release will stamp).
+  `make branch-ready` / `npm run branch-ready` ask the opposite (`[Unreleased]` written, done entries
+  archived, the backlog touched, not on `main`, `version` untouched) and exit non-zero on any failure.
+- The release commit also stamps `changelog: X.Y.Z` into every archived entry of that project still marked
+  `changelog: Unreleased` — never by hand.
