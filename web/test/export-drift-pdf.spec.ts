@@ -539,6 +539,21 @@ describe('drift-pdf: tables fit the page', () => {
     ]);
   });
 
+  it('never cuts a whitespace run, however long', () => {
+    expect(breakRuns('a' + ' '.repeat(16) + 'b')).toEqual([{ text: 'a' + ' '.repeat(16) + 'b' }]);
+  });
+
+  it('puts no break character into prose outside tables', () => {
+    const [p] = htmlToPdfContent('<p>' + PATH + ' ' + UPN + '</p>', OPTIONS);
+    expect(JSON.stringify(p)).toContain('scheduledActionsForRule');
+    expect(JSON.stringify(p)).not.toContain(BREAK_CHAR);
+  });
+
+  it('puts break characters into a paragraph inside a table cell', () => {
+    const content = htmlToPdfContent(`<table><tbody><tr><td><p>${PATH}</p></td></tr></tbody></table>`, OPTIONS);
+    expect(JSON.stringify(content)).toContain(BREAK_CHAR);
+  });
+
   it('sizes short Markdown columns to their content and shares the rest', () => {
     const markdown = all.filter((t) => t.body[0].length === 6);
     expect(markdown).toHaveLength(2);

@@ -179,11 +179,16 @@ export function substituteSymbols(text: string): string {
 // segments keep `run`'s own font. A string that needs no cut stays one run.
 export function breakRuns(text: string, run: Omit<ContentText, 'text'> = {}): ContentText[] {
   const parts: string[] = [''];
-  for (const chunk of text.split(/([ \t\n\r\f]+)/)) {
+  text.split(/([ \t\n\r\f]+)/).forEach((chunk, i) => {
+    if (i % 2 === 1) {
+      // A whitespace run is never cut, however long.
+      parts[parts.length - 1] += chunk;
+      return;
+    }
     const segments = segmentsOf(chunk);
     parts[parts.length - 1] += segments[0];
     parts.push(...segments.slice(1));
-  }
+  });
   if (parts.length === 1) return [{ ...run, text }];
   const out: ContentText[] = [];
   parts.forEach((part, i) => {
