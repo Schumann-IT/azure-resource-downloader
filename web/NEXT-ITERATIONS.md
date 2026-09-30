@@ -36,9 +36,9 @@ an attribution only when the audit file describes exactly the observation on dis
 > `findings` keyed like `drift/metadata.yaml`'s (`<type>/<name>.yaml`, reduced by the same `driftKey` rule —
 > the *new* path of a rename), each `{status, table, reason, events}`: `status` ∈ `matched | no-event-in-window
 > | no-join-key | retention-exceeded | query-failed | not-queried`, `table` ∈ `IntuneAuditLogs | AuditLogs |
-> ""`, `events` (matched only, newest first, may be several) of `{at, actor, actorType: user | application |
-> unknown, activity, result: success | failure | unknown, correlationId}`. Timestamps are quoted RFC3339 UTC
-> strings with whole seconds, compared as strings after the observation parser's Date normalisation.
+> ""`, `events` (`[]` unless matched; newest first, may be several) of `{at, actor (may be "": shown as
+> "unknown actor"), actorType: user | application | unknown, activity, result: success | failure | unknown,
+> correlationId}`. Timestamps: quoted RFC3339 UTC, whole seconds, compared as strings after Date normalisation.
 > **Validity rule.** Current only when `observedAt` **and** `baselineGeneratedAt` equal the observation's;
 > otherwise outdated (caveat only: run `azure-rd resource audit` again), and never shown for a superseded one.
 >
@@ -49,6 +49,8 @@ an attribution only when the audit file describes exactly the observation on dis
 > `findings-table.ts` already tags as `findings-drift`): its rows link to their drift documents, and that link
 > is the join key, so the app appends a **Changed by** column from `audit.yaml` rather than asking the agent to
 > copy actors into prose. No other section of `drift/index.md` or of a per-resource drift document is touched.
+> The `docs analyze-drift` prompt only recommends that table ("prose is fine too"), so an index written as
+> prose simply gets no column — never an error.
 >
 > **Owner.** none — every file is under `web/`. Sequencing: none; the web degrades gracefully when the file is
 > absent, so it can ship before or after the CLI's `resource audit`.
@@ -57,13 +59,16 @@ an attribution only when the audit file describes exactly the observation on dis
 >
 > **Non-negotiables untouched.** Read-only (one more file read, no write path); one `markdown-it` renderer (the
 > Changed-by column is a core-rule token pass like `findings-table.ts`, fed through the render `env`; the
-> render cache stays keyed by the file's mtime + size plus an audit fingerprint, so a rerun of `resource
-> audit` shows without a restart); path safety unchanged — `path-safety.ts` is not edited, the root file is read through a
+> render cache stays keyed by the file's mtime + size plus the fingerprint of the cells it was rendered with,
+> so a rerun of `resource audit` shows without a restart); the Changed-by cell tones are the one styles.css
+> addition, keyed by data attribute like the rest of the `findings-drift` table, because Tailwind scans only
+> `views/**/*.hbs` and cannot see classes emitted from TypeScript; path safety unchanged — `path-safety.ts` is not edited, the root file is read through a
 > fixed `TenantInfo.driftAuditPath`, and `/:tenant/_drift/audit(.yaml)(?raw)` stays unreachable because both
 > drift resolvers already require two segments and `driftState` never yields a finding for it; no client-side
 > JavaScript (`<details>` only); counts from `counts.*`, never by walking; the new cache is a fourth `FileCache`
-> with the same mtime + size freshness and bound; every new visual state gets a `dark:` variant; all values
-> `{{ }}`-escaped; Tailwind in the templates, nothing new in `styles.css`.
+> with the same mtime + size freshness and bound; every new visual state gets a dark variant (`dark:` in the
+> templates, `prefers-color-scheme: dark` in `styles.css`); all values `{{ }}`-escaped or emitted as
+> markdown-it `text` tokens; Tailwind in the templates.
 
 **Plan.**
 
@@ -132,32 +137,62 @@ an attribution only when the audit file describes exactly the observation on dis
   the root path in the body; rewriting and deleting `audit.yaml` is reflected on the next request without a
   restart; the read-only snapshot and the Confluence export assertions cover the audit file (no actor name, no
   `audit.yaml` in the zip).~~
-- **Changed-by column in the analysis index's findings table** (the landing page's table in `drift/index.md`,
-  header Severity | Verdict | Resource | Judgment, tagged `findings-drift`). Pure token pass beside
-  `applyFindingsTable` (in `findings-table.ts` or a new sibling), Nest-free and unit-testable: for a
-  `findings-drift` table, append a `Changed by` header cell and one body cell per row. The row's key comes from
-  the first relative `.md` link in its Resource cell, read from the link token *before* link rewriting,
-  resolved against the drift root and reduced by the shared `driftKey` rule (`<type>/<name>.md` →
-  `<type>/<name>.yaml`); a link that is absolute, leaves the tree, or is not `.md` yields no key. The cell text
-  is the same as the tenant page's row suffix — `actor · at (+N more)` for `matched`, else the status text
-  (amber for warning statuses, quiet slate for `no-join-key`), "no attribution recorded" for a key the audit
-  does not name — and **empty** for a row without a key (the inventory rows, which carry no link). Text only,
-  emitted as `text` tokens so markdown-it escapes it; tone via a class on the `td`, with `dark:` variants.
-  The column is added only in the `current` audit state; with no audit or an outdated one the table renders
-  exactly as today (the outdated caveat is already in the observation header). Wiring: the controller's
-  analysis render passes `{ attribution: Map<key, cell> | undefined }` in the render env
-  (`MarkdownRendererService.render`), built by a pure helper in `drift-view.ts` from the active audit — the
-  per-resource drift documents and every non-drift page pass none. The render cache entry records the audit
-  fingerprint it was rendered with (e.g. `observedAt` + `queriedAt`, or the audit `FileCache`'s mtime + size)
-  and re-renders when it differs; renders without attribution are unaffected. Tests: unit — header and cells
-  appended, key from the link (nested type path, rename's new path), inventory row left empty, unknown key →
-  "no attribution recorded", `+N more`, `unknown actor`, escaping of an actor containing `<`, a table without
-  a Verdict column (the summary's Findings table) untouched, no env → no column. e2e — `writeDrift()`'s
-  `drift/index.md` gains a findings table linking `changed1`, `new_name` and one inventory row; the landing
-  page shows the column with the latest actor and `+1 more` for `changed1`, the status text for `new_name`, an
-  empty cell for the inventory row; rewriting `audit.yaml` changes the cell on the next request without a
-  restart; an outdated audit and a deleted one render the table without the column; the Confluence export is
-  unchanged (no actor name in the zip).
+- **Changed-by cells** (`drift-view.ts`) — pure `changedByCells(obs, audit)` →
+  `{ cells: Map<key, { text, tone: 'matched' | 'warning' | 'quiet' }>, fingerprint: string }`, one entry per
+  finding **of the observation** (keys are `driftKey`'s extensionless `<type>/<name>`), built from the same
+  `rowAttribution`/`attributionOf` as the tenant page's row suffix so the two can never disagree: `matched` →
+  `<actor> · <at>` plus ` (+N more)` when `more > 0`, `actor` already `unknown actor` for an empty one, tone
+  `matched`; any other status → its `STATUS_TEXT`, tone `warning` for the amber statuses and `quiet` for
+  `no-join-key`/`not-queried`; a finding the audit does not name → "no attribution recorded", tone `quiet`.
+  `fingerprint` is `JSON.stringify` of the entries sorted by key — it changes exactly when a rendered cell
+  would. Called only with the `current` audit.
+- **Changed-by column** — new pure, Nest-free `applyChangedBy(tokens, cells, makeToken)` in
+  `findings-table.ts`, run by the existing `findings_table` core rule right after `applyFindingsTable` and only
+  when `state.env.changedBy` is set (`makeToken` is `(type, tag, nesting) => new state.Token(…)`, as
+  `wrapSections` takes). For each table tagged `findings-drift` that has a `resource` header: append
+  `th_open`/`inline`/`th_close` with text `Changed by` to the header row, and one `td_open`/`inline`/`td_close`
+  before every body row's `tr_close` (markdown-it emits a `td` per header column, so the cell is always last).
+  Both carry `data-column="changed-by"`; a non-empty body cell carries `data-attribution="<tone>"`. The `inline`
+  token's `children` is a single `text` token (content = cell text), so markdown-it escapes it — never
+  `html_inline`. The row's key: the first `link_open` among the Resource cell's inline `children` (core rules
+  run before the `link_open` renderer, so this is the original href); drop `#…`; it must not start with `/`,
+  `//` or a scheme, must end in `.md` (case-insensitive), is `path.posix.normalize`d against the drift root
+  and rejected when the result is `..` or starts with `../`; the key is that path without `.md`, accepted only
+  when `driftKey(key + '.yaml')` returns it. No key (the inventory rows carry no link, a `../../../docs/…`
+  link), or a key the map does not hold (not a finding of this observation) → an **empty** cell with no
+  `data-attribution`. No `changedBy` in the env → the token stream is untouched, byte-identical to today.
+- **Renderer and wiring** — `markdown-renderer.service.ts`: `render(file, env: RenderEnv)` with
+  `RenderEnv = LinkEnv & { changedBy?: { cells, fingerprint } }`; the `md.render` env passes `changedBy`
+  through beside `tenant`/`docDir`/`routeBase`; `CacheEntry` gains `fingerprint: string | undefined` and a
+  hit requires it to equal `env.changedBy?.fingerprint` strictly (so a render with cells is never served to a
+  request without, and vice versa). `docs.controller.ts` `driftTenant`: when `activeAudit` is set, pass
+  `changedBy: changedByCells(current, activeAudit)` in the `renderSplit(info.driftIndexPath, …)` env
+  (`renderSplit`/`renderOptional` take `RenderEnv`); no audit or an outdated one → no `changedBy`, the table
+  renders exactly as today (the outdated caveat is already in the observation header). `renderAnalysis` (the
+  per-resource drift documents), the documentation pages and `export/export.service.ts` pass none.
+- **Tone styles** — `src/styles.css`, in the drift findings table block: `.findings-drift
+  td[data-attribution="warning"]` amber (the `text-amber-700` / dark `text-amber-300` hues),
+  `[data-attribution="quiet"]` slate (`text-slate-500` / dark `text-slate-400`), `[data-attribution="matched"]`
+  inheriting the body colour; the dark hues under `@media (prefers-color-scheme: dark)`; the column is kept
+  `white-space: nowrap` for `matched` so `actor · at` does not break mid-timestamp.
+- **Tests for the Changed-by column** — `test/findings-table.spec.ts` (new; hand-built tokens over the
+  minimal token surface, as `test/section-hooks.spec.ts` does): header and cells appended with `data-column`; key
+  from the link for a nested type path and a rename's new path; `#anchor` stripped; inventory row, a
+  `../../../docs/…` link, an absolute link and a key outside the map → empty cell; unknown-to-audit finding →
+  "no attribution recorded" `quiet`; `+N more`; `unknown actor`; an actor containing `<script>` stays the content of a
+  `text` child (never `html_inline`); a table without a Verdict column (the summary's Findings table) and a drift table without
+  a Resource column untouched; no env → output identical to today's. `test/drift-audit.spec.ts`:
+  `changedByCells` per status, same text as the row suffix, fingerprint stable across calls and different when
+  one event changes. `test/styles-build.spec.ts`: the three `data-attribution` rules exist. e2e
+  (`test/docs.e2e.spec.ts`): extend the existing `DRIFT_INDEX` table with a `new_name` row (its inventory row
+  already exists; the existing severity/verdict assertions keep passing); the landing page shows
+  `<th data-column="changed-by">Changed by</th>`, `alice@drifted.example · 2026-01-20T09:00:00Z (+1 more)`
+  inside a `data-column="changed-by"` cell of the `changed1` rows (the tenant page's row suffix carries the
+  same text, so assert on the cell), the `new_name` status text with `data-attribution="warning"`, and an empty cell for the
+  inventory row; rewriting `audit.yaml` (e.g. swapping the two events) changes the cell on the next request
+  without a restart; an `observedAt`-outdated audit and a deleted one render the table without the column (no
+  `changed-by` in the body) and restore it after `writeDrift()`; the Confluence zip still contains no actor
+  name.
 - **`README.md`** — docs-root contract tree gains `│   ├── audit.yaml             # attribution — read, never
   served` under `drift/`, and the root-level rule names it among the unreachable files; **Drift view** gains an
   **Attribution.** bullet (what the file is, the validity rule, the per-status lines, By actor, the Changed by
