@@ -38,6 +38,9 @@ func TestScopeOfPartitionsEveryKnownKey(t *testing.T) {
 		"client-id":    ScopeTenant,
 		"tenant-id":    ScopeTenant,
 		"subscription": ScopeTenant,
+		// A workspace from another tenant returns no rows, which reads as
+		// "nobody changed it".
+		AuditWorkspaceKey: ScopeTenant,
 		// Moved to the command line.
 		"dry-run":   ScopeFlagOnly,
 		"log-level": ScopeFlagOnly,
@@ -183,6 +186,22 @@ func TestLoadMergesProfileOverBase(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsAWorkspaceGUID: the one accepted shape of audit-workspace-id
+// is a workspace id, read back unchanged.
+func TestLoadAcceptsAWorkspaceGUID(t *testing.T) {
+	const id = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "contoso.example.com.yaml"), AuditWorkspaceKey+": "+id+"\n")
+
+	v := viper.New()
+	if _, err := Load(v, Options{ConfigDir: dir, Domain: "contoso.example.com"}); err != nil {
+		t.Fatalf("Load() = %v, want a GUID accepted", err)
+	}
+	if got := v.GetString(AuditWorkspaceKey); got != id {
+		t.Errorf("%s = %q, want %q", AuditWorkspaceKey, got, id)
+	}
+}
+
 // TestLoadWithoutConfigDirAppliesDefaults: the zero-config path must keep
 // working, and the settings that lost their flag must still get their built-in
 // default from somewhere.
@@ -245,6 +264,25 @@ func TestLoadRefusals(t *testing.T) {
 		_, err := Load(viper.New(), Options{ConfigFile: filepath.Join(t.TempDir(), "nope.yaml")})
 		if err == nil {
 			t.Fatal("Load() = nil, want an error for a config file that cannot be read")
+		}
+	})
+
+	t.Run("audit workspace that is not a GUID", func(t *testing.T) {
+		for _, value := range []string{
+			"my-workspace",
+			"/subscriptions/0000/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/ws",
+			"1234",
+		} {
+			dir := t.TempDir()
+			write(t, filepath.Join(dir, "contoso.example.com.yaml"), AuditWorkspaceKey+": \""+value+"\"\n")
+			_, err := Load(viper.New(), Options{ConfigDir: dir, Domain: "contoso.example.com"})
+			if err == nil {
+				t.Errorf("Load() accepted %s %q", AuditWorkspaceKey, value)
+				continue
+			}
+			if !strings.Contains(err.Error(), AuditWorkspaceKey) || !strings.Contains(err.Error(), "contoso.example.com.yaml") {
+				t.Errorf("error %q should name the key and the profile file", err)
+			}
 		}
 	})
 

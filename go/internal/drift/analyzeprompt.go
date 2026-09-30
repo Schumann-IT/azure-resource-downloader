@@ -179,13 +179,17 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 	specPresent := specPresence(opts.TenantDir, scope.inScope)
 	res.MissingSpecTypes = missingSpecTypes(specPresent)
 
+	// Attribution is optional enrichment: used only when it belongs to this
+	// very observation, and never a reason to refuse.
+	attr := loadAttributionState(opts.TenantDir, &obs)
+
 	out := opts.Template
 	blocks := []struct {
 		name    string
 		content string
 	}{
-		{"observation", renderAnalyzeObservation(opts.TenantDir, &obs, &scope)},
-		{"worklist", renderAnalyzeWorklist(scope.inScope, specPresent)},
+		{"observation", renderAnalyzeObservation(opts.TenantDir, &obs, &scope, attr)},
+		{"worklist", renderAnalyzeWorklist(scope.inScope, specPresent, attr.usable())},
 		{"inventory", renderInventory(scope.inventory)},
 		{"refmap", renderAnalyzeRefmap(ri)},
 	}
@@ -209,33 +213,50 @@ func GenerateAnalyzePrompt(opts AnalyzeOptions) (*AnalyzeResult, error) {
 	return res, nil
 }
 
-// analyzePreflight loads and cross-checks the observation and the baseline. It
-// refuses (with a sentinel error) when the observation is missing, describes a
-// superseded baseline, belongs to a different tenant, or names payloads that do
-// not match their recorded hashes — every refusal is a "cannot answer", never a
-// degraded answer.
-func analyzePreflight(opts AnalyzeOptions) (Observation, docs.Metadata, []string, error) {
-	obs, err := LoadObservation(opts.TenantDir)
+// CheckCurrent loads a tenant's drift observation and export baseline and
+// proves the observation still describes that baseline: both tenant fields
+// agree with expectDomain (when given) and the observation was decided against
+// the baseline's current generatedAt. It refuses with ErrNoObservation,
+// docs.ErrNoMetadata, docs.ErrTenantMismatch or ErrObservationSuperseded —
+// every refusal a "cannot answer". Anything written about an observation (the
+// analysis prompt, the attribution) runs it first, so no artifact can ever
+// describe an observation the current baseline has replaced.
+func CheckCurrent(tenantDir, expectDomain string) (Observation, docs.Metadata, error) {
+	obs, err := LoadObservation(tenantDir)
 	if err != nil {
-		return Observation{}, docs.Metadata{}, nil, err
+		return Observation{}, docs.Metadata{}, err
 	}
-	meta, err := docs.LoadExportMetadata(opts.TenantDir)
+	meta, err := docs.LoadExportMetadata(tenantDir)
 	if err != nil {
-		return Observation{}, docs.Metadata{}, nil, err
+		return Observation{}, docs.Metadata{}, err
 	}
 
-	if opts.ExpectDomain != "" && obs.Tenant != "" && !strings.EqualFold(obs.Tenant, opts.ExpectDomain) {
-		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (observation tenant %q, resolved %q)", docs.ErrTenantMismatch, obs.Tenant, opts.ExpectDomain)
+	if expectDomain != "" && obs.Tenant != "" && !strings.EqualFold(obs.Tenant, expectDomain) {
+		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (observation tenant %q, resolved %q)", docs.ErrTenantMismatch, obs.Tenant, expectDomain)
 	}
-	if opts.ExpectDomain != "" && meta.Tenant != "" && !strings.EqualFold(meta.Tenant, opts.ExpectDomain) {
-		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (metadata tenant %q, resolved %q)", docs.ErrTenantMismatch, meta.Tenant, opts.ExpectDomain)
+	if expectDomain != "" && meta.Tenant != "" && !strings.EqualFold(meta.Tenant, expectDomain) {
+		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (metadata tenant %q, resolved %q)", docs.ErrTenantMismatch, meta.Tenant, expectDomain)
 	}
 
 	// A re-download moves the baseline's generatedAt (partial runs included),
 	// which is exactly what makes the observation's verdicts unanswerable.
 	if obs.Baseline.GeneratedAt != meta.GeneratedAt {
-		return Observation{}, docs.Metadata{}, nil, fmt.Errorf("%w (observation compared against %q, baseline now %q)",
+		return Observation{}, docs.Metadata{}, fmt.Errorf("%w (observation compared against %q, baseline now %q)",
 			ErrObservationSuperseded, obs.Baseline.GeneratedAt, meta.GeneratedAt)
+	}
+	return obs, meta, nil
+}
+
+// analyzePreflight loads and cross-checks the observation and the baseline
+// (CheckCurrent), validates the template's markers and verifies the payloads.
+// It refuses (with a sentinel error) when the observation is missing,
+// describes a superseded baseline, belongs to a different tenant, or names
+// payloads that do not match their recorded hashes — every refusal is a
+// "cannot answer", never a degraded answer.
+func analyzePreflight(opts AnalyzeOptions) (Observation, docs.Metadata, []string, error) {
+	obs, meta, err := CheckCurrent(opts.TenantDir, opts.ExpectDomain)
+	if err != nil {
+		return Observation{}, docs.Metadata{}, nil, err
 	}
 
 	if err := docs.ValidateMarkers(opts.Template, requiredAnalyzeMarkers); err != nil {
@@ -321,7 +342,7 @@ func partitionFindings(obs *Observation, ri *docs.ReferenceIndex) analyzeScope {
 	for _, key := range keys {
 		f := obs.Findings[key]
 		switch {
-		case ri.InScope(typeOfKey(key), f.ResourceID):
+		case ri.InScope(TypeOfKey(key), f.ResourceID):
 			sc.inScope[key] = f
 		case f.Verdict == VerdictAdded || f.Verdict == VerdictRemoved:
 			sc.inventory = append(sc.inventory, inventoryRow{key: key, f: f})
@@ -339,7 +360,7 @@ func specPresence(tenantDir string, findings map[string]Finding) map[string]bool
 	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
 	present := map[string]bool{}
 	for key := range findings {
-		rtype := typeOfKey(key)
+		rtype := TypeOfKey(key)
 		if _, known := present[rtype]; known {
 			continue
 		}

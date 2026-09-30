@@ -3,6 +3,8 @@ package docs
 import (
 	"azure-resource-downloader/internal/cmdutil"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+
 	"github.com/spf13/cobra"
 )
 
@@ -21,4 +23,14 @@ func addExportFlags(cmd *cobra.Command, outUsage string) {
 	f.String("domain", "", "export tenant domain (folder name under --output); selects <config-dir>/<domain>.yaml and skips authentication, running offline")
 	f.String("out", "", outUsage)
 	cmdutil.RegisterDomainCompletion(cmd)
+}
+
+// exportCredential returns the credential a docs command resolves the tenant
+// domain with: none when --domain was passed (the run is offline and never
+// signs in), otherwise the one the tenant's profile names.
+func exportCredential(domain string) azcore.TokenCredential {
+	if domain != "" {
+		return nil
+	}
+	return cmdutil.ProfileCredential()
 }

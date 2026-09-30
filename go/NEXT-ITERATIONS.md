@@ -100,29 +100,29 @@ never fails a run.
 
 **Plan.**
 
-- **File shape and lifecycle in `internal/drift` (`audit.go`)**, so `docs analyze-drift` can read it without
+- ~~**File shape and lifecycle in `internal/drift` (`audit.go`)**, so `docs analyze-drift` can read it without
   an import cycle: `AuditFileName = "audit.yaml"`, `AuditPath(tenantDir)`, the `Attribution` /
   `AttributionFinding` / `AttributionEvent` / `TableStatus` / `AttributionCounts` types and the six status
   constants (yaml tags exactly as in the Contract), `LoadAttribution(tenantDir)` returning a distinct
   `ErrNoAttribution`, `(a *Attribution) Matches(obs Observation) bool` (observedAt and baseline generatedAt
   equal), and `WriteAttribution(tenantDir, *Attribution, dryRun) (string, error)` — never clears anything,
   never creates the tree (an absent `drift/` means no observation), writes atomically; under `dryRun` returns
-  the path and writes nothing.
-- **One atomic-write helper instead of a third copy**: extract the temp-file-in-dir → write → `Chmod 0644` →
+  the path and writes nothing.~~
+- ~~**One atomic-write helper instead of a third copy**: extract the temp-file-in-dir → write → `Chmod 0644` →
   `Rename` sequence duplicated in `docs.writeMetadata` and `drift.WriteObservation` into an exported
   `docs.WriteFileAtomic(path string, data []byte) error` (drift already imports docs; the temp file is
   `.<basename stem>-*<ext>` in the target's directory, removed on every failure) and use it in all three
   places; the callers wrap its error with their existing messages, so the existing observation and metadata
-  tests keep passing unchanged.
-- **Extract the currency check** from `analyzePreflight` into exported
+  tests keep passing unchanged.~~
+- ~~**Extract the currency check** from `analyzePreflight` into exported
   `drift.CheckCurrent(tenantDir, expectDomain string) (Observation, docs.Metadata, error)`: `LoadObservation`
   → `docs.LoadExportMetadata` → both tenant cross-checks (`docs.ErrTenantMismatch`) → `obs.Baseline.GeneratedAt
   != meta.GeneratedAt` → `ErrObservationSuperseded`. `analyzePreflight` calls it and keeps the marker
   validation and `verifyPayloads`; an audit file can therefore never describe an observation the current
-  baseline has replaced.
-- **Engine package `internal/audit`** (imports `drift`, `azure`, `handlers`, `models`; imported by
-  `cmd/resource` only — never by `drift`):
-  - `Route(registry, key string, f drift.Finding) (table, status, reason string)`, the type taken from the
+  baseline has replaced.~~
+- ~~**Engine package `internal/audit`** (imports `drift`, `azure`, `handlers`, `models`; imported by
+  `cmd/resource` only — never by `drift`):~~
+  - ~~`Route(registry, key string, f drift.Finding) (table, status, reason string)`, the type taken from the
     key through a newly exported `drift.TypeOfKey` (today's private `typeOfKey`, `path.Dir`), builds the
     type → table map once from the registry (`models.PermissionScoped.RequiredPermissions()`: any permission
     with prefix `DeviceManagement` → `IntuneAuditLogs`, which wins over an Entra permission on the same type;
@@ -134,15 +134,15 @@ never fails a run.
     `no-join-key` with the reason. An id that embeds a GUID (`T_<guid>`, `<guid>_Suffix`) is queried as
     both the id and the embedded GUID, and a row matches the finding whose id or embedded GUID equals the
     target (case-insensitive). Only ids of that character set ever reach a query string, which is what makes
-    the KQL interpolation safe.
-  - `Querier` interface (`Query(ctx, workspaceID, kql string, from, to *time.Time) ([]Row, error)`, `Row` a
+    the KQL interpolation safe.~~
+  - ~~`Querier` interface (`Query(ctx, workspaceID, kql string, from, to *time.Time) ([]Row, error)`, `Row` a
     `map[string]any` keyed by column name, `nil` bounds = no `Timespan`) with the
     one real implementation over `sdk/monitor/query/azlogs` (`azlogs.NewClient(cred, nil)`,
     `QueryWorkspace(ctx, id, azlogs.QueryBody{Query, Timespan}, nil)`; the client requests the
     `https://api.loganalytics.io/.default` audience itself). New direct dependency added with `make deps`
     (verify the package path and `QueryBody`/`TimeInterval` names at that point — `azquery` is deprecated
-    and must not be used).
-  - Queries, one per table per chunk of ≤ 200 ids over the whole window: `IntuneAuditLogs | where
+    and must not be used).~~
+  - ~~Queries, one per table per chunk of ≤ 200 ids over the whole window: `IntuneAuditLogs | where
     TimeGenerated between (from .. to) | extend P = parse_json(Properties) | mv-expand T = P.TargetObjectIds
     | where tostring(T) in~ (ids) | project …` and `AuditLogs | … | mv-expand T = TargetResources | where
     tostring(T.id) in~ (ids) | project …`; ids embedded as a quoted list. Row mapping onto
@@ -152,31 +152,31 @@ never fails a run.
     result `Result`; results lower-cased to `success | failure | unknown`; `correlationId` from
     `CorrelationId`; `at` from `TimeGenerated` in UTC, formatted `time.RFC3339` (fraction truncated). Column
     names are pinned by the fixtures, written from Microsoft's published table schemas and confirmed by the
-    live check below, not by memory.
-  - Retention, data-driven and permission-free: for **both** tables, whether or not a finding routes to
+    live check below, not by memory.~~
+  - ~~Retention, data-driven and permission-free: for **both** tables, whether or not a finding routes to
     them (so `tables` always carries both keys and a missing diagnostic setting surfaces as `failed`), one
     unbounded `| summarize min(TimeGenerated)` (no `Timespan`) before the event queries; `earliest` recorded per table; when `window.from` precedes it,
     every finding of that table without an event becomes `retention-exceeded` (reason states both times);
-    a table with no rows at all records `earliest: ""` and the same status with reason "table has no rows".
-  - Status mapping: routed + ≥ 1 event → `matched` (events sorted newest first, then by correlationId);
+    a table with no rows at all records `earliest: ""` and the same status with reason "table has no rows".~~
+  - ~~Status mapping: routed + ≥ 1 event → `matched` (events sorted newest first, then by correlationId);
     routed, table `ok`, no event → `no-event-in-window` or `retention-exceeded`; table `failed` →
     `query-failed` with the table's reason (a permission error names the grant: *Log Analytics Reader* on the
     workspace, and `Data.Read` on the Log Analytics API for a dedicated app); a token that cannot be minted at
     all marks both tables `failed` and every routable finding `query-failed`. Exactly one entry per
-    observation finding; `counts` tallies the statuses.
-  - `Attribute(ctx, q Querier, registry, obs drift.Observation, opts Options) *drift.Attribution` where
+    observation finding; `counts` tallies the statuses.~~
+  - ~~`Attribute(ctx, q Querier, registry, obs drift.Observation, opts Options) *drift.Attribution` where
     `Options{WorkspaceID, ToolVersion, Now, Selection{Types, ResourceIDs, ResourceGroup}}`: findings outside
     the selection are `not-queried` "outside this run's selection" so the file stays complete; `Now` is
-    injected for tests.
-- **Configuration key** `audit-workspace-id` → `ScopeTenant` in `internal/config/keys.go`, read with
+    injected for tests.~~
+- ~~**Configuration key** `audit-workspace-id` → `ScopeTenant` in `internal/config/keys.go`, read with
   `viper.GetString`, no default; validated in `config.Load` after the merge as a GUID (an error naming the key
   and the profile file, surfaced by `initConfig` — a full ARM resource id or a workspace name is not
   accepted). `config.example.domain.yaml` gains the key **empty and commented** under a new "Audit
   attribution" heading explaining the grant and the diagnostic-settings prerequisite;
   `TestConfigExampleDomainIsNoOp` asserts it is unset, `TestConfigExamplesCoverThePartition` passes by
   construction, `TestPartitionIsEnforced` gains the case "audit-workspace-id in the base file", and a new
-  case rejects a non-GUID value.
-- **Tenant-dir helper move**: relocate `resolveExportDir` (offline with `--domain`, else authenticate with the
+  case rejects a non-GUID value.~~
+- ~~**Tenant-dir helper move**: relocate `resolveExportDir` (offline with `--domain`, else authenticate with the
   profile's credentials and resolve, else the single export) from `cmd/docs/generate_prompt.go` to
   `cmdutil.ResolveExportDir(ctx, baseOutput, declaredDomain string, cred azcore.TokenCredential) (tenantDir,
   expectDomain string, err error)`, resolving the domain through `azure.NewClientWithCredential(ctx, cred,
@@ -184,8 +184,8 @@ never fails a run.
   one — takes today's warn-and-fall-back path), and collapsing `detectSingleExportDomain` onto the existing
   `cmdutil.ExportDomains`; the three `docs` subcommands build the credential with
   `azure.NewCredential(client-id, tenant-id)` and pass it, unchanged in behaviour. This is what lets
-  `resource audit` sign in once and reuse the same credential for the Log Analytics query.
-- **`resource audit` command** (`cmd/resource/audit.go`, attached in `cmd/resource.go`; the parent's Long
+  `resource audit` sign in once and reuse the same credential for the Log Analytics query.~~
+- ~~**`resource audit` command** (`cmd/resource/audit.go`, attached in `cmd/resource.go`; the parent's Long
   text no longer says "all four"): refuses (exit 2) on an empty `audit-workspace-id` before anything else,
   builds the credential once with `azure.NewCredential(client-id, tenant-id)` from the profile (never
   `runprep.Prepare` — no Graph probe, no dedicated-app prompt), resolves the tenant dir through
@@ -197,8 +197,8 @@ never fails a run.
   findings are never queried, so `--resource-group` yields an all-`not-queried` file and warns); no
   `--exit-code`. `--dry-run` runs the queries, reports, withholds the write and says an earlier `audit.yaml`
   was not refreshed. Extend `TestResourceGroupSharesFlags` and `TestRemovedFlagsAreGone` to include `audit`
-  and to assert it does not offer `--exit-code`.
-- **Drift-run integration** in `cmd/resource/drift.go`: after `WriteObservation` returns (metadata written
+  and to assert it does not offer `--exit-code`.~~
+- ~~**Drift-run integration** in `cmd/resource/drift.go`: after `WriteObservation` returns (metadata written
   last), when `audit-workspace-id` is set, attribute the observation **as written** — today
   `WriteObservation` stamps `ObservedAt` / `ToolVersion` on a copy, so `rep.Observation.ObservedAt` stays
   empty; change it to return the stamped `Observation` alongside the path (also under `--dry-run`) and
@@ -209,8 +209,8 @@ never fails a run.
   The token request and the queries run under a context bounded by the run's `timeout`, so an interactive
   sign-in the new audience might trigger (a dedicated app without the Log Analytics consent) cannot hold the
   run open; its failure degrades to `query-failed`. Unset key → one info line, no file. Under `--dry-run`
-  query and report, withhold the write, note the stale file. Update the command's Long text.
-- **Prompt splice** in `internal/drift` (`analyzeprompt*.go`, `analyze_drift_template.md` — not hashed, not
+  query and report, withhold the write, note the stale file. Update the command's Long text.~~
+- ~~**Prompt splice** in `internal/drift` (`analyzeprompt*.go`, `analyze_drift_template.md` — not hashed, not
   regeneration-gated): `GenerateAnalyzePrompt` loads `audit.yaml` via `LoadAttribution` and uses it only when
   `Matches(obs)`; the `observation` block gains `- Attribution: <workspace, queriedAt, per-table status,
   counts>` or `- Attribution: none (no drift/audit.yaml — configure audit-workspace-id or run 'azure-rd
@@ -218,8 +218,8 @@ never fails a run.
   `renderFinding` emits `- Changed by: <actor> (<actorType>) at <at> — <activity>, <result>, correlation
   <id>` per event (newest first) or `- Attribution unavailable (<status>: <reason>)`; step 2 gains a short
   2b' note (an attributed actor is a fact about *who*, never proof of intent; several events are listed, judge
-  the latest; absence is not evidence); the ground rules add `drift/audit.yaml` to the never-touch list.
-- **Tests, no network**: recorded response fixtures for both table schemas (row → event mapping, actor
+  the latest; absence is not evidence); the ground rules add `drift/audit.yaml` to the never-touch list.~~
+- ~~**Tests, no network**: recorded response fixtures for both table schemas (row → event mapping, actor
   precedence, result normalisation); routing of **every registered type** through the real registry
   (each lands on exactly one of the two tables or `not-queried`) plus the singleton/pseudo-id → `no-join-key`
   cases, the numeric `roleScopeTags` id and an empty `ResourceID` → `no-join-key`, and `T_<guid>` /
@@ -234,7 +234,7 @@ never fails a run.
   observation and with a superseded one; byte determinism for a fixed fixture and injected `Now`;
   `LoadAttribution`/`Matches` staleness; the prompt splice with present, absent and outdated files
   (deterministic output); the config key partition and the example file's no-op promise; the flag-surface
-  tests above, plus no command offering `--audit-workspace-id`.
+  tests above, plus no command offering `--audit-workspace-id`.~~
 - **Documentation** (written at *done*): README — new `resource audit` section (prerequisites: Intune and
   Entra diagnostic settings shipping `IntuneAuditLogs` / `AuditLogs` to one workspace, *Log Analytics
   Reader* on it, the profile key; flags honoured; the artifact and its statuses; re-runnability and

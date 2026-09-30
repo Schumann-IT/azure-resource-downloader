@@ -22,8 +22,9 @@ func newResourceCommand() *cobra.Command {
 		Short: "Work with a tenant's Azure resources",
 		Long: `Commands that act on the Azure resources of a tenant: see which resource
 types this build supports (types), see what the tenant contains (list),
-download it as clean YAML (download), and detect drift between the tenant and
-the export on disk (drift).
+download it as clean YAML (download), detect drift between the tenant and
+the export on disk (drift), and attribute each drift finding to the actor and
+time the tenant's audit logs record (audit).
 
 The flags these commands share are declared here, on the group, so every
 subcommand resolves them identically. All are optional: with no selection, a
@@ -36,10 +37,10 @@ configuration profile (see config.example.domain.yaml).`,
 	}
 
 	// Shared flags live on the group, not on each subcommand. Only groups every
-	// subcommand honours belong here: --domain names the tenant all four act on
-	// (and selects its configuration profile), and the selection flags scope
-	// what download and drift fetch, what list enumerates and what types shows
-	// and counts. Everything else these commands need — credentials, worker
+	// subcommand honours belong here: --domain names the tenant every subcommand
+	// acts on (and selects its configuration profile), and the selection flags
+	// scope what download and drift fetch, what list enumerates, what types
+	// shows and counts, and which findings audit attributes. Everything else these commands need — credentials, worker
 	// counts, timeouts, the write-path switches — comes from the configuration
 	// file, which is the single source of truth for it.
 	cmdutil.AddPersistentSelectionFlags(cmd)
@@ -58,6 +59,7 @@ configuration profile (see config.example.domain.yaml).`,
 
 	cmd.AddCommand(resource.NewDownloadCommand())
 	cmd.AddCommand(resource.NewDriftCommand())
+	cmd.AddCommand(resource.NewAuditCommand())
 	cmd.AddCommand(resource.NewTypesCommand())
 	cmd.AddCommand(resource.NewListCommand())
 	return cmd

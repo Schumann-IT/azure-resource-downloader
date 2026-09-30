@@ -284,7 +284,7 @@ func Compare(opts Options) *Report {
 	// choose — never a collision resolving differently in the two runs.
 	planner := pipeline.NewNamePlanner()
 	for key := range meta.Resources {
-		planner.ReserveExisting(typeOfKey(key), strings.TrimSuffix(path.Base(key), ".yaml"))
+		planner.ReserveExisting(TypeOfKey(key), strings.TrimSuffix(path.Base(key), ".yaml"))
 	}
 
 	// Partition the results. touched marks baseline keys re-observed this run
@@ -431,7 +431,7 @@ func Compare(opts Options) *Report {
 		if touched[key] || !entry.PresentInTenant || entry.Filtered || entry.Skipped {
 			continue
 		}
-		if !covered[typeOfKey(key)] {
+		if !covered[TypeOfKey(key)] {
 			continue
 		}
 		if !obs.Run.Complete {
@@ -520,8 +520,10 @@ func deltasAgainstBaseline(resourcesDir, baselineKey string, current map[string]
 	return ComputeDeltas(old, current), ""
 }
 
-// typeOfKey derives the resource type from a key ("<type>/<name>.yaml").
-func typeOfKey(key string) string {
+// TypeOfKey derives the resource type from a finding or baseline key
+// ("<type>/<name>.yaml"). Exported so consumers of the drift tree (the audit
+// attribution) derive a finding's type exactly as the engine does.
+func TypeOfKey(key string) string {
 	return path.Dir(key)
 }
 

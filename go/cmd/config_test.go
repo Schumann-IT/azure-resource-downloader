@@ -181,6 +181,16 @@ func TestPartitionIsEnforced(t *testing.T) {
 			wantInErr: "--dry-run",
 		},
 		{
+			name:      "audit-workspace-id in the base file",
+			base:      "audit-workspace-id: 0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b\n",
+			wantInErr: "audit-workspace-id",
+		},
+		{
+			name:      "audit-workspace-id that is not a GUID",
+			profile:   "audit-workspace-id: my-workspace\n",
+			wantInErr: "audit-workspace-id",
+		},
+		{
 			name:      "an unknown key is a typo, not a no-op",
 			base:      "timeoutt: 42\n",
 			wantInErr: "not a known setting",
@@ -310,6 +320,12 @@ func TestConfigExampleDomainIsNoOp(t *testing.T) {
 		if got := viper.GetString(k); got != "" {
 			t.Errorf("config.example.domain.yaml %q = %q, want empty", k, got)
 		}
+	}
+	// Attribution is enabled by the key's presence, so the stub must leave it
+	// unset: copying the stub must not switch on audit queries.
+	if viper.IsSet(config.AuditWorkspaceKey) {
+		t.Errorf("config.example.domain.yaml sets %q = %v, want unset (it must stay commented out)",
+			config.AuditWorkspaceKey, viper.Get(config.AuditWorkspaceKey))
 	}
 	if viper.IsSet("filters") {
 		t.Errorf("config.example.domain.yaml sets 'filters' = %v, want unset (it must stay commented out)", viper.Get("filters"))
