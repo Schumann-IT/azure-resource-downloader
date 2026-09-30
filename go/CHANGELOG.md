@@ -65,6 +65,20 @@ This project is released independently of the documentation browser in `web/`: i
   to that app and grant admin consent again**; without it the sign-in fails with `AADSTS650057`. See
   **resource audit** and **Create the app registration** in the [README](README.md).
 
+### Changed
+
+#### Documentation and drift analysis
+
+- **Both management summaries now lead with the verdict.** The tenant summary the documentation agent writes
+  opens with short bold-led paragraphs on what is managed, whether the settings are consistent and whether the
+  configuration is actually in force, and closes with a **bottom line**: does anything demand action before the
+  next export. The drift analysis index opens with the same bold bottom line, then one short section per theme
+  (a group of findings that share a cause, not a resource type), most severe first, naming the actor where the
+  change is attributed and the recommended action; the remaining low-severity findings go into a final
+  *Everything else*. A reader who reads only the summary now learns what to do; the evidence stays in the parts
+  below. Neither template is hashed, so no regeneration is required: the next `docs generate-prompt` or `docs
+  analyze-drift` run hands the agent the new structure.
+
 ### Breaking
 
 #### Command-line surface and configuration
