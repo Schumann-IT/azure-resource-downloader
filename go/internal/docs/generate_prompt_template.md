@@ -773,10 +773,26 @@ Above the first H2, write the page preamble in this fixed shape, and emit nothin
 
 Then write these four sections, in this order:
 
-**1. Management summary** — the top half of the page, and the only part that judges anything. Open with one
-paragraph on the overall posture (no heading): what is managed, how consistently, and whether the
-configuration that exists is actually in force. Then two H3 subsections, in this order, each heading written
-verbatim:
+**1. Management summary** — the top half of the page, and the only part that judges anything; the parts
+after it are evidence and reference. Write it for a reader who reads nothing else.
+
+Open with a short run of prose paragraphs — not a bullet list — on the overall posture, as far as the export
+shows it. Each paragraph opens with its topic in bold, then the judgement. The topics, in order:
+
+- **what is managed** — the types and number of resources observed, and what could not be seen
+- **consistency** — does any setting contradict another
+- **whether the configuration that exists is actually in force** — policies that are unassigned,
+  report-only, excluded or overridden
+
+Then close with one more paragraph in the same shape: the **bottom line** — does anything demand action
+before the next export, and if so what.
+
+The bold lead is a label, not a closed vocabulary: keep it short (`**In force.**`) rather than padding it to
+match the wording above — only the H2 and H3 headings are verbatim contracts here. Judge only from the three
+inputs named under *Where the facts come from* below, and say where the evidence is too thin to judge rather
+than letting a check that did not run read as a clean result.
+
+Then two H3 subsections, in this order, each heading written verbatim:
 
 - `### Findings` — at most six, rendered as a table, one finding per row, sorted by severity with the most
   serious first (all `critical` rows, then `high`, then `medium`). The table has these columns, in this
