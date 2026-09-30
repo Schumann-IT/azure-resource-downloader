@@ -11,6 +11,85 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
+### 1. Export the drift report as a single PDF
+
+**Goal.** An operator can download a tenant's current drift report as one self-contained PDF from the tenant
+drift page — everything the drift pages show about the observation, the analysis and every finding, with
+nothing hidden behind a collapsed `<details>` — to hand to someone who has no access to the browser or the
+export tree.
+
+> **Why a library, not print CSS or a headless browser.** Printing the drift pages drops every collapsed
+> `<details>` (CSS cannot open one; "All recorded findings" is collapsed whenever an analysis exists) and
+> needs one print per page. A headless Chromium adds ~150 MB, a sandbox and a second rendering stack. `pdfmake`
+> is pure JavaScript, builds the document in memory — read-only holds, no temporary file — and can produce
+> deterministic bytes. Accepted trade-off: the PDF is laid out in its own right, not a pixel copy of the page.
+>
+> **Scope.** Only a *current* observation is exported: when `tenantDriftState` is `none` or `superseded` the
+> link is not rendered and the route answers 404. No YAML payloads and no line diffs — the same line the
+> Confluence export draws at source YAML; the "What changed" deltas table is included.
+>
+> **Entry point.** The drift report is a *scoped* export (the drift observation, not the tenant's
+> documentation), so under *Export entry points live on the tenant picker* it sits next to the thing it
+> exports — the tenant drift page — not on the picker; that standing decision now says so. The parked idea on
+> one export button per tenant is not triggered: this is not a second whole-tenant format.
+>
+> **Relation to the parked idea "Further export formats and partial exports".** A documentation PDF stays
+> parked there; once this ships, the `pdfmake` dependency and the HTML→PDF content walker exist, so it would
+> be a second format module rather than a new engine.
+>
+> No regeneration gating (web only); no go counterpart.
+>
+> **Implementer.** opus
+
+**Plan.**
+
+- **Dependency.** `pdfmake` (current major, server-side API) in `dependencies`, its types in
+  `devDependencies` if it ships none. Fonts: its bundled Roboto (Apache-2.0; Unicode coverage for display
+  names) and Courier for code. No network, no font files under `public/`.
+- **One view model for the page and the PDF.** Move the finding view assembly out of `docs.controller.ts`
+  (`findingView`, the severity read from the analysis frontmatter, what `renderDrift` gathers) into
+  `drift-view.ts` or a small `DriftReportService` in `src/docs/`, so the drift page and the PDF read one
+  decision and the controller keeps HTTP only. The drift pages render byte-identically; the existing e2e
+  cases stay green.
+- **`src/docs/export/pdf-content.ts`** (pure, Nest-free): an `htmlparser2` walker from the browser's rendered
+  Markdown HTML to `pdfmake` content, mirroring the keep / unwrap / drop verdicts of `html-allowlist.ts` —
+  headings, paragraphs, lists, tables, `strong`/`em`/`code`/`pre` kept; `<details>` always expanded with its
+  `<summary>` as a bold lead line; images become their alt text; a link to a finding in this PDF becomes an
+  internal link, any other link plain text; unknown elements unwrapped; `script`/`style` dropped. The drift
+  index table's severity and **Changed by** columns come through because the input is the page's own render
+  (`env.changedBy` included).
+- **`src/docs/export/drift-pdf.ts`** (pure): the document definition from the report model — cover (tenant,
+  "Drift report", `observedAt`, baseline `generatedAt`, both tool versions); the observation block as in
+  `partials/drift-observation.hbs` (counts, incomplete run, removals suppressed, unknown types, not comparable,
+  attribution-outdated caveat); the analysis summary (`drift/index.md`); the findings grouped by type
+  (`findingGroups`), each with its header (`findingHeader`), verdict and severity, attribution (events table
+  or the one-line status), the deltas table, the mismatch warning when its files are not intact, and its
+  analysis — "No analysis" when that document is missing or unreadable, never a failed export; then "By actor"
+  (`byActor`). Footer: tenant · observed at · page n/m. `CreationDate` = `observedAt`, so the same observation
+  gives the same bytes.
+- **`ExportService.driftPdf(info, res)`**: reads the observation, the audit and the analysis documents through
+  `DriftService` and `resolveDriftDocument()` only, renders them with `MarkdownRendererService` using the drift
+  route base and the page's env (the render cache stays shared), yields to the event loop between findings,
+  streams the PDF to `res` with `Content-Type: application/pdf`, `Content-Disposition: attachment;
+  filename="<tenant>-drift.pdf"` and `nosniff`. Nothing written under `DOCS_ROOT`.
+- **Route.** `GET /:tenant/_export/:format` accepts `drift-pdf` beside `confluence`; 404 for an unknown
+  tenant, a drift state other than `current` and an unknown format, without leaking paths.
+- **Entry point.** `views/drift-tenant.hbs`: a plain `<a download>` "Download drift report (PDF)" in the top
+  bar next to the **Summary | Drift** switch, only for a current observation, with "A snapshot of this
+  observation; it is not updated." beside it; dark variant, visible `:focus-visible`, no nested anchor.
+- **Tests.** `test/export-drift-pdf.spec.ts` (pure, `mkdtemp` fixtures): the `pdf-content` verdicts
+  (details expanded, internal vs plain links, images to alt, unknown unwrapped, script dropped); the document
+  definition carries the counts, the type groups in order, the deltas, each attribution state (matched,
+  status line, outdated caveat), "No analysis" for a missing document and a non-Latin display name.
+  `test/docs.e2e.spec.ts`: a current observation answers 200 `application/pdf`, attachment filename, body
+  starting `%PDF-`, identical bytes on a second request, security headers; 404 for `none`, `superseded`, an
+  unknown format and a traversal tenant; the link is on a current drift page and absent otherwise, and absent
+  from the picker and the landing page; the docs root is untouched. `test/styles-build.spec.ts` if
+  `src/styles.css` changes.
+- **Documentation** (at done). `README.md`: the route in the Routes table, a "Drift report PDF" section
+  (content, scope, determinism, no payloads or diffs, current observation only), the Printing section
+  pointing at it, known limitations, the layout for the new modules. `CHANGELOG.md` `[Unreleased]` → Added.
+
 ## Fixes
 
 Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
@@ -21,7 +100,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
 deleted, and the remaining entries are renumbered.
 
-### 1. Count an archived entry as a backlog change in the branch gate
+### 2. Count an archived entry as a backlog change in the branch gate
 
 **Goal.** `npm run branch-ready` (and `make branch-ready-web`) must accept a branch that planned an entry and
 archived it again: today it fails with "NEXT-ITERATIONS.md is unchanged on this branch" whenever every entry
@@ -81,6 +160,10 @@ one place to look per tenant instead of a control repeated on every page.
   *not* be on the picker, because the picker cannot express the scope. Their entry point belongs next to the
   thing being exported — the document top bar next to the **Documentation | YAML** switcher for a single
   document, a sidebar section header for one type — and the picker keeps whole-tenant formats only.
+- **Scoped reports** (the drift report PDF): an export of something other than the tenant's documentation
+  is the same case as a partial export — its link sits on the page of the thing it exports (the tenant drift
+  page, next to the **Summary | Drift** switch), shown only when there is something current to export, and
+  never on the picker.
 - **Media and source YAML as attachments**: no entry point of its own. It changes what an existing export
   *contains*, never where it is offered.
 - **Confluence REST API synchronisation**: not a download, and it mutates a remote system, so it cannot be
@@ -306,7 +389,9 @@ Single-file HTML, DOCX, PDF via a print stylesheet, a Markdown bundle; and expor
 or only the summary. **Parked** deliberately: the Confluence exporter is whole-tenant only, and the
 `src/docs/export/` seam exists so a second format is a second `ExportService` method plus its own format
 module, with the controller and the serialiser untouched. **Revisit** per format when someone actually needs
-it. Preserving the document tree in an export is not expressible through Confluence HTML import at all —
+it. For a PDF of the documentation, the drift report PDF entry brings `pdfmake` and an HTML→PDF content
+walker (`src/docs/export/pdf-content.ts`) — reuse those rather than a print stylesheet or a second engine.
+Preserving the document tree in an export is not expressible through Confluence HTML import at all —
 re-parenting by hand or the REST API are the only routes. Where each of these would be offered is already
 settled, including why the partial exports are the exception: see *Export entry points live on the tenant
 picker*.
