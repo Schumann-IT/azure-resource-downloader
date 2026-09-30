@@ -102,6 +102,13 @@ section of the [repository README](../README.md) for the procedure.
   as a whole line removed and another added. The page counts the differences and links each one to the next,
   with plain links rather than a script.
 
+#### Layout
+
+- **Pages are wider on large screens.** The documentation, drift and compare pages, and the top bar above
+  them, now share a 96rem width (the `2xl` breakpoint) instead of 80rem, so wide tables and side-by-side
+  diffs need less horizontal scrolling. The layout stays centred, and the breadcrumb still lines up with the
+  sidebar and the document. The tenant picker and the error page keep their narrower width.
+
 ### Fixed
 
 #### Drift view
