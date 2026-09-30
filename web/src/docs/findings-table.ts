@@ -218,48 +218,68 @@ export function applyChangedBy(
   makeToken: MakeToken,
 ): void {
   const out: any[] = [];
-  let table = false;
-  let resourceColumn = -1;
-  let section = '';
-  let column = 0;
-  let key = '';
+  const row: RowState = { resourceColumn: -1, section: '', column: 0, key: '' };
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
-    const type = token.type;
-
-    if (type === 'table_open') {
-      const classes = String(token.attrGet('class') || '').split(/\s+/);
-      resourceColumn = -1;
-      table = classes.includes(DRIFT_FINDINGS_CLASS);
-      if (table) {
-        const close = matchingClose(tokens, i);
-        resourceColumn = close < 0 ? -1 : headerCells(tokens, i, close).indexOf(RESOURCE_HEADER);
-        table = resourceColumn >= 0;
-      }
-    } else if (type === 'table_close') {
-      table = false;
-    } else if (table) {
-      if (type === 'thead_open') section = 'head';
-      else if (type === 'tbody_open') section = 'body';
-      else if (type === 'tr_open') {
-        column = 0;
-        key = '';
-      } else if (type === 'th_open' || type === 'td_open') {
-        if (column === resourceColumn && type === 'td_open') key = rowKey(tokens, i);
-        column++;
-      } else if (type === 'tr_close') {
-        if (section === 'head') {
-          out.push(...cellTokens(makeToken, 'th', CHANGED_BY_LABEL, null));
-        } else if (section === 'body') {
-          out.push(...cellTokens(makeToken, 'td', '', cells.get(key) ?? null));
-        }
-      }
-    }
+    if (token.type === 'table_open') row.resourceColumn = resourceColumnOf(tokens, i);
+    else if (token.type === 'table_close') row.resourceColumn = -1;
+    else if (row.resourceColumn >= 0) out.push(...trackRow(row, tokens, i, cells, makeToken));
     out.push(token);
   }
 
   tokens.splice(0, tokens.length, ...out);
+}
+
+interface RowState {
+  resourceColumn: number;
+  section: string;
+  column: number;
+  key: string;
+}
+
+// Follows the header/body section and the cell position inside a table with a
+// Resource column; returns the tokens to insert before token `i` (the Changed
+// by cell, at the end of a row).
+function trackRow(
+  row: RowState,
+  tokens: any[],
+  i: number,
+  cells: ReadonlyMap<string, ChangedByCellLike>,
+  makeToken: MakeToken,
+): any[] {
+  const type = tokens[i].type;
+  if (type === 'thead_open') row.section = 'head';
+  else if (type === 'tbody_open') row.section = 'body';
+  else if (type === 'tr_open') {
+    row.column = 0;
+    row.key = '';
+  } else if (type === 'th_open' || type === 'td_open') {
+    if (row.column === row.resourceColumn && type === 'td_open') row.key = rowKey(tokens, i);
+    row.column++;
+  } else if (type === 'tr_close') return rowEndTokens(makeToken, row.section, cells, row.key);
+  return [];
+}
+
+// The index of the Resource column of a drift findings table opened at
+// `open`, or -1 when the table is not one or has no such column.
+function resourceColumnOf(tokens: any[], open: number): number {
+  const classes = String(tokens[open].attrGet('class') || '').split(/\s+/);
+  if (!classes.includes(DRIFT_FINDINGS_CLASS)) return -1;
+  const close = matchingClose(tokens, open);
+  return close < 0 ? -1 : headerCells(tokens, open, close).indexOf(RESOURCE_HEADER);
+}
+
+// The Changed by cell that ends a header or body row.
+function rowEndTokens(
+  makeToken: MakeToken,
+  section: string,
+  cells: ReadonlyMap<string, ChangedByCellLike>,
+  key: string,
+): any[] {
+  if (section === 'head') return cellTokens(makeToken, 'th', CHANGED_BY_LABEL, null);
+  if (section === 'body') return cellTokens(makeToken, 'td', '', cells.get(key) ?? null);
+  return [];
 }
 
 function cellTokens(

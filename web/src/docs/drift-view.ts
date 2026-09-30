@@ -285,7 +285,8 @@ export function changedByCells(
 ): { cells: Map<string, ChangedByCell>; fingerprint: string } {
   const cells = new Map<string, ChangedByCell>();
   for (const finding of obs.findings) {
-    const row = rowAttribution(finding, audit)!;
+    const row = rowAttribution(finding, audit);
+    if (!row) continue;
     if ('actor' in row) {
       const more = row.more ? ` (+${row.more} more)` : '';
       cells.set(finding.key, { text: `${row.actor} \u00b7 ${row.at}${more}`, tone: 'matched' });
@@ -294,7 +295,7 @@ export function changedByCells(
     }
   }
   const fingerprint = JSON.stringify(
-    [...cells.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    [...cells.entries()].sort(([a], [b]) => a.localeCompare(b)),
   );
   return { cells, fingerprint };
 }

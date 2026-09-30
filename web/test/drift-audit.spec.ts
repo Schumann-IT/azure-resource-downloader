@@ -17,6 +17,7 @@ import {
 const BASELINE = '2026-01-01T00:00:00Z';
 const OBSERVED = '2026-02-01T10:00:00Z';
 const T = 'Microsoft.Graph/deviceConfigurations';
+const LETTER_OF: Record<string, string> = { Alpha: 'a', Beta: 'b', Gamma: 'c' };
 
 const OBSERVATION = `observedAt: "${OBSERVED}"
 baseline:
@@ -247,10 +248,9 @@ describe('attribution view models', () => {
     // Same text as the tenant page's row suffix, finding by finding.
     for (const item of findingGroups(obs, 't', audit)[0].items) {
       const row = item.attribution as any;
-      const key = `${T}/${item.label === 'Alpha' ? 'a' : item.label === 'Beta' ? 'b' : item.label === 'Gamma' ? 'c' : 'd'}`;
-      const text = row.actor
-        ? `${row.actor} \u00b7 ${row.at}${row.more ? ` (+${row.more} more)` : ''}`
-        : row.text;
+      const key = `${T}/${LETTER_OF[item.label] ?? 'd'}`;
+      const more = row.more ? ` (+${row.more} more)` : '';
+      const text = row.actor ? `${row.actor} \u00b7 ${row.at}${more}` : row.text;
       expect(cells.get(key)!.text).toBe(text);
     }
 

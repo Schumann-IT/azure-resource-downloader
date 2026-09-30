@@ -2048,11 +2048,22 @@ findings: 4
       });
 
       it('renders the table without the column for an outdated or deleted audit', async () => {
+        const headerCells = (html: string) => {
+          const table = /<table class="findings findings-drift">[\s\S]*?<\/table>/.exec(html);
+          const head = table ? /<tr[^>]*>([\s\S]*?)<\/tr>/.exec(table[0]) : null;
+          return [...(head ? head[1] : '').matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+        };
         const file = path.join(driftDir, 'audit.yaml');
         try {
           await fsp.writeFile(file, AUDIT('2026-02-01T09:00:00Z', BASELINE));
           const outdated = await get('/drifted/_drift').expect(200);
           expect(outdated.text).not.toContain('changed-by');
+          expect(headerCells(outdated.text)).toEqual([
+            'Severity',
+            'Verdict',
+            'Resource',
+            'Judgment',
+          ]);
           await fsp.rm(file);
           const gone = await get('/drifted/_drift').expect(200);
           expect(gone.text).not.toContain('changed-by');
