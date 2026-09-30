@@ -257,4 +257,40 @@ describe('attribution view models', () => {
     expect(current).toMatchObject({ workspaceId: 'ws-1', matched: 2, noEvent: 1 });
     expect(current?.failedTables?.map((t) => t.name)).toEqual(['AuditLogs']);
   });
+
+  describe('events that name no actor', () => {
+    const event = (at: string, actor: string, id: string) =>
+      `            - at: "${at}"\n              actor: "${actor}"\n              actorType: ${actor ? 'user' : 'unknown'}\n              activity: Patch\n              result: success\n              correlationId: ${id}\n`;
+    const auditWith = (events: string) =>
+      parseAudit(`version: 1
+observedAt: "${OBSERVED}"
+baselineGeneratedAt: "${BASELINE}"
+findings:
+    ${T}/a.yaml:
+        status: matched
+        events:
+${events}`)!;
+
+    it('keeps a matched finding whose only event has no actor', () => {
+      const audit = auditWith(event('2026-01-20T09:00:00Z', '', 'x'));
+      expect(audit.byKey.get(`${T}/a`)?.events).toHaveLength(1);
+      const row = findingGroups(obs, 't', audit)[0].items[0].attribution;
+      expect(row).toEqual({ actor: 'unknown actor', at: '2026-01-20T09:00:00Z', more: 0 });
+      const { actors } = byActor(obs, audit, 't');
+      expect(actors).toHaveLength(1);
+      expect(actors[0]).toMatchObject({ actor: 'unknown actor', actorType: 'unknown', tagged: true });
+      expect(actors[0].findings.map((f) => f.label)).toEqual(['Alpha']);
+    });
+
+    it('counts an actor-less event between two named ones in +N more', () => {
+      const audit = auditWith(
+        event('2026-01-22T09:00:00Z', 'alice@contoso.com', '1') +
+          event('2026-01-21T09:00:00Z', '', '2') +
+          event('2026-01-20T09:00:00Z', 'bob@contoso.com', '3'),
+      );
+      const a = attributionOf(obs.byKey.get(`${T}/a`)!, audit);
+      expect(a.more).toBe(2);
+      expect(a.events.map((e) => e.actor)).toEqual(['alice@contoso.com', 'unknown actor', 'bob@contoso.com']);
+    });
+  });
 });

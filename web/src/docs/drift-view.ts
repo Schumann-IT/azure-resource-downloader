@@ -78,6 +78,9 @@ export const STATUS_TEXT: Record<Exclude<AuditStatus, 'matched'>, string> = {
   'no-join-key': 'no audit join key for this resource type',
 };
 
+// How an event that names neither a user nor an application is shown.
+export const UNKNOWN_ACTOR = 'unknown actor';
+
 const NO_ATTRIBUTION = 'no attribution recorded';
 
 const NO_OBSERVATION = 'No drift observation. Run azure-rd resource drift.';
@@ -279,7 +282,7 @@ export function attributionOf(finding: DriftFinding, audit: DriftAudit | undefin
       table: '',
       reason: '',
       events: [] as AuditEvent[],
-      latest: null as AuditEvent | null,
+      latest: null as ReturnType<typeof displayEvent> | null,
       more: 0,
     };
   }
@@ -292,13 +295,20 @@ export function attributionOf(finding: DriftFinding, audit: DriftAudit | undefin
     quiet: found.status === 'no-join-key',
     table: found.table,
     reason: found.reason,
-    events: found.events.map((e) => ({
-      ...e,
-      actorUser: e.actorType === 'user',
-      failure: e.result === 'failure',
-    })),
-    latest: found.events[0] ?? null,
+    events: found.events.map(displayEvent),
+    latest: found.events[0] ? displayEvent(found.events[0]) : null,
     more: Math.max(found.events.length - 1, 0),
+  };
+}
+
+// An event as the templates read it: a display actor for the empty one, and the
+// flags the resource page's table needs.
+function displayEvent(e: AuditEvent) {
+  return {
+    ...e,
+    actor: e.actor || UNKNOWN_ACTOR,
+    actorUser: e.actorType === 'user',
+    failure: e.result === 'failure',
   };
 }
 
@@ -314,11 +324,12 @@ export function byActor(obs: DriftObservation, audit: DriftAudit, tenant: string
     if (found?.status !== 'matched') continue;
     const seen = new Set<string>();
     for (const event of found.events) {
-      if (seen.has(event.actor)) continue;
-      seen.add(event.actor);
-      const block = blocks.get(event.actor) ?? {
-        actor: event.actor,
-        actorType: event.actorType,
+      const actor = event.actor || UNKNOWN_ACTOR;
+      if (seen.has(actor)) continue;
+      seen.add(actor);
+      const block = blocks.get(actor) ?? {
+        actor,
+        actorType: event.actor ? event.actorType : 'unknown',
         findings: [],
       };
       block.findings.push({
@@ -327,7 +338,7 @@ export function byActor(obs: DriftObservation, audit: DriftAudit, tenant: string
         badge: verdictBadge(finding.verdict),
         at: event.at,
       });
-      blocks.set(event.actor, block);
+      blocks.set(actor, block);
     }
   }
   const actors = [...blocks.values()]

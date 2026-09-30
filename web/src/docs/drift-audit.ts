@@ -166,7 +166,9 @@ function toEvents(value: unknown): AuditEvent[] {
       result: oneOf(RESULTS, e.result),
       correlationId: str(e.correlationId),
     }))
-    .filter((e) => e.at !== '' && e.actor !== '')
+    // An event naming no actor is still an event: the CLI records those with an
+    // empty actor and type `unknown`, and dropping them would misstate the count.
+    .filter((e) => e.at !== '')
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 

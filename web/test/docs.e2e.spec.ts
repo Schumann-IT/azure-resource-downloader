@@ -1930,6 +1930,7 @@ findings: 4
       expect(res.text).toContain('workspace-42');
       expect(res.text).toContain('1 matched');
       expect(res.text).toContain('1 beyond retention');
+      expect(res.text).toContain('1 no join key');
       expect(res.text).toContain('AuditLogs failed: Forbidden by policy');
     });
 
