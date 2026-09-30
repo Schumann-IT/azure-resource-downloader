@@ -24,6 +24,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Commands](#commands)
   - [`resource download`](#resource-download)
   - [`resource drift`](#resource-drift)
+  - [`resource audit`](#resource-audit)
   - [`resource types`](#resource-types)
   - [`resource list`](#resource-list)
   - [`docs generate-prompt`](#docs-generate-prompt)
@@ -239,9 +240,85 @@ are reported as *unknown* and excluded from the totals. Verdict counts, per-find
 resources — dotted-path `old → new` field deltas are printed (full delta values at `--log-level debug`), plus
 how many documents the observed drift will make stale once re-baselined.
 
+**Attribution — who changed it.** When the tenant profile sets `audit-workspace-id`, the run then attributes
+every finding to the actor and time the tenant's Log Analytics audit tables record, and writes
+`drift/audit.yaml` **after** the observation, so the two always describe the same run. It prints one line per
+audit table, an attribution summary and a *changed by* line per matched finding. Attribution is enrichment: a
+failed query, a missing grant or a window past retention is a warning, never a failure, and **the exit code
+stays the comparison's**. Without the key attribution is off — one info line, no queries, no `audit.yaml`.
+Under `--dry-run` the queries run and report, but no `audit.yaml` is written. Prerequisites, statuses and the
+file's shape: [`resource audit`](#resource-audit), which also refreshes the file later.
+
 **Exit codes:** `0` on success whether or not drift was found; `2` when the question cannot be answered (no
 baseline, wrong tenant, incomparable configuration); `1` only when resources failed to fetch; `3` with
 `--exit-code` when drift was found.
+
+### `resource audit`
+
+Answers **"who changed this, and when?"** for every finding of the latest [`resource drift`](#resource-drift)
+observation. It joins each finding's object id against the tenant's Log Analytics audit tables —
+`IntuneAuditLogs` for Intune types, `AuditLogs` for Entra ID types — over exactly the observation's window
+(from the baseline's `generatedAt` to the observation's `observedAt`), and writes the result to
+`drift/audit.yaml` beside the observation. It fetches nothing from the tenant and writes nothing else.
+
+```bash
+azure-rd resource audit --config-dir ~/.azure-rd --domain contoso.onmicrosoft.com    # attribute the observation
+azure-rd resource audit --type Microsoft.Graph/deviceManagementConfigurationPolicies # only these findings
+azure-rd resource audit --dry-run                                                    # query and report, write nothing
+```
+
+**Prerequisites** — nothing is attributed without all three:
+
+1. **Diagnostic settings** that send Intune's audit logs (`IntuneAuditLogs`) and Entra ID's audit logs
+   (`AuditLogs`) to one Log Analytics workspace.
+2. **Log Analytics Reader** (or any role that can read the workspace's data) on that workspace for the
+   signed-in user. A dedicated app registration also needs the Log Analytics API delegated permission
+   `Data.Read` — see [Create the app registration](#create-the-app-registration).
+3. **`audit-workspace-id`** in the tenant profile: the workspace **id** (a GUID), never its name or ARM resource
+   id. It is configuration only — there is deliberately no flag and no environment variable, because a
+   workspace typed for one tenant and forgotten would silently apply to the next, and a wrong workspace does
+   not fail loudly: it returns no rows, which reads as *nobody changed it*.
+
+The command signs in once with the profile's credentials (the `az login` session, or the device-code app named
+by `client-id`/`tenant-id`) and uses that one sign-in for everything; it runs no Graph probe and never prompts
+for an app registration.
+
+| Flag | Meaning |
+|---|---|
+| `--type`, `--resource-id`, `--resource-group` | Narrow the attributed findings; findings outside the selection are recorded as `not-queried`. ARM findings are never queried, so `--resource-group` yields a file of `not-queried` findings and warns. |
+| `--domain` | Assert which export's observation to attribute; refused when it differs from the signed-in tenant. |
+
+There is no `--exit-code`: [`resource drift`](#resource-drift) already gates CI on drift being found.
+
+**Every finding gets exactly one status** — *no event found* and *could not look* never read the same:
+
+| Status | Meaning |
+|---|---|
+| `matched` | One or more audit events name the resource in the window; all of them are listed, newest first, with actor (user principal name or application name), activity, result and correlation id. Several events are a list, never a single "who". |
+| `no-event-in-window` | The table was queried and holds no event for the resource in the window. |
+| `no-join-key` | The resource has no audit target id: tenant-wide singletons (`organization`, `authorizationPolicy`, `deviceManagement`, …), the Apple push certificate, numeric role scope tag ids. |
+| `retention-exceeded` | The window starts before the table's earliest retained row, so an earlier change is *unknown*, not *absent*. |
+| `query-failed` | The table could not be queried — a missing grant is named in the reason. |
+| `not-queried` | ARM types (the Azure activity log is not consulted), types not registered in this build, or findings outside this run's selection. |
+
+**`drift/audit.yaml` is facts only, and lives with the observation.** It records the workspace, when it was
+queried, the window, each table's status and earliest retained row, the per-status counts, and one entry per
+finding, keyed exactly like `drift/metadata.yaml`. It never changes a verdict and never enters the
+observation, so the observation stays deterministic and verifiable against the bytes it was computed from.
+Like the rest of the `drift/` tree it is cleared by the next `resource drift` run and by a re-baselining
+`resource download`.
+
+**Rerun it later.** Audit records reach the workspace with an ingestion lag, so a change observed minutes ago
+may not be queryable yet; the command says so when any finding has no event in the window. Rerunning
+`resource audit` refreshes `audit.yaml` without fetching the tenant again. Under `--dry-run` the queries run and
+the report prints, but the file is not written; an earlier `audit.yaml` stays on disk and is reported with its
+age.
+
+**Exit codes:** `0` when at least one audit table could be queried; `2` when nothing could be answered — no
+`audit-workspace-id` in the profile, no drift observation (run `resource drift` first), an observation
+superseded by a newer download (run `resource drift` again), another tenant's observation, no export, no
+credential, or no audit table queryable at all (the file is still written, recording every finding as
+`query-failed`).
 
 ### `resource types`
 
@@ -405,6 +482,14 @@ export run with `no-prompt` set) so reduced confidence is stated rather than hid
 like `docs/generate.md` — no longer carries the template's explanatory header comment or the ` (template)`
 H1 suffix; a `--prompt` override template must now also carry the `inventory` marked block.
 
+**Attribution.** When `drift/audit.yaml` exists and belongs to this observation, the prompt carries it: the
+observation block names the workspace, the query time and each table's status, with an ingestion-lag caveat,
+and every finding lists a `Changed by:` line per audit event (newest first) — or `Attribution unavailable` with
+the status and its reason. The agent is told to treat an actor as a fact about *who*, never as proof of intent,
+and that a missing attribution is not evidence of anything. Without the file the block says attribution is
+off; an `audit.yaml` left over from an earlier observation is reported as outdated and not used. The agent
+never touches `audit.yaml`.
+
 **Exit codes:** `0` on success — including a clean observation (nothing to analyze, no prompt written); `2`
 when the question cannot be answered: no observation (run `resource drift` first), the export was
 re-baselined after the observation (run `resource drift` again), tenant mismatch, a payload not matching the
@@ -434,7 +519,9 @@ az account get-access-token --resource https://graph.microsoft.com -o tsv --quer
 only ever see what the signed-in user can see, and every request is attributable to that user in the audit log.
 Service principals and client secrets are not supported by design.
 
-Two credential paths exist; both yield one delegated token used for ARM and Microsoft Graph alike:
+Two credential paths exist; both yield delegated tokens for ARM and Microsoft Graph alike — and, for
+[`resource audit`](#resource-audit) and an attributing `resource drift`, for the Log Analytics API
+(`https://api.loganalytics.io`):
 
 | Path | When | How |
 |---|---|---|
@@ -481,6 +568,7 @@ not need; the types that require it are then skipped with a warning.
 GRAPH="00000003-0000-0000-c000-000000000000"
 ARM="797f4846-ba00-4fd7-ba43-dac1f8f63013"
 ARM_USER_IMP="41094075-9dad-400e-a0bd-54e686782033"      # user_impersonation (delegated)
+LOG_ANALYTICS="ca7f3f0b-7d91-482c-8e09-c5d840d0eac5"     # Log Analytics API (resource audit)
 
 # Delegated Microsoft Graph scopes covering every supported resource type.
 # DeviceManagementConfiguration.ReadWrite.All is only needed for resolve-secrets;
@@ -517,6 +605,14 @@ done
 az ad app permission add --id "$APP_ID" --api "$ARM" \
   --api-permissions "$ARM_USER_IMP=Scope"
 
+# Log Analytics API delegated permission Data.Read (resource audit / drift attribution).
+# If the lookup prints nothing, the API's service principal is missing in this tenant:
+#   az ad sp create --id "$LOG_ANALYTICS"
+LA_READ=$(az ad sp show --id "$LOG_ANALYTICS" \
+  --query "oauth2PermissionScopes[?value=='Data.Read'].id" -o tsv)
+az ad app permission add --id "$APP_ID" --api "$LOG_ANALYTICS" \
+  --api-permissions "$LA_READ=Scope"
+
 # Service principal, then admin consent (allow ~60 s for replication)
 az ad sp create --id "$APP_ID"
 az ad app permission admin-consent --id "$APP_ID"
@@ -551,6 +647,22 @@ az ad app permission add --id "$APP_ID" --api "$GRAPH" --api-permissions "$SCOPE
 az ad app permission admin-consent --id "$APP_ID"
 ```
 
+An app registered before [`resource audit`](#resource-audit) existed lacks the Log Analytics API, and the
+sign-in fails with `AADSTS650057: Invalid resource` naming `https://api.loganalytics.io`. Add it the same way:
+
+```bash
+LOG_ANALYTICS="ca7f3f0b-7d91-482c-8e09-c5d840d0eac5"
+az ad sp create --id "$LOG_ANALYTICS"   # only if the next command prints nothing
+LA_READ=$(az ad sp show --id "$LOG_ANALYTICS" --query "oauth2PermissionScopes[?value=='Data.Read'].id" -o tsv)
+az ad app permission add --id "$APP_ID" --api "$LOG_ANALYTICS" --api-permissions "$LA_READ=Scope"
+az ad app permission admin-consent --id "$APP_ID"
+```
+
+In the Entra admin center: **App registrations** → the app → **API permissions** → **Add a permission** →
+**APIs my organization uses** → **Log Analytics API** → **Delegated permissions** → **Data.Read** → **Add
+permissions**, then **Grant admin consent**. The permission only lets the app act as you; reading the
+workspace still needs the Log Analytics Reader role on it.
+
 These are **delegated** permissions: the token acts as the signed-in user, who still needs the matching
 directory / Intune / Azure RBAC roles. If a Graph call fails with "required scopes are missing" on the CLI
 path (ARM-only runs), refresh the session with `az logout && az login --scope https://graph.microsoft.com/.default`.
@@ -575,12 +687,15 @@ Configuration splits in two, and the split is **enforced**: a key on the wrong s
 | | Where | Settings |
 |---|---|---|
 | **General** | base file | `output`, `type`, `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`, `transformers`, `taxonomy` |
-| **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters` |
+| **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters`, `audit-workspace-id` |
 
 The split is not bookkeeping. `transformers` is hashed into `transformConfigSha256`, so a per-tenant override
 would make an export non-comparable with its own baseline and with every other tenant; `output` is the export
 root and the tenant is already a subdirectory of it; `filters` is hashed into `filtersSha256`, which gates
-drift comparability, so it must be stable *per tenant* rather than shared.
+drift comparability, so it must be stable *per tenant* rather than shared. `audit-workspace-id` names the Log
+Analytics workspace that holds *this* tenant's audit tables (see [`resource audit`](#resource-audit)); it must
+be a workspace GUID — anything else is a fatal error naming the key and the profile — and it has no default,
+no flag and no environment variable.
 
 - **`--config <path>`** names the base file. A mistyped path is a fatal error, never a silent fallback.
 - **`--config-dir <dir>`** holds one `<domain>.yaml` per tenant plus an optional **`base.yaml`**, which is
@@ -639,6 +754,7 @@ output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
     ├── drift/                                    owned by azure-rd resource drift — the latest observation only
     │   ├── metadata.yaml                         what was compared, against which baseline, and the findings
+    │   ├── audit.yaml                            written by azure-rd resource audit (and an attributing drift run): who changed each finding
     │   ├── analyze.md                            written by azure-rd docs analyze-drift (agent input)
     │   ├── index.md                              written by the agent: the drift summary for this observation
     │   ├── Microsoft.Graph/…/….yaml              fetched bytes of added/changed/renamed resources, mirroring resources/
@@ -1069,7 +1185,10 @@ channels. Type **listing** runs before it, concurrently across types.
   run would delete, from the same selection.
 - `resource drift --dry-run` still **fetches and compares in full** — nothing about drift is answerable
   without the tenant's current bytes — but withholds the `drift/` tree entirely (clearing nothing): an
-  observation from an earlier run stays on disk and is reported as not refreshed.
+  observation from an earlier run stays on disk and is reported as not refreshed. With `audit-workspace-id`
+  set it also queries the audit tables and reports the attribution, without writing `audit.yaml`.
+- `resource audit --dry-run` queries the audit tables and prints the full report without writing
+  `audit.yaml`; an earlier one stays on disk and is reported with its age.
 - `docs generate-prompt --dry-run` runs the full comparison and reports the work list without writing
   `generate.md`; `docs generate-index --dry-run` reports the index counts without writing `index.yaml`;
   `docs analyze-drift --dry-run` runs the full preflight and reports the observation's findings without
@@ -1124,6 +1243,8 @@ go/
 │   ├── docs.go                   `docs` parent command
 │   └── docs/                     `generate-prompt`, `generate-index` (own package; avoids an import cycle)
 ├── internal/
+│   ├── audit/                    resource audit engine: routing by type to IntuneAuditLogs / AuditLogs,
+│   │                             Log Analytics queries, retention probe, per-finding status
 │   ├── azure/                    credentials (CLI / device code), client, identity, tenant domain,
 │   │                             ARM list pagers, permission-error detection, resource-id parsing
 │   ├── cmdutil/                  shared flag groups (auth / selection / pipeline), Viper binding,

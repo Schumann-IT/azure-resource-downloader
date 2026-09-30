@@ -43,6 +43,28 @@ This project is released independently of the documentation browser in `web/`: i
   administrators; merges are squash only** — a repository setting, made by hand. See the **Development
   workflow** section of the [repository README](../README.md). (#31)
 
+#### Drift analysis
+
+- **Drift findings now say who changed the resource, and when.** A drift observation says a resource's
+  bytes moved between the baseline and the observation; the new `resource audit` command joins every
+  finding against the tenant's Log Analytics audit tables (Intune's and Entra ID's) over exactly that window
+  and records the actor, activity, result and time of each change in `drift/audit.yaml` beside the
+  observation — so a deliberate administrative change can be told from an unexplained one. When a tenant
+  profile sets the new `audit-workspace-id` key, every `resource drift` run attributes its own observation
+  as well, and `docs analyze-drift` hands the attribution to the analysis agent as a `Changed by:` line per
+  event, with the instruction that an actor is a fact about *who*, never proof of intent. Attribution is
+  facts only and never alters the observation or a verdict: every finding gets exactly one status, so *no
+  event found*, *no audit target*, *before the table's retention* and *could not look* never read the same,
+  and a failed lookup is a warning — the drift run's exit code stays the comparison's. Audit records arrive
+  with an ingestion lag, so `resource audit` can be rerun later without fetching the tenant again. The key is
+  configuration only — a workspace GUID in the tenant profile, with no flag and no environment variable, since
+  a workspace typed for one tenant would silently answer "nobody changed it" for the next. **To use it: send
+  Intune's and Entra ID's audit logs to one Log Analytics workspace through diagnostic settings, grant the
+  signed-in user Log Analytics Reader on it, set `audit-workspace-id` in the tenant profile, and — when you
+  sign in through a dedicated app registration — add the Log Analytics API delegated permission `Data.Read`
+  to that app and grant admin consent again**; without it the sign-in fails with `AADSTS650057`. See
+  **resource audit** and **Create the app registration** in the [README](README.md).
+
 ### Breaking
 
 #### Command-line surface and configuration
