@@ -84,7 +84,7 @@ section of the [repository README](../README.md) for the procedure.
   never served, and a new audit shows on the next request without a restart. **To see attribution, run
   `azure-rd resource audit`, or set `audit-workspace-id` in the tenant profile so `azure-rd resource drift`
   records it** (see the CLI's README for the workspace and permissions it needs); without it the drift pages
-  are unchanged.
+  are unchanged. (#33)
 
 ### Changed
 
@@ -107,7 +107,7 @@ section of the [repository README](../README.md) for the procedure.
 - **Pages are wider on large screens.** The documentation, drift and compare pages, and the top bar above
   them, now share a 96rem width (the `2xl` breakpoint) instead of 80rem, so wide tables and side-by-side
   diffs need less horizontal scrolling. The layout stays centred, and the breadcrumb still lines up with the
-  sidebar and the document. The tenant picker and the error page keep their narrower width.
+  sidebar and the document. The tenant picker and the error page keep their narrower width. (#33)
 
 ### Fixed
 

@@ -63,7 +63,7 @@ This project is released independently of the documentation browser in `web/`: i
   signed-in user Log Analytics Reader on it, set `audit-workspace-id` in the tenant profile, and — when you
   sign in through a dedicated app registration — add the Log Analytics API delegated permission `Data.Read`
   to that app and grant admin consent again**; without it the sign-in fails with `AADSTS650057`. See
-  **resource audit** and **Create the app registration** in the [README](README.md).
+  **resource audit** and **Create the app registration** in the [README](README.md). (#33)
 
 ### Changed
 
@@ -77,7 +77,7 @@ This project is released independently of the documentation browser in `web/`: i
   change is attributed and the recommended action; the remaining low-severity findings go into a final
   *Everything else*. A reader who reads only the summary now learns what to do; the evidence stays in the parts
   below. Neither template is hashed, so no regeneration is required: the next `docs generate-prompt` or `docs
-  analyze-drift` run hands the agent the new structure.
+  analyze-drift` run hands the agent the new structure. (#33)
 
 ### Breaking
 
