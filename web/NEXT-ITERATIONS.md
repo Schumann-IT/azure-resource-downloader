@@ -26,33 +26,29 @@ an attribution only when the audit file describes exactly the observation on dis
 > unexplained one, and the analysis agent's prose is the only place an actor is ever named. The structured data
 > is what the drift documents are checked against.
 >
-> **Contract.** The CLI writes `<export>/drift/audit.yaml` at the drift tree root, beside `metadata.yaml`, only
-> when the tenant has an audit workspace configured; it is ephemeral like the rest of the tree (swept by the
-> next drift run and by a re-baselining download), so its absence is the normal state and never an error. Read
-> as data through a fixed `TenantInfo` path, never served. Shape, in this app's terms: `version: 1` (integer,
-> `>= 1` accepted, like `index.yaml`); `observedAt` and `baselineGeneratedAt` (the observation this file belongs
-> to — the validity rule below); `tenant`; `toolVersion`; `queriedAt`; `workspaceId`; `window: { from, to }`
-> (= baseline `generatedAt` → `observedAt`); `tables.IntuneAuditLogs` and `tables.AuditLogs`, each
-> `{ status: ok | failed, reason, earliest }` (`earliest` is the table's oldest retained row, RFC3339 or empty);
-> `counts: { matched, noEventInWindow, noJoinKey, retentionExceeded, queryFailed, notQueried }` (read as data,
-> never recomputed by walking the findings); `findings`, keyed exactly like `drift/metadata.yaml`'s findings
-> (`<type>/<name>.yaml`, reduced by the same `driftKey` rule to the extensionless route path), each
-> `{ status, table, reason, events }` where `status` is one of
-> `matched | no-event-in-window | no-join-key | retention-exceeded | query-failed | not-queried`, `table` is
-> `IntuneAuditLogs | AuditLogs | ""`, and `events` (matched only, newest first, may be several) are
-> `{ at, actor (UPN or application display name), actorType: user | application | unknown, activity,
-> result: success | failure | unknown, correlationId }`. Timestamps are RFC3339 UTC strings, compared as
-> strings after the same Date-to-string normalisation the observation parser applies.
-> **Validity rule.** The audit is *current* only when its `observedAt` **and** `baselineGeneratedAt` both equal
-> the observation's; otherwise it is *outdated* and is never rendered as attribution — only a caveat saying the
-> attribution predates the observation, run `azure-rd resource audit` again. An outdated or superseded
-> observation never shows attribution at all. A finding the audit file does not name gets a neutral "no
-> attribution recorded" line, never an inferred status. The `docs analyze-drift` prompt gains attribution lines
-> on the Go side, so agent-written drift documents may name actors in prose; this app shows the structured data
-> regardless and adds no section hook or marker for it.
+> **Contract.** The CLI writes `<export>/drift/audit.yaml` at the drift root beside `metadata.yaml`, only when
+> the tenant has an audit workspace configured; swept with the rest of the tree, so absence is the normal state,
+> never an error. Read as data through `TenantInfo.driftAuditPath`, never served. Shape: `version` (integer,
+> `>= 1` accepted); `observedAt`, `baselineGeneratedAt`; `tenant`, `toolVersion`, `queriedAt`, `workspaceId`;
+> `window: {from, to}` (baseline `generatedAt` → `observedAt`); `tables` with both `IntuneAuditLogs` and
+> `AuditLogs`, each `{status: ok | failed, reason, earliest}` (`earliest` may be empty); `counts: {matched,
+> noEventInWindow, noJoinKey, retentionExceeded, queryFailed, notQueried}` (read, never recomputed);
+> `findings` keyed like `drift/metadata.yaml`'s (`<type>/<name>.yaml`, reduced by the same `driftKey` rule —
+> the *new* path of a rename), each `{status, table, reason, events}`: `status` ∈ `matched | no-event-in-window
+> | no-join-key | retention-exceeded | query-failed | not-queried`, `table` ∈ `IntuneAuditLogs | AuditLogs |
+> ""`, `events` (matched only, newest first, may be several) of `{at, actor, actorType: user | application |
+> unknown, activity, result: success | failure | unknown, correlationId}`. Timestamps are quoted RFC3339 UTC
+> strings with whole seconds, compared as strings after the observation parser's Date normalisation.
+> **Validity rule.** Current only when `observedAt` **and** `baselineGeneratedAt` equal the observation's;
+> otherwise outdated (caveat only: run `azure-rd resource audit` again), and never shown for a superseded one.
+>
+> **Rendering rules.** A finding the audit file does not name gets a neutral "no attribution recorded" line,
+> never an inferred status. The `docs analyze-drift` prompt gains attribution lines on the Go side, so
+> agent-written drift documents may name actors in prose; this app shows the structured data regardless and
+> adds no section hook or marker for it.
 >
 > **Owner.** none — every file is under `web/`. Sequencing: none; the web degrades gracefully when the file is
-> absent, so it can ship before or after the Go entry.
+> absent, so it can ship before or after the CLI's `resource audit`.
 >
 > **Implementer.** sonnet
 >
@@ -125,7 +121,8 @@ an attribution only when the audit file describes exactly the observation on dis
   unnamed; assert the tenant page rows carry the latest actor and `+1 more`, the status texts, the **By actor**
   section with both actors linking `changed1`, the header caveat with workspace and counts; the resource page
   shows both events newest first with correlation ids, and one line per other status (the `no-join-key` line
-  without the amber classes); an audit whose `observedAt` differs shows the outdated caveat and no actor
+  without the amber classes); the renamed finding's old (baseline) path shows the same attribution as
+  `new_name`, joined by the finding's key; an audit whose `baselineGeneratedAt` alone differs is outdated too; an audit whose `observedAt` differs shows the outdated caveat and no actor
   anywhere; `/drifted/_drift/audit`, `/drifted/_drift/audit.yaml`, `/drifted/_drift/audit?raw` → 404 without
   the root path in the body; rewriting and deleting `audit.yaml` is reflected on the next request without a
   restart; the read-only snapshot and the Confluence export assertions cover the audit file (no actor name, no
@@ -134,7 +131,9 @@ an attribution only when the audit file describes exactly the observation on dis
   served` under `drift/`, and the root-level rule names it among the unreachable files; **Drift view** gains an
   **Attribution.** bullet (what the file is, the validity rule, the per-status lines, By actor, that nothing is
   derived); routes table unchanged; Tests table adds `test/drift-audit.spec.ts` and extends the e2e row; Project
-  layout adds `drift-audit.ts` and updates the `drift.service.ts` line.
+  layout adds `drift-audit.ts` and updates the `drift.service.ts` line. With it, at *done*: `web/CLAUDE.md`
+  and `.windsurf/rules/01-architecture.md` name `drift-audit.ts` among the drift modules and
+  `drift/audit.yaml` beside `drift/analyze.md` as read as data, never served.
 - **`CHANGELOG.md`** — under `[Unreleased]` → `### Added` → new `#### Drift view` subsection (today `Drift
   view` exists only under `### Changed` and `### Fixed`).
 
