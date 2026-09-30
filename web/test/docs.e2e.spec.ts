@@ -1477,6 +1477,67 @@ payloads:
     - Microsoft.Graph/namedLocations/new_loc.yaml
 `;
 
+  const AUDIT_HEAD = (observedAt: string, baseline: string) => `version: 1
+observedAt: "${observedAt}"
+baselineGeneratedAt: "${baseline}"
+tenant: drifted.example
+toolVersion: azure-rd test
+queriedAt: "2026-02-02T08:00:00Z"
+workspaceId: workspace-42
+window:
+    from: "${baseline}"
+    to: "${observedAt}"
+tables:
+    IntuneAuditLogs:
+        status: ok
+        reason: ""
+        earliest: "2025-12-01T00:00:00Z"
+    AuditLogs:
+        status: failed
+        reason: Forbidden by policy
+        earliest: ""
+counts:
+    matched: 1
+    noEventInWindow: 1
+    noJoinKey: 1
+    retentionExceeded: 1
+    queryFailed: 0
+    notQueried: 0
+findings:
+`;
+  const AUDIT_CHANGED = `    ${T}/changed1.yaml:
+        status: matched
+        table: IntuneAuditLogs
+        events:
+            - at: "2026-01-20T09:00:00Z"
+              actor: alice@drifted.example
+              actorType: user
+              activity: Patch deviceConfiguration
+              result: success
+              correlationId: corr-newest
+            - at: "2026-01-10T09:00:00Z"
+              actor: builder-app
+              actorType: application
+              activity: Patch deviceConfiguration
+              result: failure
+              correlationId: corr-oldest
+`;
+  const AUDIT_NEW_NAME = `    ${T}/new_name.yaml:
+        status: no-event-in-window
+        table: IntuneAuditLogs
+        reason: nothing between the timestamps
+`;
+  const AUDIT_TAMPERED = `    ${T}/tampered1.yaml:
+        status: retention-exceeded
+        table: AuditLogs
+        reason: table starts 2026-01-15T00:00:00Z
+`;
+  const AUDIT_NEW_LOC = `    Microsoft.Graph/namedLocations/new_loc.yaml:
+        status: no-join-key
+`;
+  const AUDIT = (observedAt = OBSERVED, baseline = BASELINE) =>
+    AUDIT_HEAD(observedAt, baseline) + AUDIT_CHANGED + AUDIT_NEW_NAME + AUDIT_TAMPERED + AUDIT_NEW_LOC;
+
   const ANALYSIS = `---
 observedAt: ${OBSERVED}
 verdict: changed
@@ -1520,6 +1581,7 @@ findings: 4
     await fsp.rm(driftDir, { recursive: true, force: true });
     await write('drift/metadata.yaml', OBSERVATION);
     await write('drift/index.md', DRIFT_INDEX);
+    await write('drift/audit.yaml', AUDIT());
     await write('drift/analyze.md', '# The analysis prompt, never served\n');
     await write(`drift/${T}/changed1.yaml`, CHANGED_PAYLOAD);
     await write(`drift/${T}/changed1.md`, ANALYSIS);
@@ -1802,7 +1864,9 @@ findings: 4
     await get('/drifted/_drift').expect(200);
     await get(`/drifted/_drift/${T}/changed1`).expect(200);
     await get(`/drifted/_drift/${T}/changed1?raw`).expect(200);
+    await get('/drifted/_drift/audit.yaml').expect(404);
     expect(await snapshot(exportDir)).toEqual(before);
+    expect(before.join('\n')).toContain('audit.yaml');
   });
 
   it('keeps the drift tree out of the Confluence export', async () => {
@@ -1830,9 +1894,124 @@ findings: 4
       expect(all).not.toContain('The analysis prompt');
       expect(all).not.toContain('enabled: false');
       expect(all).not.toContain('Kali VPN location');
+      expect(all).not.toContain('alice@drifted.example');
+      expect(all).not.toContain('audit.yaml');
+      expect([...entries.keys()].some((name) => name.includes('audit'))).toBe(false);
     } finally {
       await fsp.rm(summary, { force: true });
     }
+  });
+
+  describe('attribution from drift/audit.yaml', () => {
+    it('suffixes every finding row of the tenant page with its actor or status', async () => {
+      const res = await get('/drifted/_drift').expect(200);
+      expect(res.text).toContain('alice@drifted.example · 2026-01-20T09:00:00Z (+1 more)');
+      expect(res.text).toContain('no audit event in the window');
+      expect(res.text).toContain("window starts before the table&#x27;s retention");
+      expect(res.text).toContain('no audit join key for this resource type');
+      // The quiet line is slate, the caveat lines are amber.
+      expect(res.text).toMatch(
+        /text-xs text-slate-500 dark:text-slate-400">no audit join key for this resource type</,
+      );
+      expect(res.text).toMatch(
+        /text-amber-700 dark:text-amber-300">no audit event in the window</,
+      );
+    });
+
+    it('lists the findings by actor and puts the caveat in the observation header', async () => {
+      const res = await get('/drifted/_drift').expect(200);
+      expect(res.text).toContain('class="drift-actors');
+      expect(res.text).toContain('By actor');
+      const actors = res.text.slice(res.text.indexOf('class="drift-actors'));
+      expect(actors).toContain('alice@drifted.example');
+      expect(actors).toContain('builder-app');
+      expect(actors).toContain('application</span>');
+      expect(actors.match(new RegExp(`href="/drifted/_drift/${T}/changed1"`, 'g'))).toHaveLength(2);
+      expect(res.text).toContain('workspace-42');
+      expect(res.text).toContain('1 matched');
+      expect(res.text).toContain('1 beyond retention');
+      expect(res.text).toContain('AuditLogs failed: Forbidden by policy');
+    });
+
+    it('shows every event newest first on the resource page', async () => {
+      const res = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+      const at = (needle: string) => res.text.indexOf(needle);
+      expect(at('corr-newest')).toBeGreaterThan(-1);
+      expect(at('corr-newest')).toBeLessThan(at('corr-oldest'));
+      expect(res.text).toContain('Patch deviceConfiguration');
+      expect(res.text).toContain('builder-app');
+      expect(res.text).toMatch(/text-red-800 dark:text-red-300">failure</);
+    });
+
+    it('states each other status on the resource page, quiet for no join key', async () => {
+      const renamed = await get(`/drifted/_drift/${T}/new_name`).expect(200);
+      expect(renamed.text).toContain('no audit event in the window');
+      expect(renamed.text).toContain('nothing between the timestamps');
+      // The old (baseline) path resolves to the same finding, so the same line.
+      const old = await get(`/drifted/_drift/${T}/old_name`).expect(200);
+      expect(old.text).toContain('no audit event in the window');
+      const tampered = await get(`/drifted/_drift/${T}/tampered1`).expect(200);
+      expect(tampered.text).toContain("window starts before the table&#x27;s retention");
+      const loc = await get('/drifted/_drift/Microsoft.Graph/namedLocations/new_loc').expect(200);
+      const line = loc.text.match(/<p class="([^"]*)">\s*<strong>Attribution:<\/strong>[^<]*no audit join key/);
+      expect(line).not.toBeNull();
+      expect(line![1]).not.toContain('amber');
+    });
+
+    it('says "no attribution recorded" for a finding the file does not name, and follows the file', async () => {
+      const file = path.join(driftDir, 'audit.yaml');
+      try {
+        await fsp.writeFile(file, AUDIT_HEAD(OBSERVED, BASELINE) + AUDIT_CHANGED);
+        const page = await get(`/drifted/_drift/${T}/tampered1`).expect(200);
+        expect(page.text).toContain('no attribution recorded');
+        expect(page.text).not.toContain('retention');
+        await fsp.rm(file);
+        const gone = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+        expect(gone.text).not.toContain('corr-newest');
+        expect(gone.text).not.toContain('Attribution');
+        const tenant = await get('/drifted/_drift').expect(200);
+        expect(tenant.text).not.toContain('alice@drifted.example');
+        expect(tenant.text).not.toContain('By actor');
+      } finally {
+        await writeDrift();
+      }
+      const back = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+      expect(back.text).toContain('corr-newest');
+    });
+
+    it('treats an audit for another observation as outdated, showing no actor', async () => {
+      const file = path.join(driftDir, 'audit.yaml');
+      try {
+        for (const stale of [
+          AUDIT('2026-02-01T09:00:00Z', BASELINE),
+          AUDIT(OBSERVED, '2025-12-31T00:00:00Z'),
+        ]) {
+          await fsp.writeFile(file, stale);
+          const tenant = await get('/drifted/_drift').expect(200);
+          expect(tenant.text).toContain('Attribution outdated');
+          expect(tenant.text).toContain('azure-rd resource audit');
+          expect(tenant.text).not.toContain('alice@drifted.example');
+          expect(tenant.text).not.toContain('By actor');
+          const page = await get(`/drifted/_drift/${T}/changed1`).expect(200);
+          expect(page.text).toContain('Attribution outdated');
+          expect(page.text).not.toContain('corr-newest');
+        }
+      } finally {
+        await writeDrift();
+      }
+    });
+
+    it('never serves the audit file', async () => {
+      for (const url of [
+        '/drifted/_drift/audit',
+        '/drifted/_drift/audit.yaml',
+        '/drifted/_drift/audit?raw',
+      ]) {
+        const res = await get(url).expect(404);
+        expect(res.text).not.toContain(root);
+        expect(res.text).not.toContain('workspace-42');
+      }
+    });
   });
 
   it('gates an observation whose baseline the export no longer holds, at both scopes', async () => {

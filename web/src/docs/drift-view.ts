@@ -1,4 +1,11 @@
 import {
+  AuditAttribution,
+  AuditEvent,
+  AuditState,
+  AuditStatus,
+  DriftAudit,
+} from './drift-audit';
+import {
   DriftFinding,
   DriftObservation,
   DriftState,
@@ -49,6 +56,29 @@ const SEVERITY_TONE: Record<string, Tone> = {
   low: 'info',
   info: 'neutral',
 };
+
+// How each attribution status is toned. Only a found actor is a success; a
+// window or table that could not answer is a caveat (amber), and a status that
+// is a fact about the resource type or the run is neutral.
+export const STATUS_TONE: Record<AuditStatus, Tone> = {
+  matched: 'success',
+  'no-event-in-window': 'warning',
+  'retention-exceeded': 'warning',
+  'query-failed': 'warning',
+  'not-queried': 'neutral',
+  'no-join-key': 'neutral',
+};
+
+// The one-line text of every status that carries no actor.
+export const STATUS_TEXT: Record<Exclude<AuditStatus, 'matched'>, string> = {
+  'no-event-in-window': 'no audit event in the window',
+  'retention-exceeded': "window starts before the table's retention",
+  'query-failed': 'audit query failed',
+  'not-queried': 'not queried',
+  'no-join-key': 'no audit join key for this resource type',
+};
+
+const NO_ATTRIBUTION = 'no attribution recorded';
 
 const NO_OBSERVATION = 'No drift observation. Run azure-rd resource drift.';
 
@@ -134,7 +164,11 @@ export function pickerDrift(state: TenantDriftState) {
 // The observation header shown on both drift pages: when, against what, how
 // complete, and every caveat the CLI recorded — so the reader can tell an
 // empty finding list from a run that could not look.
-export function observationSummary(obs: DriftObservation, tenant: string) {
+export function observationSummary(
+  obs: DriftObservation,
+  tenant: string,
+  audit: AuditState = { kind: 'none' },
+) {
   const c = obs.counts;
   return {
     observedAt: obs.observedAt,
@@ -161,18 +195,46 @@ export function observationSummary(obs: DriftObservation, tenant: string) {
       href: driftHref(tenant, n.key),
     })),
     empty: obs.findings.length === 0,
+    attribution: attributionSummary(audit),
+  };
+}
+
+// The attribution caveat of the observation header: what was queried and what
+// could not be answered, read from the audit file's own counts. An outdated
+// audit is only a caveat; no audit is no line at all.
+function attributionSummary(state: AuditState) {
+  if (state.kind === 'none') return null;
+  if (state.kind === 'outdated') return { outdated: true };
+  const a = state.audit;
+  return {
+    outdated: false,
+    workspaceId: a.workspaceId,
+    queriedAt: a.queriedAt,
+    window: a.window,
+    tables: a.tables,
+    failedTables: a.tables.filter((t) => t.failed),
+    matched: a.counts.matched,
+    noEvent: a.counts.noEventInWindow,
+    noJoinKey: a.counts.noJoinKey,
+    retention: a.counts.retentionExceeded,
+    failed: a.counts.queryFailed,
+    notQueried: a.counts.notQueried,
   };
 }
 
 // Every finding of the observation, grouped by resource type. Built from the
 // observation alone, so a finding with no document or drift document of its own
 // (an addition, an out-of-scope inventory change) is still reachable here.
-export function findingGroups(obs: DriftObservation, tenant: string) {
+export function findingGroups(
+  obs: DriftObservation,
+  tenant: string,
+  audit?: DriftAudit,
+) {
   const groups = new Map<string, ReturnType<typeof findingItem>[]>();
   for (const finding of obs.findings) {
     const type = typeOfKey(finding.key);
     const items = groups.get(type) ?? [];
-    items.push(findingItem(tenant, finding));
+    items.push(findingItem(tenant, finding, audit));
     groups.set(type, items);
   }
   return [...groups.entries()]
@@ -183,13 +245,104 @@ export function findingGroups(obs: DriftObservation, tenant: string) {
     }));
 }
 
-function findingItem(tenant: string, finding: DriftFinding) {
+function findingItem(tenant: string, finding: DriftFinding, audit: DriftAudit | undefined) {
   return {
     href: driftHref(tenant, finding.key),
     label: finding.displayName || lastSegment(finding.key),
     previous: finding.previousDisplayName,
     badge: verdictBadge(finding.verdict),
+    attribution: rowAttribution(finding, audit),
   };
+}
+
+// The suffix of a finding row: the latest actor and time, or the status text.
+// Null when there is no current audit at all, so the row stays as it was.
+function rowAttribution(finding: DriftFinding, audit: DriftAudit | undefined) {
+  if (!audit) return null;
+  const a = attributionOf(finding, audit);
+  if (a.latest) return { actor: a.latest.actor, at: a.latest.at, more: a.more };
+  return { text: a.text, quiet: a.quiet, warning: a.tone.warning };
+}
+
+// What the audit file says about one finding, in the shape the templates read.
+// A finding the file does not name is not inferred anything: it gets the
+// neutral "no attribution recorded" line.
+export function attributionOf(finding: DriftFinding, audit: DriftAudit | undefined) {
+  const found: AuditAttribution | undefined = audit?.byKey.get(finding.key);
+  if (!found) {
+    return {
+      recorded: false,
+      status: {} as Record<string, boolean>,
+      tone: badge(NO_ATTRIBUTION, 'neutral'),
+      text: NO_ATTRIBUTION,
+      quiet: true,
+      table: '',
+      reason: '',
+      events: [] as AuditEvent[],
+      latest: null as AuditEvent | null,
+      more: 0,
+    };
+  }
+  const tone = STATUS_TONE[found.status];
+  return {
+    recorded: true,
+    status: stateFlags(camel(found.status)),
+    tone: badge(found.status, tone),
+    text: found.status === 'matched' ? '' : STATUS_TEXT[found.status],
+    quiet: found.status === 'no-join-key',
+    table: found.table,
+    reason: found.reason,
+    events: found.events.map((e) => ({
+      ...e,
+      actorUser: e.actorType === 'user',
+      failure: e.result === 'failure',
+    })),
+    latest: found.events[0] ?? null,
+    more: Math.max(found.events.length - 1, 0),
+  };
+}
+
+// The tenant drift page's By actor section: every matched finding the
+// observation holds, once per actor however many events that actor has on it.
+export function byActor(obs: DriftObservation, audit: DriftAudit, tenant: string) {
+  const blocks = new Map<
+    string,
+    { actor: string; actorType: string; findings: Array<{ href: string; label: string; badge: Badge; at: string }> }
+  >();
+  for (const finding of obs.findings) {
+    const found = audit.byKey.get(finding.key);
+    if (found?.status !== 'matched') continue;
+    const seen = new Set<string>();
+    for (const event of found.events) {
+      if (seen.has(event.actor)) continue;
+      seen.add(event.actor);
+      const block = blocks.get(event.actor) ?? {
+        actor: event.actor,
+        actorType: event.actorType,
+        findings: [],
+      };
+      block.findings.push({
+        href: driftHref(tenant, finding.key),
+        label: finding.displayName || lastSegment(finding.key),
+        badge: verdictBadge(finding.verdict),
+        at: event.at,
+      });
+      blocks.set(event.actor, block);
+    }
+  }
+  const actors = [...blocks.values()]
+    .sort((a, b) => a.actor.localeCompare(b.actor))
+    .map((b) => ({
+      ...b,
+      tagged: b.actorType !== 'user',
+      findings: b.findings.sort((x, y) => x.label.localeCompare(y.label)),
+    }));
+  return { window: audit.window, actors };
+}
+
+// `no-event-in-window` → `noEventInWindow`, the flag spelling the templates use.
+function camel(status: string): string {
+  return status.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
 // Flags for the drift page templates, one per state kind.

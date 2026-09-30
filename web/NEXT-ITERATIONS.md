@@ -62,7 +62,7 @@ an attribution only when the audit file describes exactly the observation on dis
 
 **Plan.**
 
-- **Parser** — new pure `src/docs/drift-audit.ts`: `AUDIT_STATUSES` (the closed set above), `AuditEvent`,
+- ~~**Parser** — new pure `src/docs/drift-audit.ts`: `AUDIT_STATUSES` (the closed set above), `AuditEvent`,
   `AuditAttribution { key, status, table, reason, events }`, `DriftAudit { version, observedAt,
   baselineGeneratedAt, tenant, toolVersion, queriedAt, workspaceId, window, tables, counts, findings, byKey }`.
   `parseAudit(raw)` never throws and returns `undefined` for anything that is not an object with integer
@@ -71,12 +71,12 @@ an attribution only when the audit file describes exactly the observation on dis
   `actorType`/`result` outside their sets become `unknown`, events are sorted newest first defensively. Export
   `driftKey`, `timestamp`, `isRecord`, `str`, `num` from `drift-observation.ts` (today module-private) so the
   two parsers key and normalise identically. `auditState(audit, observation)` → `{ kind: 'none' } |
-  { kind: 'outdated', audit } | { kind: 'current', audit }` per the validity rule.
-- **Service** — `tenant-discovery.service.ts`: `DRIFT_AUDIT_FILE = 'audit.yaml'`, `TenantInfo.driftAuditPath`
+  { kind: 'outdated', audit } | { kind: 'current', audit }` per the validity rule.~~
+- ~~**Service** — `tenant-discovery.service.ts`: `DRIFT_AUDIT_FILE = 'audit.yaml'`, `TenantInfo.driftAuditPath`
   (comment: read as data, never served), set where `driftObservationPath` is. `drift.service.ts`: a fourth
   `FileCache<DriftAudit | undefined>` bounded like the others and `async audit(info)` reading
-  `info.driftAuditPath` through `parseAudit`.
-- **View models** (`drift-view.ts`) — `STATUS_TONE: Record<AuditStatus, Tone>` = `matched: success`,
+  `info.driftAuditPath` through `parseAudit`.~~
+- ~~**View models** (`drift-view.ts`) — `STATUS_TONE: Record<AuditStatus, Tone>` = `matched: success`,
   `no-event-in-window: warning`, `retention-exceeded: warning`, `query-failed: warning`, `not-queried: neutral`,
   `no-join-key: neutral`, with a `STATUS_TEXT` map for the one-line statuses ("no audit event in the window",
   "window starts before the table's retention", "audit query failed", "not queried", "no audit join key for this
@@ -89,8 +89,8 @@ an attribution only when the audit file describes exactly the observation on dis
   observation holds, one row per finding (several events by the same actor do not repeat it), plus the window.
   `observationSummary(obs, tenant, auditState)` gains `attribution`: for `current` — `workspaceId`, `queriedAt`,
   `window`, per-table `{ name, failed, reason, earliest }`, and the `counts` fields; for `outdated` —
-  `{ outdated: true }`; for `none` — `null` (no line).
-- **Templates** — `drift-tenant.hbs`: after the link and "was …" in each `<li>`, a
+  `{ outdated: true }`; for `none` — `null` (no line).~~
+- ~~**Templates** — `drift-tenant.hbs`: after the link and "was …" in each `<li>`, a
   `<span class="text-xs text-slate-500 dark:text-slate-400">` with `actor · at (+N more)` or the status text
   (amber `text-amber-700 dark:text-amber-300` for warning statuses, plain slate for neutral); after
   `details.drift-findings`, `<section class="drift-actors mt-8">` with an H2 "By actor", one block per actor
@@ -103,14 +103,14 @@ an attribution only when the audit file describes exactly the observation on dis
   Activity | Result | Correlation id) styled like `section.drift-deltas`, `failure` results in the deltas' red;
   for every other status one `<p>` in its tone (`no-join-key` as quiet slate text, the amber ones on the
   `drift-incomplete` amber background, `not-queried`/`query-failed` with their `reason`); the outdated caveat as
-  one amber line. Every state with its `dark:` variant; nothing new in `styles.css`.
-- **Controller wiring** — `driftTenant`: read `this.drift.audit(info)` only when the observation is `current`,
+  one amber line. Every state with its `dark:` variant; nothing new in `styles.css`.~~
+- ~~**Controller wiring** — `driftTenant`: read `this.drift.audit(info)` only when the observation is `current`,
   compute `auditState`, pass the audit to `observationSummary`/`findingGroups` only in the `current` audit
   state, plus `actors: byActor(...)`. `renderDrift`/`findingView`: same gate, `attribution:
   attributionOf(finding, activeAudit)` and `attributionOutdated` for the header caveat;
   `unknownType`/`notComparable`/`unchanged` pages show no attribution (the audit has no entry for them by
-  construction). HTTP only — no filesystem logic in the controller.
-- **Tests** — `test/drift-audit.spec.ts` (inline YAML fixtures): parses the contract shape and indexes by key;
+  construction). HTTP only — no filesystem logic in the controller.~~
+- ~~**Tests** — `test/drift-audit.spec.ts` (inline YAML fixtures): parses the contract shape and indexes by key;
   malformed, missing `version`, missing timestamps → `undefined`, never a throw; unsafe keys (`..`, absolute,
   `.yml`, non-`.yaml`) and unknown statuses dropped; `matched` without events dropped; unquoted timestamps loaded
   as `Date` normalise to the same string; events reordered newest first; `auditState` none / outdated on either
@@ -126,7 +126,7 @@ an attribution only when the audit file describes exactly the observation on dis
   anywhere; `/drifted/_drift/audit`, `/drifted/_drift/audit.yaml`, `/drifted/_drift/audit?raw` → 404 without
   the root path in the body; rewriting and deleting `audit.yaml` is reflected on the next request without a
   restart; the read-only snapshot and the Confluence export assertions cover the audit file (no actor name, no
-  `audit.yaml` in the zip).
+  `audit.yaml` in the zip).~~
 - **`README.md`** — docs-root contract tree gains `│   ├── audit.yaml             # attribution — read, never
   served` under `drift/`, and the root-level rule names it among the unreachable files; **Drift view** gains an
   **Attribution.** bullet (what the file is, the validity rule, the per-status lines, By actor, that nothing is

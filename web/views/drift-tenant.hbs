@@ -47,6 +47,13 @@
                           {{> badge this.badge}}
                           <a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.label}}</a>
                           {{#if this.previous}}<span class="text-xs text-slate-500 dark:text-slate-400">was {{this.previous}}</span>{{/if}}
+                          {{#if this.attribution}}
+                            {{#if this.attribution.actor}}
+                              <span class="drift-attribution-row text-xs text-slate-500 dark:text-slate-400">{{this.attribution.actor}} · {{this.attribution.at}}{{#if this.attribution.more}} (+{{this.attribution.more}} more){{/if}}</span>
+                            {{else}}
+                              <span class="drift-attribution-row text-xs {{#if this.attribution.warning}}text-amber-700 dark:text-amber-300{{else}}text-slate-500 dark:text-slate-400{{/if}}">{{this.attribution.text}}</span>
+                            {{/if}}
+                          {{/if}}
                         </li>
                       {{/each}}
                     </ul>
@@ -54,6 +61,33 @@
                 {{/each}}
               </div>
             </details>
+          {{/if}}
+          {{#if actors.actors.length}}
+            <section class="drift-actors mt-8">
+              <h2 class="text-lg font-semibold">By actor</h2>
+              {{#if actors.window.from}}
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Audit window {{actors.window.from}} to {{actors.window.to}}</p>
+              {{/if}}
+              <div class="mt-4 space-y-4">
+                {{#each actors.actors}}
+                  <div class="drift-actor">
+                    <h3 class="text-sm font-semibold">
+                      {{this.actor}}
+                      {{#if this.tagged}}<span class="ml-1 rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-normal text-slate-600 dark:text-slate-300">{{this.actorType}}</span>{{/if}}
+                    </h3>
+                    <ul class="mt-1 space-y-1">
+                      {{#each this.findings}}
+                        <li class="flex flex-wrap items-center gap-2">
+                          {{> badge this.badge}}
+                          <a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.label}}</a>
+                          <span class="text-xs text-slate-500 dark:text-slate-400">{{this.at}}</span>
+                        </li>
+                      {{/each}}
+                    </ul>
+                  </div>
+                {{/each}}
+              </div>
+            </section>
           {{/if}}
         {{/if}}
       </main>

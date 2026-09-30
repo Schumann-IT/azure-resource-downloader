@@ -50,6 +50,45 @@
                 {{#each links}}<a href="{{this.href}}" class="text-brand-600 dark:text-brand-400 hover:underline">{{this.label}}</a>{{/each}}
               </p>
             {{/if}}
+            {{#if attributionOutdated}}
+              <p class="drift-attribution mt-4 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200">
+                Attribution outdated: it predates this observation. Run <code class="font-mono">azure-rd resource audit</code> again.
+              </p>
+            {{/if}}
+            {{#if attributionShown}}
+              <div class="drift-attribution mt-4 text-sm">
+                {{#if attribution.status.matched}}
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm border-collapse">
+                      <thead>
+                        <tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                          <th class="py-1 pr-4 font-medium">When</th>
+                          <th class="py-1 pr-4 font-medium">Actor</th>
+                          <th class="py-1 pr-4 font-medium">Activity</th>
+                          <th class="py-1 pr-4 font-medium">Result</th>
+                          <th class="py-1 font-medium">Correlation id</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {{#each attribution.events}}
+                          <tr class="align-top border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-1 pr-4 font-mono text-xs">{{this.at}}</td>
+                            <td class="py-1 pr-4 text-xs">{{this.actor}}{{#unless this.actorUser}} <span class="text-slate-500 dark:text-slate-400">({{this.actorType}})</span>{{/unless}}</td>
+                            <td class="py-1 pr-4 text-xs">{{this.activity}}</td>
+                            <td class="py-1 pr-4 text-xs {{#if this.failure}}text-red-800 dark:text-red-300{{/if}}">{{this.result}}</td>
+                            <td class="py-1 font-mono text-xs break-all">{{this.correlationId}}</td>
+                          </tr>
+                        {{/each}}
+                      </tbody>
+                    </table>
+                  </div>
+                {{else}}
+                  <p class="{{#if attribution.quiet}}text-xs text-slate-500 dark:text-slate-400{{else if attribution.tone.warning}}rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200{{else}}text-xs text-slate-600 dark:text-slate-300{{/if}}">
+                    <strong>Attribution:</strong> {{attribution.text}}{{#if attribution.reason}}. {{attribution.reason}}{{/if}}
+                  </p>
+                {{/if}}
+              </div>
+            {{/if}}
           </header>
 
           {{#if intact}}

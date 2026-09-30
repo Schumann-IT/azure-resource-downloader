@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { DriftAudit, parseAudit } from './drift-audit';
 import {
   DriftFinding,
   DriftObservation,
@@ -37,6 +38,7 @@ export interface DriftFiles {
 @Injectable()
 export class DriftService {
   private readonly observations = new FileCache<DriftObservation | undefined>(MAX_HASH_ENTRIES);
+  private readonly audits = new FileCache<DriftAudit | undefined>(MAX_HASH_ENTRIES);
   private readonly baselines = new FileCache<string | undefined>(MAX_HASH_ENTRIES);
   private readonly hashes = new FileCache<string>(MAX_HASH_ENTRIES);
 
@@ -46,6 +48,12 @@ export class DriftService {
     return this.observations.read(info.driftObservationPath, (raw) =>
       parseObservation(raw.toString('utf8')),
     );
+  }
+
+  // The tenant's attribution (drift/audit.yaml), or undefined when there is none
+  // or it does not parse. Absence is the normal state, never an error.
+  async audit(info: TenantInfo): Promise<DriftAudit | undefined> {
+    return this.audits.read(info.driftAuditPath, (raw) => parseAudit(raw.toString('utf8')));
   }
 
   // The export's baseline timestamp, from `resources/metadata.yaml` — the same

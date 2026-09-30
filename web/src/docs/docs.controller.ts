@@ -10,14 +10,18 @@ import {
   resolveWithinTenant,
 } from './path-safety';
 import { DriftService, DriftFiles } from './drift.service';
+import { auditState, AuditState } from './drift-audit';
 import {
   DriftFinding,
+  DriftObservation,
   DriftState,
   driftState,
   tenantDriftState,
   typeOfKey,
 } from './drift-observation';
 import {
+  attributionOf,
+  byActor,
   DRIFT_PREFIX,
   driftHref,
   driftPageState,
@@ -411,6 +415,8 @@ export class DocsController {
 
     const state = await this.tenantDrift(info, index);
     const current = state.kind === 'current' ? state.observation : null;
+    const audit = current ? await this.auditOf(info, current) : ({ kind: 'none' } as AuditState);
+    const activeAudit = audit.kind === 'current' ? audit.audit : undefined;
     res.render('drift-tenant', {
       title: withTenant('Drift', info.name),
       tenant,
@@ -422,8 +428,9 @@ export class DocsController {
         state.kind === 'superseded'
           ? supersededView(state.observation, state.baselineGeneratedAt)
           : null,
-      observation: current ? observationSummary(current, tenant) : null,
-      groups: current ? findingGroups(current, tenant) : [],
+      observation: current ? observationSummary(current, tenant, audit) : null,
+      groups: current ? findingGroups(current, tenant, activeAudit) : [],
+      actors: current && activeAudit ? byActor(current, activeAudit, tenant) : null,
       analysis: current
         ? await this.renderSplit(info.driftIndexPath, {
             tenant,
@@ -733,6 +740,12 @@ export class DocsController {
     );
   }
 
+  // The attribution relative to the observation it must describe. Only asked for
+  // a current observation: an audit is never shown for a superseded one.
+  private async auditOf(info: TenantInfo, observation: DriftObservation): Promise<AuditState> {
+    return auditState(await this.drift.audit(info), observation);
+  }
+
   private async renderDrift(
     res: Response,
     info: TenantInfo,
@@ -760,7 +773,9 @@ export class DocsController {
       tenantDriftHref: `/${tenant}/${DRIFT_PREFIX}`,
       name: lastSegment(key),
       ...driftPageState(state),
-      ...(finding ? await this.findingView(info, finding, files, documented) : {}),
+      ...(finding
+        ? await this.findingView(info, state.observation, finding, files, documented)
+        : {}),
     });
   }
 
@@ -768,15 +783,20 @@ export class DocsController {
   // payload) is only filled in when every file it was decided on is intact.
   private async findingView(
     info: TenantInfo,
+    observation: DriftObservation,
     finding: DriftFinding,
     files: DriftFiles | null,
     documented: boolean,
   ) {
     const verified = files ?? { baseline: null, payload: null, intact: false };
+    const audit = await this.auditOf(info, observation);
     const analysis = await this.renderAnalysis(info, finding.key);
     const inline = finding.verdict === 'added' && verified.intact ? verified.payload : null;
     return {
       finding: findingHeader(finding, analysis?.meta.severity),
+      attribution: attributionOf(finding, audit.kind === 'current' ? audit.audit : undefined),
+      attributionShown: audit.kind === 'current',
+      attributionOutdated: audit.kind === 'outdated',
       links: this.driftLinks(info.id, finding, verified, documented),
       intact: verified.intact,
       deltas: finding.deltas,

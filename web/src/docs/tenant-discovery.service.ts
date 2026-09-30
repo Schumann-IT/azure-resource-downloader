@@ -30,6 +30,8 @@ export interface TenantInfo {
   driftDir: string;
   // The observation (drift/metadata.yaml), read as data and never served.
   driftObservationPath: string;
+  // The attribution (drift/audit.yaml), read as data and never served.
+  driftAuditPath: string;
   // The analysis summary (drift/index.md), the body of the tenant drift page.
   driftIndexPath: string;
 }
@@ -40,6 +42,7 @@ export const INDEX_FILE = 'index.yaml';
 export const SUMMARY_FILE = 'summary.md';
 export const DRIFT_DIR = 'drift';
 export const DRIFT_OBSERVATION_FILE = 'metadata.yaml';
+export const DRIFT_AUDIT_FILE = 'audit.yaml';
 export const DRIFT_INDEX_FILE = 'index.md';
 const MAX_DEPTH = 3;
 const TTL_MS = 30_000;
@@ -194,6 +197,7 @@ export class TenantDiscoveryService {
       summaryPath: path.join(docsDir, SUMMARY_FILE),
       driftDir: path.join(dir, DRIFT_DIR),
       driftObservationPath: path.join(dir, DRIFT_DIR, DRIFT_OBSERVATION_FILE),
+      driftAuditPath: path.join(dir, DRIFT_DIR, DRIFT_AUDIT_FILE),
       driftIndexPath: path.join(dir, DRIFT_DIR, DRIFT_INDEX_FILE),
     };
   }
