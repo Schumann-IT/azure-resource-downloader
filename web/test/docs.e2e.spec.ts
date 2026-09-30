@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import pdfmake from 'pdfmake';
 import * as yauzl from 'yauzl';
 import { AppModule } from '../src/app.module';
 import { configureViews } from '../src/configure-app';
@@ -1929,6 +1930,21 @@ findings: 4
         expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
+      }
+    });
+
+    it('answers a generic 500 without leaking when the PDF cannot be built', async () => {
+      const spy = jest.spyOn(pdfmake, 'createPdf').mockImplementation(() => {
+        throw new Error(`boom ${root}/secret/path`);
+      });
+      try {
+        const res = await get(PDF_HREF).expect(500).expect('Content-Type', /^text\/plain/);
+        expect(res.headers['content-disposition']).toBeUndefined();
+        expect(res.text).toBe('The drift report could not be built.');
+        expect(res.text).not.toContain('boom');
+        expect(res.text).not.toContain(root);
+      } finally {
+        spy.mockRestore();
       }
     });
 

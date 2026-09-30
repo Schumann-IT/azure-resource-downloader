@@ -136,6 +136,30 @@ function cover(input: DriftPdfInput): Content {
   };
 }
 
+// `: reason` (or the given separator) when there is a reason, else nothing.
+function suffix(reason: string | undefined | null, sep = ': '): string {
+  return reason ? `${sep}${reason}` : '';
+}
+
+function attributionSummary(a: NonNullable<DriftPdfInput['report']['observation']>['attribution']): Content[] {
+  if (a?.outdated) return [{ text: ATTRIBUTION_OUTDATED, style: 'caveat' }];
+  if (!a) return [];
+  const line = [
+    `Attribution from workspace ${a.workspaceId}, window ${a.window?.from} to ${a.window?.to}`,
+    `${a.matched} matched`,
+    `${a.noEvent} no event`,
+    `${a.retention} beyond retention`,
+    `${a.noJoinKey} no join key`,
+    `${a.failed} failed`,
+    `${a.notQueried} not queried`,
+  ];
+  const out: Content[] = [{ text: line.join(' · '), style: 'meta' }];
+  for (const t of a.failedTables ?? []) {
+    out.push({ text: `${t.name} failed${suffix(t.reason)}`, style: 'caveat' });
+  }
+  return out;
+}
+
 // The observation header, as `partials/drift-observation.hbs` shows it.
 function observationBlock(input: DriftPdfInput): Content[] {
   const s = input.report.observation;
@@ -161,29 +185,12 @@ function observationBlock(input: DriftPdfInput): Content[] {
   if (s.failed) counts.push(`${s.failed} failed`);
   out.push({ text: counts.join(' · '), style: 'meta' });
 
-  const a = s.attribution;
-  if (a?.outdated) {
-    out.push({ text: ATTRIBUTION_OUTDATED, style: 'caveat' });
-  } else if (a) {
-    const line = [
-      `Attribution from workspace ${a.workspaceId}, window ${a.window?.from} to ${a.window?.to}`,
-      `${a.matched} matched`,
-      `${a.noEvent} no event`,
-      `${a.retention} beyond retention`,
-      `${a.noJoinKey} no join key`,
-      `${a.failed} failed`,
-      `${a.notQueried} not queried`,
-    ];
-    out.push({ text: line.join(' · '), style: 'meta' });
-    for (const t of a.failedTables ?? []) {
-      out.push({ text: `${t.name} failed${t.reason ? `: ${t.reason}` : ''}`, style: 'caveat' });
-    }
-  }
+  out.push(...attributionSummary(s.attribution));
   if (!s.complete) {
     out.push({
       text: [
         { text: 'Incomplete run', bold: true },
-        `${s.incompleteReason ? `: ${s.incompleteReason}` : ''}. What was not observed is unknown, not unchanged.`,
+        `${suffix(s.incompleteReason)}. What was not observed is unknown, not unchanged.`,
       ],
       style: 'caveat',
     });
@@ -329,7 +336,7 @@ function attributionBlock(report: FindingReport): Content[] {
   }
   return [
     {
-      text: [{ text: 'Attribution: ', bold: true }, `${a.text}${a.reason ? `. ${a.reason}` : ''}`],
+      text: [{ text: 'Attribution: ', bold: true }, `${a.text}${suffix(a.reason, '. ')}`],
       style: a.tone.warning ? 'caveat' : 'meta',
     },
   ];
