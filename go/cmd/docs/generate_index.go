@@ -82,7 +82,7 @@ func runGenerateIndex(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Resolve the export directory and the domain to cross-check metadata against.
-	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain)
+	tenantDir, expectDomain, err := cmdutil.ResolveExportDir(ctx, baseOutput, domain, exportCredential(domain))
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to index: %w", err))
 	}

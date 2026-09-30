@@ -1,0 +1,33 @@
+{
+  "tables": [
+    {
+      "name": "PrimaryResult",
+      "columns": [
+        {"name": "TimeGenerated", "type": "datetime"},
+        {"name": "Target", "type": "string"},
+        {"name": "Properties", "type": "string"},
+        {"name": "OperationName", "type": "string"},
+        {"name": "ResultType", "type": "string"},
+        {"name": "CorrelationId", "type": "string"}
+      ],
+      "rows": [
+        [
+          "2026-09-29T08:15:42.1234567Z",
+          "11111111-2222-3333-4444-555555555555",
+          "{\"AuditEventId\":\"aaaa\",\"Actor\":{\"ObjectId\":\"u1\",\"UPN\":\"admin@contoso.example.com\",\"ActorType\":1,\"ApplicationName\":\"Microsoft Intune portal extension\"},\"TargetObjectIds\":[\"11111111-2222-3333-4444-555555555555\"],\"TargetDisplayNames\":[\"GBL_C_PRD\"]}",
+          "Patch DeviceConfiguration",
+          "Success",
+          "c0000000-0000-0000-0000-000000000001"
+        ],
+        [
+          "2026-09-29T09:00:00Z",
+          "11111111-2222-3333-4444-555555555555",
+          "{\"Actor\":{\"UPN\":\"\",\"ApplicationName\":\"Graph automation\"},\"TargetObjectIds\":[\"11111111-2222-3333-4444-555555555555\"]}",
+          "Assign DeviceConfiguration",
+          "Failure",
+          "c0000000-0000-0000-0000-000000000002"
+        ]
+      ]
+    }
+  ]
+}

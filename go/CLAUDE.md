@@ -21,8 +21,8 @@ repo-wide rules: `../CLAUDE.md`. Path-scoped detail loads automatically from `..
 ## Layout
 
 - `cmd/` — Cobra commands. Root (`root.go`: global flags, `--debug`, config loading in `PersistentPreRunE`);
-  `resource` parent (`resource.go`) with `download`/`drift`/`types`/`list` in `cmd/resource/`; `docs` parent
-  (`docs.go`) with `generate-prompt`/`generate-index`/`analyze-drift` in `cmd/docs/`. Subcommand packages
+  `resource` parent (`resource.go`) with `download`/`drift`/`audit`/`types`/`list` in `cmd/resource/`;
+  `docs` parent (`docs.go`) with `generate-prompt`/`generate-index`/`analyze-drift` in `cmd/docs/`. Subcommand packages
   must not import package `cmd` (cycle); shared helpers live in `internal/cmdutil`.
 - `internal/config/` — the configuration surface: the `keyScopes` partition (general / tenant-scoped /
   flag-only), base + profile resolution and merging, built-in defaults.
@@ -42,6 +42,9 @@ repo-wide rules: `../CLAUDE.md`. Path-scoped detail loads automatically from `..
 - `internal/docs/` — `resources/metadata.yaml` (facts, partial-run merge, prune); `docs generate-prompt`
   engine (staleness vs frontmatter, referenced groups, template splice → `docs/generate.md`);
   `docs generate-index` (taxonomy → `docs/index.yaml`).
+- `internal/audit/` — `resource audit` engine: routes each drift finding by type to `IntuneAuditLogs` or
+  `AuditLogs`, queries Log Analytics (`azlogs`) over the observation's window, retention probe, per-finding
+  status; writes nothing itself (`drift.WriteAttribution` does).
 - `internal/drift/` — `resource drift` engine (comparability preflight, verdicts, field deltas, the `drift/`
   tree) and `docs analyze-drift` (observation preflight, payload verification, template → `drift/analyze.md`).
 - `internal/logger/`, `internal/retry/`, `internal/version/`, `main.go`, `Makefile`, `.golangci.yml`

@@ -14,7 +14,7 @@ import (
 // involved, the baseline it was decided against, its completeness and the
 // verdict counts — everything the report's frontmatter and caveats section are
 // copied from.
-func renderAnalyzeObservation(tenantDir string, obs *Observation, scope *analyzeScope) string {
+func renderAnalyzeObservation(tenantDir string, obs *Observation, scope *analyzeScope, attr attributionState) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- Tenant folder: `%s`\n", tenantDir)
 	fmt.Fprintf(&b, "- Baseline (read-only): `%s/`\n", path.Join(tenantDir, models.ResourcesDirName))
@@ -32,6 +32,7 @@ func renderAnalyzeObservation(tenantDir string, obs *Observation, scope *analyze
 	fmt.Fprintf(&b, "- Types whose drift is unknown (listing failed): %s\n", listOrNone(obs.UnknownTypes))
 	fmt.Fprintf(&b, "- Removals suppressed (incomplete run could not assert absence): %v\n", obs.RemovalsSuppressed)
 	b.WriteString(renderNotComparable(obs.NotComparable))
+	b.WriteString(renderAttributionSummary(attr))
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -76,14 +77,14 @@ func renderNotComparable(entries []NotComparableEntry) string {
 // renderAnalyzeWorklist renders the in-scope findings grouped by type, each
 // with the files to read and the recorded field deltas. Output is
 // deterministic: types and findings are sorted by key.
-func renderAnalyzeWorklist(findings map[string]Finding, specPresent map[string]bool) string {
+func renderAnalyzeWorklist(findings map[string]Finding, specPresent map[string]bool, attr *Attribution) string {
 	if len(findings) == 0 {
 		return "_No findings in scope: write no drift documents — the index (section 5) still carries the inventory._"
 	}
 
 	byType := map[string][]string{}
 	for key := range findings {
-		rtype := typeOfKey(key)
+		rtype := TypeOfKey(key)
 		byType[rtype] = append(byType[rtype], key)
 	}
 	types := make([]string, 0, len(byType))
@@ -99,7 +100,7 @@ func renderAnalyzeWorklist(findings map[string]Finding, specPresent map[string]b
 		keys := byType[t]
 		sort.Strings(keys)
 		for _, key := range keys {
-			b.WriteString(renderFinding(key, findings[key]))
+			b.WriteString(renderFinding(key, findings[key], attr))
 			total++
 		}
 	}
@@ -117,7 +118,7 @@ func renderInventory(rows []inventoryRow) string {
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		fmt.Fprintf(&b, "- `info` · %s: %s (`%s`)\n", r.f.Verdict, findingTitle(r.key, r.f), typeOfKey(r.key))
+		fmt.Fprintf(&b, "- `info` · %s: %s (`%s`)\n", r.f.Verdict, findingTitle(r.key, r.f), TypeOfKey(r.key))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -132,8 +133,9 @@ func specHeading(rtype string, present bool) string {
 }
 
 // renderFinding renders one finding: verdict, names, the three files that
-// matter for it, and its deltas.
-func renderFinding(key string, f Finding) string {
+// matter for it, its deltas and — when a current attribution exists — who
+// changed it.
+func renderFinding(key string, f Finding, attr *Attribution) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "#### %s: %s\n\n", f.Verdict, findingTitle(key, f))
 	if f.ResourceID != "" {
@@ -144,6 +146,7 @@ func renderFinding(key string, f Finding) string {
 	}
 	b.WriteString(findingPaths(key, f))
 	b.WriteString(findingDeltas(f))
+	b.WriteString(findingAttribution(key, attr))
 	b.WriteString("\n")
 	return b.String()
 }

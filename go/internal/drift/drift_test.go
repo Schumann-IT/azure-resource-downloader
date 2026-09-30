@@ -534,7 +534,7 @@ func TestWriteObservationOwnsItsTree(t *testing.T) {
 		PayloadData: map[string][]byte{testType + "/b.yaml": []byte("new bytes")},
 	}
 
-	metaPath, err := WriteObservation(tenantDir, rep, time.Now(), "test", false)
+	_, metaPath, err := WriteObservation(tenantDir, rep, time.Now(), "test", false)
 	if err != nil {
 		t.Fatalf("WriteObservation: %v", err)
 	}
@@ -588,7 +588,7 @@ func TestWriteObservationDryRunWritesNothingAndClearsNothing(t *testing.T) {
 		Observation: Observation{Findings: map[string]Finding{}, Payloads: []string{testType + "/b.yaml"}},
 		PayloadData: map[string][]byte{testType + "/b.yaml": []byte("new bytes")},
 	}
-	if _, err := WriteObservation(tenantDir, rep, time.Now(), "test", true); err != nil {
+	if _, _, err := WriteObservation(tenantDir, rep, time.Now(), "test", true); err != nil {
 		t.Fatalf("WriteObservation dry-run: %v", err)
 	}
 

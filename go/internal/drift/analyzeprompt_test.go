@@ -114,7 +114,7 @@ func driftedTenant(t *testing.T) string {
 		TotalRequests:          1,
 		Results:                []*models.TransformResult{tr("id-b", "B", "b", newData)},
 	})
-	if _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
+	if _, _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
 		t.Fatalf("write observation: %v", err)
 	}
 	return tenantDir
@@ -276,7 +276,7 @@ func TestGenerateAnalyzePromptNothingToAnalyze(t *testing.T) {
 	writeBaselineMetadata(t, tenantDir, meta)
 
 	rep := compare(meta, []*models.TransformResult{tr("id-a", "A", "a", data)})
-	if _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
+	if _, _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -328,7 +328,7 @@ func observedTenant(t *testing.T, meta docs.Metadata, results []*models.Transfor
 	tenantDir := t.TempDir()
 	writeBaselineMetadata(t, tenantDir, meta)
 	rep := compare(meta, results)
-	if _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
+	if _, _, err := WriteObservation(tenantDir, rep, time.Now(), "test", false); err != nil {
 		t.Fatal(err)
 	}
 	return tenantDir

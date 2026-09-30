@@ -1,15 +1,20 @@
 package resource
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"azure-resource-downloader/internal/audit"
 	"azure-resource-downloader/internal/cmdutil"
+	"azure-resource-downloader/internal/config"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/drift"
+	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/pipeline"
@@ -18,6 +23,7 @@ import (
 	"azure-resource-downloader/internal/version"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // Exit codes for resource drift, carried to the root Execute via
@@ -56,6 +62,13 @@ only when the run is complete and the type was actually covered — the same rul
 Unlike a download, nothing about drift can be answered without the tenant's
 current bytes, so --dry-run still fetches and still reports in full; it only
 withholds the drift/ tree (clearing nothing).
+
+When the tenant profile sets 'audit-workspace-id', the run then attributes
+every finding to the actor and time the tenant's Log Analytics audit tables
+record, and writes drift/audit.yaml after the observation (see 'azure-rd
+resource audit', which refreshes it later). Attribution never fails the run
+and never changes the exit code; without the key it is off and no audit.yaml
+is written. Under --dry-run it still queries and reports, and writes nothing.
 
 Exit codes: 0 on success (drift found or not), 2 when the question cannot be
 answered (no baseline, wrong tenant, incomparable configuration), non-zero only
@@ -189,12 +202,16 @@ func runDrift(cmd *cobra.Command, args []string) error {
 	if prep.DryRun {
 		noteStaleObservation(drift.ObservationPath(tenantDir))
 	}
-	metaPath, err := drift.WriteObservation(tenantDir, rep, time.Now(), version.Tool(), prep.DryRun)
+	written, metaPath, err := drift.WriteObservation(tenantDir, rep, time.Now(), version.Tool(), prep.DryRun)
 	if err != nil {
 		return fmt.Errorf("failed to write the drift observation: %w", err)
 	}
 
 	reportDrift(rep, metaPath, prep.DryRun)
+
+	// Attribution is enrichment: it runs after the observation is on disk,
+	// never fails the run, and leaves the exit code to the comparison.
+	attributeDriftRun(ctx, prep, written)
 
 	if failed := rep.Observation.Counts.Failed; failed > 0 {
 		return fmt.Errorf("drift check completed with errors (%d resources failed to fetch)", failed)
@@ -202,6 +219,38 @@ func runDrift(cmd *cobra.Command, args []string) error {
 	if exitCode && rep.DriftFound {
 		return cmdutil.WithExitCode(driftExitDriftFound, errors.New("drift detected (see the report above)"))
 	}
+	return nil
+}
+
+// attributeDriftRun attributes the observation just written — the stamped copy
+// WriteObservation returned, so audit.yaml's observedAt equals metadata.yaml's
+// byte for byte — when the tenant profile names an audit workspace, with the
+// run's own credential and selection. Every failure is a warning.
+func attributeDriftRun(ctx context.Context, prep *runprep.Prepared, obs drift.Observation) {
+	log := logger.Default
+	workspaceID := strings.TrimSpace(viper.GetString(config.AuditWorkspaceKey))
+	if workspaceID == "" {
+		log.Info("Audit attribution is off (no " + config.AuditWorkspaceKey + " in the tenant profile)")
+		return
+	}
+
+	sel := audit.Selection{Types: prep.SelectedTypes, ResourceIDs: prep.ResourceIDs, ResourceGroup: prep.ResourceGroup}
+	q := newQuerier(prep.Client.GetCredential())
+	if err := writeDriftAttribution(ctx, q, prep.Registry, prep.Output, obs, workspaceID, sel, prep.DryRun); err != nil {
+		log.Warn("Could not write the drift attribution; the observation is unaffected", "reason", err.Error())
+	}
+}
+
+// writeDriftAttribution attributes obs through q, persists audit.yaml (or,
+// under dryRun, withholds it) and reports the outcome.
+func writeDriftAttribution(ctx context.Context, q audit.Querier, registry *handlers.Registry, tenantDir string,
+	obs drift.Observation, workspaceID string, sel audit.Selection, dryRun bool) error {
+	a := attributeObservation(ctx, q, registry, obs, workspaceID, sel)
+	path, err := persistAttribution(tenantDir, a, dryRun)
+	if err != nil {
+		return err
+	}
+	reportAttribution(a, path, dryRun)
 	return nil
 }
 

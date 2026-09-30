@@ -2,7 +2,7 @@
   {{!-- The row's width is the page's: it defaults to the document/tenant/resource
         layout and the narrow pages (picker, error) pass their own, so the
         breadcrumb always lines up with what is under it. --}}
-  <div class="mx-auto {{#if headerWidth}}{{headerWidth}}{{else}}max-w-7xl{{/if}} px-4 py-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+  <div class="mx-auto {{#if headerWidth}}{{headerWidth}}{{else}}max-w-(--breakpoint-2xl){{/if}} px-4 py-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
     <a href="/" class="font-semibold text-brand-600 dark:text-brand-400 hover:underline">Docs</a>
     {{#if tenant}}
       <span class="text-slate-400">/</span>

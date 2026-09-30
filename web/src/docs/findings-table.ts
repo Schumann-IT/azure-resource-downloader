@@ -16,8 +16,16 @@
 // inventory rows). A value outside the table's own set stays plain text, so a
 // summary `low` or a drift `critical` is never drawn as a wrong icon.
 //
+// The drift index's findings table also gains a Changed by column when the
+// caller hands in the audit's cells (`applyChangedBy`). The join key is the
+// Resource cell's link to the resource's drift document; nothing is inferred
+// from the cell's prose.
+//
 // Kept pure and Nest-free (like `link-rewrite.ts`): it only rewrites a
 // markdown-it token stream, so it is unit-testable without a module.
+
+import * as path from 'path';
+import { driftKey } from './drift-observation';
 
 export const SEVERITIES = ['critical', 'high', 'medium'] as const;
 
@@ -184,4 +192,140 @@ function cellText(tokens: any[], cellOpen: number, close: number): string {
     if (tokens[i].type === 'th_close' || tokens[i].type === 'td_close') break;
   }
   return '';
+}
+
+export const CHANGED_BY_COLUMN = 'changed-by';
+const CHANGED_BY_LABEL = 'Changed by';
+const RESOURCE_HEADER = 'resource';
+
+// One cell of the Changed by column: its text and how it is toned.
+export interface ChangedByCellLike {
+  text: string;
+  tone: string;
+}
+
+type MakeToken = (type: string, tag: string, nesting: number) => any;
+
+// Appends the Changed by column to every drift findings table (tagged by
+// `applyFindingsTable`) that has a Resource column. `cells` is keyed by the
+// extensionless `<type>/<name>` path of a finding of the observation. A row
+// whose Resource cell links to no such finding gets an empty cell. The text is
+// a `text` child of the cell's `inline` token, so markdown-it escapes it.
+// Mutates `tokens` in place.
+export function applyChangedBy(
+  tokens: any[],
+  cells: ReadonlyMap<string, ChangedByCellLike>,
+  makeToken: MakeToken,
+): void {
+  const out: any[] = [];
+  const row: RowState = { resourceColumn: -1, section: '', column: 0, key: '' };
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.type === 'table_open') row.resourceColumn = resourceColumnOf(tokens, i);
+    else if (token.type === 'table_close') row.resourceColumn = -1;
+    else if (row.resourceColumn >= 0) out.push(...trackRow(row, tokens, i, cells, makeToken));
+    out.push(token);
+  }
+
+  tokens.splice(0, tokens.length, ...out);
+}
+
+interface RowState {
+  resourceColumn: number;
+  section: string;
+  column: number;
+  key: string;
+}
+
+// Follows the header/body section and the cell position inside a table with a
+// Resource column; returns the tokens to insert before token `i` (the Changed
+// by cell, at the end of a row).
+function trackRow(
+  row: RowState,
+  tokens: any[],
+  i: number,
+  cells: ReadonlyMap<string, ChangedByCellLike>,
+  makeToken: MakeToken,
+): any[] {
+  const type = tokens[i].type;
+  if (type === 'thead_open') row.section = 'head';
+  else if (type === 'tbody_open') row.section = 'body';
+  else if (type === 'tr_open') {
+    row.column = 0;
+    row.key = '';
+  } else if (type === 'th_open' || type === 'td_open') {
+    if (row.column === row.resourceColumn && type === 'td_open') row.key = rowKey(tokens, i);
+    row.column++;
+  } else if (type === 'tr_close') return rowEndTokens(makeToken, row.section, cells, row.key);
+  return [];
+}
+
+// The index of the Resource column of a drift findings table opened at
+// `open`, or -1 when the table is not one or has no such column.
+function resourceColumnOf(tokens: any[], open: number): number {
+  const classes = String(tokens[open].attrGet('class') || '').split(/\s+/);
+  if (!classes.includes(DRIFT_FINDINGS_CLASS)) return -1;
+  const close = matchingClose(tokens, open);
+  return close < 0 ? -1 : headerCells(tokens, open, close).indexOf(RESOURCE_HEADER);
+}
+
+// The Changed by cell that ends a header or body row.
+function rowEndTokens(
+  makeToken: MakeToken,
+  section: string,
+  cells: ReadonlyMap<string, ChangedByCellLike>,
+  key: string,
+): any[] {
+  if (section === 'head') return cellTokens(makeToken, 'th', CHANGED_BY_LABEL, null);
+  if (section === 'body') return cellTokens(makeToken, 'td', '', cells.get(key) ?? null);
+  return [];
+}
+
+function cellTokens(
+  makeToken: MakeToken,
+  tag: 'th' | 'td',
+  headerText: string,
+  cell: ChangedByCellLike | null,
+): any[] {
+  const text = cell ? cell.text : headerText;
+  const open = makeToken(`${tag}_open`, tag, 1);
+  open.attrSet('data-column', CHANGED_BY_COLUMN);
+  if (cell && text) open.attrSet('data-attribution', cell.tone);
+  const inline = makeToken('inline', '', 0);
+  inline.content = text;
+  inline.children = [];
+  if (text) {
+    const child = makeToken('text', '', 0);
+    child.content = text;
+    inline.children.push(child);
+  }
+  return [open, inline, makeToken(`${tag}_close`, tag, -1)];
+}
+
+// The finding key a body row's Resource cell links to, or '' when it links to
+// no drift document of the tree (no link, an absolute or foreign link, a path
+// leaving the drift root). Runs before the link renderer rewrites the href.
+function rowKey(tokens: any[], cellOpen: number): string {
+  for (let i = cellOpen + 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.type === 'td_close') break;
+    if (token.type !== 'inline') continue;
+    for (const child of token.children || []) {
+      if (child.type !== 'link_open') continue;
+      return keyOfHref(String(child.attrGet('href') || ''));
+    }
+  }
+  return '';
+}
+
+function keyOfHref(href: string): string {
+  const hash = href.indexOf('#');
+  const target = hash >= 0 ? href.slice(0, hash) : href;
+  if (!target || target.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(target)) return '';
+  if (!target.toLowerCase().endsWith('.md')) return '';
+  const normalised = path.posix.normalize(target);
+  if (normalised === '..' || normalised.startsWith('../')) return '';
+  const key = normalised.slice(0, -'.md'.length);
+  return driftKey(`${key}.yaml`) === key ? key : '';
 }

@@ -273,7 +273,7 @@ function toCounts(value: unknown): DriftCounts {
 // a relative `.yaml` path without `..` segments is refused, so a key read from
 // the observation is safe to put into an href. It is never turned into a
 // filesystem path here — that is `path-safety.ts`'s job.
-function driftKey(value: unknown): string {
+export function driftKey(value: unknown): string {
   if (typeof value !== 'string') return '';
   if (!value.toLowerCase().endsWith('.yaml')) return '';
   if (value.startsWith('/') || value.includes('\0')) return '';
@@ -285,7 +285,7 @@ function isVerdict(value: unknown): value is DriftVerdict {
   return (DRIFT_VERDICTS as readonly unknown[]).includes(value);
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+export function isRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -295,7 +295,7 @@ function stripMd(doc: string): string {
 
 // A timestamp as a string. The CLI quotes them, but an unquoted one would be
 // loaded as a Date by js-yaml, and the gate compares strings.
-function timestamp(value: unknown): string {
+export function timestamp(value: unknown): string {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().replace('.000Z', 'Z');
   }
@@ -317,11 +317,11 @@ function unquote(value: string): string {
   return value;
 }
 
-function str(value: unknown): string {
+export function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function num(value: unknown): number {
+export function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 

@@ -7,117 +7,42 @@ review while `CHANGELOG.md` records the what and why. Ideas that are deliberatel
 *Parked ideas* at the end, so they persist as the entries around them ship. `README.md` stays the single source
 of truth for what the tool *does today*.
 
-## 1. Attribute each drift finding to an actor and a time, from the tenant's Log Analytics audit tables
+## 1. Count an archived entry as a backlog change in the branch gate
 
-**Goal.** Answer *who changed this, and when* for every drifted resource. A drift observation today says a
-resource's bytes moved somewhere between the baseline and the observation; the change record that names the
-actor already exists in the operator's Log Analytics workspace, keyed by the same object GUID the finding
-carries. Join the two and record the result as a new, separate artifact at the drift tree root — so the
-drift-analysis agent, and a human reading the tree, can tell a deliberate administrative change from an
-unexplained one.
+**Goal.** `make branch-ready-go` must accept a branch that planned an entry and archived it again: today it
+fails with "NEXT-ITERATIONS.md is unchanged on this branch" whenever every entry the branch touched was both
+added and archived on it, because the backlog file then ends up identical to `main`. A branch that archived
+an entry has visibly delivered its backlog, so that must count.
 
-> **Why a separate `drift/audit.yaml` and not `drift/metadata.yaml`.** Three structural reasons, not
-> presentation: (1) **provenance differs** — the observation is computed from bytes this run fetched and can be
-> verified against them, while audit rows are copied from an external system with its own ingestion latency,
-> retention and completeness, so folding them in makes the observation partly unverifiable; (2) it would
-> **break determinism** — `findingsSha256` and the "identical bytes over an unchanged tenant except the
-> timestamp" property would be lost, because a re-run sees whatever has been ingested since; (3) it **must be
-> allowed to fail** — no workspace, no permission or a window past retention may not invalidate the
-> observation, and a separate artifact can simply be absent. Lifecycle is free: the file sits at the drift tree
-> root beside `metadata.yaml` and `analyze.md`, where no payload can be, so it is swept by the drift run's
-> existing clear-and-rebuild and by a re-baselining `resource download`. **No new delete path.**
+> **Why.** Check 5 of `scripts/branch-ready.sh` compares `NEXT-ITERATIONS.md` between the merge-base and
+> `HEAD` (`git diff --quiet "$base" HEAD -- "$next"`), so only the net difference counts. The rule it guards —
+> every branch that changes `go/` delivers, refines or adds an entry — is still met when the entry is added
+> and archived on the same branch; the archive file under `.claude/archive/go/` is the evidence. First seen on
+> `feat/drift-attribution` on the web side, where every entry was planned and closed on the branch; the go
+> gate has the same logic and passed there only because its entry already existed on `main`.
 >
-> **The join key and the window already exist.** `Finding.ResourceID` is the Graph object GUID the audit
-> tables record as the target, and `Observation.Baseline.GeneratedAt` → `Observation.ObservedAt` is exactly the
-> interval the verdict claims the change happened in — so the query needs no heuristic bounds.
+> **Owner.** the gate's wording in the root `CLAUDE.md` ("the backlog changed on the branch") and in
+> `.claude/rules/next-iterations.md` ("when the backlog did not change on a branch that changed the project")
+> — updated at *done*. The web gate gets the same fix in its own entry; no sequencing between them.
 >
-> **Facts only, and the gaps are facts too.** Record the actor (UPN / application name), the activity, its
-> result, the event timestamp and the correlation id — never a judgment such as "authorized" or "expected".
-> Where the join cannot be made the entry says so explicitly with a distinct status, because *no event found*
-> and *could not look* must never render as the same thing: singleton types (`organization`,
-> `authorizationPolicy`, `deviceManagementSettings`, …) have no GUID target to join on; a window starting
-> before the workspace's retention is *unknown*, not *unchanged*; ingestion latency means a change observed
-> seconds ago may not be queryable yet; and several events in one window are a list, never a single "who".
->
-> **Failure semantics (settled).** The lookup is enrichment and **never fails a run** — in either entry point
-> it warns, records the per-finding status, writes whatever it could answer, and leaves the exit code to the
-> drift comparison alone. This mirrors how a permission error skips a type instead of failing a download.
->
-> **Not regeneration-gated.** It touches no `doc-prompt.md` and no per-type template, so no `promptSha256`
-> moves and no documentation regeneration is forced. The drift-analysis template is not hashed either.
->
-> **Coverage (settled).** `IntuneAuditLogs` for the Intune/device-management types plus `AuditLogs` (Entra
-> directory audit) for conditional access, groups, named locations and the authentication policies. The three
-> ARM types are out of scope for this entry and report their status as not queried; `AzureActivity` can be
-> added later behind the same per-finding shape.
->
-> **Where the workspace is configured (settled), and the ordering that follows.** The workspace is a
-> **per-tenant fact**, like the tenant domain itself — not a per-invocation choice — so it is one plain,
-> config-only key in **that tenant's own configuration file**. This entry therefore depends on the
-> per-tenant configuration profiles planned ahead of it (a config directory of `<domain>.yaml` files selected
-> by `--domain`): with profiles, the setting is a single scalar in the file that already describes the
-> tenant; without them it would have to be a domain-keyed map inside a shared file, which is strictly worse
-> and would have to be migrated afterwards. **Do not implement this entry first.**
->
-> Two consequences are deliberate. The key holds the workspace **id** (the GUID `azquery` queries by; a full
-> ARM resource id may be accepted as an alternative spelling), never a display name — resolving a name would
-> need a subscription, Reader on the workspace's resource group and disambiguation across subscriptions, a
-> whole second permission surface to save pasting a GUID once per tenant. And there is deliberately **no
-> flag and no `AZURE_RD_*` variable**: both beat the config file in the precedence order, so a value passed or
-> exported for one tenant and forgotten would silently apply to the next — and a wrong workspace does not fail
-> loudly, it returns no matching rows, which reads as *nobody changed it*. Binding the setting to the tenant's
-> own profile makes that mistake unrepresentable.
+> **Implementer.** sonnet
 
 **Plan.**
 
-- Add an `internal/audit` engine (imported by `internal/drift`, keeping the dependency direction that already
-  holds for `drift` → `docs`) that takes an `Observation` plus a workspace id and returns one attribution per
-  finding. Query `IntuneAuditLogs` and `AuditLogs` through `sdk/monitor/query/azquery` (new direct dependency,
-  added with `make deps`) over the observation's window, and map both schemas onto **one** finding-shaped
-  record — the two tables' field names must not leak into the artifact.
-- Route each finding to a table by its `APIType`/resource type, not by trying both: Intune types to
-  `IntuneAuditLogs` (joining `Properties.TargetObjectIds` against the finding's `resourceId`), Entra types to
-  `AuditLogs` (joining `TargetResources[].id`), everything else straight to a stated not-queried status.
-- Batch the lookup: one query per table for the whole finding set (a GUID `in (…)` set), not one query per
-  finding — a drift observation can carry hundreds.
-- Write `drift/audit.yaml` atomically, last, the way `WriteObservation` writes the observation. It is
-  self-describing: a schema `version:` from day one (the field `drift/metadata.yaml` lacks and `index.yaml`
-  learned to need), the workspace queried, the exact window, the tables consulted, the `observedAt` and
-  baseline `generatedAt` it belongs to, and a per-finding status of `matched` / `no-event-in-window` /
-  `no-join-key` / `retention-exceeded` / `query-failed` / `not-queried`.
-- Refuse to attribute a superseded observation: reuse the `docs analyze-drift` preflight rule (baseline
-  `generatedAt` mismatch) and the tenant cross-check, so an audit file can never describe an observation the
-  current baseline has replaced.
-- Expose it twice, over the one engine: a standalone `azure-rd resource audit` that enriches the observation
-  already on disk (re-runnable without re-fetching the tenant — the usual case, since ingestion lags), and a
-  drift run that calls the same engine after comparing. Per the option model established by the
-  configuration entry above, the latter is enabled by a config key, not a flag — it changes what a run
-  produces — while the standalone command remains the explicit, visible entry point. Both honour `--dry-run`
-  by withholding only the write and saying an earlier `audit.yaml` was not refreshed.
-- Add one config-only option, `audit-workspace-id:`, read from the tenant's configuration profile and
-  registered on the tenant-scoped side of the key partition (so it is rejected in a base file). Empty or
-  absent means the lookup is off and every finding's status says so — never a silent no-op. Add it to
-  `config.example.domain.yaml` **empty and commented**, preserving that file's no-op promise.
-- Record the workspace actually queried in `drift/audit.yaml`, so an attribution can always be traced back to
-  the source it came from and a profile mix-up is visible after the fact rather than only at the time.
-- Note the new audience in the auth surface: the workspace token is issued for `api.loganalytics.io`, so the
-  operator needs *Log Analytics Reader* on the workspace, and the dedicated-app path needs the Log Analytics
-  API permission added. Detect a missing permission through `azure.IsPermissionError` and degrade to
-  `query-failed` with a warning naming the grant required.
-- Splice the attribution into `docs analyze-drift`: each finding's section gains the actor and timestamp when
-  one is known, and an explicit "attribution unavailable (<status>)" line when it is not, so the analysis
-  agent can weigh a change against who made it instead of reading it as anonymous.
-- Tests: schema mapping for both tables from recorded fixtures (no network), routing by resource type, the
-  batching query construction, the preflight refusals, every status path including retention and permission
-  failure, determinism of the written bytes for a fixed input, and the dry-run withholding. Cover the
-  off-by-default case (no workspace configured) reporting a stated status rather than an empty result. Extend
-  the drift command's flag-surface test so `--audit` is offered only where honoured.
-- Documentation: a README section on attributing drift (prerequisites — Intune and Entra diagnostic settings
-  shipping to one workspace, the RBAC grant — the two entry points, the profile key that enables it, the
-  artifact and its statuses, and the ephemerality it shares with the rest of the drift tree), plus the
-  output-layout list gaining `drift/audit.yaml`;
-  `CHANGELOG.md` under `[Unreleased]`; and the drift-tree lifecycle rule in
-  `.windsurf/rules/04-security-and-ops.md` naming the new root file as swept, never pruned.
+- Check 5 in `scripts/branch-ready.sh` passes when `NEXT-ITERATIONS.md` differs from the merge-base **or** at
+  least one file was added under `.claude/archive/go/` on the branch (`git diff --name-only --diff-filter=A
+  "$base" HEAD -- ':(top).claude/archive/go'`, the same pathspec the archive check uses). The ok line says
+  which: "NEXT-ITERATIONS.md changed on this branch" or "NEXT-ITERATIONS.md delivered on this branch (<n>
+  archived entry(ies))". The failure message is unchanged.
+- A script test, in the style of `scripts/lib/changelog_test.sh` and run by `make test-scripts`, builds a
+  throw-away repository in a temp directory (never this checkout) and asserts: backlog unchanged and nothing
+  archived → fail; entry added and archived on the branch → pass; backlog edited → pass. If the check is
+  easier to test as a function, move it into `scripts/lib/` first.
+- Documentation at *done*: `CHANGELOG.md` gets none (internal tooling, no operator-visible effect beyond the
+  gate no longer refusing a delivered branch — record it under the release-workflow area only if the
+  changelog policy counts gate behaviour as operator-visible); root `CLAUDE.md` and
+  `.claude/rules/next-iterations.md` describe the check as "the backlog changed or an entry was archived on
+  the branch".
 
 ## Parked ideas
 

@@ -43,6 +43,11 @@ const (
 	DefaultTimeoutSeconds = 300
 )
 
+// AuditWorkspaceKey names the Log Analytics workspace id (a GUID) whose
+// IntuneAuditLogs and AuditLogs tables attribute drift findings to an actor.
+// Unset means attribution is off.
+const AuditWorkspaceKey = "audit-workspace-id"
+
 // keyScopes is the single truth for the configuration partition. Every key the
 // tool recognises appears exactly once; anything absent is rejected as unknown,
 // which is what turns a typo into an error instead of a silently ignored line.
@@ -52,6 +57,11 @@ var keyScopes = map[string]Scope{
 	"client-id":    ScopeTenant,
 	"subscription": ScopeTenant,
 	"filters":      ScopeTenant,
+	// The Log Analytics workspace holding this tenant's audit tables. A
+	// workspace typed for one tenant and forgotten would silently apply to the
+	// next and return no rows — which reads as "nobody changed it" — so it is
+	// tenant-scoped and has no flag.
+	AuditWorkspaceKey: ScopeTenant,
 
 	// General: base only.
 	"output":          ScopeGeneral,

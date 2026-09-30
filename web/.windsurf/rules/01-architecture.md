@@ -38,7 +38,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   - `path-safety.ts` — `resolveWithinRoot` (+ the `resolveWithinTenant`/`resolveResource`/
     `resolveDriftDocument`/`resolveDriftPayload` wrappers), the security boundary.
   - `drift-observation.ts` — pure functions (`parseObservation`, `driftState`, `tenantDriftState`).
-  - `drift.service.ts` — observation, baseline timestamp and verified-hash reads, mtime-cached.
+  - `drift-audit.ts` — pure functions (`parseAudit`, `auditState`) for `drift/audit.yaml`, the CLI's
+    attribution: read as data, never served.
+  - `drift.service.ts` — observation, baseline timestamp, verified-hash and audit reads, mtime-cached.
   - `drift-view.ts` — pure view models for the drift pages and the Drift switcher entries.
   - `yaml-diff.ts` — pure functions (`diffYaml`, `pairRows`) behind the drift and compare YAML diffs, over
     `diff` (jsdiff); `pairRows` gives each hunk its side-by-side rows.
@@ -77,7 +79,7 @@ here. `README.md` in this folder is the single source of truth (no further Markd
   re-verify containment **after** `realpath()` so symlinks cannot escape. One extension per resolver
   is what keeps the representations apart — never widen one to an extension list.
 - Both drift resolvers require **at least two path segments**, so the drift tree's top level
-  (`metadata.yaml`, `analyze.md`, `index.md`) is unreachable through them by construction.
+  (`metadata.yaml`, `analyze.md`, `audit.yaml`, `index.md`) is unreachable through them by construction.
 - Every change to that file needs a matching case in `test/path-safety.spec.ts`.
 - Error responses must not leak absolute filesystem paths (asserted in the e2e suite).
 

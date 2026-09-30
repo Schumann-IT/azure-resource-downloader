@@ -38,7 +38,7 @@ var removedFlags = []string{
 func TestResourceGroupSharesFlags(t *testing.T) {
 	resourceCmd := newResourceCommand()
 
-	for _, name := range []string{"download", "drift", "types", "list"} {
+	for _, name := range []string{"download", "drift", "audit", "types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
 		for _, flag := range []string{"type", "resource-id", "resource-group", "domain"} {
 			// InheritedFlags is what a subcommand gets from its parents, and
@@ -58,7 +58,7 @@ func TestResourceGroupSharesFlags(t *testing.T) {
 	if driftCmd.Flags().Lookup("exit-code") == nil {
 		t.Error("resource drift is missing --exit-code")
 	}
-	for _, name := range []string{"download", "types", "list"} {
+	for _, name := range []string{"download", "audit", "types", "list"} {
 		sub := subcommand(t, resourceCmd, name)
 		if sub.Flags().Lookup("exit-code") != nil {
 			t.Errorf("resource %s offers --exit-code but ignores it", name)
@@ -79,7 +79,7 @@ func TestRemovedFlagsAreGone(t *testing.T) {
 		"resource": resourceCmd,
 		"docs":     docsCmd,
 	}
-	for _, name := range []string{"download", "drift", "types", "list"} {
+	for _, name := range []string{"download", "drift", "audit", "types", "list"} {
 		commands["resource "+name] = subcommand(t, resourceCmd, name)
 	}
 	for _, name := range []string{"generate-prompt", "generate-index", "analyze-drift"} {
@@ -91,6 +91,11 @@ func TestRemovedFlagsAreGone(t *testing.T) {
 			if cmd.Flags().Lookup(flag) != nil {
 				t.Errorf("%s still offers --%s; it is a configuration setting now", label, flag)
 			}
+		}
+		// The audit workspace is tenant-scoped configuration by design: a
+		// value typed for one tenant would silently apply to the next.
+		if cmd.Flags().Lookup(config.AuditWorkspaceKey) != nil || cmd.PersistentFlags().Lookup(config.AuditWorkspaceKey) != nil {
+			t.Errorf("%s offers --%s; it must stay a profile setting", label, config.AuditWorkspaceKey)
 		}
 	}
 }

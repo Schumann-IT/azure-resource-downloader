@@ -79,3 +79,27 @@ tenant-id: ""     # Entra tenant ID (required together with client-id)
 #   # anchor a regex for an exact prefix on storage accounts
 #   Microsoft.Storage/storageAccounts:
 #     name: "^prod"
+
+# ---------------------------------------------------------------------------
+# Audit attribution — WHO changed a drifted resource (config-only)
+# ---------------------------------------------------------------------------
+# The Log Analytics workspace ID (a GUID — not the workspace name, not its ARM
+# resource id) that holds this tenant's audit tables. When set, every
+# 'resource drift' run also writes drift/audit.yaml, attributing each finding to
+# the actor and time its audit record names, and 'resource audit' can refresh
+# that file later (audit records arrive with some ingestion lag). Unset means
+# attribution is off: no queries, no audit.yaml.
+#
+# Prerequisites:
+#   - Diagnostic settings that ship Intune's audit logs (IntuneAuditLogs) and
+#     Entra ID's audit logs (AuditLogs) to this one workspace.
+#   - The signed-in user holds "Log Analytics Reader" on the workspace; with a
+#     dedicated app registration, the app also needs the Log Analytics API
+#     delegated permission Data.Read, consented.
+#
+# There is deliberately no flag for it: a workspace typed for one tenant would
+# silently apply to the next, and a wrong workspace does not fail — it returns
+# no rows, which reads as "nobody changed it". Leave it commented out unless
+# you want attribution.
+#
+# audit-workspace-id: "00000000-0000-0000-0000-000000000000"

@@ -16,10 +16,13 @@ Everything lives under `<output>/<tenant>/`, `<tenant>` being the Entra default 
   always `<APIType>/<endpoint>/<name>.md`, derived by swapping tree root and extension — never store a
   document path in `metadata.yaml`.
 - `drift/` — owned by `resource drift`: `metadata.yaml` (the observation) at the root, payloads of
-  added/changed/renamed resources at paths mirroring `resources/`; `docs analyze-drift` writes `analyze.md`
-  at the root; the analysis agent writes `<key>.md` beside each payload and `index.md` at the root. Each drift
+  added/changed/renamed resources at paths mirroring `resources/`; `resource audit` (and a drift run whose
+  tenant profile sets `audit-workspace-id`, after the observation) writes `audit.yaml` — the attribution,
+  facts only, never folded into the observation — atomically at the root; `docs analyze-drift` writes
+  `analyze.md` at the root; the analysis agent writes `<key>.md` beside each payload and `index.md` at the root. Each drift
   run clears and rebuilds the tree, and a re-baselining `resource download` clears it too (`drift.ClearTree`,
-  after a successful metadata write, never under dry-run). No history, by design. Drift never writes under
+  after a successful metadata write, never under dry-run) — `audit.yaml` included: swept with the tree, never
+  pruned, no delete path of its own. No history, by design. Drift never writes under
   `resources/` or `docs/`, never updates the export's `metadata.yaml`, never prunes.
 - File names: display name sanitised (lowercase, `[a-z0-9_]`, `resource_` prefix for a leading digit,
   `unnamed` fallback); collisions resolved by lowest resource id + `sha256(id)` suffix — decided by id, never by

@@ -1,19 +1,15 @@
 package docs
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
 	docsengine "azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/logger"
-	"azure-resource-downloader/internal/models"
-	"azure-resource-downloader/internal/tenantdir"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -85,7 +81,7 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 	exitCode, _ := cmd.Flags().GetBool("exit-code")
 
 	// Resolve the export directory and the domain to cross-check metadata against.
-	tenantDir, expectDomain, err := resolveExportDir(ctx, baseOutput, domain)
+	tenantDir, expectDomain, err := cmdutil.ResolveExportDir(ctx, baseOutput, domain, exportCredential(domain))
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to document: %w", err))
 	}
@@ -138,73 +134,6 @@ func runGeneratePrompt(cmd *cobra.Command, _ []string) error {
 		return cmdutil.WithExitCode(exitStaleFound, errors.New("stale documentation found (see the report above)"))
 	}
 	return nil
-}
-
-// resolveExportDir decides which export directory to act on and the domain to
-// cross-check metadata.yaml against, through the resolver every command shares.
-// An explicit --domain runs offline; otherwise it authenticates (with the
-// credentials the tenant's profile supplies) to resolve the tenant domain, and
-// failing that falls back to the single export directory under baseOutput —
-// which is then treated as a declaration, not as a confirmed tenant.
-func resolveExportDir(ctx context.Context, baseOutput, domain string) (tenantDir, expectDomain string, err error) {
-	log := logger.Default
-
-	resolved := ""
-	if domain == "" {
-		if azureClient, aerr := azure.NewClient(ctx, viper.GetString("subscription"),
-			viper.GetString("client-id"), viper.GetString("tenant-id")); aerr != nil {
-			log.Warn("Authentication failed; falling back to a single export directory (pass --domain to run offline)",
-				"reason", azure.ErrorSummary(aerr))
-		} else if d, derr := azureClient.GetTenantDomain(ctx); derr != nil {
-			log.Warn("Could not resolve tenant domain; falling back to a single export directory",
-				"reason", azure.ErrorSummary(derr))
-		} else {
-			resolved = d
-		}
-
-		if resolved == "" {
-			d, derr := detectSingleExportDomain(baseOutput)
-			if derr != nil {
-				return "", "", derr
-			}
-			log.Info("Defaulting to the only export directory found", "domain", d)
-			domain = d
-		}
-	}
-
-	target, err := tenantdir.Resolve(baseOutput, domain, resolved)
-	if err != nil {
-		return "", "", err
-	}
-	return target.Dir, target.Domain, nil
-}
-
-// detectSingleExportDomain returns the single sub-directory of baseOutput that
-// contains resources/metadata.yaml. It refuses to guess when zero or several
-// candidates exist.
-func detectSingleExportDomain(baseOutput string) (string, error) {
-	entries, err := os.ReadDir(baseOutput)
-	if err != nil {
-		return "", fmt.Errorf("cannot read output directory %q: %w (pass --domain)", baseOutput, err)
-	}
-	var candidates []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		metaPath := filepath.Join(baseOutput, e.Name(), models.ResourcesDirName, docsengine.MetadataFileName)
-		if info, statErr := os.Stat(metaPath); statErr == nil && !info.IsDir() {
-			candidates = append(candidates, e.Name())
-		}
-	}
-	switch len(candidates) {
-	case 1:
-		return candidates[0], nil
-	case 0:
-		return "", fmt.Errorf("no export directory under %q (expected <domain>/resources/metadata.yaml); pass --domain", baseOutput)
-	default:
-		return "", fmt.Errorf("several export directories under %q (%v); pass --domain to choose", baseOutput, candidates)
-	}
 }
 
 // noteStaleGeneratePrompt prints the path and age of an existing generate.md so

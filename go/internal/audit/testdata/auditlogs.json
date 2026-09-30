@@ -1,0 +1,33 @@
+{
+  "tables": [
+    {
+      "name": "PrimaryResult",
+      "columns": [
+        {"name": "TimeGenerated", "type": "datetime"},
+        {"name": "Target", "type": "string"},
+        {"name": "InitiatedBy", "type": "dynamic"},
+        {"name": "ActivityDisplayName", "type": "string"},
+        {"name": "Result", "type": "string"},
+        {"name": "CorrelationId", "type": "string"}
+      ],
+      "rows": [
+        [
+          "2026-09-29T10:30:05.9Z",
+          "66666666-7777-8888-9999-000000000000",
+          "{\"user\":{\"id\":\"u2\",\"displayName\":\"Jane\",\"userPrincipalName\":\"jane@contoso.example.com\",\"ipAddress\":\"\"}}",
+          "Update conditional access policy",
+          "success",
+          "c0000000-0000-0000-0000-000000000003"
+        ],
+        [
+          "2026-09-29T10:31:00Z",
+          "66666666-7777-8888-9999-000000000000",
+          "{\"app\":{\"appId\":\"a1\",\"displayName\":\"Policy pipeline\",\"servicePrincipalId\":\"sp1\"}}",
+          "Update conditional access policy",
+          "timeout",
+          "c0000000-0000-0000-0000-000000000004"
+        ]
+      ]
+    }
+  ]
+}

@@ -13,6 +13,26 @@
     {{#if excluded}}<span>{{excluded}} excluded</span>{{/if}}
     {{#if failed}}<span>{{failed}} failed</span>{{/if}}
   </p>
+  {{#if attribution}}
+    {{#if attribution.outdated}}
+      <p class="drift-attribution-caveat mt-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200">
+        Attribution outdated: it predates this observation. Run <code class="font-mono">azure-rd resource audit</code> again.
+      </p>
+    {{else}}
+      <p class="drift-attribution-caveat mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+        <span>Attribution from workspace <span class="font-mono">{{attribution.workspaceId}}</span>, window {{attribution.window.from}} to {{attribution.window.to}}</span>
+        <span>{{attribution.matched}} matched</span>
+        <span>{{attribution.noEvent}} no event</span>
+        <span>{{attribution.retention}} beyond retention</span>
+        <span>{{attribution.noJoinKey}} no join key</span>
+        <span>{{attribution.failed}} failed</span>
+        <span>{{attribution.notQueried}} not queried</span>
+        {{#each attribution.failedTables}}
+          <span class="text-amber-700 dark:text-amber-300">{{this.name}} failed{{#if this.reason}}: {{this.reason}}{{/if}}</span>
+        {{/each}}
+      </p>
+    {{/if}}
+  {{/if}}
   {{#unless complete}}
     <p class="drift-incomplete mt-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-xs text-amber-900 dark:text-amber-200">
       <strong>Incomplete run</strong>{{#if incompleteReason}}: {{incompleteReason}}{{/if}}. What was not observed is unknown, not unchanged.

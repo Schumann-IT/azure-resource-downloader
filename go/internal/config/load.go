@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -64,6 +65,9 @@ func Load(v *viper.Viper, opts Options) (Result, error) {
 		return res, err
 	}
 	if err := mergeFiles(v, baseFile, profileFile); err != nil {
+		return res, err
+	}
+	if err := validateValues(v, profileFile); err != nil {
 		return res, err
 	}
 
@@ -129,6 +133,24 @@ func mergeFiles(v *viper.Viper, baseFile, profileFile string) error {
 			return fmt.Errorf("failed to read config file %q: %w", file, err)
 		}
 		loaded = true
+	}
+	return nil
+}
+
+// guidPattern is the shape of a Log Analytics workspace id.
+var guidPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
+
+// validateValues checks the values whose shape the merged configuration can
+// prove wrong before any command runs. audit-workspace-id must be a workspace
+// id (GUID): a workspace name or a full ARM resource id would need a
+// subscription and Reader rights to resolve, and a wrong workspace does not
+// fail loudly — it returns no rows. The key is tenant-scoped, so a value can
+// only have come from the profile.
+func validateValues(v *viper.Viper, profileFile string) error {
+	id := strings.TrimSpace(v.GetString(AuditWorkspaceKey))
+	if id != "" && !guidPattern.MatchString(id) {
+		return fmt.Errorf("invalid configuration in %s: %q must be a Log Analytics workspace id (a GUID), not a name or resource id: %q",
+			profileFile, AuditWorkspaceKey, id)
 	}
 	return nil
 }

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"azure-resource-downloader/internal/docs"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,11 +45,15 @@ func ClearTree(tenantDir string) (bool, error) {
 // atomically, and last, so a consumer that sees the metadata can trust every
 // payload it names.
 //
+// It returns the observation exactly as written (ObservedAt and ToolVersion
+// stamped) alongside its path — also under dryRun — so anything attributed to
+// it afterwards (drift/audit.yaml) carries the same observedAt byte for byte.
+//
 // Under dryRun nothing is written and nothing is cleared: a previous
 // observation stays intact on disk (the caller reports it as not refreshed).
 // It never touches resources/ or docs/: --prune remains the only delete path
 // inside the export; a drift run deletes only within its own drift/ tree.
-func WriteObservation(tenantDir string, rep *Report, observedAt time.Time, toolVersion string, dryRun bool) (string, error) {
+func WriteObservation(tenantDir string, rep *Report, observedAt time.Time, toolVersion string, dryRun bool) (Observation, string, error) {
 	obs := rep.Observation
 	obs.ObservedAt = observedAt.UTC().Format(time.RFC3339)
 	obs.ToolVersion = toolVersion
@@ -56,16 +62,16 @@ func WriteObservation(tenantDir string, rep *Report, observedAt time.Time, toolV
 	metaPath := filepath.Join(driftDir, ObservationFileName)
 
 	if dryRun {
-		return metaPath, nil
+		return obs, metaPath, nil
 	}
 
 	// Clear the observation space through the single clear implementation, so
 	// this delete can never reach into resources/ or docs/.
 	if _, err := ClearTree(tenantDir); err != nil {
-		return metaPath, err
+		return obs, metaPath, err
 	}
 	if err := os.MkdirAll(driftDir, 0755); err != nil {
-		return metaPath, fmt.Errorf("failed to create drift tree: %w", err)
+		return obs, metaPath, fmt.Errorf("failed to create drift tree: %w", err)
 	}
 
 	// Payloads first, metadata last: the metadata names the payloads, so it
@@ -73,42 +79,23 @@ func WriteObservation(tenantDir string, rep *Report, observedAt time.Time, toolV
 	for _, key := range obs.Payloads {
 		payloadPath := filepath.Join(driftDir, filepath.FromSlash(key))
 		if err := os.MkdirAll(filepath.Dir(payloadPath), 0755); err != nil {
-			return metaPath, fmt.Errorf("failed to create payload directory for %s: %w", key, err)
+			return obs, metaPath, fmt.Errorf("failed to create payload directory for %s: %w", key, err)
 		}
 		if err := os.WriteFile(payloadPath, rep.PayloadData[key], 0644); err != nil {
-			return metaPath, fmt.Errorf("failed to write payload %s: %w", key, err)
+			return obs, metaPath, fmt.Errorf("failed to write payload %s: %w", key, err)
 		}
 	}
 
 	data, err := yaml.Marshal(&obs)
 	if err != nil {
-		return metaPath, fmt.Errorf("failed to marshal observation: %w", err)
+		return obs, metaPath, fmt.Errorf("failed to marshal observation: %w", err)
 	}
 
 	// Atomic write (temp file in the same directory, then rename), matching
 	// the export's metadata.yaml: a run killed mid-write must leave either
 	// nothing or the complete observation, never a truncated mix.
-	tmp, err := os.CreateTemp(driftDir, ".metadata-*.yaml")
-	if err != nil {
-		return metaPath, fmt.Errorf("failed to create temporary observation file: %w", err)
+	if err := docs.WriteFileAtomic(metaPath, data); err != nil {
+		return obs, metaPath, fmt.Errorf("failed to write observation: %w", err)
 	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return metaPath, fmt.Errorf("failed to write observation: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return metaPath, fmt.Errorf("failed to write observation: %w", err)
-	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
-		_ = os.Remove(tmpPath)
-		return metaPath, fmt.Errorf("failed to set observation permissions: %w", err)
-	}
-	if err := os.Rename(tmpPath, metaPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return metaPath, fmt.Errorf("failed to replace observation: %w", err)
-	}
-	return metaPath, nil
+	return obs, metaPath, nil
 }

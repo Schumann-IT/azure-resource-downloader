@@ -11,7 +11,8 @@ Override with `--prompt <file>` to use a different template.
 
 Marked blocks the tool replaces (start/end markers stay, content between them is regenerated):
 
-  observation  what was observed and when, against which baseline, with the verdict counts and caveats
+  observation  what was observed and when, against which baseline, with the verdict counts, caveats and
+               the attribution status (drift/audit.yaml)
   worklist     the in-scope drifted resources, grouped by type, each with its files and recorded field deltas
   inventory    out-of-scope added/removed resources (unreferenced groups, autopilot identities), index-only
   refmap       GUID -> name/document for assignment target groups, filters and notification templates
@@ -47,6 +48,7 @@ hash or diff anything to decide *whether* something changed, and do not re-litig
 - Types whose drift is unknown (listing failed): none
 - Removals suppressed (incomplete run could not assert absence): false
 - Entries not comparable (config attestation): none
+- Attribution: workspace `<id>`, queried at `<timestamp>`; tables: `AuditLogs` ok · `IntuneAuditLogs` ok — or none / outdated
 <!-- observation:end -->
 
 Every path below is relative to the tenant folder. Three trees matter, and they mirror each other exactly —
@@ -74,7 +76,8 @@ drift/<APIType>/<endpoint>/<name>.md         YOUR drift document for this resour
   documented, deliberate baseline deviation is intentional — describe it as such, not as a defect.
 - **Everything is read-only except your drift documents and index.** You write exactly the per-finding
   drift documents named by the worklist plus `drift/index.md` — nothing else. Never modify anything under
-  `resources/` or `docs/`, and never touch `drift/metadata.yaml`, `drift/analyze.md` or the payloads.
+  `resources/` or `docs/`, and never touch `drift/metadata.yaml`, `drift/analyze.md`, `drift/audit.yaml`
+  or the payloads.
 - **Do not update documentation.** The documents under `docs/` describe the baseline and must keep doing
   so; they are refreshed by a separate documentation pass after the operator re-baselines (appendix A).
 - **Inventory rows are not findings.** The resources under "Out of scope — inventory only" (section 1) are
@@ -127,6 +130,11 @@ Work through every finding, one at a time:
 - **2b. Establish what changed — facts only.** Changed/renamed: start from the recorded deltas; open the
   baseline and payload files when a delta needs surrounding context. Added: read the payload in full.
   Removed: read the baseline file, and its document for what the resource was doing.
+- **2b'. Weigh who made the change.** Where the finding lists `Changed by:` lines (read from the tenant's
+  audit logs, newest first), name the actor in the report. An actor is a fact about *who*, never proof of
+  intent: do not call a change authorized or unauthorized because of who made it. Several events are all
+  listed; judge the latest against the observed bytes. `Attribution unavailable` is not evidence that
+  nobody changed the resource — say that the actor is unknown and why.
 - **2c. Establish who is affected.** Deltas under assignment paths change *who receives* the
   configuration; resolve every group and filter GUID through the reference map (section 3). For added and
   removed resources the whole assignment scope appears or disappears with them.
@@ -191,8 +199,16 @@ severities: high <n> · medium <n> · low <n> · info <n>
 
 Then four parts, in order:
 
-1. **Executive summary** — 3–6 sentences of prose: the overall shape of the drift, the highest-severity
-   items, and whether anything demands action before the next re-baseline.
+1. **Management summary** — open with one bold sentence, the bottom line: does anything demand action
+   before the next re-baseline, and if so, what. Then one H3 section per theme, most severe first,
+   at most five. A theme is a group of findings that share a cause or a purpose (one admin change
+   across several policies, a rollout, a service-side schema change), not a resource type. Name the
+   heading after the theme itself (e.g. "Trusted-location exception in Conditional Access"), not a
+   generic category. Each section is 2–4 sentences of prose, no lists or tables: what changed and
+   when, the actor if attributed, the highest severity it carries, and the recommended action.
+   Link the findings' drift documents inline where you name them. Put every remaining low-severity
+   finding in a final section, "Everything else", of one or two sentences. Keep evidence and
+   tables for part 3 — this part says *what to do*, part 3 shows *why*.
 2. **Findings, ordered by severity** (high first, then by resource name), each linking to its drift
    document by relative path (`<APIType>/<endpoint>/<name>.md`) with a one-line judgment. A table
    (severity · verdict · resource · one-liner) fits well; prose is fine too. Append the inventory rows
