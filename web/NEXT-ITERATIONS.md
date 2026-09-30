@@ -47,7 +47,10 @@ export tree.
 > `•`, `—` and `·`; none of them is WinAnsi, so a code run holding one already falls back to Roboto and
 > renders it — they are not mapped. It has U+200B (zero-width space) with zero advance, the table break
 > character; standard Courier cannot encode U+200B (pdfkit would write its code unit as garbage bytes), so
-> it never appears inside a Courier run.
+> it never appears inside a Courier run. The break limit applies per inline run: a token spanning two runs
+> without whitespace (`` `settings`.enabledForAllUsers ``, a link followed by a suffix) is not cut across
+> the run boundary — a known limitation. Copied text carries U+200B at the break points, and a table row
+> taller than a page is not broken.
 >
 > **Decision.** Which PDF engine: pure-JavaScript `pdfmake` — no headless browser, no print-CSS route.
 >
