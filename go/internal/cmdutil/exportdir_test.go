@@ -42,6 +42,14 @@ func TestResolveExportDir(t *testing.T) {
 		}
 	})
 
+	t.Run("unreadable output directory", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "absent")
+		_, _, err := ResolveExportDir(ctx, missing, "", nil)
+		if err == nil || !strings.Contains(err.Error(), "cannot read output directory") || !strings.Contains(err.Error(), "(pass --domain)") {
+			t.Errorf("missing output directory: err = %v", err)
+		}
+	})
+
 	t.Run("refuses to guess", func(t *testing.T) {
 		empty := t.TempDir()
 		if _, _, err := ResolveExportDir(ctx, empty, "", nil); err == nil || !strings.Contains(err.Error(), "no export directory") {

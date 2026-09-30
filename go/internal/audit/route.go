@@ -25,11 +25,11 @@ const intunePermissionPrefix = "DeviceManagement"
 // entraPermissions are the delegated permissions whose types Entra ID audits
 // into AuditLogs.
 var entraPermissions = map[string]bool{
-	"Policy.Read.All":                        true,
-	"Group.Read.All":                         true,
-	"Agreement.Read.All":                     true,
-	"Organization.Read.All":                  true,
-	"OrganizationalBranding.Read.All":        true,
+	"Policy.Read.All":                         true,
+	"Group.Read.All":                          true,
+	"Agreement.Read.All":                      true,
+	"Organization.Read.All":                   true,
+	"OrganizationalBranding.Read.All":         true,
 	"OnPremDirectorySynchronization.Read.All": true,
 }
 

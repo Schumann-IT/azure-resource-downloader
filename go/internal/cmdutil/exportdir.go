@@ -3,6 +3,7 @@ package cmdutil
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/logger"
@@ -73,6 +74,9 @@ func resolveSignedInDomain(ctx context.Context, cred azcore.TokenCredential) str
 // singleExportDomain returns the single tenant directory under baseOutput that
 // holds an export. It refuses to guess when zero or several exist.
 func singleExportDomain(baseOutput string) (string, error) {
+	if _, err := os.Stat(baseOutput); err != nil {
+		return "", fmt.Errorf("cannot read output directory %q: %w (pass --domain)", baseOutput, err)
+	}
 	candidates := ExportDomains(baseOutput)
 	switch len(candidates) {
 	case 1:

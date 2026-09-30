@@ -197,20 +197,26 @@ func queryEvents(ctx context.Context, q Querier, workspaceID string, spec tableS
 			return nil, err
 		}
 		for _, row := range rows {
-			ev := spec.toEvent(row)
-			for _, key := range byID[strings.ToLower(asString(row[colTarget]))] {
-				if seen[key] == nil {
-					seen[key] = map[drift.AttributionEvent]bool{}
-				}
-				if seen[key][ev] {
-					continue
-				}
-				seen[key][ev] = true
-				events[key] = append(events[key], ev)
-			}
+			addEvent(events, seen, byID[strings.ToLower(asString(row[colTarget]))], spec.toEvent(row))
 		}
 	}
 	return events, nil
+}
+
+// addEvent records ev under every key in keys, skipping a key that already
+// holds an identical event.
+func addEvent(events map[string][]drift.AttributionEvent, seen map[string]map[drift.AttributionEvent]bool,
+	keys []string, ev drift.AttributionEvent) {
+	for _, key := range keys {
+		if seen[key] == nil {
+			seen[key] = map[drift.AttributionEvent]bool{}
+		}
+		if seen[key][ev] {
+			continue
+		}
+		seen[key][ev] = true
+		events[key] = append(events[key], ev)
+	}
 }
 
 // absenceStatus decides what "no event" means for a table: nothing changed in

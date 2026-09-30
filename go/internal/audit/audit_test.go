@@ -263,10 +263,10 @@ func TestRouteEveryRegisteredType(t *testing.T) {
 	}
 
 	for rtype, want := range map[string]string{
-		intuneType:                  drift.TableIntuneAuditLogs,
-		appProtType:                 drift.TableIntuneAuditLogs,
-		entraType:                   drift.TableAuditLogs,
-		"Microsoft.Graph/groups":    drift.TableAuditLogs,
+		intuneType:                       drift.TableIntuneAuditLogs,
+		appProtType:                      drift.TableIntuneAuditLogs,
+		entraType:                        drift.TableAuditLogs,
+		"Microsoft.Graph/groups":         drift.TableAuditLogs,
 		"Microsoft.Graph/namedLocations": drift.TableAuditLogs,
 	} {
 		if got, _, _ := rt.route(rtype+"/x.yaml", changed(guidA)); got != want {
@@ -342,10 +342,10 @@ func TestAttributeStatuses(t *testing.T) {
 		intuneRow("2026-09-29T09:00:00Z", guidC, "x@x", "", "Patch", "Success", "c9"),
 	}
 	obs := observation(map[string]drift.Finding{
-		intuneType + "/a.yaml":                    changed(guidA),
-		intuneType + "/b.yaml":                    changed(guidB),
-		entraType + "/c.yaml":                     changed(guidC),
-		"Microsoft.Graph/organization/o.yaml":     changed(guidA),
+		intuneType + "/a.yaml":                     changed(guidA),
+		intuneType + "/b.yaml":                     changed(guidB),
+		entraType + "/c.yaml":                      changed(guidC),
+		"Microsoft.Graph/organization/o.yaml":      changed(guidA),
 		"Microsoft.Storage/storageAccounts/s.yaml": changed("/subscriptions/s/resourceGroups/rg/providers/x/y"),
 	})
 
@@ -431,8 +431,8 @@ func TestAttributeRetention(t *testing.T) {
 func TestAttributeFailures(t *testing.T) {
 	forbidden := &azcore.ResponseError{StatusCode: http.StatusForbidden, ErrorCode: "InsufficientAccessError"}
 	findings := map[string]drift.Finding{
-		intuneType + "/a.yaml":              changed(guidA),
-		entraType + "/c.yaml":               changed(guidC),
+		intuneType + "/a.yaml":                changed(guidA),
+		entraType + "/c.yaml":                 changed(guidC),
 		"Microsoft.Graph/organization/o.yaml": changed(guidA),
 	}
 
@@ -558,8 +558,8 @@ func TestAttributeSelection(t *testing.T) {
 		entraType + "/c.yaml":  changed(guidC),
 	})
 	for name, sel := range map[string]Selection{
-		"type":           {Types: []string{strings.ToLower(intuneType)}},
-		"resource id":    {ResourceIDs: []string{strings.ToUpper(guidA)}},
+		"type":        {Types: []string{strings.ToLower(intuneType)}},
+		"resource id": {ResourceIDs: []string{strings.ToUpper(guidA)}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := attribute(newFake(), obs, sel)
