@@ -34,12 +34,12 @@ top bar share one width, 96rem (Tailwind's `2xl` breakpoint) instead of 80rem, a
 
 **Plan.**
 
-- Every page layout (`views/tenant.hbs`, `resource.hbs`, `page.hbs`, `drift.hbs`, `drift-tenant.hbs`,
-  `drift-diff.hbs`, `compare.hbs`, `compare-diff.hbs`) uses `mx-auto max-w-(--breakpoint-2xl)`, with the space.
-- The top bar's default width in `views/partials/header.hbs` is the same class, so the breadcrumb lines up
-  with the sidebar and the document.
-- `test/docs.e2e.spec.ts`: the top-bar width assertions expect the new class; a new assertion pins the page
-  layout's class, so a lost space fails a test.
+- ~~Every page layout (`views/tenant.hbs`, `resource.hbs`, `page.hbs`, `drift.hbs`, `drift-tenant.hbs`,
+  `drift-diff.hbs`, `compare.hbs`, `compare-diff.hbs`) uses `mx-auto max-w-(--breakpoint-2xl)`, with the space.~~
+- ~~The top bar's default width in `views/partials/header.hbs` is the same class, so the breadcrumb lines up
+  with the sidebar and the document.~~
+- ~~`test/docs.e2e.spec.ts`: the top-bar width assertions expect the new class; a new assertion pins the page
+  layout's class, so a lost space fails a test.~~
 - `CHANGELOG.md`: under `[Unreleased]` → `### Changed`, a layout entry.
 
 ## Standing decisions

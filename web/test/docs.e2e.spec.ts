@@ -773,9 +773,11 @@ describe('Docs browser (e2e)', () => {
     const wide = await request(app.getHttpServer())
       .get('/mytenant/Microsoft.Graph/groups/g1')
       .expect(200);
-    // The document layout is max-w-7xl, so an inset max-w-5xl header row would
-    // leave the breadcrumb out of line with the sidebar and the document.
-    expect(wide.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
+    // The document layout is max-w-(--breakpoint-2xl), so an inset narrower
+    // header row would leave the breadcrumb out of line with the sidebar and
+    // the document. Pin both, so a lost space in either class fails here.
+    expect(wide.text).toMatch(/<div class="mx-auto max-w-\(--breakpoint-2xl\) px-4 py-3/);
+    expect(wide.text).toMatch(/<div class="doc-layout mx-auto max-w-\(--breakpoint-2xl\) px-4 py-8/);
 
     const narrow = await request(app.getHttpServer()).get('/').expect(200);
     expect(narrow.text).toMatch(/<div class="mx-auto max-w-5xl px-4 py-3/);
@@ -2347,7 +2349,7 @@ settings:
     // Full width: no sidebar on the compare pages any more.
     expect(res.text).not.toContain('<aside');
     expect(res.text).toContain('class="doc-layout');
-    expect(res.text).toMatch(/<div class="mx-auto max-w-7xl px-4 py-3/);
+    expect(res.text).toMatch(/<div class="mx-auto max-w-\(--breakpoint-2xl\) px-4 py-3/);
     // `_compare` is a representation, not a breadcrumb segment.
     expect(res.text).not.toMatch(/<span class="text-slate-500[^"]*">_compare<\/span>/);
   });
