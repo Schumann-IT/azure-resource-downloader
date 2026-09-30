@@ -267,6 +267,38 @@ function rowAttribution(finding: DriftFinding, audit: DriftAudit | undefined) {
   return { text: a.text, quiet: a.quiet, warning: a.tone.warning };
 }
 
+export type ChangedByTone = 'matched' | 'warning' | 'quiet';
+
+export interface ChangedByCell {
+  text: string;
+  tone: ChangedByTone;
+}
+
+// The cells of the analysis index's Changed by column: one per finding of the
+// observation, keyed by its extensionless `<type>/<name>` path (what `driftKey`
+// yields). Built from `rowAttribution`, the tenant page's row suffix, so the
+// two can never disagree. The fingerprint changes exactly when a rendered cell
+// would, which is what the render cache compares. Called with a current audit.
+export function changedByCells(
+  obs: DriftObservation,
+  audit: DriftAudit,
+): { cells: Map<string, ChangedByCell>; fingerprint: string } {
+  const cells = new Map<string, ChangedByCell>();
+  for (const finding of obs.findings) {
+    const row = rowAttribution(finding, audit)!;
+    if ('actor' in row) {
+      const more = row.more ? ` (+${row.more} more)` : '';
+      cells.set(finding.key, { text: `${row.actor} \u00b7 ${row.at}${more}`, tone: 'matched' });
+    } else {
+      cells.set(finding.key, { text: row.text, tone: row.warning ? 'warning' : 'quiet' });
+    }
+  }
+  const fingerprint = JSON.stringify(
+    [...cells.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+  return { cells, fingerprint };
+}
+
 // What the audit file says about one finding, in the shape the templates read.
 // A finding the file does not name is not inferred anything: it gets the
 // neutral "no attribution recorded" line.

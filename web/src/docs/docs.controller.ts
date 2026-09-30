@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
 import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
-import { MarkdownRendererService } from './markdown-renderer.service';
+import { MarkdownRendererService, RenderEnv } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import {
   resolveDriftDocument,
@@ -22,6 +22,7 @@ import {
 import {
   attributionOf,
   byActor,
+  changedByCells,
   DRIFT_PREFIX,
   driftHref,
   driftPageState,
@@ -36,7 +37,6 @@ import {
   tenantSwitch,
   ViewSwitch,
 } from './drift-view';
-import { LinkEnv } from './link-rewrite';
 import {
   buildFacetFilters,
   buildNavigation,
@@ -436,6 +436,7 @@ export class DocsController {
             tenant,
             docDir: '',
             routeBase: DRIFT_PREFIX,
+            changedBy: current && activeAudit ? changedByCells(current, activeAudit) : undefined,
           })
         : null,
     });
@@ -923,13 +924,13 @@ export class DocsController {
   // block between the title and the prose.
   private async renderSplit(
     file: string,
-    env: LinkEnv,
+    env: RenderEnv,
   ): Promise<{ heading: string; body: string } | null> {
     const html = await this.renderOptional(file, env);
     return html === null ? null : splitLeadingHeading(html);
   }
 
-  private async renderOptional(file: string, env: LinkEnv): Promise<string | null> {
+  private async renderOptional(file: string, env: RenderEnv): Promise<string | null> {
     try {
       return (await this.renderer.render(file, env)).html;
     } catch {

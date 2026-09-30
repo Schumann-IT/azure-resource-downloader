@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import matter from 'gray-matter';
 import { dynamicImport } from '../dynamic-import';
 import { rewriteHref, extractTitle, LinkEnv } from './link-rewrite';
-import { applyFindingsTable } from './findings-table';
+import { applyChangedBy, applyFindingsTable, ChangedByCellLike } from './findings-table';
 import {
   applyMarkerBlocks,
   applyMetadataTable,
@@ -11,6 +11,12 @@ import {
   slugifyHeading,
   wrapSections,
 } from './section-hooks';
+
+// What a render is given beyond the link context: the Changed by cells of the
+// drift index's findings table, with the fingerprint the render cache compares.
+export type RenderEnv = LinkEnv & {
+  changedBy?: { cells: ReadonlyMap<string, ChangedByCellLike>; fingerprint: string };
+};
 
 export interface RenderedPage {
   html: string;
@@ -24,6 +30,7 @@ interface CacheEntry {
   size: number;
   meta: Record<string, unknown>;
   title: string;
+  fingerprint: string | undefined;
 }
 
 const MAX_ENTRIES = 500;
@@ -114,6 +121,13 @@ export class MarkdownRendererService implements OnModuleInit {
   private installFindingsTable(): void {
     this.md.core.ruler.push('findings_table', (state: any) => {
       applyFindingsTable(state.tokens);
+      if (state.env?.changedBy) {
+        applyChangedBy(
+          state.tokens,
+          state.env.changedBy.cells,
+          (type: string, tag: string, nesting: number) => new state.Token(type, tag, nesting),
+        );
+      }
     });
   }
 
@@ -140,10 +154,16 @@ export class MarkdownRendererService implements OnModuleInit {
 
   // Renders the Markdown file at `file`, caching by mtime + size. Throws if the
   // file cannot be read (the caller maps that to a 404).
-  async render(file: string, env: LinkEnv): Promise<RenderedPage> {
+  async render(file: string, env: RenderEnv): Promise<RenderedPage> {
     const stat = await fs.stat(file);
     const cached = this.cache.get(file);
-    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    const fingerprint = env.changedBy?.fingerprint;
+    if (
+      cached &&
+      cached.mtimeMs === stat.mtimeMs &&
+      cached.size === stat.size &&
+      cached.fingerprint === fingerprint
+    ) {
       return { html: cached.html, title: cached.title, meta: cached.meta };
     }
 
@@ -155,6 +175,7 @@ export class MarkdownRendererService implements OnModuleInit {
       tenant: env.tenant,
       docDir: env.docDir,
       routeBase: env.routeBase,
+      changedBy: env.changedBy,
     });
 
     this.cache.set(file, {
@@ -163,6 +184,7 @@ export class MarkdownRendererService implements OnModuleInit {
       size: stat.size,
       meta: parsed.data,
       title,
+      fingerprint,
     });
     if (this.cache.size > MAX_ENTRIES) {
       const oldest = this.cache.keys().next().value;

@@ -147,6 +147,12 @@ describe('Tailwind stylesheet build', () => {
     expect(print).toMatch(/:target/);
   });
 
+  it('includes the Changed by cell tones', () => {
+    for (const tone of ['warning', 'quiet', 'matched']) {
+      expect(css).toContain(`.findings-drift td[data-attribution="${tone}"]`);
+    }
+  });
+
   it('still emits the typography prose classes', () => {
     expect(css).toMatch(/prose/);
   });

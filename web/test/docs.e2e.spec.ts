@@ -1561,6 +1561,7 @@ findings: 4
 | medium | shifted | [Changed one](${T}/changed1.md) | Unknown verdict. |
 | low | changed | [Changed one](${T}/changed1.md) | Cosmetic. |
 | critical | changed | [Changed one](${T}/changed1.md) | Not in the drift set. |
+| medium | renamed | [New name](${T}/new_name.md) | Renamed. |
 | info | added | Microsoft.Graph/namedLocations/inv | inventory change — not analyzed |
 `;
 
@@ -2000,6 +2001,67 @@ findings: 4
       } finally {
         await writeDrift();
       }
+    });
+
+    describe('Changed by column of the analysis index', () => {
+      const cellsOf = (html: string) =>
+        [...html.matchAll(/<td data-column="changed-by"([^>]*)>([^<]*)<\/td>/g)].map((m) => ({
+          attrs: m[1].trim(),
+          text: m[2],
+        }));
+
+      it('appends the column, one cell per row, joined through the Resource link', async () => {
+        const res = await get('/drifted/_drift').expect(200);
+        expect(res.text).toContain('<th data-column="changed-by">Changed by</th>');
+        const cells = cellsOf(res.text);
+        const newest = 'alice@drifted.example · 2026-01-20T09:00:00Z (+1 more)';
+        expect(cells.filter((c) => c.text === newest)).toHaveLength(4);
+        expect(cells.find((c) => c.text === newest)!.attrs).toBe('data-attribution="matched"');
+        const renamed = cells.find((c) => c.text === 'no audit event in the window');
+        expect(renamed!.attrs).toBe('data-attribution="warning"');
+        // The inventory row links nowhere: an empty cell, no tone.
+        const empty = cells.filter((c) => c.text === '');
+        expect(empty).toHaveLength(1);
+        expect(empty[0].attrs).toBe('');
+      });
+
+      it('follows a rewritten audit file without a restart', async () => {
+        const file = path.join(driftDir, 'audit.yaml');
+        try {
+          await fsp.writeFile(
+            file,
+            (await fsp.readFile(file, 'utf8'))
+              .replace('actor: alice@drifted.example', 'actor: zed@drifted.example')
+              .replace('actor: builder-app', 'actor: alice@drifted.example'),
+          );
+          const res = await get('/drifted/_drift').expect(200);
+          expect(cellsOf(res.text).map((c) => c.text)).toContain(
+            'zed@drifted.example · 2026-01-20T09:00:00Z (+1 more)',
+          );
+        } finally {
+          await writeDrift();
+        }
+        const back = await get('/drifted/_drift').expect(200);
+        expect(cellsOf(back.text).map((c) => c.text)).toContain(
+          'alice@drifted.example · 2026-01-20T09:00:00Z (+1 more)',
+        );
+      });
+
+      it('renders the table without the column for an outdated or deleted audit', async () => {
+        const file = path.join(driftDir, 'audit.yaml');
+        try {
+          await fsp.writeFile(file, AUDIT('2026-02-01T09:00:00Z', BASELINE));
+          const outdated = await get('/drifted/_drift').expect(200);
+          expect(outdated.text).not.toContain('changed-by');
+          await fsp.rm(file);
+          const gone = await get('/drifted/_drift').expect(200);
+          expect(gone.text).not.toContain('changed-by');
+        } finally {
+          await writeDrift();
+        }
+        const back = await get('/drifted/_drift').expect(200);
+        expect(back.text).toContain('data-column="changed-by"');
+      });
     });
 
     it('never serves the audit file', async () => {

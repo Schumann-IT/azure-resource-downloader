@@ -7,6 +7,7 @@ import { parseObservation } from '../src/docs/drift-observation';
 import {
   attributionOf,
   byActor,
+  changedByCells,
   findingGroups,
   observationSummary,
   STATUS_TEXT,
@@ -227,6 +228,47 @@ describe('attribution view models', () => {
       findingGroups(obs, 't', a)[0].items.map((i) => i.attribution);
     expect(rows(undefined).every((r) => r === null)).toBe(true);
     expect(rows(audit)[0]).toEqual({ actor: 'alice@contoso.com', at: '2026-01-20T09:00:00Z', more: 1 });
+  });
+
+  it('builds Changed by cells that say what the row suffix says', () => {
+    const { cells, fingerprint } = changedByCells(obs, audit);
+    expect([...cells.keys()].sort()).toEqual(['a', 'b', 'c', 'd'].map((n) => `${T}/${n}`));
+    expect(cells.get(`${T}/a`)).toEqual({
+      text: 'alice@contoso.com \u00b7 2026-01-20T09:00:00Z (+1 more)',
+      tone: 'matched',
+    });
+    expect(cells.get(`${T}/b`)).toEqual({
+      text: 'alice@contoso.com \u00b7 2026-01-21T09:00:00Z (+1 more)',
+      tone: 'matched',
+    });
+    expect(cells.get(`${T}/c`)).toEqual({ text: STATUS_TEXT['no-event-in-window'], tone: 'warning' });
+    expect(cells.get(`${T}/d`)).toEqual({ text: 'no attribution recorded', tone: 'quiet' });
+
+    // Same text as the tenant page's row suffix, finding by finding.
+    for (const item of findingGroups(obs, 't', audit)[0].items) {
+      const row = item.attribution as any;
+      const key = `${T}/${item.label === 'Alpha' ? 'a' : item.label === 'Beta' ? 'b' : item.label === 'Gamma' ? 'c' : 'd'}`;
+      const text = row.actor
+        ? `${row.actor} \u00b7 ${row.at}${row.more ? ` (+${row.more} more)` : ''}`
+        : row.text;
+      expect(cells.get(key)!.text).toBe(text);
+    }
+
+    expect(changedByCells(obs, audit).fingerprint).toBe(fingerprint);
+    const changed = parseAudit(AUDIT.replace('c-1', 'c-1x').replace('"2026-01-20T09:00:00Z"', '"2026-01-22T09:00:00Z"'))!;
+    expect(changedByCells(obs, changed).fingerprint).not.toBe(fingerprint);
+  });
+
+  it('tones quiet statuses quiet and shows an unknown actor', () => {
+    const quiet = parseAudit(
+      AUDIT.replace(
+        `${T}/c.yaml:\n        status: no-event-in-window`,
+        `${T}/c.yaml:\n        status: no-join-key`,
+      ),
+    )!;
+    expect(changedByCells(obs, quiet).cells.get(`${T}/c`)!.tone).toBe('quiet');
+    const anon = parseAudit(AUDIT.replace('actor: alice@contoso.com\n              actorType: user\n              activity: Patch\n              result: success\n              correlationId: c-1', 'actor: ""\n              actorType: unknown\n              activity: Patch\n              result: success\n              correlationId: c-1'))!;
+    expect(changedByCells(obs, anon).cells.get(`${T}/a`)!.text).toMatch(/^unknown actor \u00b7 /);
   });
 
   it('groups by actor once per finding, sorted, joined to the observation', () => {

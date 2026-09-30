@@ -371,6 +371,22 @@ html {
   --verdict-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
 }
 
+/* The Changed by column the app appends from the CLI's audit attribution. The
+   tones are keyed by data attribute like the rest of this table: Tailwind scans
+   only the templates, and these cells are emitted from TypeScript. */
+.findings-drift td[data-attribution="warning"] {
+  color: #b45309; /* text-amber-700 */
+}
+
+.findings-drift td[data-attribution="quiet"] {
+  color: #64748b; /* text-slate-500 */
+}
+
+.findings-drift td[data-attribution="matched"] {
+  color: inherit;
+  white-space: nowrap;
+}
+
 /* Drift severity vocabulary (high | medium | low | info), scoped so it
    outranks the summary's critical | high | medium rules above. The hues follow
    the drift page badge: high is the danger red and octagon the summary gives
@@ -864,6 +880,12 @@ html {
   }
   .findings.findings-drift [data-severity="info"] {
     --sev-color: oklch(0.72 0.03 250);
+  }
+  .findings-drift td[data-attribution="warning"] {
+    color: #fcd34d; /* text-amber-300 */
+  }
+  .findings-drift td[data-attribution="quiet"] {
+    color: #94a3b8; /* text-slate-400 */
   }
   .findings tbody tr:hover {
     background: rgba(148, 163, 184, 0.1);
