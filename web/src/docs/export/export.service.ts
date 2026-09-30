@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
+import pdfmake from 'pdfmake';
 import { ZipFile } from 'yazl';
+import { DriftService } from '../drift.service';
+import { DriftReportService, FindingReport } from '../drift-report.service';
 import { MarkdownRendererService } from '../markdown-renderer.service';
 import { resolveWithinTenant } from '../path-safety';
 import { TenantInfo } from '../tenant-discovery.service';
@@ -14,22 +17,115 @@ import {
   OVERVIEW_FILE,
 } from './confluence';
 import { parseExportIndexMode } from './export-index-mode';
+import { driftPdfDefinition } from './drift-pdf';
 import { toConfluenceHtml } from './html-allowlist';
 import { stripDocExtension } from './page-name';
+import { CODE_FONT } from './pdf-content';
 
-// Builds and streams a tenant's documentation as an importable archive.
+// What a drift PDF request came to: the file was sent; there is no current
+// observation to export (a 404 for the caller); or the build failed before a
+// single byte went out (a generic error for the caller).
+export type DriftPdfOutcome = 'sent' | 'noDrift' | 'failed';
+
+// The body font: the Roboto TTFs pdfmake ships, located through the package
+// itself so no font file is copied into the app and nothing is fetched.
+const ROBOTO_FILES = {
+  normal: 'Roboto-Regular.ttf',
+  bold: 'Roboto-Medium.ttf',
+  italics: 'Roboto-Italic.ttf',
+  bolditalics: 'Roboto-MediumItalic.ttf',
+} as const;
+
+// The code font: a PDF standard font, so its names are not files. pdfkit
+// carries its metrics; the local access policy still has to admit the names.
+const COURIER = {
+  normal: CODE_FONT,
+  bold: `${CODE_FONT}-Bold`,
+  italics: `${CODE_FONT}-Oblique`,
+  bolditalics: `${CODE_FONT}-BoldOblique`,
+} as const;
+
+// Builds and sends a tenant's exports: the documentation as an importable
+// archive, and the current drift report as one PDF.
 //
-// Thin on purpose: the format lives in `confluence.ts`, the serialiser in
-// `html-allowlist.ts`. A second format is a second method here plus its own
-// format module, with the controller untouched.
+// Thin on purpose: the formats live in `confluence.ts` and `drift-pdf.ts`, the
+// serialisers in `html-allowlist.ts` and `pdf-content.ts`.
 //
 // Read-only, like every other route: documents are enumerated from
-// `docs/index.yaml`, read through `resolveWithinTenant()`, and the archive is
-// assembled in memory and streamed — nothing is written under `DOCS_ROOT`, and
-// no temporary file is created at all.
+// `docs/index.yaml` (the drift report from `drift/metadata.yaml`), read through
+// the path-safety resolvers, and each export is assembled in memory — nothing
+// is written under `DOCS_ROOT`, and no temporary file is created at all.
 @Injectable()
-export class ExportService {
-  constructor(private readonly renderer: MarkdownRendererService) {}
+export class ExportService implements OnModuleInit {
+  constructor(
+    private readonly renderer: MarkdownRendererService,
+    private readonly reports: DriftReportService,
+    private readonly drift: DriftService,
+  ) {}
+
+  // pdfmake is a process-wide singleton, so it is configured once here and
+  // never per request. Both access policies are required: without them pdfmake
+  // warns on every build (no per-request logging) and would fetch any URL or
+  // read any local file a definition named. The policy admits exactly the
+  // fonts; the definitions never carry an image, an svg or a URL.
+  onModuleInit(): void {
+    const dir = path.dirname(require.resolve(`pdfmake/fonts/Roboto/${ROBOTO_FILES.normal}`));
+    const roboto = {
+      normal: path.join(dir, ROBOTO_FILES.normal),
+      bold: path.join(dir, ROBOTO_FILES.bold),
+      italics: path.join(dir, ROBOTO_FILES.italics),
+      bolditalics: path.join(dir, ROBOTO_FILES.bolditalics),
+    };
+    const allowed = new Set<string>([...Object.values(roboto), ...Object.values(COURIER)]);
+    pdfmake.setFonts({ Roboto: roboto, [CODE_FONT]: { ...COURIER } });
+    pdfmake.setUrlAccessPolicy(() => false);
+    pdfmake.setLocalAccessPolicy((file) => allowed.has(file));
+  }
+
+  // The tenant's current drift observation as one PDF. Built completely in
+  // memory before a header is set, so a failed build never leaves a
+  // half-sent attachment.
+  async driftPdf(
+    info: TenantInfo,
+    index: TenantIndex,
+    res: Response,
+  ): Promise<DriftPdfOutcome> {
+    const report = await this.reports.tenantReport(info, index);
+    if (report.state.kind !== 'current') return 'noDrift';
+    const observation = report.state.observation;
+
+    let pdf: Buffer;
+    try {
+      const findings = new Map<string, FindingReport>();
+      for (const finding of observation.findings) {
+        const files = await this.drift.files(info, observation, finding);
+        findings.set(
+          finding.key,
+          await this.reports.findingReport(info, finding, files, report.audit),
+        );
+        // A large observation is many documents on one thread; yielding keeps
+        // the rest of the app responsive while it runs.
+        await yieldToEventLoop();
+      }
+      const definition = driftPdfDefinition({
+        tenantId: info.id,
+        tenantName: info.name,
+        observation,
+        report,
+        findings,
+      });
+      pdf = await pdfmake.createPdf(definition).getBuffer();
+    } catch {
+      return 'failed';
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${info.id}-drift.pdf"`);
+    res.setHeader('Content-Length', String(pdf.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(pdf);
+    return 'sent';
+  }
 
   async confluence(
     info: TenantInfo,

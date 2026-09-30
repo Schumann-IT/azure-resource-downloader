@@ -112,8 +112,9 @@ const UNWRAP = new Set([
   'col',
 ]);
 
-// Elements whose *content* must not travel either.
-const DROP = new Set([
+// Elements whose *content* must not travel either. Shared with the drift PDF
+// walker, which drops the same elements.
+export const DROP: ReadonlySet<string> = new Set([
   'script',
   'style',
   'noscript',

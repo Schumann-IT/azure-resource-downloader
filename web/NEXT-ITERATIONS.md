@@ -64,24 +64,24 @@ export tree.
 
 **Plan.**
 
-- **Dependency.** `pdfmake` `^0.3` (0.3.11 current; CommonJS `js/index.js`, so a plain import, not
+- ~~**Dependency.** `pdfmake` `^0.3` (0.3.11 current; CommonJS `js/index.js`, so a plain import, not
   `dynamicImport`) in `dependencies`, `@types/pdfmake` `^0.3` in `devDependencies`. Fonts: the Roboto TTFs
   the package ships under `pdfmake/fonts/Roboto/` (located with `require.resolve`, registered with
   `setFonts`) for text, and the pdfkit standard font Courier for `code`/`pre` runs that are WinAnsi-encodable
-  (any other run stays in Roboto). No network, no font files under `public/`.
-- **Configure the pdfmake singleton once**, in the owning service's constructor or `onModuleInit`, never per
+  (any other run stays in Roboto). No network, no font files under `public/`.~~
+- ~~**Configure the pdfmake singleton once**, in the owning service's constructor or `onModuleInit`, never per
   request: `setUrlAccessPolicy(() => false)` and `setLocalAccessPolicy()` allowing exactly the four Roboto
   font files. Both are required — without them pdfmake `console.warn`s on every `createPdf` (no per-request
   logging, `no-console`) and would fetch URLs or read local files named in a definition. The document
-  definition never carries `image`, `svg` or a URL.
-- **One view model for the page and the PDF.** A `DriftReportService` in `src/docs/drift-report.service.ts`
+  definition never carries `image`, `svg` or a URL.~~
+- ~~**One view model for the page and the PDF.** A `DriftReportService` in `src/docs/drift-report.service.ts`
   (registered in `docs.module.ts`) takes over what `docs.controller.ts` assembles today: the tenant report
   (`tenantDrift` state, `auditOf`, `observationSummary`, `findingGroups`, `byActor`, `changedByCells`, the
   split `drift/index.md` render) and the finding view (`findingView`, `renderAnalysis`, the severity from
   the analysis frontmatter, `attributionOf`, deltas, `intact`). The controller keeps HTTP, `driftLinks` and
   the inline payload; `ExportService` injects the same service, so the drift page and the PDF read one
-  decision. The drift pages render byte-identically; the existing e2e cases stay green.
-- **`src/docs/export/pdf-content.ts`** (pure, Nest-free): an `htmlparser2` walker from the browser's rendered
+  decision. The drift pages render byte-identically; the existing e2e cases stay green.~~
+- ~~**`src/docs/export/pdf-content.ts`** (pure, Nest-free): an `htmlparser2` walker from the browser's rendered
   Markdown HTML to `pdfmake` content, mirroring the keep / unwrap / drop verdicts of `html-allowlist.ts` —
   headings, paragraphs, lists, tables, `strong`/`em`/`code`/`pre` kept; `<details>` always expanded with its
   `<summary>` as a bold lead line; images become their alt text; a link whose path (query and fragment
@@ -89,8 +89,8 @@ export tree.
   query becomes an internal link to that finding's section (`linkToDestination` / `id` = a stable id derived
   from the key), any other link plain text; unknown elements unwrapped; `script`/`style` dropped. The drift
   index table's severity and **Changed by** columns come through because the input is the page's own render
-  (`env.changedBy` included).
-- **`src/docs/export/drift-pdf.ts`** (pure): the document definition from the report model — cover (tenant,
+  (`env.changedBy` included).~~
+- ~~**`src/docs/export/drift-pdf.ts`** (pure): the document definition from the report model — cover (tenant,
   "Drift report", `observedAt`, baseline `generatedAt`, both tool versions); the observation block as in
   `partials/drift-observation.hbs` (counts, incomplete run, removals suppressed, unknown types, not comparable,
   attribution-outdated caveat); the analysis summary (`drift/index.md`); the findings grouped by type
@@ -99,24 +99,24 @@ export tree.
   analysis — "No analysis" when that document is missing or unreadable, never a failed export; then "By actor"
   (`byActor`). Footer: tenant · observed at · page n/m. Determinism: `info.creationDate` is a `Date` parsed
   from `observedAt` (the Unix epoch when it does not parse) — pdfkit derives the file ID from it — no
-  `modDate`, fixed `title` "<tenant name> drift report", so the same observation gives the same bytes.
-- **`ExportService.driftPdf(info, index, res)`**: gets the report from `DriftReportService` (observation,
+  `modDate`, fixed `title` "<tenant name> drift report", so the same observation gives the same bytes.~~
+- ~~**`ExportService.driftPdf(info, index, res)`**: gets the report from `DriftReportService` (observation,
   audit and analysis documents through `DriftService` and `resolveDriftDocument()` only, rendered by
   `MarkdownRendererService` with the drift route base and the page's env, so the render cache stays
   shared), yields to the event loop between findings, builds the PDF in memory with `getBuffer()` and only
   then sets `Content-Type: application/pdf`, `Content-Disposition: attachment;
   filename="<tenant>-drift.pdf"`, `Content-Length` and `nosniff` and ends the response — a failed build
   answers a generic error without a half-sent attachment, a path or a message. No temporary file, nothing
-  written under `DOCS_ROOT`.
-- **Route.** `GET /:tenant/_export/:format` accepts `drift-pdf` beside `confluence`; 404 for an unknown
+  written under `DOCS_ROOT`.~~
+- ~~**Route.** `GET /:tenant/_export/:format` accepts `drift-pdf` beside `confluence`; 404 for an unknown
   tenant or index (`tenant` kind), an unknown format (`export` kind) and a drift state other than `current`
-  (`noDrift` kind), without leaking paths.
-- **Entry point.** `views/partials/header.hbs` gains an optional `download` slot (`href`, `label`, `caveat`)
+  (`noDrift` kind), without leaking paths.~~
+- ~~**Entry point.** `views/partials/header.hbs` gains an optional `download` slot (`href`, `label`, `caveat`)
   rendered beside the view switcher; only the `driftTenant` handler fills it, and only for a current
   observation: a plain `<a download>` "Download drift report (PDF)" to `/<tenant>/_export/drift-pdf` with
   "A snapshot of this observation; it is not updated." as visible text beside it; dark variant, visible
-  `:focus-visible`, no nested anchor. Every other page passes no `download` and renders unchanged.
-- **Tests.** `test/export-drift-pdf.spec.ts` (pure, `mkdtemp` fixtures): the `pdf-content` verdicts
+  `:focus-visible`, no nested anchor. Every other page passes no `download` and renders unchanged.~~
+- ~~**Tests.** `test/export-drift-pdf.spec.ts` (pure, `mkdtemp` fixtures): the `pdf-content` verdicts
   (details expanded, internal vs plain links — a finding link with `?diff` stays plain —, images to alt,
   unknown unwrapped, script dropped, a non-WinAnsi code run kept in Roboto); the document definition carries
   the counts, the type groups in order, the deltas, the not-intact warning, each attribution state (matched,
@@ -127,7 +127,7 @@ export tree.
   export; 404 for `none`, `superseded`, an unknown format and a traversal tenant; the link is on a current
   drift page and absent otherwise, and absent from the picker and the landing page; the docs root is
   untouched. `test/styles-build.spec.ts` if
-  `src/styles.css` changes.
+  `src/styles.css` changes.~~
 - **Documentation** (at done). `README.md`: the route in the Routes table, a "Drift report PDF" section
   (content, scope, determinism, no payloads or diffs, current observation only), the Printing section
   pointing at it, known limitations, the layout for the new modules. `CHANGELOG.md` `[Unreleased]` → Added.

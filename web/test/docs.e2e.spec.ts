@@ -1905,6 +1905,99 @@ findings: 4
     }
   });
 
+  describe('drift report PDF', () => {
+    const PDF_HREF = '/drifted/_export/drift-pdf';
+    const pdf = () => get(PDF_HREF).buffer().parse(binaryParser);
+
+    it('downloads the current observation as one PDF, byte-identical on every request', async () => {
+      const warn = jest.spyOn(console, 'warn');
+      try {
+        const first = await pdf()
+          .expect(200)
+          .expect('Content-Type', 'application/pdf')
+          .expect('Content-Disposition', 'attachment; filename="drifted-drift.pdf"')
+          .expect('X-Content-Type-Options', 'nosniff');
+        expect(first.headers['content-security-policy']).toContain("default-src 'none'");
+        expect(first.headers['referrer-policy']).toBe('same-origin');
+        expect(first.headers['x-frame-options']).toBe('DENY');
+        const body = first.body as Buffer;
+        expect(body.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+        expect(first.headers['content-length']).toBe(String(body.length));
+        const second = await pdf().expect(200);
+        expect((second.body as Buffer).equals(body)).toBe(true);
+        // The access policies are configured once, so pdfmake has nothing to warn about.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('writes nothing under the export while building the PDF', async () => {
+      const before = await snapshot(root);
+      await pdf().expect(200);
+      expect(await snapshot(root)).toEqual(before);
+    });
+
+    it('answers 404 for no observation, an outdated one, an unknown format and a traversal tenant', async () => {
+      const metadata = path.join(exportDir, 'resources', 'metadata.yaml');
+      try {
+        await fsp.writeFile(metadata, 'generatedAt: 2026-03-03T00:00:00.5Z\n');
+        const superseded = await get(PDF_HREF).expect(404);
+        expect(superseded.text).toContain('No drift observation');
+        expect(superseded.text).not.toContain(root);
+      } finally {
+        await fsp.writeFile(metadata, `generatedAt: "${BASELINE}"\ntenant: drifted.example\n`);
+      }
+      try {
+        await fsp.rm(driftDir, { recursive: true, force: true });
+        const none = await get(PDF_HREF).expect(404);
+        expect(none.text).toContain('No drift observation');
+      } finally {
+        await writeDrift();
+      }
+      const format = await get('/drifted/_export/drift-docx').expect(404);
+      expect(format.text).toContain('Export format not found');
+      for (const url of ['/..%2fdrifted/_export/drift-pdf', '/nosuchtenant/_export/drift-pdf']) {
+        const res = await get(url).expect(404);
+        expect(res.text).toContain('Tenant not found');
+        expect(res.text).not.toContain(root);
+      }
+      await pdf().expect(200);
+    });
+
+    it('offers the download on a current tenant drift page only', async () => {
+      const page = await get('/drifted/_drift').expect(200);
+      expect(page.text).toMatch(
+        new RegExp(`<a\\s+href="${PDF_HREF}"\\s+download\\s+class="[^"]*focus-visible:[^"]*"\\s*>Download drift report \\(PDF\\)</a>`),
+      );
+      expect(page.text).toContain('A snapshot of this observation; it is not updated.');
+      expect(page.text).toContain('dark:text-slate-400">A snapshot');
+
+      for (const url of ['/', '/drifted', `/drifted/_drift/${T}/changed1`, `/drifted/${T}/changed1`]) {
+        const other = await get(url).expect(200);
+        expect(other.text).not.toContain('drift-pdf');
+        expect(other.text).not.toContain('header-download');
+      }
+
+      const metadata = path.join(exportDir, 'resources', 'metadata.yaml');
+      try {
+        await fsp.writeFile(metadata, 'generatedAt: 2026-03-03T00:00:00.5Z\n');
+        const superseded = await get('/drifted/_drift').expect(200);
+        expect(superseded.text).toContain('This drift observation is outdated');
+        expect(superseded.text).not.toContain('drift-pdf');
+      } finally {
+        await fsp.writeFile(metadata, `generatedAt: "${BASELINE}"\ntenant: drifted.example\n`);
+      }
+      try {
+        await fsp.rm(driftDir, { recursive: true, force: true });
+        const none = await get('/drifted/_drift').expect(200);
+        expect(none.text).not.toContain('drift-pdf');
+      } finally {
+        await writeDrift();
+      }
+    });
+  });
+
   describe('attribution from drift/audit.yaml', () => {
     it('suffixes every finding row of the tenant page with its actor or status', async () => {
       const res = await get('/drifted/_drift').expect(200);
