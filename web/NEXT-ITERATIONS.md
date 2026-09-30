@@ -136,15 +136,15 @@ export tree.
   drift page and absent otherwise, and absent from the picker and the landing page; the docs root is
   untouched. `test/styles-build.spec.ts` if
   `src/styles.css` changes.~~
-- **Follow-up: every table fits the A4 content width.** Found in review of a real 155-page export: almost no
+- ~~**Follow-up: every table fits the A4 content width.** Found in review of a real 155-page export: almost no
   table fits. Two causes. First, `pdf-content.ts` gives every Markdown table column `'*'`, so the drift index
   table's short Severity and Verdict columns take as much room as Resource, and Resource and Changed by run
   off the right edge. Second, pdfmake never lets a `'*'` column shrink below its longest unbreakable token,
   and the cells are full of them. Examples: dotted delta paths such as
   `scheduledActionsForRule[0].scheduledActionConfigurations[0].gracePeriodHours`, GUIDs,
   `GBL_CP_PRD_…` names with underscores, UPNs and Courier type keys. In "What changed" this pushes Baseline
-  and Observed off the page even though its widths are `'*', '*', '*'`.
-  - **Break points in long tokens.** One exported helper in `pdf-content.ts` (the limit a named constant,
+  and Observed off the page even though its widths are `'*', '*', '*'`.~~
+  - ~~**Break points in long tokens.** One exported helper in `pdf-content.ts` (the limit a named constant,
     12 characters: a Courier run at 9 pt fits a six-column `'*'` table's ~72 pt column) turns a string
     into inline runs. A whitespace-free token longer than 12 characters is cut greedily: each segment is
     at most 12 characters and ends after the last `.`, `/`, `_`, `-`, `@`, `:` or `]` inside that window,
@@ -157,34 +157,34 @@ export tree.
     characters or fewer are left as one run. The copy-paste text gains nothing visible (U+200B only).
     Applied to every table cell (Markdown tables in `tableOf`, the "What changed" and events tables and
     the cover facts table in `drift-pdf.ts`), to inline `code` runs, to `pre` blocks and to `code()` in
-    `drift-pdf.ts`; prose outside tables is left alone.
-  - **Content-sized widths.** In `tableOf`, a Markdown column whose longest cell text (header included,
+    `drift-pdf.ts`; prose outside tables is left alone.~~
+  - ~~**Content-sized widths.** In `tableOf`, a Markdown column whose longest cell text (header included,
     whitespace-normalised, after symbol substitution) is at most 12 characters is `'auto'`; every other
     column is `'*'`. The events table's `'auto'`, `'*'`, `'*'`, `'auto'`, `'*'` (When, Actor, Activity,
     Result, Correlation id) and "What changed"'s `'*'`, `'*'`, `'*'` (Field, Baseline, Observed) stay as
-    they are: their overflow is the unbreakable tokens, which the break points fix.
-  - **Portrait A4 stays.** No landscape pages, no change to `pageSize` or `pageMargins`, and no table text
-    below today's 8.5 pt (`table` stays 8.5, `code` stays 9). The drift pages render unchanged.
-  - **Test.** `test/export-drift-pdf.spec.ts` gets a case that fails on the current code. It builds a
+    they are: their overflow is the unbreakable tokens, which the break points fix.~~
+  - ~~**Portrait A4 stays.** No landscape pages, no change to `pageSize` or `pageMargins`, and no table text
+    below today's 8.5 pt (`table` stays 8.5, `code` stays 9). The drift pages render unchanged.~~
+  - ~~**Test.** `test/export-drift-pdf.spec.ts` gets a case that fails on the current code. It builds a
     definition from the worst cases above (the dotted delta path, a GUID, a `GBL_CP_PRD_…` name with
     underscores, `jan.schumann@extern.cb-gmbh.com`, a Courier type key) in "What changed", the events
     table and a six-column Markdown table (Severity, Verdict, Resource, Changed by and two long columns).
     Walking every table cell, it joins adjacent inline runs, splits on whitespace and U+200B, and asserts
     no piece is longer than 12 characters; that no run with `font: 'Courier'` contains U+200B; that the
     cell text with U+200B removed equals the input; and that the Severity and Verdict columns are
-    `'auto'` while Resource and Changed by are `'*'`.
-- **Follow-up: table rows never split across a page break.** On the real export, an events-table row
+    `'auto'` while Resource and Changed by are `'*'`.~~
+- ~~**Follow-up: table rows never split across a page break.** On the real export, an events-table row
   starts at the bottom of one page and continues on the next ("jan.schumann@extern.cb-" on one page,
   "gmbh.com" on the next). Every table the definition carries — Markdown tables from `tableOf`, "What
   changed", the events table and the cover facts table — sets `dontBreakRows: true`. `headerRows` stays
   1 on "What changed" and the events table and stays the `<thead>` row count on Markdown tables, so the
   header repeats on a continuation page; the cover facts table has no header row and keeps none. A row
-  taller than a page is not expected in a drift report and is accepted as a known limitation.
-  - **Test.** Walking the whole definition, every `table` node has `dontBreakRows: true`, and "What
-    changed", the events table and a Markdown table with a `<thead>` have `headerRows: 1`.
-- **Follow-up: the arrow and other common symbols render as a box.** The Roboto bundled with pdfmake has no
-  `→` (U+2192), so every "`a → b`" in the analyses prints `□`, in prose and in code runs alike.
-  - **Substitution map.** One exported pure function in `pdf-content.ts` maps the six symbols Roboto lacks
+  taller than a page is not expected in a drift report and is accepted as a known limitation.~~
+  - ~~**Test.** Walking the whole definition, every `table` node has `dontBreakRows: true`, and "What
+    changed", the events table and a Markdown table with a `<thead>` have `headerRows: 1`.~~
+- ~~**Follow-up: the arrow and other common symbols render as a box.** The Roboto bundled with pdfmake has no
+  `→` (U+2192), so every "`a → b`" in the analyses prints `□`, in prose and in code runs alike.~~
+  - ~~**Substitution map.** One exported pure function in `pdf-content.ts` maps the six symbols Roboto lacks
     (the coverage check is done and recorded in the Glyph coverage note): `→ ->`, `← <-`, `↔ <->`,
     `⇒ =>`, `✓ yes`, `✗ no`. `≠`, `≤` and `≥` are not mapped: Roboto has them, and a code run holding
     one falls back to Roboto through the WinAnsi check. The function runs on every string before the
@@ -192,10 +192,10 @@ export tree.
     `drift-pdf.ts` `code()`, table cells, finding labels, verdict and severity labels, attribution text,
     `deltaNote`, the By actor lines and the cover. A code run that held only a mapped symbol outside
     WinAnsi is therefore drawn in Courier after substitution. The mapping applies to the PDF only; the
-    drift pages and the Markdown render cache keep the original character.
-  - **Test.** A pure test for each of the six symbols, in prose and in a code run (the code run ends up
+    drift pages and the Markdown render cache keep the original character.~~
+  - ~~**Test.** A pure test for each of the six symbols, in prose and in a code run (the code run ends up
     `font: 'Courier'`); `≠` in a code run is kept and the run is in Roboto; a walk of a whole definition
-    built from fixtures holding all six finds none of them in any `text`.
+    built from fixtures holding all six finds none of them in any `text`.~~
 - **Documentation** (at done). `README.md`: the route in the Routes table, a "Drift report PDF" section
   (content, scope, determinism, no payloads or diffs, current observation only), the Printing section
   pointing at it, known limitations, the layout for the new modules. `CHANGELOG.md` `[Unreleased]` → Added.

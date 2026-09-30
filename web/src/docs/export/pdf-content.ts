@@ -22,6 +22,36 @@ import { DROP } from './html-allowlist';
 // WinAnsi only. A run it cannot encode stays in the body font (Roboto).
 export const CODE_FONT = 'Courier';
 
+// The body font. It is also the font of every break character: the standard
+// Courier cannot encode U+200B.
+export const BODY_FONT = 'Roboto';
+
+// The longest whitespace-free token a table cell or a code run keeps whole: a
+// Courier run at 9 pt fits a six-column '*' table's ~72 pt column. Longer ones
+// get break points; a Markdown column whose cells are all this short is sized
+// to its content.
+export const BREAK_LIMIT = 12;
+
+// The zero-width space: a Unicode break opportunity with no advance, so a line
+// may wrap there and the copy-paste text gains nothing visible.
+export const BREAK_CHAR = '\u200B';
+
+// A long token is cut after the last of these inside the window, so a dotted
+// path, a UPN or an underscored name wraps where it reads naturally.
+const BREAK_AFTER = new Set(['.', '/', '_', '-', '@', ':', ']']);
+
+// The symbols the bundled Roboto has no glyph for, and their ASCII stand-ins.
+// Roboto has `≠`, `≤`, `≥`, so those are kept.
+const SYMBOLS: Readonly<Record<string, string>> = {
+  '\u2192': '->',
+  '\u2190': '<-',
+  '\u2194': '<->',
+  '\u21D2': '=>',
+  '\u2713': 'yes',
+  '\u2717': 'no',
+};
+const SYMBOL_PATTERN = new RegExp(`[${Object.keys(SYMBOLS).join('')}]`, 'gu');
+
 // The colour of an internal link, so it reads as one on paper.
 const LINK_COLOR = '#1d4ed8';
 
@@ -42,6 +72,12 @@ export interface PdfContentOptions {
   // How many levels the document's headings move down, so a finding's analysis
   // nests under the finding's own heading. Clamped to h6.
   headingShift?: number;
+}
+
+// The walk's own state beside the caller's options.
+interface WalkOptions extends PdfContentOptions {
+  // Inside a table cell: every text run gets break points, not only code.
+  inTable?: boolean;
 }
 
 type DomNode = ReturnType<typeof parseDocument>['children'][number];
@@ -127,6 +163,56 @@ export function isWinAnsi(text: string): boolean {
   return true;
 }
 
+// Replaces the symbols the PDF's fonts cannot draw (they would print as a box)
+// with ASCII. Runs before the code-font choice and the break points; the drift
+// pages and the Markdown render cache keep the original character.
+export function substituteSymbols(text: string): string {
+  return text.replace(SYMBOL_PATTERN, (ch) => SYMBOLS[ch] ?? ch);
+}
+
+// A string as inline runs with break points, so a long token (a dotted path, a
+// GUID, a UPN) cannot push a table column past the page: every whitespace-free
+// token longer than BREAK_LIMIT is cut greedily into segments of at most that
+// many characters, each ending after the last BREAK_AFTER character of its
+// window or cut hard when there is none. Between two segments goes a run of
+// only BREAK_CHAR in the body font with the run's other properties; the
+// segments keep `run`'s own font. A string that needs no cut stays one run.
+export function breakRuns(text: string, run: Omit<ContentText, 'text'> = {}): ContentText[] {
+  const parts: string[] = [''];
+  for (const chunk of text.split(/([ \t\n\r\f]+)/)) {
+    const segments = segmentsOf(chunk);
+    parts[parts.length - 1] += segments[0];
+    parts.push(...segments.slice(1));
+  }
+  if (parts.length === 1) return [{ ...run, text }];
+  const out: ContentText[] = [];
+  parts.forEach((part, i) => {
+    if (i > 0) out.push({ ...run, text: BREAK_CHAR, font: BODY_FONT });
+    out.push({ ...run, text: part });
+  });
+  return out;
+}
+
+// A token cut into segments of at most BREAK_LIMIT characters (code points).
+function segmentsOf(token: string): string[] {
+  let rest = Array.from(token);
+  if (rest.length <= BREAK_LIMIT) return [token];
+  const out: string[] = [];
+  while (rest.length > BREAK_LIMIT) {
+    let cut = BREAK_LIMIT;
+    for (let i = BREAK_LIMIT - 1; i >= 0; i--) {
+      if (BREAK_AFTER.has(rest[i])) {
+        cut = i + 1;
+        break;
+      }
+    }
+    out.push(rest.slice(0, cut).join(''));
+    rest = rest.slice(cut);
+  }
+  if (rest.length > 0) out.push(rest.join(''));
+  return out;
+}
+
 // The finding section a rendered href points at, or null when it is not a
 // finding of this report: the path (query and fragment removed) must be the
 // finding's drift route, and the query must not ask for another representation.
@@ -158,11 +244,11 @@ export function htmlToPdfContent(html: string, options: PdfContentOptions): Cont
   return blocksOf(doc.children, options);
 }
 
-function blocksOf(nodes: DomNode[], options: PdfContentOptions): Content[] {
+function blocksOf(nodes: DomNode[], options: WalkOptions): Content[] {
   const out: Content[] = [];
   let pending: Run[] = [];
   const flush = () => {
-    const paragraph = textNode(pending, 'p');
+    const paragraph = textNode(pending, 'p', options);
     if (paragraph) out.push(paragraph);
     pending = [];
   };
@@ -185,20 +271,20 @@ function blocksOf(nodes: DomNode[], options: PdfContentOptions): Content[] {
   return out;
 }
 
-function blockOf(node: DomElement, tag: string, options: PdfContentOptions): Content[] {
+function blockOf(node: DomElement, tag: string, options: WalkOptions): Content[] {
   const heading = /^h([1-6])$/.exec(tag);
   if (heading) {
     const level = Math.min(6, Number(heading[1]) + (options.headingShift ?? 0));
-    const text = textNode(inlineRuns(node.children, options, {}), `h${level}`);
+    const text = textNode(inlineRuns(node.children, options, {}), `h${level}`, options);
     return text ? [text] : [];
   }
   switch (tag) {
     case 'p': {
-      const text = textNode(inlineRuns(node.children, options, {}), 'p');
+      const text = textNode(inlineRuns(node.children, options, {}), 'p', options);
       return text ? [text] : [];
     }
     case 'summary': {
-      const text = textNode(inlineRuns(node.children, options, {}), 'summary');
+      const text = textNode(inlineRuns(node.children, options, {}), 'summary', options);
       return text ? [text] : [];
     }
     case 'ul':
@@ -228,7 +314,7 @@ function blockOf(node: DomElement, tag: string, options: PdfContentOptions): Con
 }
 
 // Always expanded: the summary as a bold lead line, then everything else.
-function detailsOf(node: DomElement, options: PdfContentOptions): Content {
+function detailsOf(node: DomElement, options: WalkOptions): Content {
   const stack: Content[] = [];
   const rest: DomNode[] = [];
   for (const child of node.children) {
@@ -242,7 +328,7 @@ function detailsOf(node: DomElement, options: PdfContentOptions): Content {
   return { stack, style: 'details' };
 }
 
-function listOf(node: DomElement, tag: 'ul' | 'ol', options: PdfContentOptions): Content[] {
+function listOf(node: DomElement, tag: 'ul' | 'ol', options: WalkOptions): Content[] {
   const items: Content[] = [];
   for (const child of node.children) {
     if (!DomUtils.isTag(child) || child.name.toLowerCase() !== 'li') continue;
@@ -259,8 +345,12 @@ function listOf(node: DomElement, tag: 'ul' | 'ol', options: PdfContentOptions):
 }
 
 // A table with every row padded to the widest, a `colspan` honoured with the
-// placeholders pdfmake expects, and the `<thead>` rows repeated on each page.
-function tableOf(node: DomElement, options: PdfContentOptions): Content[] {
+// placeholders pdfmake expects, the `<thead>` rows repeated on each page and no
+// row split across a page break. A column whose longest cell (header included)
+// is at most BREAK_LIMIT characters is sized to its content, every other one
+// shares the rest — so short Severity or Verdict columns leave the room to the
+// long ones, and the long tokens in those carry break points.
+function tableOf(node: DomElement, options: WalkOptions): Content[] {
   const rows: Array<{ header: boolean; cells: DomElement[] }> = [];
   const collect = (parent: DomElement, header: boolean) => {
     for (const child of parent.children) {
@@ -281,11 +371,19 @@ function tableOf(node: DomElement, options: PdfContentOptions): Content[] {
   };
   collect(node, false);
 
+  const cellOptions: WalkOptions = { ...options, inTable: true };
+  const lengths: number[] = [];
   const body: TableCell[][] = rows.map((row) => {
     const cells: TableCell[] = [];
     for (const cell of row.cells) {
       const span = Math.max(1, Number.parseInt(cell.attribs.colspan ?? '', 10) || 1);
-      const blocks = blocksOf(cell.children, options);
+      const blocks = blocksOf(cell.children, cellOptions);
+      // A spanning cell counts towards every column it spans.
+      const length = Array.from(plainText(blocks)).length;
+      for (let i = 0; i < span; i++) {
+        const col = cells.length + i;
+        lengths[col] = Math.max(lengths[col] ?? 0, length);
+      }
       const style = cell.name.toLowerCase() === 'th' ? 'tableHeader' : undefined;
       cells.push({
         ...(blocks.length > 0 ? { stack: blocks } : { text: '' }),
@@ -304,23 +402,31 @@ function tableOf(node: DomElement, options: PdfContentOptions): Content[] {
   }
   let headerRows = 0;
   while (headerRows < rows.length && rows[headerRows].header) headerRows++;
+  const widths = Array.from({ length: columns }, (_, col) =>
+    (lengths[col] ?? 0) <= BREAK_LIMIT ? 'auto' : '*',
+  );
   return [
     {
-      table: { headerRows, widths: Array(columns).fill('*'), body },
+      table: { headerRows, dontBreakRows: true, widths, body },
       layout: 'lightHorizontalLines',
       style: 'table',
     },
   ];
 }
 
+// A code block, in Courier when it can be encoded there, with break points in
+// its long tokens.
 function preOf(node: DomElement): Content {
-  const text = DomUtils.textContent(node).replace(/\t/g, '    ').replace(/\r?\n$/, '');
-  const pre: ContentText = { text, style: 'pre', preserveLeadingSpaces: true };
-  if (isWinAnsi(text)) pre.font = CODE_FONT;
-  return pre;
+  const text = substituteSymbols(
+    DomUtils.textContent(node).replace(/\t/g, '    ').replace(/\r?\n$/, ''),
+  );
+  const font = isWinAnsi(text) ? { font: CODE_FONT } : {};
+  const runs = breakRuns(text, font);
+  if (runs.length === 1) return { text, style: 'pre', preserveLeadingSpaces: true, ...font };
+  return { text: runs, style: 'pre', preserveLeadingSpaces: true };
 }
 
-function inlineRuns(nodes: DomNode[], options: PdfContentOptions, style: RunStyle): Run[] {
+function inlineRuns(nodes: DomNode[], options: WalkOptions, style: RunStyle): Run[] {
   const runs: Run[] = [];
   for (const node of nodes) {
     if (DomUtils.isText(node)) {
@@ -332,7 +438,7 @@ function inlineRuns(nodes: DomNode[], options: PdfContentOptions, style: RunStyl
   return runs;
 }
 
-function inlineOf(node: DomElement, options: PdfContentOptions, style: RunStyle): Run[] {
+function inlineOf(node: DomElement, options: WalkOptions, style: RunStyle): Run[] {
   const tag = node.name.toLowerCase();
   if (DROP.has(tag)) return [];
   if (tag === 'br') return [{ text: '\n', br: true }];
@@ -357,10 +463,10 @@ function inlineOf(node: DomElement, options: PdfContentOptions, style: RunStyle)
 }
 
 // A paragraph-like text node, or null when it holds no visible text.
-function textNode(runs: Run[], style: string): Content | null {
+function textNode(runs: Run[], style: string, options: WalkOptions): Content | null {
   const normalised = normalise(runs);
   if (normalised.every((r) => r.br)) return null;
-  return { text: normalised.map(toPdfRun), style };
+  return { text: normalised.flatMap((r) => toPdfRuns(r, options.inTable === true)), style };
 }
 
 // HTML whitespace rules for inline runs: collapsed to one space, dropped at the
@@ -396,15 +502,19 @@ function trimLast(runs: Run[]): void {
   if (last && !last.br) last.text = last.text.replace(/ $/, '');
 }
 
-function toPdfRun(run: Run): ContentText {
-  if (run.br) return { text: '\n' };
-  const out: ContentText = { text: run.text };
+// One inline run as `pdfmake` runs: the symbols substituted, a code run in
+// Courier when it can be encoded there, and break points in a code run and in
+// any run of a table cell. Prose outside tables is left whole.
+function toPdfRuns(run: Run, inTable: boolean): ContentText[] {
+  if (run.br) return [{ text: '\n' }];
+  let text = substituteSymbols(run.text);
+  const out: Omit<ContentText, 'text'> = {};
   if (run.bold) out.bold = true;
   if (run.italics) out.italics = true;
   if (run.code) {
-    out.text = run.text.replace(/\t/g, '    ');
+    text = text.replace(/\t/g, '    ');
     out.style = 'code';
-    if (isWinAnsi(run.text)) out.font = CODE_FONT;
+    if (isWinAnsi(text)) out.font = CODE_FONT;
   }
   if (run.link) {
     out.linkToDestination = run.link;
@@ -412,7 +522,23 @@ function toPdfRun(run: Run): ContentText {
   }
   if (run.strike) out.decoration = 'lineThrough';
   else if (run.link) out.decoration = 'underline';
-  return out;
+  return run.code || inTable ? breakRuns(text, out) : [{ ...out, text }];
+}
+
+// The visible text of built content, whitespace-normalised, for sizing a
+// column: the break characters are not counted.
+function plainText(content: unknown): string {
+  const collect = (node: unknown): string => {
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(collect).join(' ');
+    if (!node || typeof node !== 'object') return '';
+    const rec = node as Record<string, unknown>;
+    if (Array.isArray(rec.text)) return rec.text.map((r) => collect(r)).join('');
+    if (typeof rec.text === 'string') return rec.text;
+    const table = rec.table as { body?: unknown } | undefined;
+    return [rec.stack, rec.ul, rec.ol, table?.body].map(collect).join(' ');
+  };
+  return collect(content).split(BREAK_CHAR).join('').replace(/[ \t\n\r\f]+/g, ' ').trim();
 }
 
 // Whether an element that is not a block itself holds one — then it is

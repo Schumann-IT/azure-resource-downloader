@@ -11,12 +11,16 @@ import {
 } from '../src/docs/drift-view';
 import { driftPdfDefinition, DriftPdfInput } from '../src/docs/export/drift-pdf';
 import {
+  BREAK_CHAR,
+  BREAK_LIMIT,
+  breakRuns,
   CODE_FONT,
   findingAnchor,
   htmlToPdfContent,
   internalDestination,
   isWinAnsi,
   PdfContentOptions,
+  substituteSymbols,
 } from '../src/docs/export/pdf-content';
 
 // The drift report PDF as data: the HTML walker's verdicts and the document
@@ -144,9 +148,10 @@ function input(state: AuditState = auditState(audit, obs)): DriftPdfInput {
   return { tenantId: 't', tenantName: 'Contoso', observation: obs, report, findings };
 }
 
-// Every text of a content tree, one line per node, runs of a node joined.
+// Every text of a content tree, one line per node, runs of a node joined. The
+// break character is invisible and not part of the text a reader sees.
 function texts(node: unknown): string[] {
-  if (typeof node === 'string') return [node];
+  if (typeof node === 'string') return [node.split(BREAK_CHAR).join('')];
   if (Array.isArray(node)) return node.flatMap(texts);
   if (!node || typeof node !== 'object') return [];
   const rec = node as Record<string, unknown>;
@@ -355,5 +360,235 @@ describe('drift-pdf: the document definition', () => {
   it('puts tenant, observation time and page n/m in the footer', () => {
     const footer = definition.footer as (current: number, count: number) => Content;
     expect(texts(footer(2, 7))).toEqual([`Contoso · observed ${OBSERVED} · page 2/7`]);
+  });
+});
+
+// A definition built from the worst cases a real export holds: long dotted
+// paths, GUIDs, underscored names, UPNs and Courier type keys, in every table
+// the report draws, plus every symbol the bundled Roboto cannot draw.
+const PATH = 'scheduledActionsForRule[0].scheduledActionConfigurations[0].gracePeriodHours';
+const GUID = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const NAME = 'GBL_CP_PRD_Windows_Compliance_Baseline';
+const UPN = 'jan.schumann@extern.cb-gmbh.com';
+const TYPE_KEY = 'Microsoft.Graph/deviceCompliancePolicies';
+const SYMBOLS = ['→', '←', '↔', '⇒', '✓', '✗'];
+const P = 'Microsoft.Graph/deviceCompliancePolicies';
+
+const WORST_OBSERVATION = `observedAt: "${OBSERVED}"
+toolVersion: azure-rd v2 → v3
+baseline:
+    generatedAt: "${BASELINE}"
+    toolVersion: azure-rd v1
+run:
+    complete: true
+counts:
+    compared: 1
+    unchanged: 0
+    changed: 1
+findings:
+    ${P}/${NAME}.yaml:
+        verdict: changed
+        displayName: ${NAME} → ✓
+        baselineKey: ${P}/${NAME}.yaml
+        deltas:
+            - path: ${PATH}
+              old: "${GUID}"
+              new: "${UPN}"
+            - path: settings.mode
+              old: "a → b"
+              new: "≠"
+        deltaNote: renamed ← ↔ ⇒ ✓ ✗
+`;
+
+const WORST_AUDIT = `version: 1
+observedAt: "${OBSERVED}"
+baselineGeneratedAt: "${BASELINE}"
+workspaceId: ws-1
+window:
+    from: "${BASELINE}"
+    to: "${OBSERVED}"
+counts:
+    matched: 1
+findings:
+    ${P}/${NAME}.yaml:
+        status: matched
+        table: IntuneAuditLogs
+        events:
+            - at: "2026-01-20T09:00:00Z"
+              actor: ${UPN}
+              actorType: user
+              activity: Patch ${TYPE_KEY} ⇒ ✗
+              result: success
+              correlationId: ${GUID}
+`;
+
+// The six-column table the drift index draws, with two long columns.
+const WORST_TABLE =
+  '<table><thead><tr><th>Severity</th><th>Verdict</th><th>Resource</th><th>Changed by</th><th>Type</th><th>Id</th></tr></thead>' +
+  `<tbody><tr><td>high</td><td>changed</td><td><a href="/t/_drift/${P}/${NAME}">${NAME}</a></td><td>${UPN}</td>` +
+  `<td><code>${TYPE_KEY}</code></td><td>${GUID}</td></tr></tbody></table>`;
+
+function worstInput(): DriftPdfInput {
+  const o = parseObservation(WORST_OBSERVATION)!;
+  const state = auditState(parseAudit(WORST_AUDIT)!, o);
+  const active = state.kind === 'current' ? state.audit : undefined;
+  const finding = o.byKey.get(`${P}/${NAME}`)!;
+  return {
+    tenantId: GUID,
+    tenantName: 'Contoso → EU',
+    observation: o,
+    report: {
+      state: { kind: 'current', observation: o },
+      audit: state,
+      observation: observationSummary(o, 't', state),
+      groups: findingGroups(o, 't', active),
+      actors: active ? byActor(o, active, 't') : null,
+      analysis: {
+        heading: '<h1>Drift analysis summary</h1>',
+        body: `<p>Moved a → b ← c ↔ d ⇒ e ✓ ✗, <code>x → y</code>.</p>${WORST_TABLE}<pre><code>${PATH} → ${GUID}\n</code></pre>`,
+      },
+    },
+    findings: new Map([
+      [
+        finding.key,
+        findingReport(finding, state, {
+          analysis: `<p>Grace ✓ <code>→</code> ✗</p>${WORST_TABLE}`,
+        }),
+      ],
+    ]),
+  };
+}
+
+// Every `table` node of a content tree.
+function tables(node: unknown): Array<{ headerRows?: number; widths: unknown[]; body: unknown[][]; dontBreakRows?: boolean }> {
+  return nodes(node)
+    .filter((n) => n.table && typeof n.table === 'object')
+    .map((n) => n.table as any);
+}
+
+// The inline runs of one text node, strings and nested arrays flattened.
+function runsOf(node: unknown): Array<Record<string, unknown>> {
+  if (typeof node === 'string') return [{ text: node }];
+  if (Array.isArray(node)) return node.flatMap(runsOf);
+  if (!node || typeof node !== 'object') return [];
+  const rec = node as Record<string, unknown>;
+  return Array.isArray(rec.text) ? rec.text.flatMap(runsOf) : [rec];
+}
+
+// Every text node's joined run text, for each node that holds text, in a cell.
+function lineTexts(node: unknown): string[] {
+  return nodes(node)
+    .filter((n) => 'text' in n && !nodes(n.text).some((c) => Array.isArray(c.text)))
+    .filter((n) => typeof n.text === 'string' || Array.isArray(n.text))
+    .map((n) =>
+      runsOf(n)
+        .map((r) => (typeof r.text === 'string' ? r.text : ''))
+        .join(''),
+    );
+}
+
+describe('drift-pdf: tables fit the page', () => {
+  const definition = driftPdfDefinition(worstInput());
+  const all = tables(definition.content);
+
+  it('breaks every long token in a table cell into pieces of at most the limit', () => {
+    expect(all.length).toBeGreaterThanOrEqual(5);
+    for (const table of all) {
+      for (const row of table.body) {
+        for (const cell of row) {
+          for (const line of lineTexts(cell)) {
+            for (const piece of line.split(new RegExp(`[\\s${BREAK_CHAR}]+`))) {
+              expect(Array.from(piece).length).toBeLessThanOrEqual(BREAK_LIMIT);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('never puts the break character into a Courier run', () => {
+    const courier = nodes(definition.content).filter((n) => n.font === CODE_FONT);
+    expect(courier.length).toBeGreaterThan(0);
+    for (const n of courier) {
+      expect(JSON.stringify(n)).not.toContain(BREAK_CHAR);
+    }
+    // The segments of a long code run stay in Courier: the break runs do not
+    // push the run into the body font.
+    const segments = runsOf(breakRuns(PATH, { font: CODE_FONT, style: 'code' }));
+    expect(segments.filter((r) => r.text !== BREAK_CHAR).every((r) => r.font === CODE_FONT)).toBe(true);
+    expect(segments.filter((r) => r.text === BREAK_CHAR).every((r) => r.font === 'Roboto')).toBe(true);
+  });
+
+  it('keeps the text: with the break character removed, the cells read as the input', () => {
+    const cellTexts = all.flatMap((t) => t.body.flatMap((row) => row.flatMap((c) => texts(c))));
+    for (const value of [PATH, GUID, UPN, TYPE_KEY, NAME, `Patch ${TYPE_KEY} => no`]) {
+      expect(cellTexts).toContain(value);
+    }
+    expect(texts({ text: breakRuns(PATH) })).toEqual([PATH]);
+  });
+
+  it('cuts after a separator in the window, or hard at the limit', () => {
+    const pieces = (s: string) =>
+      breakRuns(s)
+        .map((r) => r.text)
+        .filter((t) => t !== BREAK_CHAR);
+    expect(pieces(UPN)).toEqual(['jan.', 'schumann@', 'extern.cb-', 'gmbh.com']);
+    expect(pieces('abcdefghijklmnopqrstuvwxyz')).toEqual(['abcdefghijkl', 'mnopqrstuvwx', 'yz']);
+    expect(breakRuns('twelve_chars and short', { bold: true })).toEqual([
+      { text: 'twelve_chars and short', bold: true },
+    ]);
+  });
+
+  it('sizes short Markdown columns to their content and shares the rest', () => {
+    const markdown = all.filter((t) => t.body[0].length === 6);
+    expect(markdown).toHaveLength(2);
+    for (const table of markdown) {
+      expect(table.widths.slice(0, 4)).toEqual(['auto', 'auto', '*', '*']);
+    }
+  });
+
+  it('never splits a row across a page break, and repeats the header rows', () => {
+    for (const table of all) expect(table.dontBreakRows).toBe(true);
+    const headed = all.filter((t) => t.headerRows === 1);
+    // What changed, the events table and both Markdown tables.
+    expect(headed).toHaveLength(4);
+    const cover = all.find((t) => t.headerRows === undefined);
+    expect(cover?.widths).toEqual(['auto', '*']);
+  });
+});
+
+describe('drift-pdf: symbols the font cannot draw', () => {
+  it.each([
+    ['→', '->'],
+    ['←', '<-'],
+    ['↔', '<->'],
+    ['⇒', '=>'],
+    ['✓', 'yes'],
+    ['✗', 'no'],
+  ])('replaces %s with %s in prose and in code, the code run in Courier', (symbol, ascii) => {
+    expect(substituteSymbols(`a ${symbol} b`)).toBe(`a ${ascii} b`);
+    const [p] = htmlToPdfContent(`<p>x ${symbol} y <code>${symbol}</code></p>`, OPTIONS);
+    const [prose, code] = (p as any).text;
+    expect(prose.text).toBe(`x ${ascii} y `);
+    expect(code).toMatchObject({ text: ascii, font: CODE_FONT });
+  });
+
+  it('keeps ≠ in a code run, drawn in Roboto', () => {
+    const [p] = htmlToPdfContent('<p><code>a ≠ b</code></p>', OPTIONS);
+    const [run] = (p as any).text;
+    expect(run.text).toBe('a ≠ b');
+    expect(run.font).toBeUndefined();
+  });
+
+  it('leaves none of the six anywhere in a whole definition', () => {
+    const definition = driftPdfDefinition(worstInput());
+    const footer = definition.footer as (current: number, count: number) => Content;
+    const every = [...texts(definition.content), ...texts(footer(1, 1))];
+    expect(every.join('\n')).toContain('->');
+    for (const symbol of SYMBOLS) {
+      expect(every.some((t) => t.includes(symbol))).toBe(false);
+    }
+    // ≠ has a glyph and is kept.
+    expect(every).toContain('≠');
   });
 });

@@ -1,12 +1,21 @@
 import type {
   Content,
+  ContentText,
   StyleDictionary,
   TDocumentDefinitions,
 } from 'pdfmake/interfaces';
 import { DriftObservation } from '../drift-observation';
 import { UNKNOWN_ACTOR } from '../drift-view';
 import type { FindingReport, TenantDriftReport } from '../drift-report.service';
-import { CODE_FONT, findingAnchor, htmlToPdfContent, isWinAnsi, PdfContentOptions } from './pdf-content';
+import {
+  breakRuns,
+  CODE_FONT,
+  findingAnchor,
+  htmlToPdfContent,
+  isWinAnsi,
+  PdfContentOptions,
+  substituteSymbols as sym,
+} from './pdf-content';
 
 // The drift report as a `pdfmake` document definition, built from the same
 // report model the tenant drift page and the finding pages render: the cover,
@@ -18,6 +27,10 @@ import { CODE_FONT, findingAnchor, htmlToPdfContent, isWinAnsi, PdfContentOption
 // source YAML. Deterministic: the creation date is the observation's own time
 // and nothing else in the definition depends on the wall clock, so the same
 // observation yields the same bytes.
+//
+// Every string from the model goes through `sym` (the symbols the fonts cannot
+// draw, as ASCII); every table cell and code run carries break points, and no
+// table row is split across a page break.
 
 export interface DriftPdfInput {
   tenantId: string;
@@ -86,7 +99,7 @@ export function driftPdfDefinition(input: DriftPdfInput): TDocumentDefinitions {
     defaultStyle: { font: 'Roboto', fontSize: 10, lineHeight: 1.2 },
     styles: STYLES,
     footer: (currentPage: number, pageCount: number) => ({
-      text: `${tenantName} · observed ${observation.observedAt} · page ${currentPage}/${pageCount}`,
+      text: sym(`${tenantName} · observed ${observation.observedAt} · page ${currentPage}/${pageCount}`),
       style: 'footer',
       margin: [PAGE_MARGINS[0], 16, PAGE_MARGINS[2], 0],
     }),
@@ -120,14 +133,12 @@ function cover(input: DriftPdfInput): Content {
   return {
     stack: [
       { text: 'Drift report', style: 'title' },
-      { text: input.tenantName, style: 'subtitle' },
+      { text: sym(input.tenantName), style: 'subtitle' },
       {
         table: {
+          dontBreakRows: true,
           widths: ['auto', '*'],
-          body: facts.map(([label, value]) => [
-            { text: label, bold: true },
-            { text: value },
-          ]),
+          body: facts.map(([label, value]) => [cell(label, { bold: true }), cell(value)]),
         },
         layout: 'noBorders',
       },
@@ -153,9 +164,9 @@ function attributionSummary(a: NonNullable<DriftPdfInput['report']['observation'
     `${a.failed} failed`,
     `${a.notQueried} not queried`,
   ];
-  const out: Content[] = [{ text: line.join(' · '), style: 'meta' }];
+  const out: Content[] = [{ text: sym(line.join(' · ')), style: 'meta' }];
   for (const t of a.failedTables ?? []) {
-    out.push({ text: `${t.name} failed${suffix(t.reason)}`, style: 'caveat' });
+    out.push({ text: sym(`${t.name} failed${suffix(t.reason)}`), style: 'caveat' });
   }
   return out;
 }
@@ -168,10 +179,10 @@ function observationBlock(input: DriftPdfInput): Content[] {
   out.push({
     text: [
       'Observed ',
-      { text: s.observedAt, bold: true },
+      { text: sym(s.observedAt), bold: true },
       ' against the baseline of ',
-      { text: s.baselineGeneratedAt, bold: true },
-      s.toolVersion ? ` · ${s.toolVersion}` : '',
+      { text: sym(s.baselineGeneratedAt), bold: true },
+      s.toolVersion ? sym(` · ${s.toolVersion}`) : '',
     ],
     style: 'p',
   });
@@ -183,14 +194,14 @@ function observationBlock(input: DriftPdfInput): Content[] {
   if (s.unattested) counts.push(`${s.unattested} not comparable`);
   if (s.excluded) counts.push(`${s.excluded} excluded`);
   if (s.failed) counts.push(`${s.failed} failed`);
-  out.push({ text: counts.join(' · '), style: 'meta' });
+  out.push({ text: sym(counts.join(' · ')), style: 'meta' });
 
   out.push(...attributionSummary(s.attribution));
   if (!s.complete) {
     out.push({
       text: [
         { text: 'Incomplete run', bold: true },
-        `${suffix(s.incompleteReason)}. What was not observed is unknown, not unchanged.`,
+        sym(`${suffix(s.incompleteReason)}. What was not observed is unknown, not unchanged.`),
       ],
       style: 'caveat',
     });
@@ -211,7 +222,7 @@ function observationBlock(input: DriftPdfInput): Content[] {
       style: 'summary',
     });
     out.push({
-      ul: s.notComparable.map((n) => ({ text: [code(n.key), ` — ${n.reason}`] })),
+      ul: s.notComparable.map((n) => ({ text: [code(n.key), sym(` — ${n.reason}`)] })),
       style: 'list',
     });
   }
@@ -236,7 +247,7 @@ function findingsBlock(input: DriftPdfInput, links: PdfContentOptions): Content[
   if (input.report.groups.length === 0) return [];
   const out: Content[] = [{ text: 'Findings', style: 'h1', pageBreak: 'before' }];
   for (const group of input.report.groups) {
-    out.push({ text: `${group.type} (${group.items.length})`, style: 'h2' });
+    out.push({ text: sym(`${group.type} (${group.items.length})`), style: 'h2' });
     for (const item of group.items) {
       out.push(...findingSection(item.key, item.label, input.findings.get(item.key), links));
     }
@@ -252,14 +263,18 @@ function findingSection(
   report: FindingReport | undefined,
   links: PdfContentOptions,
 ): Content[] {
-  const out: Content[] = [{ text: report?.finding.label || label, style: 'h3', id: findingAnchor(key) }];
+  const out: Content[] = [
+    { text: sym(report?.finding.label || label), style: 'h3', id: findingAnchor(key) },
+  ];
   const facts: Content[] = [];
   if (report) {
-    facts.push({ text: [{ text: 'Verdict: ', bold: true }, report.finding.verdictBadge.label] });
+    facts.push({ text: [{ text: 'Verdict: ', bold: true }, sym(report.finding.verdictBadge.label)] });
     if (report.finding.severityBadge) {
-      facts.push({ text: [{ text: ' · Severity: ', bold: true }, report.finding.severityBadge.label] });
+      facts.push({
+        text: [{ text: ' · Severity: ', bold: true }, sym(report.finding.severityBadge.label)],
+      });
     }
-    if (report.finding.previous) facts.push({ text: ` · was ${report.finding.previous}` });
+    if (report.finding.previous) facts.push({ text: sym(` · was ${report.finding.previous}`) });
   }
   if (facts.length > 0) out.push({ text: facts, style: 'meta' });
   out.push({ text: [code(key)], style: 'meta' });
@@ -275,12 +290,13 @@ function findingSection(
       out.push({
         table: {
           headerRows: 1,
+          dontBreakRows: true,
           widths: ['*', '*', '*'],
           body: [
             [
-              { text: 'Field', style: 'tableHeader' },
-              { text: 'Baseline', style: 'tableHeader' },
-              { text: 'Observed', style: 'tableHeader' },
+              cell('Field', { style: 'tableHeader' }),
+              cell('Baseline', { style: 'tableHeader' }),
+              cell('Observed', { style: 'tableHeader' }),
             ],
             ...report.deltas.map((d) => [code(d.path), code(d.old), code(d.new)]),
           ],
@@ -289,7 +305,7 @@ function findingSection(
         style: 'table',
       });
     }
-    if (report.deltaNote) out.push({ text: report.deltaNote, style: 'meta' });
+    if (report.deltaNote) out.push({ text: sym(report.deltaNote), style: 'meta' });
   } else {
     out.push({ text: MISMATCH, style: 'warning' });
   }
@@ -311,19 +327,19 @@ function attributionBlock(report: FindingReport): Content[] {
       {
         table: {
           headerRows: 1,
+          dontBreakRows: true,
           widths: ['auto', '*', '*', 'auto', '*'],
           body: [
-            ['When', 'Actor', 'Activity', 'Result', 'Correlation id'].map((h) => ({
-              text: h,
-              style: 'tableHeader',
-            })),
+            ['When', 'Actor', 'Activity', 'Result', 'Correlation id'].map((h) =>
+              cell(h, { style: 'tableHeader' }),
+            ),
             ...a.events.map((e) => {
               const actor = e.actor || UNKNOWN_ACTOR;
               return [
                 code(e.at),
-                { text: e.actorType === 'user' ? actor : `${actor} (${e.actorType})` },
-                { text: e.activity },
-                e.result === 'failure' ? { text: e.result, color: '#991b1b' } : { text: e.result },
+                cell(e.actorType === 'user' ? actor : `${actor} (${e.actorType})`),
+                cell(e.activity),
+                cell(e.result, e.result === 'failure' ? { color: '#991b1b' } : {}),
                 code(e.correlationId),
               ];
             }),
@@ -336,7 +352,7 @@ function attributionBlock(report: FindingReport): Content[] {
   }
   return [
     {
-      text: [{ text: 'Attribution: ', bold: true }, `${a.text}${suffix(a.reason, '. ')}`],
+      text: [{ text: 'Attribution: ', bold: true }, sym(`${a.text}${suffix(a.reason, '. ')}`)],
       style: a.tone.warning ? 'caveat' : 'meta',
     },
   ];
@@ -349,23 +365,28 @@ function actorsBlock(input: DriftPdfInput): Content[] {
   if (!actors || actors.actors.length === 0) return [];
   const out: Content[] = [{ text: 'By actor', style: 'h1', pageBreak: 'before' }];
   if (actors.window.from) {
-    out.push({ text: `Audit window ${actors.window.from} to ${actors.window.to}`, style: 'meta' });
+    out.push({
+      text: sym(`Audit window ${actors.window.from} to ${actors.window.to}`),
+      style: 'meta',
+    });
   }
   for (const actor of actors.actors) {
     out.push({
-      text: actor.tagged ? [actor.actor, { text: ` (${actor.actorType})`, bold: false }] : actor.actor,
+      text: actor.tagged
+        ? [sym(actor.actor), { text: sym(` (${actor.actorType})`), bold: false }]
+        : sym(actor.actor),
       style: 'h4',
     });
     out.push({
       ul: actor.findings.map((f) => ({
         text: [
           {
-            text: f.label,
+            text: sym(f.label),
             linkToDestination: findingAnchor(f.key),
             color: '#1d4ed8',
             decoration: 'underline',
           },
-          ` · ${f.badge.label} · ${f.at}`,
+          sym(` · ${f.badge.label} · ${f.at}`),
         ],
       })),
       style: 'list',
@@ -375,7 +396,19 @@ function actorsBlock(input: DriftPdfInput): Content[] {
 }
 
 // A run of code-like text (a key, a field path, a value) in the code font when
-// it can be encoded there, and in the body font otherwise.
+// it can be encoded there after symbol substitution, and in the body font
+// otherwise, with break points in its long tokens. Each run carries its own
+// style and font: pdfmake drops a wrapper's properties when it is nested in
+// another text array.
 function code(text: string): Content {
-  return isWinAnsi(text) ? { text, font: CODE_FONT, style: 'code' } : { text, style: 'code' };
+  const t = sym(text);
+  const runs = breakRuns(t, isWinAnsi(t) ? { font: CODE_FONT, style: 'code' } : { style: 'code' });
+  return runs.length === 1 ? runs[0] : { text: runs };
+}
+
+// A table cell's text with the symbols substituted and break points in its long
+// tokens, so no token widens its column past the page.
+function cell(text: string, props: Omit<ContentText, 'text'> = {}): Content {
+  const runs = breakRuns(sym(text), props);
+  return runs.length === 1 ? runs[0] : { text: runs };
 }
