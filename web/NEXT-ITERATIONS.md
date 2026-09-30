@@ -17,8 +17,8 @@ its rationale against what is true at that point rather than copying it across.
 finding against the tenant's Log Analytics audit tables and writes the result as `drift/audit.yaml` beside the
 observation. This browser reads that file and shows, per finding, the actor and time of the change — or states
 explicitly why there is none — on the tenant drift page (a suffix on every finding row, a **By actor** section,
-a caveat line in the observation header) and on the resource drift page (an attribution block in the header,
-every event newest first). The app derives nothing: it joins by finding key, shows the recorded facts, and shows
+a caveat line in the observation header, and a **Changed by** column in the analysis index's findings table)
+and on the resource drift page (an attribution block in the header, every event newest first). The app derives nothing: it joins by finding key, shows the recorded facts, and shows
 an attribution only when the audit file describes exactly the observation on disk.
 
 > **Why.** A drift finding says a resource's bytes moved between the baseline and the observation; the audit
@@ -44,16 +44,21 @@ an attribution only when the audit file describes exactly the observation on dis
 >
 > **Rendering rules.** A finding the audit file does not name gets a neutral "no attribution recorded" line,
 > never an inferred status. The `docs analyze-drift` prompt gains attribution lines on the Go side, so
-> agent-written drift documents may name actors in prose; this app shows the structured data regardless and
-> adds no section hook or marker for it.
+> agent-written drift documents may name actors in prose; this app shows the structured data regardless. The
+> one exception to "no hook into agent-written Markdown" is the analysis index's findings table (the table
+> `findings-table.ts` already tags as `findings-drift`): its rows link to their drift documents, and that link
+> is the join key, so the app appends a **Changed by** column from `audit.yaml` rather than asking the agent to
+> copy actors into prose. No other section of `drift/index.md` or of a per-resource drift document is touched.
 >
 > **Owner.** none — every file is under `web/`. Sequencing: none; the web degrades gracefully when the file is
 > absent, so it can ship before or after the CLI's `resource audit`.
 >
 > **Implementer.** sonnet
 >
-> **Non-negotiables untouched.** Read-only (one more file read, no write path); one `markdown-it` renderer (no
-> Markdown involved); path safety unchanged — `path-safety.ts` is not edited, the root file is read through a
+> **Non-negotiables untouched.** Read-only (one more file read, no write path); one `markdown-it` renderer (the
+> Changed-by column is a core-rule token pass like `findings-table.ts`, fed through the render `env`; the
+> render cache stays keyed by the file's mtime + size plus an audit fingerprint, so a rerun of `resource
+> audit` shows without a restart); path safety unchanged — `path-safety.ts` is not edited, the root file is read through a
 > fixed `TenantInfo.driftAuditPath`, and `/:tenant/_drift/audit(.yaml)(?raw)` stays unreachable because both
 > drift resolvers already require two segments and `driftState` never yields a finding for it; no client-side
 > JavaScript (`<details>` only); counts from `counts.*`, never by walking; the new cache is a fourth `FileCache`
@@ -127,10 +132,36 @@ an attribution only when the audit file describes exactly the observation on dis
   the root path in the body; rewriting and deleting `audit.yaml` is reflected on the next request without a
   restart; the read-only snapshot and the Confluence export assertions cover the audit file (no actor name, no
   `audit.yaml` in the zip).~~
+- **Changed-by column in the analysis index's findings table** (the landing page's table in `drift/index.md`,
+  header Severity | Verdict | Resource | Judgment, tagged `findings-drift`). Pure token pass beside
+  `applyFindingsTable` (in `findings-table.ts` or a new sibling), Nest-free and unit-testable: for a
+  `findings-drift` table, append a `Changed by` header cell and one body cell per row. The row's key comes from
+  the first relative `.md` link in its Resource cell, read from the link token *before* link rewriting,
+  resolved against the drift root and reduced by the shared `driftKey` rule (`<type>/<name>.md` →
+  `<type>/<name>.yaml`); a link that is absolute, leaves the tree, or is not `.md` yields no key. The cell text
+  is the same as the tenant page's row suffix — `actor · at (+N more)` for `matched`, else the status text
+  (amber for warning statuses, quiet slate for `no-join-key`), "no attribution recorded" for a key the audit
+  does not name — and **empty** for a row without a key (the inventory rows, which carry no link). Text only,
+  emitted as `text` tokens so markdown-it escapes it; tone via a class on the `td`, with `dark:` variants.
+  The column is added only in the `current` audit state; with no audit or an outdated one the table renders
+  exactly as today (the outdated caveat is already in the observation header). Wiring: the controller's
+  analysis render passes `{ attribution: Map<key, cell> | undefined }` in the render env
+  (`MarkdownRendererService.render`), built by a pure helper in `drift-view.ts` from the active audit — the
+  per-resource drift documents and every non-drift page pass none. The render cache entry records the audit
+  fingerprint it was rendered with (e.g. `observedAt` + `queriedAt`, or the audit `FileCache`'s mtime + size)
+  and re-renders when it differs; renders without attribution are unaffected. Tests: unit — header and cells
+  appended, key from the link (nested type path, rename's new path), inventory row left empty, unknown key →
+  "no attribution recorded", `+N more`, `unknown actor`, escaping of an actor containing `<`, a table without
+  a Verdict column (the summary's Findings table) untouched, no env → no column. e2e — `writeDrift()`'s
+  `drift/index.md` gains a findings table linking `changed1`, `new_name` and one inventory row; the landing
+  page shows the column with the latest actor and `+1 more` for `changed1`, the status text for `new_name`, an
+  empty cell for the inventory row; rewriting `audit.yaml` changes the cell on the next request without a
+  restart; an outdated audit and a deleted one render the table without the column; the Confluence export is
+  unchanged (no actor name in the zip).
 - **`README.md`** — docs-root contract tree gains `│   ├── audit.yaml             # attribution — read, never
   served` under `drift/`, and the root-level rule names it among the unreachable files; **Drift view** gains an
-  **Attribution.** bullet (what the file is, the validity rule, the per-status lines, By actor, that nothing is
-  derived); routes table unchanged; Tests table adds `test/drift-audit.spec.ts` and extends the e2e row; Project
+  **Attribution.** bullet (what the file is, the validity rule, the per-status lines, By actor, the Changed by
+  column in the analysis index's findings table and its join through the row's link, that nothing is derived); routes table unchanged; Tests table adds `test/drift-audit.spec.ts` and extends the e2e row; Project
   layout adds `drift-audit.ts` and updates the `drift.service.ts` line. With it, at *done*: `web/CLAUDE.md`
   and `.windsurf/rules/01-architecture.md` name `drift-audit.ts` among the drift modules and
   `drift/audit.yaml` beside `drift/analyze.md` as read as data, never served.
