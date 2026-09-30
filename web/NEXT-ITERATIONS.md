@@ -128,6 +128,38 @@ export tree.
   drift page and absent otherwise, and absent from the picker and the landing page; the docs root is
   untouched. `test/styles-build.spec.ts` if
   `src/styles.css` changes.~~
+- **Follow-up: every table fits the A4 content width.** Found in review of a real 155-page export: almost no
+  table fits. Two causes. First, `pdf-content.ts` gives every Markdown table column `'*'`, so the drift index
+  table's short Severity and Verdict columns take as much room as Resource, and Resource and Changed by run
+  off the right edge. Second, pdfmake never lets a `'*'` column shrink below its longest unbreakable token,
+  and the cells are full of them. Examples: dotted delta paths such as
+  `scheduledActionsForRule[0].scheduledActionConfigurations[0].gracePeriodHours`, GUIDs,
+  `GBL_CP_PRD_…` names with underscores, UPNs and Courier type keys. In "What changed" this pushes Baseline
+  and Observed off the page even though its widths are `'*', '*', '*'`.
+  - **Break points in long tokens.** In table cells and code runs, a token longer than a fixed limit gets
+    break opportunities after `.`, `/`, `_`, `-`, `@`, `:` and `]`, and a hard split as a last resort. It is
+    done with a character both fonts render invisibly: no glyph box in Roboto or in Courier. The copy-paste
+    text of a value must not gain visible characters.
+  - **Content-sized widths.** A column whose cells are all short (Severity, Verdict, Result, When, and any
+    Markdown column whose longest cell is under a fixed length) is `'auto'`; the rest share `'*'`. "What
+    changed" gives Field and the two values `'*'` each. The events table keeps its widths; they already fit.
+  - **Portrait A4 stays.** No landscape pages and no smaller table font below today's 8.5 pt.
+  - **Test.** `test/export-drift-pdf.spec.ts` gets a case that fails on the current code. It builds a
+    definition from the worst cases above plus a six-column Markdown table and asserts that no table cell
+    holds an unbreakable run longer than the limit. It also asserts that the short columns are `'auto'`.
+- **Follow-up: table rows never split across a page break.** On the real export, an events-table row
+  starts at the bottom of one page and continues on the next ("jan.schumann@extern.cb-" on one page,
+  "gmbh.com" on the next). Every table sets `dontBreakRows: true` and keeps `headerRows: 1`, so the header
+  repeats on a continuation page. Test: the definitions carry both.
+- **Follow-up: the arrow and other common symbols render as a box.** The Roboto bundled with pdfmake has no
+  `→` (U+2192), so every "`a → b`" in the analyses prints `□`, in prose and in code runs alike.
+  - **Substitution map.** Before the text reaches pdfmake, a small fixed map of symbols the analyses use
+    turns each one into an ASCII equivalent: `→ ->`, `← <-`, `↔ <->`, `⇒ =>`, `≠ !=`, `≤ <=`, `≥ >=`,
+    `✓ yes`, `✗ no`. The mapping applies to the PDF only; the drift pages keep the original character.
+  - **Coverage check.** The map is checked against the actual font coverage. The implementer confirms which
+    of these Roboto and WinAnsi Courier really lack, drops any that render fine, and records the final list
+    in the Glyph coverage note.
+  - **Test.** A pure test for each mapped symbol, in prose and in a code run.
 - **Documentation** (at done). `README.md`: the route in the Routes table, a "Drift report PDF" section
   (content, scope, determinism, no payloads or diffs, current observation only), the Printing section
   pointing at it, known limitations, the layout for the new modules. `CHANGELOG.md` `[Unreleased]` → Added.
