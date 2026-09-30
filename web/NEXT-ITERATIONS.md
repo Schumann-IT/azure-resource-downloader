@@ -41,7 +41,13 @@ export tree.
 >
 > **Glyph coverage.** The bundled Roboto covers Latin, Greek and Cyrillic; CJK and emoji render as a missing
 > glyph. Courier (a PDF standard font) encodes WinAnsi only, so code runs outside it fall back to Roboto.
-> Both are known limitations, not bugs.
+> Both are known limitations, not bugs. Checked against the pdfmake 0.3.11 Roboto (fontkit
+> `hasGlyphForCodePoint`) during plan review: it lacks `→` U+2192, `←` U+2190, `↔` U+2194, `⇒` U+21D2,
+> `✓` U+2713 and `✗` U+2717 — these six are substituted with ASCII in the PDF. It has `≠`, `≤`, `≥`, `…`,
+> `•`, `—` and `·`; none of them is WinAnsi, so a code run holding one already falls back to Roboto and
+> renders it — they are not mapped. It has U+200B (zero-width space) with zero advance, the table break
+> character; standard Courier cannot encode U+200B (pdfkit would write its code unit as garbage bytes), so
+> it never appears inside a Courier run.
 >
 > **Decision.** Which PDF engine: pure-JavaScript `pdfmake` — no headless browser, no print-CSS route.
 >
@@ -56,7 +62,9 @@ export tree.
 > (attribution, read as data), `drift/index.md` (analysis summary) and `drift/<key>.md` per finding
 > (frontmatter `severity`), validity-gated against `resources/metadata.yaml`'s `generatedAt` as today. No file under the export tree is added, renamed or written. The download URL is
 > `GET /:tenant/_export/drift-pdf`, the filename `<tenant>-drift.pdf`; the same observation yields the same
-> bytes.
+> bytes. The layout follow-ups (table widths and break points, unbroken rows, symbol substitution) change
+> only the PDF's layout and text; the route, the filename, the files read and the drift pages stay as they
+> are.
 >
 > **Owner.** none — every file is under `web/`; no sequencing.
 >
@@ -136,30 +144,58 @@ export tree.
   `scheduledActionsForRule[0].scheduledActionConfigurations[0].gracePeriodHours`, GUIDs,
   `GBL_CP_PRD_…` names with underscores, UPNs and Courier type keys. In "What changed" this pushes Baseline
   and Observed off the page even though its widths are `'*', '*', '*'`.
-  - **Break points in long tokens.** In table cells and code runs, a token longer than a fixed limit gets
-    break opportunities after `.`, `/`, `_`, `-`, `@`, `:` and `]`, and a hard split as a last resort. It is
-    done with a character both fonts render invisibly: no glyph box in Roboto or in Courier. The copy-paste
-    text of a value must not gain visible characters.
-  - **Content-sized widths.** A column whose cells are all short (Severity, Verdict, Result, When, and any
-    Markdown column whose longest cell is under a fixed length) is `'auto'`; the rest share `'*'`. "What
-    changed" gives Field and the two values `'*'` each. The events table keeps its widths; they already fit.
-  - **Portrait A4 stays.** No landscape pages and no smaller table font below today's 8.5 pt.
+  - **Break points in long tokens.** One exported helper in `pdf-content.ts` (the limit a named constant,
+    12 characters: a Courier run at 9 pt fits a six-column `'*'` table's ~72 pt column) turns a string
+    into inline runs. A whitespace-free token longer than 12 characters is cut greedily: each segment is
+    at most 12 characters and ends after the last `.`, `/`, `_`, `-`, `@`, `:` or `]` inside that window,
+    or is cut hard at 12 when the window holds none. Between two segments goes a run holding only U+200B
+    (zero-width space) in `font: 'Roboto'` with the segment's other properties (style, link); the segments
+    keep their own font. U+200B never enters a Courier run — standard Courier cannot encode it — and a run
+    that splits into segments must not end up in Roboto only because of it: the WinAnsi check runs on the
+    segment text. pdfmake glues adjacent runs into one word unless the join is a Unicode break
+    opportunity, and U+200B is one, so the break is taken only where a line overflows. Tokens of 12
+    characters or fewer are left as one run. The copy-paste text gains nothing visible (U+200B only).
+    Applied to every table cell (Markdown tables in `tableOf`, the "What changed" and events tables and
+    the cover facts table in `drift-pdf.ts`), to inline `code` runs, to `pre` blocks and to `code()` in
+    `drift-pdf.ts`; prose outside tables is left alone.
+  - **Content-sized widths.** In `tableOf`, a Markdown column whose longest cell text (header included,
+    whitespace-normalised, after symbol substitution) is at most 12 characters is `'auto'`; every other
+    column is `'*'`. The events table's `'auto'`, `'*'`, `'*'`, `'auto'`, `'*'` (When, Actor, Activity,
+    Result, Correlation id) and "What changed"'s `'*'`, `'*'`, `'*'` (Field, Baseline, Observed) stay as
+    they are: their overflow is the unbreakable tokens, which the break points fix.
+  - **Portrait A4 stays.** No landscape pages, no change to `pageSize` or `pageMargins`, and no table text
+    below today's 8.5 pt (`table` stays 8.5, `code` stays 9). The drift pages render unchanged.
   - **Test.** `test/export-drift-pdf.spec.ts` gets a case that fails on the current code. It builds a
-    definition from the worst cases above plus a six-column Markdown table and asserts that no table cell
-    holds an unbreakable run longer than the limit. It also asserts that the short columns are `'auto'`.
+    definition from the worst cases above (the dotted delta path, a GUID, a `GBL_CP_PRD_…` name with
+    underscores, `jan.schumann@extern.cb-gmbh.com`, a Courier type key) in "What changed", the events
+    table and a six-column Markdown table (Severity, Verdict, Resource, Changed by and two long columns).
+    Walking every table cell, it joins adjacent inline runs, splits on whitespace and U+200B, and asserts
+    no piece is longer than 12 characters; that no run with `font: 'Courier'` contains U+200B; that the
+    cell text with U+200B removed equals the input; and that the Severity and Verdict columns are
+    `'auto'` while Resource and Changed by are `'*'`.
 - **Follow-up: table rows never split across a page break.** On the real export, an events-table row
   starts at the bottom of one page and continues on the next ("jan.schumann@extern.cb-" on one page,
-  "gmbh.com" on the next). Every table sets `dontBreakRows: true` and keeps `headerRows: 1`, so the header
-  repeats on a continuation page. Test: the definitions carry both.
+  "gmbh.com" on the next). Every table the definition carries — Markdown tables from `tableOf`, "What
+  changed", the events table and the cover facts table — sets `dontBreakRows: true`. `headerRows` stays
+  1 on "What changed" and the events table and stays the `<thead>` row count on Markdown tables, so the
+  header repeats on a continuation page; the cover facts table has no header row and keeps none. A row
+  taller than a page is not expected in a drift report and is accepted as a known limitation.
+  - **Test.** Walking the whole definition, every `table` node has `dontBreakRows: true`, and "What
+    changed", the events table and a Markdown table with a `<thead>` have `headerRows: 1`.
 - **Follow-up: the arrow and other common symbols render as a box.** The Roboto bundled with pdfmake has no
   `→` (U+2192), so every "`a → b`" in the analyses prints `□`, in prose and in code runs alike.
-  - **Substitution map.** Before the text reaches pdfmake, a small fixed map of symbols the analyses use
-    turns each one into an ASCII equivalent: `→ ->`, `← <-`, `↔ <->`, `⇒ =>`, `≠ !=`, `≤ <=`, `≥ >=`,
-    `✓ yes`, `✗ no`. The mapping applies to the PDF only; the drift pages keep the original character.
-  - **Coverage check.** The map is checked against the actual font coverage. The implementer confirms which
-    of these Roboto and WinAnsi Courier really lack, drops any that render fine, and records the final list
-    in the Glyph coverage note.
-  - **Test.** A pure test for each mapped symbol, in prose and in a code run.
+  - **Substitution map.** One exported pure function in `pdf-content.ts` maps the six symbols Roboto lacks
+    (the coverage check is done and recorded in the Glyph coverage note): `→ ->`, `← <-`, `↔ <->`,
+    `⇒ =>`, `✓ yes`, `✗ no`. `≠`, `≤` and `≥` are not mapped: Roboto has them, and a code run holding
+    one falls back to Roboto through the WinAnsi check. The function runs on every string before the
+    WinAnsi font choice and before the break points: text runs and `pre` in `pdf-content.ts`, and in
+    `drift-pdf.ts` `code()`, table cells, finding labels, verdict and severity labels, attribution text,
+    `deltaNote`, the By actor lines and the cover. A code run that held only a mapped symbol outside
+    WinAnsi is therefore drawn in Courier after substitution. The mapping applies to the PDF only; the
+    drift pages and the Markdown render cache keep the original character.
+  - **Test.** A pure test for each of the six symbols, in prose and in a code run (the code run ends up
+    `font: 'Courier'`); `≠` in a code run is kept and the run is in Roboto; a walk of a whole definition
+    built from fixtures holding all six finds none of them in any `text`.
 - **Documentation** (at done). `README.md`: the route in the Routes table, a "Drift report PDF" section
   (content, scope, determinism, no payloads or diffs, current observation only), the Printing section
   pointing at it, known limitations, the layout for the new modules. `CHANGELOG.md` `[Unreleased]` → Added.
