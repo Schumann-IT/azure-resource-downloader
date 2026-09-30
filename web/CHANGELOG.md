@@ -68,6 +68,24 @@ section of the [repository README](../README.md) for the procedure.
   re-downloaded export shows on the next request. Pairing by file name is a heuristic the page states; manual
   pairing is a parked idea in `NEXT-ITERATIONS.md`. Routes and the normalisation rule are in `README.md`.
 
+#### Drift view
+
+- **The drift pages now say who changed each drifted resource, and when.** The CLI can join every drift
+  finding against the tenant's Log Analytics audit tables and record the result beside the observation; the
+  browser shows it wherever a finding appears. Each finding row on the tenant drift page ends with the actor
+  and time of the change, a *By actor* section groups the findings by who made them, the observation header
+  gives the workspace, window and counts, and a resource's drift page lists every event in the window, newest
+  first. The analysis index's findings table gains a **Changed by** column, joined to each finding through the
+  row's own link, so the landing page answers the question without the analysis having to repeat it. Where no
+  actor could be established the page says why — no event in the window, beyond the table's retention, query
+  failed, not queried, or no join key for the type — so *could not look* never reads as *nobody changed it*.
+  The browser derives nothing: it shows the recorded facts only when they belong to exactly the observation on
+  disk, and otherwise says the attribution is outdated. It stays read-only and script-free, the audit file is
+  never served, and a new audit shows on the next request without a restart. **To see attribution, run
+  `azure-rd resource audit`, or set `audit-workspace-id` in the tenant profile so `azure-rd resource drift`
+  records it** (see the CLI's README for the workspace and permissions it needs); without it the drift pages
+  are unchanged.
+
 ### Changed
 
 #### Drift view

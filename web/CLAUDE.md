@@ -29,9 +29,9 @@ used from this folder.
   `parseTenantIndex`, `buildNavigation`, facet filters); `markdown-renderer.service.ts` (the one `markdown-it`
   instance + mtime render cache); `yaml-highlighter.service.ts` (the one `shiki` highlighter + cache);
   `link-rewrite.ts`, `section-hooks.ts`, `findings-table.ts` (pure); `path-safety.ts` (**the security
-  boundary**); `drift-observation.ts`, `drift.service.ts`, `drift-view.ts`, `yaml-diff.ts`, `file-cache.ts`,
-  `resources-metadata.ts`; `compare-normalise.ts` (provisional cross-tenant identity rule), `compare-view.ts`,
-  `compare.service.ts`; `export/` (Confluence zip: `export.service.ts`, `confluence.ts`,
+  boundary**); `drift-observation.ts`, `drift-audit.ts`, `drift.service.ts`, `drift-view.ts`, `yaml-diff.ts`,
+  `file-cache.ts`, `resources-metadata.ts`; `compare-normalise.ts` (provisional cross-tenant identity rule),
+  `compare-view.ts`, `compare.service.ts`; `export/` (Confluence zip: `export.service.ts`, `confluence.ts`,
   `export-index-mode.ts`, `html-allowlist.ts`, `page-name.ts`).
 - `views/` + `views/partials/` Handlebars templates; `public/` (`favicon.svg`; `app.css` is generated and
   gitignored); `test/` `*.spec.ts` only; `scripts/` readiness reports; `eslint.config.mjs` (single lint truth);
@@ -64,10 +64,11 @@ The server resolves `views/` and `public/` from `process.cwd()`, so it runs from
 - **Tenant discovery.** A tenant is a directory with a readable `docs/index.yaml` of integer `version >= 1`
   (CLI writes v4; v2 still understood). Document root is `<export>/docs`; `<export>/resources` is a second,
   separate served root and **not** a discovery marker; `<export>/drift` is a third, ephemeral root and not a
-  marker either. `docs/generate.md` and `drift/analyze.md` are tool input, never served. Skip `_`- and
-  `.`-prefixed directories; depth stays bounded (`MAX_DEPTH`); a matched tenant owns its subtree. A malformed
-  index makes the folder *not a tenant*, never a crash. Counts and listings are read as data (index
-  `counts.*`; compare: `resources/metadata.yaml`), never by walking the tree.
+  marker either. `docs/generate.md` and `drift/analyze.md` are tool input, never served; `drift/audit.yaml`
+  (the CLI's attribution) is read as data, never served. Skip `_`- and `.`-prefixed directories; depth stays
+  bounded (`MAX_DEPTH`); a matched tenant owns its subtree. A malformed index makes the folder *not a tenant*,
+  never a crash. Counts and listings are read as data (index `counts.*`; compare: `resources/metadata.yaml`),
+  never by walking the tree.
 - **Source YAML view.** One `shiki` highlighter, built in `onModuleInit`, loaded through `dynamicImport`;
   a load failure or oversize file degrades to an escaped `<pre>`. A document's source is found by inverting the
   CLI mapping (`docs/<type>/<name>.md` ↔ `resources/<type>/<name>.yaml`); `source` frontmatter is a label,

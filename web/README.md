@@ -122,6 +122,7 @@ npm run start:prod
     ├── drift/                     # optional, ephemeral — written by `azure-rd resource drift`
     │   ├── metadata.yaml          # the observation — read, never served
     │   ├── analyze.md             # analysis prompt — never served
+    │   ├── audit.yaml             # optional attribution (`azure-rd resource audit`) — read, never served
     │   ├── index.md               # optional analysis summary — the tenant drift page body
     │   └── Microsoft.Graph/
     │       └── <endpoint>/
@@ -152,8 +153,9 @@ Discovery and resolution rules:
   tenant whose YAML views simply 404.
 - `drift/` is a third served root and not a discovery marker either. It is deleted wholesale by the next drift
   run or re-baselining download, so a missing tree is the normal *no observation* state, reflected on the next
-  request without a restart. Everything at its top level (`metadata.yaml`, `analyze.md`, `index.md`) is
-  unreachable through the per-resource route; `index.md` is only ever the tenant drift page's body.
+  request without a restart. Everything at its top level (`metadata.yaml`, `analyze.md`, `audit.yaml`,
+  `index.md`) is unreachable through the per-resource route; `index.md` is only ever the tenant drift page's
+  body, and `audit.yaml` is only ever read as data for the attribution below.
 - A document's source is located by mirroring its own path (`docs/<type>/<name>.md` ↔
   `resources/<type>/<name>.yaml`) — exactly inverting how the CLI derives the document path. The `source`
   frontmatter is only a label, and only resources listed in `docs/index.yaml` are reachable.
@@ -323,6 +325,34 @@ CLI's job — this app only renders what is on disk, and never acts on it.
   An addition, which has no baseline, keeps its observed YAML links.
 - **Links** inside the analysis documents resolve within the drift view; a link out to `docs/` reaches the
   documentation route.
+- **Attribution.** *Who changed this, and when* comes from `drift/audit.yaml`, which the CLI writes beside the
+  observation — `azure-rd resource audit`, or `azure-rd resource drift` when the tenant profile sets
+  `audit-workspace-id` — by joining each finding against the tenant's Log Analytics audit tables. The file is
+  optional; without it the drift pages look exactly as before. It is shown only when its `observedAt` **and**
+  `baselineGeneratedAt` both equal the observation's; otherwise the observation header says *Attribution
+  outdated: it predates this observation. Run `azure-rd resource audit` again.* and no actor appears anywhere.
+  An outdated observation never shows attribution at all. When current:
+  - **Tenant drift page, finding rows.** Each finding in *All recorded findings* ends with `actor · time`, plus
+    `(+N more)` when the window holds several events. A finding the CLI could not attribute shows why: *no
+    audit event in the window*, *window starts before the table's retention* and *audit query failed* in
+    amber; *not queried* and *no audit join key for this resource type* in quiet slate. A finding the file does
+    not name shows *no attribution recorded*. An event that names neither a user nor an application shows as
+    *unknown actor*.
+  - **By actor.** A section below the findings lists each actor once, with a tag when the actor is not a user,
+    the audit window, and the findings they changed, each with its verdict badge and the time of their latest
+    event on it. Only findings with a recorded event are listed.
+  - **Observation header.** A caveat line gives the workspace, the window and the counts — matched, no event,
+    beyond retention, no join key, failed, not queried — read from the file, never recomputed, with a note per
+    audit table that could not be queried.
+  - **Resource drift page.** The header gains the finding's events, newest first: when, actor, activity,
+    result (a failure in red) and correlation id — or the one-line reason there are none. A renamed resource's
+    old-name page shows the same attribution as its new name.
+  - **Changed by column.** The analysis index's findings table (the one with Severity and Verdict columns)
+    gains a last column, **Changed by**, with the same text as the finding row. Each row is joined to its
+    finding through the link in its Resource cell; a row without a link, such as the inventory rows, or whose
+    link names no finding of this observation, stays empty. An index written as prose gets no column.
+  The app derives nothing: it joins by finding key and shows the recorded facts. Rewriting or deleting
+  `audit.yaml` shows on the next request without a restart.
 
 ## Tenant compare
 
@@ -430,7 +460,12 @@ contract in its `doc-prompt.md`), which makes the heading text a machine contrac
   `.findings` with a `data-severity` per row, so severity can be coloured; the drift index's Findings table
   (Severity first, with a Verdict column) is additionally classed `.findings-drift` and tagged against the
   drift analysis's own set, `high / medium / low / info`, on the drift page's colour scale. Each table keeps
-  its closed set: a value outside it stays plain text rather than getting a wrong icon.
+  its closed set: a value outside it stays plain text rather than getting a wrong icon. On the tenant drift
+  page, with a current audit, the drift index's table also gains the **Changed by** column (see
+  [Drift view](#drift-view)), its cells tagged `data-column="changed-by"` and toned by `data-attribution`
+  (`matched`, `warning`, `quiet`). It is added in the same token pass through the one `markdown-it` instance,
+  as escaped text; the render cache keys on the column's content as well as the file, so it stays fresh
+  without a restart.
 
 None of this reaches the Confluence export: `<div>` and `<section>` unwrap and the attributes are on no
 element allowlist, so an exported page is unaffected.
@@ -500,6 +535,8 @@ built in a temp directory and removed afterwards.
 | Suite | Covers |
 | --- | --- |
 | `test/path-safety.spec.ts` | Traversal, symlink escape, null bytes, absolute paths, one extension per root for both roots, one extension per drift resolver and the drift depth guard. |
+| `test/drift-audit.spec.ts` | `drift/audit.yaml` parsing (malformed rejected, never a throw; unsafe keys and unknown statuses dropped; actor-less events kept), the validity rule, the per-status row and page attribution, *By actor* grouping, and the Changed by cells. |
+| `test/findings-table.spec.ts` | The Changed by column on the drift index's findings table: the header and cells, the key read from the Resource link, empty inventory rows, unknown keys, escaping, and tables it must leave alone. |
 | `test/drift-observation.spec.ts` | Observation parsing (malformed rejected, never a throw), the baseline timestamp read, and every drift state in evaluation order, including renames and the validity gate. |
 | `test/link-rewrite.spec.ts` | `.md` href rewriting for the documentation and drift route bases. |
 | `test/yaml-diff.spec.ts` | The line diff: per-side line numbers, hunk grouping and headers, identical files, verbatim text, the size cap, and the pairing of removed and added lines into side-by-side rows. |
@@ -507,7 +544,7 @@ built in a temp directory and removed afterwards.
 | `test/compare-normalise.spec.ts` | The compare's normalisation rule — every dropped key, the id shapes kept and dropped, reference resolution with its ambiguous, unresolved and sentinel outcomes, the audience-only variant, scalar stability — and `resources/metadata.yaml` parsing. |
 | `test/tenant-index.spec.ts` | `index.yaml` parsing (malformed file rejected, later schema accepted, `facets`/`programmes`/`groups`/vocabularies), navigation building, every taxonomy-filter rule listed above (OR/AND, selection-aware counts, uncategorised bucket, exempt active document, version-2 synthesis, no-taxonomy passthrough), and `filterableAxes`/`groupByAxis` — the rule the export shares. |
 | `test/section-hooks.spec.ts` | Heading slugs, declared vs undeclared headings, matched/unmatched marker pairs, section wrapping (an H2 inside a spliced block never opens one), metadata-table detection. |
-| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
+| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the attribution on both drift pages, the Changed by column, the outdated caveat, an unreachable `audit.yaml` and its no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
 | `test/export.spec.ts` | The exporter's pure modules: page titles, the allowlist serialiser, href rewriting, the format (space, page plan, provenance, overview and its axis index in all three modes), `parseExportIndexMode`, and the shared `<details>` fixture. |
 | `test/styles-build.spec.ts` | Compiles `src/styles.css` with the local Tailwind CLI and asserts the custom rules survive. |
 | `test/readiness-readers.spec.ts` | The `CHANGELOG.md`, `NEXT-ITERATIONS.md` and archive-frontmatter readers behind the readiness reports and the start gate. |
@@ -533,15 +570,16 @@ web/
 │       ├── docs.controller.ts           # routes, breadcrumb, 404 mapping
 │       ├── tenant-discovery.service.ts  # DOCS_ROOT scan + 30 s TTL cache + index cache
 │       ├── tenant-index.ts              # docs/index.yaml parsing + navigation + facet filters
-│       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache
+│       ├── markdown-renderer.service.ts # markdown-it instance + mtime render cache (+ Changed by fingerprint)
 │       ├── yaml-highlighter.service.ts  # shiki highlighter + mtime render cache
 │       ├── link-rewrite.ts              # .md href → app route, H1 title extraction
-│       ├── findings-table.ts            # the summary's and the drift index's Findings tables → .findings(-drift) + data-severity
+│       ├── findings-table.ts            # the summary's and the drift index's Findings tables → .findings(-drift) + data-severity, Changed by column
 │       ├── section-hooks.ts             # heading slugs, data-section, marker blocks, metadata table
 │       ├── path-safety.ts               # the security boundary
 │       ├── drift-observation.ts         # drift/metadata.yaml parsing + the one drift decision
-│       ├── drift.service.ts             # observation / baseline / hash reads, mtime-cached
-│       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists
+│       ├── drift-audit.ts               # drift/audit.yaml parsing + the attribution validity rule
+│       ├── drift.service.ts             # observation / baseline / hash / audit reads, mtime-cached
+│       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists, attribution
 │       ├── yaml-diff.ts                 # line diff of two YAML texts, hunks + side-by-side rows
 │       ├── file-cache.ts                # mtime + size parsed-file cache shared by drift and compare
 │       ├── resources-metadata.ts        # resources/metadata.yaml parsing + reference lookup
