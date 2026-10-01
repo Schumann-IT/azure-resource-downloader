@@ -604,8 +604,9 @@ func TestRenderSummaryFacts(t *testing.T) {
 			autopilotIdentitiesType + "/dev1.yaml": {ResourceId: "dev1", PresentInTenant: true},
 		},
 		NotListed: NotListedMeta{
-			Types: []string{"Microsoft.Graph/notlisted"},
-			Empty: []string{"Microsoft.Graph/empty"},
+			Types:   []string{"Microsoft.Graph/notlisted", "Microsoft.Graph/alsonotlisted"},
+			Empty:   []string{"Microsoft.Graph/empty"},
+			Reasons: map[string]string{"Microsoft.Graph/notlisted": "HTTP 503: failed to list notlisted: service unavailable"},
 		},
 	}
 
@@ -622,7 +623,7 @@ func TestRenderSummaryFacts(t *testing.T) {
 		"- Configured but unassigned: 1",
 		"- Targets: All users ×1 · All devices ×0 · group targets ×1 (dynamic ×1 · assigned ×0 · dangling ×0)",
 		"Retained but no longer in tenant: 1",
-		"Types not listed (permissions): Microsoft.Graph/notlisted",
+		"Types not listed: Microsoft.Graph/alsonotlisted, Microsoft.Graph/notlisted (HTTP 503: failed to list notlisted: service unavailable)\n",
 		"Types that listed to zero: Microsoft.Graph/empty",
 	}
 	for _, w := range wants {
@@ -878,5 +879,28 @@ func TestParseFrontmatter(t *testing.T) {
 		if _, ok := parseFrontmatter(bad); ok {
 			t.Errorf("expected parse failure for %q", bad)
 		}
+	}
+}
+
+func TestNotListedWithReasons(t *testing.T) {
+	tests := []struct {
+		name string
+		in   NotListedMeta
+		want string
+	}{
+		{name: "nothing failed", in: NotListedMeta{Reasons: map[string]string{}}, want: "none"},
+		{name: "older file without reasons", in: NotListedMeta{Types: []string{"b", "a"}}, want: "a, b"},
+		{
+			name: "reasons sorted by type",
+			in:   NotListedMeta{Types: []string{"b", "a"}, Reasons: map[string]string{"a": "HTTP 404 X: gone", "b": "no subscription available"}},
+			want: "a (HTTP 404 X: gone), b (no subscription available)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := notListedWithReasons(tt.in); got != tt.want {
+				t.Errorf("notListedWithReasons() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

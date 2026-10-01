@@ -414,7 +414,7 @@ func renderSummaryFacts(m *Metadata, groups map[string]groupInfo) string {
 		allUsers, allDevices, groupTargets, dynamicGroups, assignedGroups, danglingGroups)
 
 	fmt.Fprintf(&b, "Retained but no longer in tenant: %d\n", gone)
-	fmt.Fprintf(&b, "Types not listed (permissions): %s\n", listOrNone(m.NotListed.Types))
+	fmt.Fprintf(&b, "Types not listed: %s\n", notListedWithReasons(m.NotListed))
 	fmt.Fprintf(&b, "Types that listed to zero: %s", listOrNone(m.NotListed.Empty))
 
 	return b.String()
@@ -459,6 +459,27 @@ func isDynamicGroup(gi groupInfo) bool {
 
 // listOrNone renders a slice as a sorted, comma-joined cell, or "none" when it
 // is empty, for the coverage caveats.
+// notListedWithReasons renders the types that could not be listed, sorted,
+// each followed by its recorded reason in parentheses — "none" when every type
+// listed. A type without a recorded reason (a file written before reasons
+// existed) is rendered bare. The reason is not assumed to be a permission.
+func notListedWithReasons(n NotListedMeta) string {
+	if len(n.Types) == 0 {
+		return "none"
+	}
+	types := append([]string(nil), n.Types...)
+	sort.Strings(types)
+	parts := make([]string, 0, len(types))
+	for _, t := range types {
+		if reason := n.Reasons[t]; reason != "" {
+			parts = append(parts, fmt.Sprintf("%s (%s)", t, reason))
+		} else {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 func listOrNone(items []string) string {
 	if len(items) == 0 {
 		return "none"

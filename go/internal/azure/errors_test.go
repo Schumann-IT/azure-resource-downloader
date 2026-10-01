@@ -108,24 +108,24 @@ func TestErrorSummary(t *testing.T) {
 			want: "connection reset by peer",
 		},
 		{
-			name: "ARM response error collapses to status and code",
+			name: "ARM response error summarises status, code and first line",
 			err:  armErr,
-			want: "HTTP 403 AuthorizationFailed",
+			want: "HTTP 403 AuthorizationFailed: GET https://management.azure.com/subscriptions/x/resources",
 		},
 		{
 			name: "wrapped ARM response error",
 			err:  fmt.Errorf("failed to list resources: %w", armErr),
-			want: "HTTP 403 AuthorizationFailed",
+			want: "HTTP 403 AuthorizationFailed: failed to list resources: GET https://management.azure.com/subscriptions/x/resources",
 		},
 		{
 			name: "multiline Intune error surfaces embedded JSON Message and hint",
-			err:  errors.New("failed to list device configurations: {\r\n  \"Message\": \"Application is not authorized\"\r\n} (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"),
-			want: "failed to list device configurations: Application is not authorized (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)",
+			err:  errors.New("failed to list device configurations: {\r\n  \"Message\": \"Application is not authorized to perform this operation\"\r\n} (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"),
+			want: "failed to list device configurations: Application is not authorized to perform this operation (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)",
 		},
 		{
-			name: "multiline error without JSON Message keeps first line and hint",
+			name: "multiline non-permission error without JSON Message keeps first line, drops hint",
 			err:  errors.New("failed to list device configurations: {\r\n  \"_version\": 3\r\n} (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"),
-			want: "failed to list device configurations (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)",
+			want: "failed to list device configurations",
 		},
 		{
 			name: "single-line error with hint is unchanged",

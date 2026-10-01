@@ -275,3 +275,27 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 		t.Errorf("BuildFetchRequests() = %+v, want %+v", requests[0], expected)
 	}
 }
+
+func TestNothingListed(t *testing.T) {
+	req := []*models.FetchRequest{{ResourceID: "id-1", ResourceType: "Microsoft.Graph/groups"}}
+	empty := []string{"Microsoft.Graph/organizationalBranding"}
+
+	tests := []struct {
+		name       string
+		requests   []*models.FetchRequest
+		emptyTypes []string
+		want       bool
+	}{
+		{name: "requests only", requests: req, want: false},
+		{name: "empty types only", emptyTypes: empty, want: false},
+		{name: "requests and empty types", requests: req, emptyTypes: empty, want: false},
+		{name: "neither", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nothingListed(tt.requests, tt.emptyTypes); got != tt.want {
+				t.Errorf("nothingListed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

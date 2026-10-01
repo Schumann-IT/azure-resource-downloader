@@ -1,12 +1,15 @@
 package graph
 
 import (
+	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/models"
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 	betaorganization "github.com/microsoftgraph/msgraph-beta-sdk-go/organization"
 )
 
@@ -21,8 +24,9 @@ const organizationalBrandingFallbackName = "Organizational Branding"
 // This is a tenant **singleton** scoped to the organization: List resolves the
 // organization ID, probes the default branding object and returns at most one
 // ID, and Fetch retrieves the branding regardless of the requested ID. When no
-// branding has been configured the Graph API returns an empty body, so List
-// yields no IDs and nothing is exported.
+// default branding has been configured Graph answers 404
+// (Request_ResourceNotFound), so List yields no IDs: the type lists as empty
+// (covered, nothing exported) rather than as "could not be listed".
 func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*GraphCollectionHandler, error) {
 	client, err := newBetaGraphClient(credential)
 	if err != nil {
@@ -61,17 +65,7 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			if err != nil {
 				return nil, err
 			}
-			branding, err := client.Organization().ByOrganizationId(orgID).Branding().Get(ctx, nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get organizational branding: %w (hint: requires 'OrganizationalBranding.Read.All' permission in Microsoft Graph)", err)
-			}
-			if branding == nil {
-				return nil, nil
-			}
-			if branding.GetId() != nil && *branding.GetId() != "" {
-				return []string{*branding.GetId()}, nil
-			}
-			return []string{"organizationalBranding"}, nil
+			return brandingListIDs(client.Organization().ByOrganizationId(orgID).Branding().Get(ctx, nil))
 		},
 		fetchItem: func(ctx context.Context, _ string) (serialization.Parsable, error) {
 			orgID, err := getOrganizationID(ctx)
@@ -84,6 +78,11 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 				},
 			}
 			item, err := client.Organization().ByOrganizationId(orgID).Branding().Get(ctx, requestConfig)
+			if status, ok := azure.HTTPStatus(err); ok && status == http.StatusNotFound {
+				// Listed a moment ago, gone now: the branding was removed
+				// between list and fetch. Not a permission problem, so no hint.
+				return nil, fmt.Errorf("organizational branding is not configured: %w", err)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("failed to get organizational branding: %w (hint: requires 'OrganizationalBranding.Read.All' permission in Microsoft Graph)", err)
 			}
@@ -96,4 +95,26 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			return organizationalBrandingFallbackName
 		},
 	}, nil
+}
+
+// brandingListIDs decides what listing the default branding yields, given the
+// Graph response. A 404 means no default branding is configured: the type
+// lists as empty (no IDs, no error), which counts as covered. Any other error
+// fails the listing, with the permission hint (ErrorSummary keeps the hint
+// only for a 401/403). A nil body also lists as empty; otherwise the
+// branding's ID, or a fixed pseudo-ID when it carries none.
+func brandingListIDs(branding betamodels.OrganizationalBrandingable, err error) ([]string, error) {
+	if err != nil {
+		if status, ok := azure.HTTPStatus(err); ok && status == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get organizational branding: %w (hint: requires 'OrganizationalBranding.Read.All' permission in Microsoft Graph)", err)
+	}
+	if branding == nil {
+		return nil, nil
+	}
+	if branding.GetId() != nil && *branding.GetId() != "" {
+		return []string{*branding.GetId()}, nil
+	}
+	return []string{"organizationalBranding"}, nil
 }

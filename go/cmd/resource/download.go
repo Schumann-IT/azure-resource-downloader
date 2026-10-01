@@ -6,6 +6,7 @@
 package resource
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -125,7 +126,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to build fetch requests: %w", err)
 	}
 
-	if len(requests) == 0 {
+	if nothingListed(requests, emptyTypes) {
 		return errors.New("no resources to download")
 	}
 
@@ -148,23 +149,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		WritePrompts:       writePrompts,
 	}
 
-	// A dry run answers "what would be downloaded" offline: the per-type
-	// listing that built the request set has already run (upstream of the
-	// fetcher), so stop here rather than fetching, transforming and discarding
-	// every resource. This keeps the dry run cheap and consistent with
-	// 'docs generate-prompt --dry-run', and its output is a subset of a real
-	// run, never a preview of the files a real run would write.
-	var summary *pipeline.ExecutionSummary
-	if prep.DryRun {
-		log.Info("Dry-run: listing resources that would be downloaded (no fetch, transform or write)")
-		summary = pipeline.DryRunSummary(requests)
-	} else {
-		p := pipeline.NewPipeline(prep.Client, prep.Registry, pipelineConfig)
-		log.Info("Starting pipeline execution...")
-		summary, err = p.Execute(ctx, requests)
-		if err != nil {
-			return fmt.Errorf("pipeline execution failed: %w", err)
-		}
+	summary, err := executeDownload(ctx, prep, pipelineConfig, requests)
+	if err != nil {
+		return err
 	}
 
 	// Attach the resource types that could not be listed and the types that
@@ -211,6 +198,47 @@ func runDownload(cmd *cobra.Command, args []string) error {
 
 	log.Info("Download completed successfully")
 	return nil
+}
+
+// nothingListed reports whether a download has nothing to act on: the listing
+// produced no fetch request and no type listed as empty. That happens when
+// every type in scope could not be listed, or a --resource-group run had no
+// subscription. A run whose types merely listed empty is not "nothing": those
+// types are covered, so the run must still record metadata (marking their
+// earlier entries absent, and pruning them on a complete run with prune on).
+func nothingListed(requests []*models.FetchRequest, emptyTypes []string) bool {
+	return len(requests) == 0 && len(emptyTypes) == 0
+}
+
+// executeDownload produces the run's ExecutionSummary for the listed requests.
+//
+// A dry run answers "what would be downloaded" offline: the per-type listing
+// that built the request set has already run (upstream of the fetcher), so it
+// stops there rather than fetching, transforming and discarding every
+// resource. This keeps the dry run cheap and consistent with
+// 'docs generate-prompt --dry-run', and its output is a subset of a real run,
+// never a preview of the files a real run would write.
+//
+// When only empty types were listed there is nothing to fetch, so the pipeline
+// is skipped and the summary is empty — zero requests, zero results — which
+// MarkCompleteness accounts exactly as a full run's.
+func executeDownload(ctx context.Context, prep *runprep.Prepared, cfg *models.PipelineConfig, requests []*models.FetchRequest) (*pipeline.ExecutionSummary, error) {
+	log := logger.Default
+	if prep.DryRun {
+		log.Info("Dry-run: listing resources that would be downloaded (no fetch, transform or write)")
+		return pipeline.DryRunSummary(requests), nil
+	}
+	if len(requests) == 0 {
+		log.Info("Every listed type is empty: nothing to fetch, recording the export metadata only")
+		return &pipeline.ExecutionSummary{Results: []*models.WriteResult{}}, nil
+	}
+	p := pipeline.NewPipeline(prep.Client, prep.Registry, cfg)
+	log.Info("Starting pipeline execution...")
+	summary, err := p.Execute(ctx, requests)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline execution failed: %w", err)
+	}
+	return summary, nil
 }
 
 // rebaselineClearDrift removes the tenant's drift/ tree after a run that
