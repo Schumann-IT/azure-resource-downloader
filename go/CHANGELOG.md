@@ -125,7 +125,7 @@ This project is released independently of the documentation browser in `web/`: i
   update. The go and npm groups now carry minor and patch updates only; a major arrives as its own pull request
   (`build(go): bump … in /go`, `build(web): bump … in /web`), is merged only when green, and is otherwise closed
   and planned as an entry. GitHub Actions updates stay grouped. **After merging, check under Insights →
-  Dependency graph → Dependabot that the configuration shows no error.**
+  Dependency graph → Dependabot that the configuration shows no error.** (#44)
 
 #### Dependencies
 

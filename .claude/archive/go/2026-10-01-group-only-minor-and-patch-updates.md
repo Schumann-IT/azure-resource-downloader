@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-01
 branch: docs/dependabot-majors
+pr: 44
 changelog: Unreleased
 ---
 ## Group only minor and patch updates in Dependabot
