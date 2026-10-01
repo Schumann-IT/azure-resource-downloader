@@ -20,7 +20,7 @@ Lifecycle and operations:
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive settings and any deviations from the best-practice baselines listed above, including the tenant-wide security impact.
+- call out security-sensitive settings{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above, including the tenant-wide security impact{{ end }}.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.

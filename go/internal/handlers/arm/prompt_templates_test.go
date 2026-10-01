@@ -39,8 +39,8 @@ func TestArmPromptTemplateOverride(t *testing.T) {
 			if strings.Contains(prompt, "a table of any assignments/targeting present") {
 				t.Error("prompt unexpectedly contains default-template assignments text")
 			}
-			if !strings.Contains(models.DefaultDocumentationPromptTemplate(), "assignments/targeting") {
-				t.Error("sanity check: default template should mention assignments/targeting")
+			if !strings.Contains(models.DefaultDocumentationPromptTemplate(), `template "prompt-assignments"`) {
+				t.Error("sanity check: default template should call the prompt-assignments partial")
 			}
 		})
 	}

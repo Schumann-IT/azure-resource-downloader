@@ -20,7 +20,7 @@ Lifecycle and operations:
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.) and any deviations from the best-practice baselines listed above, including the security impact.
+- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.){{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above, including the security impact{{ end }}.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.

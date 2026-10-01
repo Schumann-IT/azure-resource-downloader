@@ -67,6 +67,7 @@ Security:
 Settings:
 - document EVERY property present in the YAML outside `conditions` (`state`, `grantControls`, `sessionControls`, the timestamps and the rest).
 - give particular attention to: state, conditions.users, conditions.applications, conditions.locations, grantControls.builtInControls, grantControls.authenticationStrength, sessionControls.
+- entries of that list under `conditions` are covered in the Conditions section — no `<details data-setting>` block for them here.
 - Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.
 - State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="grantControls.builtInControls">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.

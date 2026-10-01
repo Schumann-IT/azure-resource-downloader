@@ -40,7 +40,7 @@ Lifecycle and operations:
 
 Security:
 - name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
-- call out security-sensitive settings and any deviations from the best-practice baselines listed above, including the tenant-wide security impact.
+- call out security-sensitive settings.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.

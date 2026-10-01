@@ -7,7 +7,6 @@ The configuration is provided as a YAML file exported by azure-resource-download
 - An H1 title set to the resource's display name.
 - Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the tenant. {{ template "prompt-purpose-rule" . }}
 - Directly after the summary paragraph, a metadata table stating the resource type, the concrete subtype (`@odata.type`, if present), the resource ID, and other identifying top-level fields where present (e.g. platform, technologies).
-{{- /* The assignments/targeting bullet is the shared prompt-assignments partial. */}}
 {{ template "prompt-assignments" . }}
 
 Then the following H2 sections, unnumbered, in this order:
@@ -23,7 +22,9 @@ Lifecycle and operations:
 Security:
 {{ template "prompt-change-role" . }}
 - call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)
+{{- if .Links.BestPractices }}
 - any deviations from the best-practice baselines listed above, including the security impact.
+{{- end }}
 
 Settings:
 - document EVERY setting/property present in the YAML.

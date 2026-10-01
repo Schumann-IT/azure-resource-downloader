@@ -28,11 +28,12 @@ Security:
 {{ template "prompt-change-role" . }}
 - state whether the policy is report-only or enforced, from `state`.
 - state whether any user or group is excluded — without claiming that an exclusion is an emergency-access (break-glass) account.
-- call out the grant and session controls that strengthen or weaken access, and any deviations from the best-practice baselines listed above.
+- call out the grant and session controls that strengthen or weaken access,{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above{{ end }}.
 
 Settings:
 - document EVERY property present in the YAML outside `conditions` (`state`, `grantControls`, `sessionControls`, the timestamps and the rest).
 {{- template "prompt-key-settings" . }}
+- entries of that list under `conditions` are covered in the Conditions section — no `<details data-setting>` block for them here.
 - Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.
 {{ template "prompt-baseline-rule" . }}
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="grantControls.builtInControls">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
