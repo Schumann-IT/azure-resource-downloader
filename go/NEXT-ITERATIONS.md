@@ -386,10 +386,12 @@ naming flags that no longer exist.
   never calls `Authenticate`; `AuthenticationRequiredError` → one `Authenticate`, record saved, retry succeeds;
   non-interactive variant never calls `Authenticate`; N concurrent `GetToken` calls on a fresh session call
   `Authenticate` once (run under `make test-race`); other errors pass through.~~
-- Operator step, not for the implementer — stays unstruck until the result is recorded here: on cb-gmbh.com, with
+- ~~Operator step, not for the implementer — stays unstruck until the result is recorded here: on cb-gmbh.com, with
   the dedicated app in the profile, sign in once, then a second `resource download --dry-run` must not prompt;
   record the platform and whether it prompted. The profile's `tenant-id` must be the tenant GUID: the stored record
-  carries the GUID, so a domain never matches it and every run would prompt.
+  carries the GUID, so a domain never matches it and every run would prompt.~~
+  **Result (2026-10-01, cb-gmbh.com, macOS):** the cache works — after the one device-code sign-in, later runs got
+  their tokens silently. The number of prompts on the very first run was not recorded (see the CAE follow-up).
 - The experiment, an operator step not for the implementer — stays unstruck until recorded here: on cb-gmbh.com
   `az logout && az login --scope https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
   --domain cb-gmbh.com` with no `client-id` in the profile; record `appid`, the `scp` list and the covered/missing
@@ -419,6 +421,58 @@ naming flags that no longer exist.
   `SignedInIdentity` do not) may therefore prompt twice on its first sign-in, and silently after that. The cache
   check above should record how many prompts the first run showed; if two, sign in once and seed the other
   partition from the same session, or drop the mixed request.
+
+## 7. Check access before listing, and refuse a run that would be mostly refused
+
+**Goal.** A run finds out before it lists anything whether the signed-in account can actually read what was
+selected. When it cannot — an expired PIM-activated Global Administrator, a missing Intune role, a missing Entra
+role — it stops with one clear message naming what is missing, instead of listing everything, collecting dozens of
+refusals and ending as a mostly empty, incomplete run.
+
+> **Why.** On 2026-10-01 a `resource download --dry-run` on cb-gmbh.com ran after the operator's Global
+> Administrator role had expired: 44 of 50 types were refused while listing — Intune answered `HTTP 401` with a
+> nested `{"ErrorCode":"Forbidden", …}` body on every device-management and app endpoint, Entra answered `403`
+> (`Authorization_RequestDenied`, `accessDenied`, `AccessDenied` naming the roles needed, `UnauthorizedUserRole`).
+> The token itself was fine: the cached dedicated-app session carried the scopes. This is a **role** problem, which
+> a scope check (the `--debug` coverage of the sign-in entry) cannot see — only a live request can. Today the run
+> lists every type, logs each refusal twice (warn and debug) with the full nested JSON, and continues; a real run
+> would then write an incomplete export.
+>
+> **Decision.** When a probe is refused: refuse the whole run before listing — exit non-zero, nothing written; to
+> run with less, the operator narrows the selection (`--type`, `type:`, `exclude-type`).
+>
+> Not regeneration-gated.
+>
+> **Implementer.** opus — it adds a step in front of every listing command and must not misread a 404 or a
+> throttle as a refusal.
+
+**Plan.**
+
+- Probe plan (pure): from the effective type selection and each handler's declared `RequiredPermissions`, build one
+  probe per permission group actually needed (e.g. `DeviceManagementConfiguration`, `DeviceManagementApps`,
+  `DeviceManagementServiceConfig`, `DeviceManagementScripts`, `DeviceManagementRBAC`,
+  `DeviceManagementManagedDevices`, `Policy`, `Agreement`, `OnPremDirectorySynchronization`, `Group`,
+  `Organization`). A probe is the cheapest read of one selected type in that group (`$top=1` / `$select=id` where
+  the endpoint allows it). Handlers expose the probe through a small optional interface; a type without one is
+  probed by its normal first list page.
+- Prober: runs the probes concurrently after credential resolution and before `BuildFetchRequests` lists anything,
+  in `resource download`, `resource drift` and `resource list`. Classification: 401 and 403 are *refused*; a 404 (an
+  unconfigured singleton such as organizational branding) and everything else are *not refusals* and are left to
+  the listing as today; a throttle is retried by the existing retry policy.
+- Refusal: stop before any listing or write (`--dry-run` included; the `drift/` tree untouched), exit non-zero
+  (download/list: 1; drift: its "cannot answer" code 2), with one block per refused group — the permission group,
+  the HTTP status and service error code, the selected types it blocks, and a hint: Intune `Forbidden` → "no Intune
+  role for this account (a PIM-activated role may have expired)"; Entra 403 → the roles the service names. The
+  closing line says how to narrow the run (`--type`, `type:`, `exclude-type`).
+- Error summaries: Intune's nested body (`{"ErrorCode":"Forbidden","Message":"{\r\n \"_version\": 3, …}"}`) is
+  unwrapped to `HTTP 401 Forbidden: <operation>` — the `Activity ID` and URL only at debug level — in
+  `azure.ErrorSummary`, so both the refusal and any later listing warning stay one readable line.
+- Tests: the probe planner (groups from a selection, one probe per group, types without a probe), the classifier
+  (401/403 refused; 404, 429, 5xx not), the refusal message, `ErrorSummary` with the nested Intune body, and the
+  runprep integration with a stub prober (refused → no listing, exit code; all clear → unchanged run). No network.
+- Documentation at *done*: `README.md` — the access check before listing (what it probes, what refuses, how to
+  narrow a run) in the sign-in / permissions section and the exit codes; `CHANGELOG.md` `### Added` (the access
+  check) and `### Changed` (the readable Intune error summary).
 
 ## Parked ideas
 
