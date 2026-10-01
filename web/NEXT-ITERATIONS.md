@@ -61,8 +61,8 @@ branch), L (several branches or a design change).
 **Ships together.**
 
 1. **The pre-regeneration batch** (scheduled): *Style the Conditional Access `Conditions` section* pairs with go
-   *Template content fixes and a Conditional Access template*, inside the go batch that shares one documentation
-   regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which *per-item context in
+   *Template content fixes and a Conditional Access template* (shipped), inside the go batch that shares one
+   documentation regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which *per-item context in
    the sidebar* and *per-document identity* build on.
 2. **The compare track** (cross-project, must): *Move the compare normalisation to the CLI* ships with go
    *`resource compare`*; *manual pairing* and *a one-sided resource* follow.

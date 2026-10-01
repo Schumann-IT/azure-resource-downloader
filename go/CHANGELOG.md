@@ -152,6 +152,17 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Documentation and drift analysis
 
+- **Conditional Access gets its own documentation template, and every template asks for evidence, not guesses.**
+  A Conditional Access policy is documented from what actually targets it — its users, roles, applications,
+  locations, platforms, client apps and risk conditions — in a new `Conditions` section, instead of an assignments
+  table that never applied to it. Across all templates the agent may link a setting only to a page it actually
+  knows, recommends a value only where a listed baseline covers it, asks for a review cadence only where a
+  credential expires, takes a resource's purpose from its own description rather than its name, and names the
+  read permission and, where documented, the role needed to change it. Groups get the full set of reference
+  links, role scope tags get their assignments, reusable policy settings are documented as the referenced objects
+  they are, records redact exposed credentials, and embedded payloads are described as the export delivers them.
+  Every type's prompt changes, so **regenerate the documentation**.
+
 - **Per-type documentation metadata corrected and completed.** Every resource type's documentation prompt now
   carries metadata checked field by field against Microsoft Learn: what the type is and what the export actually
   contains, the settings that matter, lifecycle facts with a source, the types it really references (role scope
