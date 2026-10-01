@@ -128,6 +128,13 @@ describe('applySectionHeadings', () => {
     expect(tokens[0].attrGet('class')).toBe(SECTION_HEADING_CLASS);
   });
 
+  it('styles the Conditional Access Conditions heading', () => {
+    const tokens = heading('h2', 'Conditions');
+    applySectionHeadings(tokens as any);
+    expect(tokens[0].attrGet('data-section')).toBe('conditions');
+    expect(tokens[0].attrGet('class')).toBe(SECTION_HEADING_CLASS);
+  });
+
   it('leaves an unrecognised heading addressable but unstyled', () => {
     const tokens = heading('h2', 'Metadata');
     applySectionHeadings(tokens as any);
@@ -280,6 +287,17 @@ describe('wrapSections', () => {
     const out = wrapped(tokens);
     expect(out.filter((t) => t === '>')).toHaveLength(1);
     expect(out.filter((t) => String(t).startsWith('<'))).toEqual(['<settings']);
+  });
+
+  it('wraps a Conditions run in a doc-section with that slug', () => {
+    const tokens = [
+      ...heading('h2', 'Conditions'),
+      new FakeToken('paragraph_open', 'p'),
+    ];
+    applySectionHeadings(tokens as any);
+    const out = wrapSections(tokens as any, makeToken as any);
+    expect(out[0].attrGet('class')).toBe(SECTION_CLASS);
+    expect(out[0].attrGet('data-section')).toBe('conditions');
   });
 
   it('carries the heading slug onto the wrapper, declared or not', () => {

@@ -511,6 +511,7 @@ html {
 [data-section="usage-as-assignment-target"],
 [data-section="usage-and-references"],
 [data-section="assignment-posture"],
+[data-section="conditions"],
 [data-section="targeted-by"],
 [data-section="used-by"] {
   --section-color: var(--sec-relation);
@@ -551,6 +552,10 @@ html {
 
 [data-section="definition"] {
   --section-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1'/%3E%3Cpath d='M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1'/%3E%3C/svg%3E");
+}
+
+[data-section="conditions"] {
+  --section-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z'/%3E%3C/svg%3E");
 }
 
 [data-section="membership"] {
@@ -697,29 +702,27 @@ html {
    wrapper exists at all. */
 .doc-section[data-section="settings"],
 .doc-section[data-section="properties"],
-.doc-section[data-section="definition"],
-.doc-section[data-section="membership"] {
+.doc-section[data-section="definition"] {
   font-size: 0.9375rem;
 }
 
 .doc-section[data-section="settings"] details,
 .doc-section[data-section="properties"] details,
-.doc-section[data-section="definition"] details,
-.doc-section[data-section="membership"] details {
+.doc-section[data-section="definition"] details {
   margin: 0.25rem 0;
 }
 
 .doc-section[data-section="settings"] summary,
 .doc-section[data-section="properties"] summary,
-.doc-section[data-section="definition"] summary,
-.doc-section[data-section="membership"] summary {
+.doc-section[data-section="definition"] summary {
   padding: 0.125rem 0.375rem;
 }
 
 /* Depth is legible from the rail rather than from indentation alone, which at
    five levels is not enough on its own. */
 .doc-section[data-section="settings"] details details,
-.doc-section[data-section="properties"] details details {
+.doc-section[data-section="properties"] details details,
+.doc-section[data-section="definition"] details details {
   border-left-color: color-mix(in oklch, var(--section-color) 35%, transparent);
 }
 

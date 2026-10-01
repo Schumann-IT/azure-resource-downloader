@@ -42,20 +42,9 @@ the section styling are closed: `membership` is not treated as a `<details>` con
 
 **Plan.**
 
-- `src/docs/section-hooks.ts`: add `conditions` to `SECTION_VOCABULARY` and a line to the template list in its
-  comment (`conditional-access   references, conditions, lifecycle-and-operations, security, settings`); note that
-  `roleScopeTags` / `reusablePolicySettings` now use the referenced set.
-- `src/styles.css`: `[data-section="conditions"]` joins the *Relations* role (`--section-color: var(--sec-relation)`
-  — targeting is who and what the policy points at), so the dark variant comes from the existing `--sec-relation`
-  lift with no extra rule; add a `--section-icon` for it in the existing Lucide data-URI format (e.g. `funnel`);
-  `conditions` gets no dense rule. Drop `membership` from the three dense rules (the `font-size`, `details` margin
-  and `summary` padding selectors under `.doc-section[data-section=…]`) while keeping its colour and icon; add
-  `.doc-section[data-section="definition"] details details` to the nested-`<details>` depth rail.
-- Tests: `test/section-hooks.spec.ts` — a `## Conditions` heading gets `data-section="conditions"` and the
-  `doc-section-heading` class, and `wrapSections` wraps its run in a `doc-section` with that slug;
-  `test/styles-build.spec.ts` — the built CSS contains the `[data-section="conditions"]` identity rule and the
-  `definition` depth-rail selector, and contains neither a `.doc-section[data-section="membership"]` dense rule
-  nor a `.doc-section[data-section="conditions"]` dense rule.
+- ~~`src/docs/section-hooks.ts`: add `conditions` to `SECTION_VOCABULARY` and a line to the template list in its comment (`conditional-access   references, conditions, lifecycle-and-operations, security, settings`); note that `roleScopeTags` / `reusablePolicySettings` now use the referenced set.~~
+- ~~`src/styles.css`: `[data-section="conditions"]` joins the *Relations* role (`--section-color: var(--sec-relation)` — targeting is who and what the policy points at), so the dark variant comes from the existing `--sec-relation` lift with no extra rule; add a `--section-icon` for it in the existing Lucide data-URI format (e.g. `funnel`); `conditions` gets no dense rule. Drop `membership` from the three dense rules (the `font-size`, `details` margin and `summary` padding selectors under `.doc-section[data-section=…]`) while keeping its colour and icon; add `.doc-section[data-section="definition"] details details` to the nested-`<details>` depth rail.~~
+- ~~Tests: `test/section-hooks.spec.ts` — a `## Conditions` heading gets `data-section="conditions"` and the `doc-section-heading` class, and `wrapSections` wraps its run in a `doc-section` with that slug; `test/styles-build.spec.ts` — the built CSS contains the `[data-section="conditions"]` identity rule and the `definition` depth-rail selector, and contains neither a `.doc-section[data-section="membership"]` dense rule nor a `.doc-section[data-section="conditions"]` dense rule.~~
 - Documentation at *done*: `README.md` section-styling paragraph (the heading sets per template); `CHANGELOG.md`
   `### Changed` under the views area.
 
