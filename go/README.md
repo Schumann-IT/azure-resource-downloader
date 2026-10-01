@@ -1470,7 +1470,9 @@ through the production parse, transform and YAML path and must match the checked
 byte. A Graph SDK, Kiota or YAML update that would change exported bytes — and so move `sourceSha256` for
 resources that did not change in the tenant — fails here, offline, in CI. Accepting such a change is a
 deliberate `make golden-update` plus a reviewed diff, and belongs with a documentation regeneration.
-Dependabot (`.github/dependabot.yml`) proposes one grouped update per week as `build(go): …`.
+Dependabot (`.github/dependabot.yml`) proposes one grouped pull request per week with the **minor and patch**
+updates (`build(go): …`); a **major** version arrives as its own single-dependency pull request with the same
+prefix and is merged only when green — otherwise it is closed and, if wanted, planned as an entry.
 
 ### Linting and the editor
 
