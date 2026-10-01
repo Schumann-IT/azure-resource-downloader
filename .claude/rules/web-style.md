@@ -18,9 +18,13 @@ paths:
   `src/main.ts` keeps `console` to the single startup line).
 - `eslint-suppressions.json` is a **debt ledger, not an escape hatch**: counts per file and rule for findings
   that predate the sonarjs rules. **Never run `npm run lint:baseline` to make your own change pass** — a new
-  violation exceeding a count is the signal it exists for. It only shrinks: when editing a baselined file
-  anyway, pay the finding off and run `npm run lint:prune`. Growing it needs the user's agreement and a
-  changelog entry.
+  violation exceeding a count is the signal it exists for. It only shrinks: when editing a baselined file anyway,
+  pay the finding off and run `npm run lint:prune`. Growing it needs the user's agreement and a changelog entry.
+  Pay it off a rule at a time and run `npm run lint:prune` after each, so the diff shows what was paid off; a
+  finding you decide to keep becomes an `eslint-disable-next-line` with its reason at the site, never a ledger
+  entry (a baseline must not be where a standing choice hides). Paying off is internal (no changelog unless a
+  reader sees a difference; a rewritten regex gets a spec case pinning the same accepted and rejected inputs);
+  deleting the ledger and its two scripts is operator-visible and gets one.
 
 ## TypeScript style
 - CommonJS modules, `strictNullChecks` on: handle `undefined` explicitly, no `!` assertions.
@@ -48,6 +52,12 @@ paths:
   print). Templates outside `views/` must be added with `@source` or their classes are purged.
 - Every visual state has a dark variant (`prefers-color-scheme` / `dark:`); interactive elements keep a
   visible `:focus-visible` outline; no anchor nested inside an anchor.
+- Read a document's headings from `markdown-it`'s tokens, the way `section-hooks.ts` does, never with a
+  line-based regex: generated documents contain `##` lines inside fenced code blocks.
+- **Query-parameter options** (facets, export options, view switches): a named choice with a stable id, so a
+  chosen variant has exactly one URL; an unknown or malformed value falls back to the default, never a 404 —
+  the way `parseFacetSelection()` validates a selection; every option has a default, so an option-less URL keeps
+  working.
 - `{{{body}}}` (triple-stache) only for already-rendered Markdown HTML; everything else `{{ }}` escaped.
 - **No client-side JavaScript and no frontend framework.** HTML interactivity (`<details>`, `:target`,
   `<form method="get">`) is in bounds; shipped script and client-side state are not.

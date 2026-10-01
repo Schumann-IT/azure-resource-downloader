@@ -4,7 +4,8 @@ A **self-contained, read-only** NestJS browser for the Markdown documentation pr
 `azure-resource-downloader` exports. `README.md` in this folder is the single source of truth (routes,
 environment variables, the docs-root contract, layout); update it in the same change. Workflow, gates and
 repo-wide rules: `../CLAUDE.md`. Style, testing and lint detail loads automatically from
-`../.claude/rules/web-style.md`. The Go rules in `../go` do not apply here, and the Go `Makefile` is never
+`../.claude/rules/web-style.md`; where export entry points live and the export seam from
+`../.claude/rules/web-export.md`. The Go rules in `../go` do not apply here, and the Go `Makefile` is never
 used from this folder.
 
 ## Context
@@ -13,7 +14,9 @@ used from this folder.
   Handlebars (`hbs`), Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`),
   `shiki`, `gray-matter`, `js-yaml`, `diff`, `yazl`, `pdfmake`, Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered; the CSP names no `script-src`, so no script
-  can run. State lives in the URL. Dropping this rule is a parked idea in `NEXT-ITERATIONS.md`, not a
+  can run. State lives in the URL. The ban is on shipped script and client-side state, not on HTML
+  interactivity: `<details>`/`<summary>`, `:target`, `:focus-visible`, `prefers-color-scheme` and
+  `<form method="get">` are in bounds. Dropping this rule is a parked idea in `NEXT-ITERATIONS.md`, not a
   decision you may take.
 - Version is `version` in `package.json`, bumped only at release; releases are tagged `web/vX.Y.Z`.
 

@@ -24,7 +24,7 @@ existing entry. The rule `.claude/rules/next-iterations.md` applies throughout.
      and "not regeneration-gated" / "regeneration-gated, batched with …" as applicable.
    - `**Plan.**` ← the work steps and the verification as concrete, implementable bullets, tests and
      documentation included (`README.md`, `CHANGELOG.md`, rule files if they change).
-   Write it as the next number (`## N.` in `go/`; `### N.` under `## Features` or `## Fixes` in `web/`),
+   Write it as the next `## N.` with its `*Kind:*` line,
    delete the `### Idea` block (for `plan item N`: replace the entry in place), and keep `1..N` contiguous.
 4. **Commit** `docs(<project>): plan <title>` (only the backlog file). Stop: implementation is a separate
    `implement item N`, and the start gate needs the entry in `HEAD`.

@@ -16,7 +16,7 @@ Run only when the user asks. Branch: `$ARGUMENTS` (or the current one). Follow t
    then archives (a fully struck entry whole; a partially delivered one only its struck bullets, keeping the
    open ones). Ask the user before treating an entry with open code bullets as done. Never delete an entry.
    Afterwards nothing is struck out and the remaining entries are numbered `1..N`. Do not touch parked ideas
-   or standing decisions. Keep the two projects' files independent.
+   or their overview. Keep the two projects' files independent.
 3. Confirm `## [Unreleased]` in that project's `CHANGELOG.md` records every user-visible effect of the branch
    (compare against the diff) and `README.md` documents every new command, flag, setting, route or
    variable. Confirm `web/package.json` `version` and the changelog version headings were not touched.

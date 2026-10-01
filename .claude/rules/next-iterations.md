@@ -1,7 +1,7 @@
 # Managing `NEXT-ITERATIONS.md` (both projects)
 
 Each project's `NEXT-ITERATIONS.md` is **the only way work enters the codebase**: outstanding work as numbered
-entries, parked ideas, and (in `web/`) standing decisions. `README.md` says what the tool does today;
+entries and parked ideas. `README.md` says what the tool does today;
 `CHANGELOG.md` records what shipped and why; the archive under `.claude/archive/<project>/` keeps how. It is a
 sanctioned Markdown file.
 
@@ -20,10 +20,11 @@ sanctioned Markdown file.
 The start gate cannot gate its own creation; nothing else is exempt.
 
 ## Entry anatomy
-Each numbered work entry is a `## N. Title` section (`web/` nests them as `### N.` under `## Features` /
-`## Fixes`):
+Each numbered work entry is a `## N. Title` section, in both projects:
 - **Title** — the substantive change in sentence case; common consequences (e.g. "requires regeneration")
   belong in the Goal or Plan, not the title.
+- **Kind** (required) — a `*Kind:* feat | fix | refactor | build | chore` line directly under the title: the
+  Conventional Commits type of the implementation commit, and of a pull request that closes only this entry.
 - **Goal** (required, exactly one) — a `**Goal.**` paragraph in user/intent terms.
 - **Notes** (optional) — one blockquote directly after the Goal, every line starting with `>`; rationale,
   scope, caveats, hash impact, cross-references; labelled notes separated by a bare `>` line.
@@ -35,8 +36,8 @@ Each numbered work entry is a `## N. Title` section (`web/` nests them as `### N
   tier for the implementing agent). Decisions the user took during the review land as
   `> **Decision.** <question>: <answer>.`
 
-Ideas never live inside an entry. `web/` also keeps a `## Standing decisions` section for decisions that
-constrain ideas without being work items.
+Ideas never live inside an entry. A design decision that constrains ideas without being a work item is a
+rule (`.claude/rules/`, e.g. `web-export.md` for export entry points), never a backlog section.
 
 ## Lifecycle
 - **Committed before implemented.** The start gate reads entry N from `HEAD`, not from the working copy.
@@ -71,7 +72,7 @@ constrain ideas without being work items.
 - **Promotion is a review, not a copy.** In Claude Code, `/promote-idea <title>` locates the block, enters
   plan mode seeded with it, and on approval transcribes the plan file into the entry anatomy — Context →
   Goal and Notes (with the reconciled revisit conditions), work steps and verification → Plan bullets —
-  as the next number, deletes the `### Idea` block, and commits `chore(<project>): plan <title>`. Elsewhere:
+  as the next number, deletes the `### Idea` block, and commits `docs(<project>): plan <title>`. Elsewhere:
   draft the entry from the idea, review it with the user, commit. Implementation stays a separate
   `implement item N`.
 

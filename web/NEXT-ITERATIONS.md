@@ -1,17 +1,16 @@
 # Next iterations
 
-Outstanding work, standing decisions and parked ideas for the docs browser. `README.md` describes what it does
-today and `CHANGELOG.md` records what shipped; neither is repeated here.
+Outstanding work and parked ideas for the docs browser. `README.md` says what it does today and `CHANGELOG.md` what
+shipped and why; neither is repeated here. How entries and ideas are written, promoted, implemented and
+archived is `../.claude/rules/next-iterations.md`.
 
-The *Features* below are scheduled design work, promoted from *Parked ideas* and refined against what is true
-now. The *Fixes* below are scheduled too, but smaller: self-contained corrections that need no design work,
-listed so they are not forgotten between features. Every idea in *Parked ideas* is deliberately unscheduled:
-picking one up means promoting it into a numbered work entry with a `**Goal.**` and a `**Plan.**`, reconciling
-its rationale against what is true at that point rather than copying it across.
+Numbered entries are scheduled work: committed here before they are implemented, struck through as they land,
+and archived to `../.claude/archive/web/` once done. Parked ideas, grouped by area under the overview below,
+are deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## Features
+## 1. Style the Conditional Access `Conditions` section and close two section-style gaps
 
-### 1. Style the Conditional Access `Conditions` section and close two section-style gaps
+*Kind:* feat
 
 **Goal.** When the regenerated documentation arrives, a Conditional Access policy's new `Conditions` section is
 styled like every other contract section instead of rendering as plain unstyled prose, and the two known gaps in
@@ -48,62 +47,6 @@ the section styling are closed: `membership` is not treated as a `<details>` con
 - Documentation at *done*: `README.md` section-styling paragraph (the heading sets per template); `CHANGELOG.md`
   `### Changed` under the views area.
 
-## Fixes
-
-Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
-JavaScript, one `markdown-it` instance, path safety) and none depends on a documentation regeneration. Each
-carries its own e2e or spec case and a `CHANGELOG.md` entry under `[Unreleased]`; purely internal ones say so.
-
-A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry is written. It stays here,
-struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
-deleted, and the remaining entries are renumbered.
-
-## Standing decisions
-
-Decisions that are not work items but constrain the ideas below, recorded so the next iteration does not
-relitigate them.
-
-### Export entry points live on the tenant picker
-
-**Decision.** Every export a *whole tenant* produces is offered on the tenant picker (`GET /`), on that
-tenant's card, as a plain `<a download>` with the one-way-publish caveat beside it. Not on the tenant
-landing page, not in the top bar, not on document pages.
-
-**Why.** The landing page belongs to `docs/summary.md` — it is documentation, and the view adds no chrome of
-its own to it. The picker is where a tenant is chosen *as a whole*, which is exactly the scope an export
-operates on, so the button sits with the noun it applies to and stays out of the reading flow. It also means
-one place to look per tenant instead of a control repeated on every page.
-
-**How it extends to the planned types.**
-
-- **Further whole-tenant formats** (single-file HTML, DOCX, PDF, Markdown bundle — see the parked idea):
-  additional sibling links on the same card, under one `Export:` label once there is more than one. **No
-  dropdown, no picker widget** — that needs client-side JavaScript, which is a non-negotiable (dropping that
-  rule is its own parked idea; until it is actually dropped, this decision stands as written). If the row of
-  formats ever stops fitting, the answer is a per-tenant export *page* (`GET /:tenant/_export`) listing the
-  formats, not a control that needs scripting. A format that grows **options** is a second, earlier reason to
-  reach for that page — see the parked idea on a single export button per tenant.
-- **Partial exports** (one resource type, one document, summary only): these are the one case that must
-  *not* be on the picker, because the picker cannot express the scope. Their entry point belongs next to the
-  thing being exported — the document top bar next to the **Documentation | YAML** switcher for a single
-  document, a sidebar section header for one type — and the picker keeps whole-tenant formats only.
-- **Scoped reports** (the drift report PDF): an export of something other than the tenant's documentation
-  is the same case as a partial export — its link sits on the page of the thing it exports (the tenant drift
-  page, next to the **Summary | Drift** switch), shown only when there is something current to export, and
-  never on the picker.
-- **Media and source YAML as attachments**: no entry point of its own. It changes what an existing export
-  *contains*, never where it is offered.
-- **Confluence REST API synchronisation**: not a download, and it mutates a remote system, so it cannot be
-  an `<a>` at all — it needs a POST, and no route may mutate state today. It gets no control until that
-  design change is actually made, and if it ever does it must be visibly distinct from a download rather
-  than sitting in the same row.
-
-**What any new entry point has to keep.** A plain anchor with `download` and no client-side JavaScript; the
-route shape `/:tenant/_export/<format>` behind the `_export` representation prefix, declared before the
-document catch-all; the one-way caveat rendered next to the link rather than only in the README;
-no anchor nested inside another anchor (the picker card is a wrapper element for exactly this reason); and a
-dark-mode variant plus a visible `:focus-visible` outline.
-
 ## Parked ideas
 
 ### Idea: Per-document identity on the article
@@ -122,8 +65,7 @@ partitions the 414 reference documents cleanly: 333 *References | Lifecycle and 
 Settings* (the `default`/`singleton` contract, indistinguishable from each other by headings alone), 36
 `group`, 25 `referenced`, 6 `record`, 4 `credential`, 0 `arm`. Ignore the spliced `Targeted by` / `Used by`
 headings, emit nothing when the set matches no contract, never infer the family from the resource type, and
-take the headings from `markdown-it`'s tokens the way `section-hooks.ts` does — at least one document has a
-`##` line inside a fenced code block, which a line-based regex would miscount.
+read the headings from `markdown-it`'s tokens (`.claude/rules/web-style.md`).
 
 ### Idea: An actionable findings block
 
@@ -298,7 +240,7 @@ reference corpus — and, in principle, each document's source YAML — could tr
 `alt` text and the export attaches nothing. Doing it properly means a third served root with its own single
 extension policy — a design change, not a feature. **Revisit** if generated documents start carrying
 diagrams that matter, or if readers of an imported space ask for the YAML next to the page. It gets no entry
-point of its own either way (see *Export entry points live on the tenant picker*).
+point of its own either way (`.claude/rules/web-export.md`).
 
 ### Idea: Confluence REST API synchronisation
 
@@ -307,8 +249,7 @@ Confluence up to date". **Parked** because it is a much larger feature than HTML
 persisted mapping from resource to page id, and conflict handling, the last two of which sit awkwardly with
 a read-only browser that stores no state. **Revisit** once one-way HTML publishing is in real use and its
 re-import cost is felt. Note that it cannot reuse the export link's shape at all — it mutates a remote
-system, so it needs a POST rather than an `<a download>` (see *Export entry points live on the tenant
-picker*).
+system, so it needs a POST rather than an `<a download>` (`.claude/rules/web-export.md`).
 
 ### Idea: Further export formats and partial exports
 
@@ -316,12 +257,9 @@ Single-file HTML, DOCX, PDF via a print stylesheet, a Markdown bundle; and expor
 or only the summary. **Parked** deliberately: the Confluence exporter is whole-tenant only, and the
 `src/docs/export/` seam exists so a second format is a second `ExportService` method plus its own format
 module, with the controller and the serialiser untouched. **Revisit** per format when someone actually needs
-it. For a PDF of the documentation, the drift report PDF entry brings `pdfmake` and an HTML→PDF content
-walker (`src/docs/export/pdf-content.ts`) — reuse those rather than a print stylesheet or a second engine.
-Preserving the document tree in an export is not expressible through Confluence HTML import at all —
+it; a PDF reuses the existing engine (`.claude/rules/web-export.md`). Preserving the document tree in an export is not expressible through Confluence HTML import at all —
 re-parenting by hand or the REST API are the only routes. Where each of these would be offered is already
-settled, including why the partial exports are the exception: see *Export entry points live on the tenant
-picker*.
+settled, including why the partial exports are the exception: `.claude/rules/web-export.md`.
 
 ### Idea: One export button per tenant, leading to an export page with per-format options
 
@@ -338,9 +276,8 @@ environment variable cannot express, and the honest trigger for making the choic
 What is settled if it is picked up. **The download route keeps its shape**: `GET /:tenant/_export/:format`
 streams the archive, options ride as query parameters on it, and every option has a default so a bookmarked
 option-less URL keeps producing today's export. The new page is the *only* addition, at the bare `_export`
-prefix, declared before the document catch-all like its sibling. Options are **validated the way
-`parseFacetSelection()` validates a selection** — an unknown or malformed value falls back to the default rather
-than 404ing — and each is a named choice with a stable id, so a chosen variant has exactly one URL. The page is
+prefix, declared before the document catch-all like its sibling. Options follow the query-parameter rule in
+`.claude/rules/web-style.md` (stable ids, one URL per variant, unknown values fall back to the default). The page is
 also the honest place for the things currently crammed onto a picker card: the one-way-publish caveat stated once
 per format, and, cheaply, what the export will contain (page count, pending documents, an incomplete index),
 all index-derived.
@@ -351,7 +288,7 @@ three candidates. **(a)** A plain
 no script, still read-only, and it scales to several options; it costs the app's first form and first non-anchor
 control, and a form cannot carry `download`, so attachment behaviour rests on the `Content-Disposition` header
 `ExportService` already sets. **(b)** One `<a download>` per option combination ("Confluence, index by type",
-"Confluence, index by axis") — keeps the anchor-only shape the standing decision names, but is combinatorial as
+"Confluence, index by axis") — keeps the anchor-only shape the export rule names, but is combinatorial as
 soon as a format has two options. **(c)** Anchors first, with the GET form named as the sanctioned escape hatch
 once a format carries more than one option, and the query-parameter shape fixed up front so swapping the control
 changes no URL. Note that **(a) does not conflict with the no-client-side-JavaScript rule** — that rule bans
@@ -364,18 +301,17 @@ rather than the first option, and moves the trigger for the page to a second for
 that because the variable defaults to today's by-type index, a reader who wants the axis view on a server
 configured for `type` is the most likely first caller for this page.
 
-This amends *Export entry points live on the tenant picker*: the standing decision already names
+This amends the export entry-point rule (`.claude/rules/web-export.md`): it already names
 `GET /:tenant/_export` as the answer when a row of format links stops fitting, and this makes per-format
-options a second, earlier trigger for the same page. What the decision requires is unchanged — the picker stays
+options a second, earlier trigger for the same page. What the rule requires is unchanged — the picker stays
 the entry point for whole-tenant scope, the link is a plain anchor with no nesting, the caveat travels with it,
 and dark mode plus a visible `:focus-visible` outline apply to whatever control the page ends up using.
 
 ### Idea: Drop the no-client-side-JavaScript rule
 
 Lift the non-negotiable that this app ships no script, so the features currently blocked by it become possible.
-It is stated in `.windsurf/rules/01-architecture.md` (*"No client-side JavaScript. Everything is
-server-rendered"*), repeated in `02-style-and-quality.md` (*"Do not introduce client-side JavaScript or a
-frontend framework"*) and claimed in `README.md`'s Frontend section. **Parked** because it is a rule change, not
+It is stated in `web/CLAUDE.md` (*Context*), repeated in `.claude/rules/web-style.md` and both Windsurf twins,
+and claimed in `README.md`'s Frontend section. **Parked** because it is a rule change, not
 a feature: nothing is unblocked until a specific blocked feature is actually wanted, and every one of them is
 itself parked. **Revisit** when a feature someone has asked for cannot be built server-side at acceptable cost —
 tenant-wide search is the honest candidate — or when the alternative has become visibly worse than the script
@@ -384,10 +320,8 @@ compare's IDE-style comparison pane was checked against the rule and needed no s
 on the server, selecting a row is a link, the selected row is scrolled to with a fragment and the pane is
 resized with CSS.
 
-**Note what the rule does and does not forbid.** It bans *shipped script* — no `<script>`, no bundler, no
-framework, no client-side state. It does not ban HTML interactivity: `<details>`/`<summary>`, `:target`,
-`:focus-visible`, `prefers-color-scheme` and a `<form method="get">` are all in bounds today. Several things that
-feel scripted are already legal without it.
+**What the rule does and does not forbid** is stated in `web/CLAUDE.md`: shipped script and client-side state
+are banned, HTML interactivity is not — several things that feel scripted are already legal without lifting it.
 
 **Where the rule earns its keep.** Server-only rendering is a real benefit in its own right and not merely the
 absence of a client — a document arrives complete in the first response, so there is no loading state, no
@@ -420,8 +354,8 @@ owns and needs a *Show all* reset as part of the feature), **clickable breadcrum
 collapsed `<details>` from an anchor, so it needs a whole new route and view), and **an explicit dark-mode
 toggle**. *Tenant diff* used to be the sixth, on the claim that a readable diff of a 317-setting document needs
 interaction — the drift view's server-rendered YAML diff disproved that for the per-resource case, and the idea
-has since shipped as the tenant compare, with two-click link selection and no script. The export standing
-decision inherits it too: *no dropdown, no picker widget*.
+has since shipped as the tenant compare, with two-click link selection and no script. The export rule
+(`.claude/rules/web-export.md`) inherits it too: *no dropdown, no picker widget*.
 
 **Not a binary decision, if it is picked up.** Three tiers, all open. **(a) Keep it** and pay the workaround
 cost knowingly, which is the status quo. **(b) Progressive enhancement only**: a small dependency-free script
@@ -456,8 +390,8 @@ mean it has become a place where findings accumulate, which is the one thing it 
 
 What is settled if it is picked up. It is a **debt ledger, not a policy**: nothing in it is a rule this project
 disagrees with, and none of it is exempted in `eslint.config.mjs` — the rules switched off there for `test/` are
-a separate, permanent parity decision and are not part of this. Work rule by rule and run `npm run lint:prune`
-after each, so the diff shows what was paid off. Only `sonarjs/super-linear-regex` (6: `page-name.ts` ×2,
+a separate, permanent parity decision and are not part of this. The procedure (rule by rule, prune after each,
+what gets a changelog entry) is the ledger paragraph in `.claude/rules/web-style.md`. Only `sonarjs/super-linear-regex` (6: `page-name.ts` ×2,
 `findings-table.ts` ×2, `link-rewrite.ts`, `section-hooks.ts`) changes behaviour — these patterns run over
 generated documents, so each rewrite needs a spec case pinning the same accepted and rejected inputs. The rest
 are refactors the existing suite covers and are internal, carrying no `CHANGELOG.md` entry unless a reader sees
@@ -469,9 +403,7 @@ either way it moves **out** of the baseline: `updated-loop-counter` in `findings
 `i = close` to skip a matched table's body — deliberate and documented in place); if accepted, it becomes an
 `eslint-disable-next-line` at its site, because a baseline must not be where a standing choice hides — exactly
 what happened to `no-os-command-from-path`, which left the ledger when the git calls moved into
-`scripts/lib/git.js` behind one directive with its reason. Deleting
-the file and the two scripts is the last step and is the only operator-visible part, so that one does get a
-`CHANGELOG.md` entry.
+`scripts/lib/git.js` behind one directive with its reason.
 
 ### Idea: Manual pairing and a rename heuristic for the tenant compare
 

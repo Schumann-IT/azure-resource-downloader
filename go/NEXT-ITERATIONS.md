@@ -1,13 +1,16 @@
-# Next iterations — deliberately out of scope
+# Next iterations
 
-Outstanding work and parked ideas for the Go CLI. Each numbered entry is a unit of planned work: it is written
-and committed here before it is implemented, its plan items are struck through as they land, and **once it is
-done it is archived** — moved with its full plan to `../.claude/archive/go/`, so the *how* survives for later
-review while `CHANGELOG.md` records the what and why. Ideas that are deliberately not scheduled collect under
-*Parked ideas* at the end, so they persist as the entries around them ship. `README.md` stays the single source
-of truth for what the tool *does today*.
+Outstanding work and parked ideas for the Go CLI. `README.md` says what it does today and `CHANGELOG.md` what
+shipped and why; neither is repeated here. How entries and ideas are written, promoted, implemented and
+archived is `../.claude/rules/next-iterations.md`.
+
+Numbered entries are scheduled work: committed here before they are implemented, struck through as they land,
+and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area under the overview below,
+are deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
 ## 1. Shared prompt partials, without changing a byte
+
+*Kind:* refactor
 
 **Goal.** The seven documentation prompt templates repeat the same blocks six or seven times (header, reference
 links, `<details>` rules, redaction rule, closed-set paragraph), and they have already drifted apart (the group
@@ -37,6 +40,8 @@ while proving that this refactor moves no `promptSha256` and therefore forces no
   workflow area.
 
 ## 2. Correct and complete the per-handler documentation metadata
+
+*Kind:* fix
 
 **Goal.** Every handler's `models.ResourceDocumentation` is accurate and complete: the right read permission, an
 API reference for the API version the handler actually calls, a link to the permissions page, a deep link to the
@@ -86,6 +91,8 @@ it cannot silently decay again.
   list; `CHANGELOG.md` (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
 
 ## 3. Template content fixes and a Conditional Access template
+
+*Kind:* feat
 
 **Goal.** The documentation prompts describe each type as it really is and stop inviting guesses: Conditional
 Access gets its own template built around its conditions, mismatched types get the right template, the shared
@@ -157,6 +164,8 @@ replaced by evidence-bound ones — so the scheduled regeneration yields better 
 
 ## 4. Run-prompt fixes and the `summary:` frontmatter line
 
+*Kind:* feat
+
 **Goal.** The run prompt (`docs/generate.md`) agrees with the type templates, asks for the one frontmatter field the
 browser is still missing, and fixes link formatting — so the scheduled regeneration also lights up the sidebar's
 per-item context.
@@ -191,25 +200,19 @@ per-item context.
 
 ## Parked ideas
 
-Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
-ship and are archived. Each records why it is parked and what would make it worth doing.
-
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
 `drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
 `drift/<key>.md` and `drift/index.md` are read by the browser, joined by the shared `<type>/<name>` key,
-gated on `baseline.generatedAt` and verified by hash — exactly the shape of the `index.yaml` contract, with
-the same obligations: a change to the observation schema, to the per-finding frontmatter (`verdict`,
-`severity`, `observedAt`, `baselineGeneratedAt`) or to the index's `severities:` line is a cross-project
-change. The observation carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to
+gated on `baseline.generatedAt` and verified by hash — part of the Go → web contract the root `CLAUDE.md`
+lists, so a change to the observation schema, to the per-finding frontmatter (`verdict`, `severity`,
+`observedAt`, `baselineGeneratedAt`) or to the index's `severities:` line already ships as a go/web pair. The observation carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to
 need. **Not planned — parked deliberately**: nothing has broken, and adding the field alone is cheap but
 pointless until a consumer branches on it.
 
 **Revisit when** the observation schema or the per-finding frontmatter next changes for another reason: add
-`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and name `drift/`
-beside `index.yaml` in both projects' rules as a versioned contract. Related, web-only: the drift index
-table uses `high / medium / low / info` while the tenant summary's Findings table uses
-`critical / high / medium` (see the web backlog's *Fixes*).
+`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and mark `drift/`
+as versioned in the root `CLAUDE.md`'s contract list.
 
 ### Idea: per-finding severity in document `Security` sections
 
@@ -353,9 +356,6 @@ deleting each entry as its function is fixed, until the block and its explanatio
 **Revisit when** one of these functions is being changed for another reason (split it then and delete its entry
 in the same commit — that is how this shrinks without a campaign), when a function on the list becomes hard to
 change safely in practice rather than merely scoring high, or if the baseline ever stops shrinking, which would
-mean it has started collecting new debt instead of recording old. If picked up, work one function at a time with
-`make test-race` where the function touches the pipeline, keep the tests that pin the invariants above unchanged
-(a refactor that needs a test edited is a redesign, not a split), and remember that a stale entry is invisible —
-golangci-lint does not report an exclusion that matched nothing, so re-measure by commenting the block out. Each
-split is internal and needs no `CHANGELOG.md` entry; deleting the block at the end does.
+mean it has started collecting new debt instead of recording old. How to split, measure and record is the ledger
+procedure in `.claude/rules/go-style.md`.
 

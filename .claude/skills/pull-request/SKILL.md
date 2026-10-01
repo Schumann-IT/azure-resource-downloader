@@ -23,8 +23,7 @@ Merges are squash-and-merge, so the **title becomes the commit on `main`** and m
    to each changelog (`git diff <base>..HEAD -- go/CHANGELOG.md web/CHANGELOG.md`, added lines only); user
    actions named in the entries; the gate output.
 3. **Title.** One closed entry → `<type>(<scope>): <entry title in lowercase, imperative, ≤ 70 chars>`
-   (`feat` for a Features entry, `fix` for a Fixes entry, `chore` for tooling or setup, `docs` for
-   documentation only; scope `go` or `web`, none when both). Several entries → a short summary in the same
+   (the entry's `*Kind:*`, `docs` for documentation only; scope `go` or `web`, none when both). Several entries → a short summary in the same
    shape. Breaking changes: `!` and a `BREAKING CHANGE:` line in the body's Summary.
 4. **Body** from `.github/PULL_REQUEST_TEMPLATE.md`, every section filled: Summary; Backlog entries (per
    project, title + one-sentence goal); Changes (the added changelog lines verbatim); User actions;
