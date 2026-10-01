@@ -194,21 +194,6 @@ per-item context.
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
 ship and are archived. Each records why it is parked and what would make it worth doing.
 
-### Idea: recommend a scoped `az login` in the dedicated-app prompt
-
-Let the dedicated-app prompt (`PromptForDedicatedApp`, `internal/cmdutil/prompt.go`) first print the exact
-`az login --scope …` command derived from the selected types' declared permissions, with device code as the
-fallback — the softening step the sign-in review proposed. **Parked** because the measurement says it cannot work:
-on cb-gmbh.com (2026-10-01) a token from `az login --scope https://graph.microsoft.com/.default` belonged to the
-first-party Azure CLI app (`04b07795-…`) with its fixed scope set and covered 1 of 51 declared permissions
-(`Group.Read.All` only) — every `DeviceManagement*`, `Policy.Read.All`, `Agreement.Read.All`,
-`OnPremDirectorySynchronization.Read.All` and `Organization*` permission was missing. Recommending the command would
-send operators down a path that fails. The `--debug` Graph-token section stays the instrument to re-measure.
-
-**Revisit when** a re-measurement with `azure-rd --debug` on a representative tenant shows the Azure CLI app's token
-covering the declared permissions (Microsoft changes what its first-party app may request), or Microsoft documents
-that it does. Removing the dedicated-app path entirely would additionally be breaking (two tenant-scoped keys).
-
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
 `drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
@@ -225,47 +210,6 @@ pointless until a consumer branches on it.
 beside `index.yaml` in both projects' rules as a versioned contract. Related, web-only: the drift index
 table uses `high / medium / low / info` while the tenant summary's Findings table uses
 `critical / high / medium` (see the web backlog's *Fixes*).
-
-### Idea: consolidate on one Microsoft Graph SDK
-
-The module carries two generated Graph SDKs: `msgraph-beta-sdk-go` for the Intune / device-management endpoints that
-do not exist on v1.0 (about 50 handlers), and `msgraph-sdk-go` (v1.0) for seven handlers (conditional access, groups,
-organization, authentication methods and strengths, authorization policy, on-premises sync) plus `GraphErrorCode`.
-The two SDKs dominate compile time and binary size. **Parked** because both directions cost something real: moving
-the seven to beta trades v1.0's stability contract for beta churn on the most-referenced types, and re-fetching them
-through beta changes their YAML once (beta models carry extra properties), which moves their `sourceSha256` and
-regenerates their documents; dropping beta instead is only possible once every Intune endpoint exists on v1.0.
-
-**Revisit when** the investigation recorded by the routine-dependency-update entry shows a viable direction, build
-time becomes a felt cost, or a security advisory forces an SDK change anyway. **Regeneration-gated** when picked up:
-batch it with a scheduled regeneration; move the handlers one at a time, each proven with the golden test, and drop
-the module only at the end.
-
-**Evidence (2026-10-01, `msgraph-sdk-go v1.103.0`, `msgraph-beta-sdk-go v0.166.0`, read from the module cache —
-request builders only; a Microsoft Learn cross-check is still open).** *Drop beta* is **not viable**: 21 of the beta
-endpoints the handlers call have no v1.0 request builder, among them the Settings Catalog. *Drop v1.0* is
-**technically viable**: all seven v1.0 endpoints (`identity/conditionalAccess/policies`,
-`policies/authenticationStrengthPolicies`, `policies/authenticationMethodsPolicy`, `policies/authorizationPolicy`,
-`directory/onPremisesSynchronization`, `groups`, `organization`) exist on beta, and beta has its own `odataerrors`
-for `GraphErrorCode`; the cost stays the one stated above (beta churn, one YAML/hash move per type). Beta endpoint →
-on v1.0:
-- `deviceManagement`: `applePushNotificationCertificate` yes; `appleUserInitiatedEnrollmentProfiles` no;
-  `assignmentFilters` no; `compliancePolicies` no; `configurationPolicies` no; `depOnboardingSettings` no;
-  `deviceCategories` yes; `deviceCompliancePolicies` yes (+ assignments); `deviceComplianceScripts` no;
-  `deviceConfigurations` yes (+ assignments, `getOmaSettingPlainTextValue`); `deviceCustomAttributeShellScripts` no;
-  `deviceEnrollmentConfigurations` yes (+ assignments); `deviceHealthScripts` no; `deviceManagementScripts` no;
-  `deviceShellScripts` no; `groupPolicyConfigurations` no; `intents` no; `intuneBrandingProfiles` no;
-  `mobileThreatDefenseConnectors` yes; `ndesConnectors` no; `notificationMessageTemplates` yes;
-  `reusablePolicySettings` no; `roleDefinitions` yes; `roleScopeTags` no; `termsAndConditions` yes (+ assignments);
-  `windowsAutopilotDeploymentProfiles` no; `windowsAutopilotDeviceIdentities` yes; `windowsDriverUpdateProfiles` no;
-  `windowsFeatureUpdateProfiles` no; `windowsQualityUpdateProfiles` no; the `deviceManagement` singleton (settings)
-  yes.
-- `deviceAppManagement` (each with its assignments where the handler reads them): `androidManagedAppProtections`,
-  `iosManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `mobileAppConfigurations`, `mobileApps`,
-  `targetedManagedAppConfigurations`, `vppTokens`, `windowsInformationProtectionPolicies` yes;
-  `windowsManagedAppProtections` no.
-- `identity/conditionalAccess/namedLocations` yes; `identityGovernance/termsOfUse/agreements` yes;
-  `organization` and `organization/{id}/branding` yes.
 
 ### Idea: per-finding severity in document `Security` sections
 
@@ -287,31 +231,6 @@ at most six findings — tiny blast radius, easy to eyeball — and was therefor
 with no drift observed in practice; and (2) the web side needs per-item severity that section-level styling
 cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
 seven templates and regenerate every document — and accept that it cannot be automatically validated.
-
-### Idea: resolve Graph object ids to names inside the exported YAML
-
-Add a transformer that resolves Microsoft Graph object ids that appear in a resource — assignment `groupId`s,
-filter ids, `notificationTemplateId`s — to their display names at export time, as the `id-resolution`
-transformer already does offline for ARM resource ids (which carry their name in the id itself). The YAML
-would then read `groupId: 8964516b-… (GBL_D_WIN_...)` instead of a bare GUID. **Not planned — parked
-deliberately**, for three reasons:
-
-- **The documentation already resolves them, and does so incrementally.** `docs generate-prompt` builds the
-  group, filter and template reference maps from `metadata.yaml`, renders every assignments / "Targeted by" /
-  "Used by" block from them, and re-splices exactly those blocks when a referenced object is renamed — without
-  touching the resource's own document or its YAML. Resolving in the YAML would duplicate that with a worse
-  failure mode.
-- **It would put a decision into a fact.** A resource's YAML and its `sourceSha256` are meant to move only when
-  the resource itself changes. Embedding another object's *current* name makes every policy's hash move when a
-  group is renamed, which forces regenerating every document that assigns it — the exact cascade the marked
-  splice blocks exist to avoid.
-- **It costs one extra Graph read per referenced id**, on every run, for information the export already holds
-  once (in the group's own YAML).
-
-**Revisit only if** a consumer other than the documentation pipeline needs names inside the YAML itself — e.g.
-a diff/review workflow on `resources/` that cannot read `metadata.yaml`. If promoted, resolve from the export
-(the already-downloaded groups/filters/templates), never from a live lookup, and write the name into a sidecar
-`_name` key the way `id-resolution` does — never in place of the id.
 
 ### Idea: `resource compare` — an offline comparison of two exports, and the home of the cross-tenant identity rule
 
@@ -366,9 +285,8 @@ browser then depends on.
   moving no `promptSha256`.
 - The browser then renders the tree as it renders `drift/` and deletes its own normaliser.
 
-**Relation to the idea above.** This does **not** trigger *resolve Graph object ids to names inside the
-exported YAML*: the comparison reads names from `metadata.yaml`, which is exactly the consumer that idea says
-does not need them in the YAML. The facts stay facts.
+The comparison reads names from `metadata.yaml`; the exported YAML keeps ids as facts and never embeds another
+object's name.
 
 ### Idea: bootstrap the curated taxonomy from per-document LLM suggestions
 
