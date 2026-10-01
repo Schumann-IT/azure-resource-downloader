@@ -68,8 +68,17 @@ in `ci-web`.
 > for npm; the web gate refuses any branch that touches `web/` without a backlog change (check 6, `backlogTouched`
 > in `scripts/lib/branch.js`), so its pull requests could never pass the required check.
 >
-> **Contract.** The dependency-only rule and the ok-line wording ("dependency-only branch: backlog check not
-> required") are identical to the go gate's.
+> **Contract.** Identical to the go gate's rule (go entry *Routine dependency updates with a byte-neutrality
+> guard, and Dependabot*): a branch is dependency-only when it changes something under `web/` and every changed
+> path under `web/` (merge base with `main` to `HEAD`) is `web/package.json` or `web/package-lock.json`; paths
+> outside `web/` (`.github/…`, `.claude/archive/…`, `go/…`) count neither way. On such a branch **only** the
+> backlog check (check 6) is replaced, by the shared ok line `dependency-only branch: backlog check not
+> required`; every other check still runs — strikeouts, numbering, `[Unreleased]`, `version` untouched, not on
+> `main`, Conventional Commits, archived-as-done recorded. Dependabot's npm subjects are `build(web): …`, which
+> the Conventional Commits check accepts as is.
+>
+> **Sequencing.** The go entry ships `.github/dependabot.yml` (including npm) first; npm Dependabot pull requests
+> fail `branch-ready-web` until this entry is on `main`, then pass after `@dependabot rebase`.
 >
 > Not regeneration-gated.
 >
@@ -79,11 +88,15 @@ in `ci-web`.
 
 **Plan.**
 
-- `scripts/lib/branch.js`: a fact `dependencyOnly` — the changed files under `web/` are only `package.json` and
-  `package-lock.json`; check 6 (backlog touched) and the archive checks are skipped when it holds, with the shared ok
-  line. The `version` check still applies, so a bump that edits `version` still fails.
-- `test/readiness-git.spec.ts`: deps-only passes; deps plus a source file fails; deps with a changed `version`
-  fails.
+- `scripts/lib/branch.js`: a fact `dependencyOnly` — the branch changes something under `web/` and every changed
+  path under `web/` is `package.json` or `package-lock.json` (paths outside `web/` ignored). When it holds, check 6
+  (backlog touched) passes with the shared ok line `dependency-only branch: backlog check not required`; **only**
+  check 6 changes — the archive check, the `version` check and every other check run as before, so a bump that
+  edits `version` still fails.
+- `test/readiness-git.spec.ts` (temp `git init` repositories): deps-only passes check 6 with the shared ok line;
+  deps plus a source file fails as before; deps with a changed `version` fails the version check; a branch whose
+  only `web/` change is `package-lock.json` plus a file outside `web/` (e.g. `.github/dependabot.yml`) is still
+  dependency-only; a branch changing nothing under `web/` is not.
 - Documentation at *done*: `CHANGELOG.md` *Release workflow*; `README.md` gate-checks list: the dependency-only
   exception.
 
