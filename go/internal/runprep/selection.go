@@ -119,14 +119,8 @@ func refuseExcludedSelection(excludedSet map[string]bool, allowList, resourceIDs
 	}
 	switch {
 	case len(resourceIDs) > 0:
-		for _, id := range resourceIDs {
-			info, err := azure.ParseResourceID(id)
-			if err != nil || info.FullType == "" {
-				continue
-			}
-			if excludedSet[strings.ToLower(info.FullType)] {
-				return refuse(info.FullType, fmt.Sprintf("--resource-id %q", id))
-			}
+		if id, fullType, ok := excludedResourceID(excludedSet, resourceIDs); ok {
+			return refuse(fullType, fmt.Sprintf("--resource-id %q", id))
 		}
 	case resourceGroup != "":
 		if excludedSet[strings.ToLower(resourceGroupType)] {
@@ -134,6 +128,21 @@ func refuseExcludedSelection(excludedSet map[string]bool, allowList, resourceIDs
 		}
 	}
 	return nil
+}
+
+// excludedResourceID returns the first resource id whose parsed type the
+// exclusion names; ids that do not parse are ignored here.
+func excludedResourceID(excludedSet map[string]bool, resourceIDs []string) (id, fullType string, found bool) {
+	for _, id := range resourceIDs {
+		info, err := azure.ParseResourceID(id)
+		if err != nil || info.FullType == "" {
+			continue
+		}
+		if excludedSet[strings.ToLower(info.FullType)] {
+			return id, info.FullType, true
+		}
+	}
+	return "", "", false
 }
 
 // SelectTypesFromConfig resolves the selection against the registered types

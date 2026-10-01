@@ -63,6 +63,18 @@ func TestTypesMarksAnExcludedTypeAndDoesNotCountIt(t *testing.T) {
 		t.Errorf("countableTypes() = %v, want %v", got, want)
 	}
 
+	// Everything excluded: nothing is countable and every row is marked.
+	all := map[string]bool{vm: true, "Microsoft.Graph/groups": true, "Microsoft.Graph/namedLocations": true}
+	if got := countableTypes(types, all); len(got) != 0 {
+		t.Errorf("countableTypes(all excluded) = %v, want empty", got)
+	}
+	for _, typ := range types {
+		want := []interface{}{"handler", "resource.fakeHandler", "excluded", "exclude-type"}
+		if got := typeRow(typ, fakeHandler{}, all[typ], nil, nil); !reflect.DeepEqual(got, want) {
+			t.Errorf("typeRow(%s, all excluded) = %v, want %v", typ, got, want)
+		}
+	}
+
 	counts := map[string]int{"Microsoft.Graph/groups": 3}
 	unknown := map[string]string{"Microsoft.Graph/namedLocations": "403"}
 	tests := []struct {

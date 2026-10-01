@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -98,8 +99,11 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	// picks names from — but a type the tenant profile excludes is marked and
 	// never counted, so it cannot report a refused listing. A selection naming
 	// an excluded type refuses, as it would for a download.
+	// A profile excluding every registered type is not a refusal here: this is
+	// the catalogue the names come from, and sel.Excluded is already filled.
 	sel, err := runprep.SelectTypesFromConfig(registry.GetAllTypes(), selectedTypes, resourceIDs, resourceGroup)
-	if err != nil {
+	everythingExcluded := errors.Is(err, runprep.ErrEverythingExcluded)
+	if err != nil && !everythingExcluded {
 		return err
 	}
 	excluded := make(map[string]bool, len(sel.Excluded))
@@ -111,8 +115,12 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	// without interaction. Failing to obtain one is not an error: the offline
 	// map is complete and correct on its own terms.
 	workerConfig := runprep.BuildWorkerConfig()
+	countable := countableTypes(types, excluded)
+	if everythingExcluded {
+		countable = nil
+	}
 	counts, unknown, omitReason := tenantCounts(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"),
-		countableTypes(types, excluded), runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
+		countable, runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 
 	// State which of the two outputs this is: the same invocation prints
 	// different things on different machines, and an operator must never infer
