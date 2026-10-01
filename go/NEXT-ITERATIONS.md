@@ -17,7 +17,7 @@ API reference for the API version the handler actually calls, a link to the perm
 admin center blade where the resource is managed, and type-specific best-practice links — guarded by a test so
 it cannot silently decay again.
 
-> **Review findings (2026-10-01, 51 handlers).** `EndpointDocs` is set everywhere; `BestPractices` on 7;
+> **Review findings (2026-10-01, 53 registered types).** `EndpointDocs` is set everywhere; `BestPractices` on 7;
 > `SchemaReference` and `Links.Permissions` on none; there is no admin-center link kind. `namedLocations`
 > (`namedlocation.go:33`) and `termsOfUseAgreements` (`termsofuseagreement.go:32`) link `?view=graph-rest-1.0`
 > but call the beta client. `deviceManagement` (`devicemanagementsettings.go:47`) links the
@@ -28,36 +28,98 @@ it cannot silently decay again.
 >
 > **Runtime effect, not only docs.** `RequiredPermissions` feeds the dedicated-app scope message
 > (`internal/handlers/registry.go:100-116`, `internal/runprep/runprep.go:178`) and the audit routing
-> (`internal/audit/route.go`), so the two permission fixes change what an operator is told to consent.
+> (`internal/audit/route.go`), and the access check probes once per permission group
+> (`internal/runprep/access.go` `PlanRunProbes`), so the two permission fixes change what an operator is told to
+> consent and which probe covers the type. Both move to `DeviceManagementServiceConfig.Read.All`, already in the
+> README's dedicated-app scope list, so no new consent is needed for them.
 >
 > **Decision.** Link kinds: fill the existing `Links.Permissions` on every handler and add a new
 > `Links.AdminCenter`; no PowerShell link.
 >
-> **Regeneration-gated.** Every changed value moves the type's `promptSha256`. Batch with *Template content fixes
-> and a Conditional Access template* and *Run-prompt fixes and the `summary:` frontmatter line* so they share the
-> one scheduled regeneration. Builds on the shared prompt partials (done; the new link goes into `prompt-links`).
+> **Permission source rule (reviewer).** The authority is the Microsoft Learn page of the operation the handler
+> calls (List for a collection, Get for a singleton), at the API version it calls, *Delegated (work or school
+> account)* row. A declared scope that the page lists — as least privileged or as higher privileged — stays; only
+> a scope the page does not list is corrected, to the page's least-privileged read scope. Tightening every type to
+> its least-privileged scope would add new scopes an operator must consent to and is out of scope here.
+>
+> **Group template.** `group_prompt.tmpl` does not call `prompt-links` (it renders only `EndpointDocs` inline), so
+> `groups` gets its `Links.Permissions` / `Links.AdminCenter` values here but shows them only once *Template
+> content fixes and a Conditional Access template* gives the group template the full header — on this branch,
+> before the one regeneration, so no generated document ever misses them.
+>
+> **Regeneration-gated.** Every changed value moves the type's `promptSha256`; the new `Links.Permissions` line moves
+> it for every type. Batch with *Template content fixes and a Conditional Access template* and *Run-prompt fixes and
+> the `summary:` frontmatter line* so they share the one scheduled regeneration. Builds on the shared prompt
+> partials (done; the new link goes into `prompt-links`).
+>
+> **Contract.** No Go → web artefact changes shape: no frontmatter key, H2 heading, `doc-headings` /
+> `doc-groups` marker, export path or `metadata.yaml` field is added or renamed. After the regeneration every
+> document carries a new `promptSha256` (the browser shows it as is) and its References section may cite the
+> permissions page and an admin-center link on `intune.microsoft.com`, `entra.microsoft.com` or
+> `portal.azure.com` — plain Markdown links the browser already renders. `web/` needs no change.
+>
+> **Owner.** none — every file touched is under `go/`. Sequencing: first of the regeneration batch on this branch;
+> *Template content fixes and a Conditional Access template* relies on the `Links.AdminCenter` field and the
+> "Admin center:" line this entry adds.
 >
 > **Implementer.** sonnet
 
 **Plan.**
 
-- Permissions: `mobileThreatDefenseConnectors` and `intuneBrandingProfiles` → `DeviceManagementServiceConfig.Read.All`,
-  including their error-hint text; verify every other handler's `RequiredPermissions` against its Learn "Get"/"List"
-  page and correct what differs.
-- Links: `namedLocations`, `termsOfUseAgreements` → `?view=graph-rest-beta`; `deviceManagement` → the root
-  `deviceManagement` entity page (the settings complex type may stay as a second reference); every
-  `learn.microsoft.com/en-us/mem/intune/...` → its current `/intune/intune-service/...` path; `BestPractices` made
-  type-specific, generic duplicates removed rather than kept.
-- `Links.Permissions` on all handlers: the Learn page of the "Get"/"List" operation, which lists scopes and roles.
-- New `Links.AdminCenter` field (`internal/models/documentation.go`), rendered by the shared links partial as
-  "Admin center:" so every template shows it; set only where a stable Intune / Entra / Azure portal blade URL
-  exists, empty otherwise — never guessed.
-- Registry-wide test over `NewRegistry`: every handler has `EndpointDocs`, `RequiredPermissions` and
-  `Links.Permissions`; every link is `https://` on `learn.microsoft.com` or an allowed portal host
-  (`intune.microsoft.com`, `entra.microsoft.com`, `portal.azure.com`); a Graph link's `?view=` matches the SDK
-  client the handler uses (beta vs v1.0). Update the golden prompt test deliberately.
-- Documentation at *done*: `README.md` "Supported resource types" permissions column and the dedicated-app scope
-  list; `CHANGELOG.md` (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
+- Accessor first, bytes unchanged: a `models.Documented` interface (`Documentation() models.ResourceDocumentation`,
+  `AzureType` filled in) in `internal/models/types.go`, implemented by `GraphCollectionHandler` and the three ARM
+  handlers (`internal/handlers/arm/*.go`: move the inline `ResourceDocumentation` literal into `Documentation()`);
+  each `GetDocumentationPrompt` becomes `models.BuildDocumentationPrompt(h.Documentation())`. `make -C go test`
+  must pass with the golden prompts untouched before any metadata changes.
+- `Links.AdminCenter string` in `models.ResourceLinks` (`internal/models/documentation.go`, doc comment: the admin
+  center blade where the resource is managed; empty when no verified deep link exists). `prompt-links` in
+  `internal/models/prompt_partials.tmpl`: add `.Links.AdminCenter` to the block's `or` condition and render
+  `- Admin center: <url>` after the `- Required permissions:` line; update the `Template` field's doc comment if it
+  lists the partials' content. A `models` unit test renders a `ResourceDocumentation` with only `AdminCenter` set
+  and with all link kinds set, and asserts the block appears with the lines in that order.
+- Permissions: `mobileThreatDefenseConnectors` (`mobilethreatdefenseconnector.go`) and `intuneBrandingProfiles`
+  (`intunebrandingprofile.go`) → `DeviceManagementServiceConfig.Read.All`, in `RequiredPermissions` and in every
+  `hint: requires '…'` string of the file. Then check every other handler against the permission source rule in
+  the Notes (fetch each operation's Learn page); correct only a declared scope the page does not list, together
+  with its hints. A corrected scope outside the current set (`Policy.Read.All`, `Group.Read.All`,
+  `Agreement.Read.All`, `Organization.Read.All`, `OrganizationalBranding.Read.All`,
+  `OnPremDirectorySynchronization.Read.All`, `DeviceManagement*`) must also be added to `entraPermissions` in
+  `internal/audit/route.go` (`TestRouteEveryRegisteredType` fails otherwise) and named in the implementation
+  report as a new consent. A page that cannot be fetched leaves the value as is and is listed in the report as
+  unverified — never guessed.
+- Links, Graph `?view=` per the client the handler builds: `namedLocations` (`namedlocation.go`) and
+  `termsOfUseAgreements` (`termsofuseagreement.go`) → `?view=graph-rest-beta` (both call `newBetaGraphClient`).
+  `deviceManagement` (`devicemanagementsettings.go`): `EndpointDocs` → the beta `deviceManagement` entity resource
+  page; the `deviceManagementSettings` complex-type page moves to `SchemaReference`. No other `SchemaReference` is
+  added. Every `learn.microsoft.com/en-us/mem/intune/...` URL → its current `learn.microsoft.com/en-us/intune/
+  intune-service/...` page (follow the redirect, use the final URL).
+- `BestPractices`: keep a link only where the page is about this type's feature (a planning, hardening or baseline
+  guide for it); remove generic ones (e.g. `protect/security-baselines` on `deviceConfigurations`, which security
+  baselines do not use); add one only where such a page exists. Empty is acceptable.
+- `Links.Permissions` on all 53 types: for Graph, the Learn page of the List (collection) or Get (singleton)
+  operation the handler calls, at its API version (`?view=` as above); for the three ARM types, the Azure built-in
+  *Reader* role section on Learn.
+- `Links.AdminCenter` where a deep link is verified: the blade URL cited by a Learn page for that feature, or one
+  confirmed to open the blade, on `intune.microsoft.com` (Intune types), `entra.microsoft.com` (Entra types) or
+  `portal.azure.com` (ARM types); empty otherwise. The implementation report lists the types left empty.
+- Registry-wide test `internal/handlers/documentation_metadata_test.go` over `NewRegistry(stubCredential{}, …,
+  false)`: every handler implements `models.Documented`; `EndpointDocs`, `RequiredPermissions` and
+  `Links.Permissions` are non-empty; `EndpointDocs`, `SchemaReference`, `Permissions` and `BestPractices` are
+  `https://learn.microsoft.com/en-us/…`; `AdminCenter` is empty or `https://` on one of the three portal hosts; no
+  link contains `/mem/intune/`; no `BestPractices` entry repeats within a type. Source scan in the same test, per
+  non-test file of `internal/handlers/graph/` holding an `azureType: "…"` literal: the file uses the beta client
+  (`newBetaGraphClient(` or the `msgraph-beta-sdk-go` import) xor v1.0 (`newGraphClient(` or `msgraph-sdk-go`),
+  and every `/graph/api/` link of that type carries the matching `?view=graph-rest-beta` / `?view=graph-rest-1.0`;
+  every scope named in a `requires '…'` hint is in that type's `RequiredPermissions`. Every registered Graph type
+  is matched by exactly one file.
+- Golden prompts, deliberately: `make -C go golden-update`, then review the diff — only files under
+  `internal/pipeline/testdata/golden/prompts/` change (the exported-YAML goldens stay byte-identical), and each
+  type's diff is confined to its permission lines and its *Reference material* block (`groups`: only its
+  permission lines, if any, since its template renders no links block yet).
+- Documentation at *done*: `README.md` "Supported resource types" — move the `mobileThreatDefenseConnectors` and
+  `intuneBrandingProfiles` rows to the *enrollment, Autopilot and tenant* (`DeviceManagementServiceConfig.Read.All`)
+  table and reflect any other corrected scope there and in the dedicated-app scope list; `CHANGELOG.md`
+  (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
 
 ## 2. Template content fixes and a Conditional Access template
 
