@@ -5,8 +5,8 @@ shipped and why; neither is repeated here. How entries and ideas are written, pr
 archived is `../.claude/rules/next-iterations.md`.
 
 Numbered entries are scheduled work: committed here before they are implemented, struck through as they land,
-and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area under the overview below,
-are deliberately unscheduled; each says why it is parked and what would make it worth doing.
+and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
+deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
 ## 1. Shared prompt partials, without changing a byte
 
@@ -207,21 +207,6 @@ headings), **templates** (documentation and analysis prompts; *regen-gated* when
 formats**, **platform rule** (a non-negotiable itself), **dependencies**, **housekeeping** (lint ledgers,
 caching internals). *Impact* — operator value: high / medium / low. *Effort* — S (a day or less), M (one
 branch), L (several branches or a design change).
-
-**Overview.** Scheduled entries first, then the ideas in the order of the sections below (by area,
-then priority).
-
-| Item | Area | Impact | Effort | Ships with / after |
-|---|---|---|---|---|
-| 1 · Shared prompt partials | templates (not gated) | medium | M | first: the base for the three below |
-| 2 · Per-handler documentation metadata | export & metadata, templates (*regen-gated*) | high | M–L | one regeneration with 3, 4 and web *Conditions*; feeds web *sidebar by a taxonomy axis* |
-| 3 · Template content fixes + CA template | templates (*regen-gated*), contract | high | L | **must** pair with web *Style the CA `Conditions` section* |
-| 4 · Run-prompt fixes + `summary:` | templates, contract | medium | S | unblocks web *per-item context in the sidebar* and *per-document identity* |
-| *resource compare* | drift & compare, contract | high | L | **must** ship with web *Move the compare normalisation to the CLI*; carries `version:` from day one |
-| *version the drift observation* | contract | low | S | rides the next change to the drift schema or per-finding frontmatter (web accepts `>= 1` in the same pair) |
-| *per-finding severity in `Security`* | templates (*regen-gated*) | low | M | only worth it riding a regeneration already scheduled; web colours or filters the tags |
-| *bootstrap the taxonomy from LLM suggestions* | templates (*regen-gated*), contract | low | M–L | only worth it riding a regeneration already scheduled |
-| *clear the `gocognit` baseline* | housekeeping | low | S per function | opportunistic: any entry that edits a listed function (`GeneratePrompt`, `GenerateIndex`, `drift.Compare`, …) |
 
 **Ships together.**
 

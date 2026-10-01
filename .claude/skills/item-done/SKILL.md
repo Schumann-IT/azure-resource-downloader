@@ -46,8 +46,8 @@ implementation by hand before saying this; nothing here changes code.
    A partially delivered entry: archive only the struck bullets into the file (append if it already exists
    from an earlier branch), leave the entry with its open bullets in the backlog.
 4. **Update the backlog**: remove the archived entry (or its struck bullets) and renumber the remaining
-   entries `1..N` in file order. Remove the entry's row from the *Overview* table under `## Parked ideas` (and from the
-   *Ships with* of the rows and *Ships together* lines that name it, in both backlogs).
+   entries `1..N` in file order. Update the *Ships with* tag lines and *Ships together* lines that name it,
+   in both backlogs.
 5. **Commit** `docs(<project>): close <title>` with the README, the changelog, the archive file and the
    backlog together — the gate requires an archived entry's changelog line in the same branch. Report the
    archive path. `/close-branch` runs the gate.

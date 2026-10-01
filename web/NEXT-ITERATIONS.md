@@ -5,8 +5,8 @@ shipped and why; neither is repeated here. How entries and ideas are written, pr
 archived is `../.claude/rules/next-iterations.md`.
 
 Numbered entries are scheduled work: committed here before they are implemented, struck through as they land,
-and archived to `../.claude/archive/web/` once done. Parked ideas, grouped by area under the overview below,
-are deliberately unscheduled; each says why it is parked and what would make it worth doing.
+and archived to `../.claude/archive/web/` once done. Parked ideas, grouped by area below, are
+deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
 ## 1. Style the Conditional Access `Conditions` section and close two section-style gaps
 
@@ -56,39 +56,6 @@ headings), **templates** (documentation and analysis prompts; *regen-gated* when
 formats**, **platform rule** (a non-negotiable itself), **dependencies**, **housekeeping** (lint ledgers,
 caching internals). *Impact* — operator value: high / medium / low. *Effort* — S (a day or less), M (one
 branch), L (several branches or a design change).
-
-**Overview.** Scheduled entries first, then the ideas in the order of the sections below (by area,
-then priority).
-
-| Item | Area | Impact | Effort | Ships with / after |
-|---|---|---|---|---|
-| 1 · Style the CA `Conditions` section | document view, contract | medium | S | **must** pair with go *Template content fixes and a Conditional Access template*, one regeneration |
-| *Drop the no-client-side-JavaScript rule* | platform rule | high (keystone) | S to decide, L to follow through | decide first: unblocks *search*, *findings block*, *dark-mode toggle*, *clickable breadcrumbs* and an export dropdown |
-| *Search across a tenant's documents* | navigation | high | L | after the no-JS decision (try a server-rendered `_search` page first); subsumes the name filter |
-| *Name filter and per-item context in the sidebar* | navigation | medium | M | context half after go *run-prompt fixes and `summary:`* plus a regeneration; filter half subsumed by *search* |
-| *A resource landing page* | navigation | medium | S–M | carrier for *browsable excluded bulk types* |
-| *Sidebar by a taxonomy axis* | navigation | medium | L | function-shaped spine needs go *per-handler metadata* (`functionGroup`) or a CLI axis; Confluence export must group the same way |
-| *Summary table of contents* | navigation | low | S | standalone |
-| *Browsable excluded bulk types* | navigation | low | M | after *a resource landing page*; amends a discovery non-negotiable |
-| *Clickable breadcrumb segments* | navigation | low | M | after a per-type listing page, or the no-JS decision |
-| *A two-group navigation tree* | navigation | low | M | only if *a resource landing page* does not fix discoverability |
-| *Multi-segment tenants* | navigation | low | L | standalone; touches discovery, routing and path safety |
-| *Per-document identity on the article* | document view | low | S–M | with the first per-family CSS need; reads the H2 set go templates emit |
-| *An actionable findings block* | document view | low | M | after the no-JS decision (else the `:target` construction) |
-| *Syntax highlighting inside documents* | document view | low | S–M | ride *the rendering stack upgrade* (shiki) |
-| *Explicit dark-mode toggle* | document view | low | S | blocked by the no-JS rule |
-| *Further export formats and partial exports* | export formats | medium | M per format | the second whole-tenant format triggers *one export button per tenant* |
-| *One export button and an export page* | export formats | low–medium | M | with the second format; amends `.claude/rules/web-export.md` |
-| *Confluence REST API synchronisation* | export formats | medium–high | L | a design change: it mutates a remote system from a read-only app |
-| *Media and source YAML as page attachments* | export formats | low | M–L | with Confluence work; a third served root |
-| *Move the compare normalisation to the CLI* | drift & compare | high | L | **must** ship with go *`resource compare`* |
-| *Manual pairing and a rename heuristic* | drift & compare | medium | M | after *move the compare normalisation* (the heuristic lands in the CLI rule) |
-| *A one-sided resource in the diff area* | drift & compare | low | S–M | standalone, or after the move |
-| *Toolchain — TypeScript 7, Jest 30, ts-jest* | dependencies | medium | M | first: unblocks *NestJS 12* and *the rendering stack* |
-| *Rendering stack behind a golden test* | dependencies | medium | L | after the toolchain; golden test first; carries *syntax highlighting* |
-| *NestJS 12* | dependencies | low–medium | M | after the toolchain |
-| *Clear the ESLint suppressions baseline* | housekeeping | low | M | opportunistic: whichever entry edits a baselined file |
-| *Watch-based cache invalidation* | housekeeping | low | M | standalone |
 
 **Ships together.**
 
