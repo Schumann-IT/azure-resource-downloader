@@ -487,9 +487,12 @@ contract in its `doc-prompt.md`), which makes the heading text a machine contrac
   longer produces `%E2%80%94`. `&` slugs to `and`, so a heading has the same anchor and section identity
   whichever way it is spelled.
 - **Each H2 run is wrapped in `<section class="doc-section" data-section="…">`**, which lets a section own a
-  panel, a rail or its own density. *Settings*, *Properties*, *Definition* and *Membership* switch to a denser
-  mode (one document in the reference export holds 317 settings nested five deep); *Security* and *Expiry and
-  renewal* get a rail and deliberately no tint.
+  panel, a rail or its own density. *Settings*, *Properties* and *Definition* switch to a denser mode (one
+  document in the reference export holds 317 settings nested five deep), and nested `<details>` inside them get
+  a depth rail; *Membership* keeps its identity but stays at normal density, since the group template writes it
+  as prose. *Security* and *Expiry and renewal* get a rail and deliberately no tint. A Conditional Access
+  policy's *Conditions* section (its targeting tables) takes the relations colour and a funnel icon, at normal
+  density.
 - **The tool-maintained marker pairs become elements**: a matched `<!-- assignments:start -->` /
   `<!-- assignments:end -->` pair (likewise `targeted-by`, `used-by` and `notifications`) renders as a
   `<div class="doc-assignments">`, because an HTML comment survives into the DOM but cannot be selected. An

@@ -8,79 +8,7 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## 1. Template content fixes and a Conditional Access template
-
-*Kind:* feat
-
-**Goal.** The documentation prompts describe each type as it really is and stop inviting guesses: Conditional
-Access gets its own template built around its conditions, mismatched types get the right template, the shared
-rules are consistent, and the instructions that produced invented links, recommendations and boilerplate are
-replaced by evidence-bound ones — so the scheduled regeneration yields better documents, not just new ones.
-
-> **Review findings (2026-10-01, 7 templates, 411 generated documents in two tenants).** The heading contract and
-> frontmatter hold everywhere. Problems:
-> - *Fact mismatches.* Conditional Access uses the generic template's group-only assignments table although CA
->   targets users, roles and apps through `conditions.*`; its 37 documents carry assignments markers that are
->   never resolved or re-spliced. `roleScopeTags` has `hasAssignments: true` but gets the referenced template
->   ("no assignments of its own"), so the block landed under an H2. `reusablePolicySettings` is a referenced
->   object but gets the policy template.
-> - *Inconsistencies.* Six overrides say "assignment information belongs in the assignments block above" without
->   having one; `KeySettings` lands in Settings, Security or Lifecycle depending on the template; the group
->   template drops `SubtypeNote`, `RelatedTypes` and all links but `EndpointDocs`; the record template lacks the
->   credential-redaction rule; the credential template's Lifecycle duplicates its Expiry section.
-> - *Guess- and boilerplate-inducing instructions.* A mandatory link per setting plus the "flag as approximate"
->   escape (116 of 263 documents carry approximate URLs); a "recommended value" for every setting without a cited
->   baseline; a forced review cadence (178 of 263); purpose inferred from names; "search sibling directories"
->   prose the spliced *Targeted by* / *Used by* blocks have replaced.
-> - *Missing guidance.* Nothing tells the model what to do with `RequiredPermissions` (2 documents mention a
->   scope); no change-role / least-privilege statement; assignment-table columns and intent unspecified (tables
->   differ); dependencies (filters, scope tags, named locations, strengths) not asked for by ID with links; large
->   settings-catalog payloads not grouped (largest document 2394 lines, ~27 H3s across 263 documents).
->
-> **Decision.** Conditional Access: a dedicated template with a `Conditions` section (not a splice fix inside the
-> generic template).
->
-> **Contract.** The new H2 is exactly `Conditions` (slug `conditions`); the web entry *Style the Conditional Access
-> `Conditions` section* adds it to the browser's section vocabulary. No other H2 is added or renamed.
->
-> **Regeneration-gated.** Moves `promptSha256` for every type whose template changes (all but record types where
-> nothing changes). Batch with *Run-prompt fixes and the `summary:` frontmatter line* (and the per-handler
-> metadata already shipped on this branch); ship together with the web entry; builds on the shared prompt partials (done).
->
-> **Implementer.** opus
-
-**Plan.**
-
-- New `internal/handlers/graph/conditional_access_prompt.tmpl` for `conditionalAccessPolicies`: targeting is
-  documented from `conditions.*` (users, groups, roles, applications, locations, platforms, client apps, risk) in a
-  `Conditions` section, with no group-only assignments block; IDs are resolved only through the existing reference
-  maps and an unresolved role or application id is stated as such, never named. `doc-headings: References |
-  Conditions | Lifecycle and operations | Security | Settings`. Check how the CA handler's `hasAssignments` and the
-  assignments splice interact so CA documents no longer carry unresolved markers.
-- Template selection: `reusablePolicySettings` → referenced template; `roleScopeTags` keeps the referenced template
-  but, having `hasAssignments: true`, gets the assignments block above the first H2 (a referenced-template variant
-  or a template flag, whichever keeps the partials simple).
-- Closed-set paragraph per template names only the blocks that template defines.
-- Consistency: `KeySettings` always in the settings-like section; group template gets the full header (links,
-  `SubtypeNote`, `RelatedTypes`); record template gets the redaction rule; credential Lifecycle drops what Expiry
-  and renewal covers.
-- Evidence-bound instructions: a reference link per setting only when a specific page is known, otherwise none —
-  no "approximate" links; the curated `Links` (incl. Admin center) must appear under References; a recommended
-  value only where a cited `BestPractices` baseline covers the setting; review cadence only for types with expiry or
-  renewal; the summary states purpose from the resource's own `description` and settings, or says it is not
-  documented — never inferred from the name; drop the "search sibling directories" usage prose in favour of the
-  spliced *Targeted by* / *Used by* blocks.
-- New guidance: Security names the read permission (`RequiredPermissions`) and the admin role needed to change the
-  resource (least privilege); assignment tables use the fixed columns `Direction | Target | Intent | Filter
-  (mode)`; referenced objects (assignment filters, scope tags, named locations, authentication strengths,
-  notification templates) are documented by id with a relative link to their document; large payloads are grouped
-  under H3s by category.
-- Tests: golden prompt test updated deliberately; template selection for CA, `roleScopeTags`,
-  `reusablePolicySettings`; the CA `doc-headings` line; existing per-template tests kept green.
-- Documentation at *done*: `README.md` (documentation section: the CA template and its `Conditions` section, the
-  templates' evidence rules); `CHANGELOG.md` `### Changed`, with **regenerate the documentation** in bold.
-
-## 2. Run-prompt fixes and the `summary:` frontmatter line
+## 1. Run-prompt fixes and the `summary:` frontmatter line
 
 *Kind:* feat
 
@@ -100,8 +28,8 @@ per-item context.
 > and Markdown links (~1400) and do not link sibling documents.
 >
 > **Regeneration-gated in effect.** `generate_prompt_template.md` is not hashed, but no existing document gets the
-> new frontmatter without regeneration. Batch with *Template content fixes and a Conditional Access template* (and
-> the per-handler metadata already shipped on this branch).
+> new frontmatter without regeneration. The per-handler metadata and the template content fixes with the
+> Conditional Access template have shipped; this entry is the last before the one regeneration.
 >
 > **Implementer.** sonnet
 
@@ -128,11 +56,11 @@ branch), L (several branches or a design change).
 
 **Ships together.**
 
-1. **The pre-regeneration batch** (scheduled; the shared prompt partials and the per-handler metadata already
-   shipped): *template content fixes and a CA template* and *run-prompt fixes and `summary:`* together with web *Style the
-   Conditional Access `Conditions` section* — one documentation regeneration for all of them. The two
-   regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*) either join that batch, decided before
-   *template content fixes* starts, or wait for the next regeneration.
+1. **The pre-regeneration batch** (scheduled; the shared prompt partials, the per-handler metadata and the
+   template content fixes with the CA template — paired with web *Style the Conditional Access `Conditions`
+   section* — already shipped): *run-prompt fixes and `summary:`* is the last one, then one documentation
+   regeneration for all of them. The two regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*)
+   did not join it and wait for the next regeneration.
 2. **The compare track** (cross-project, must): *`resource compare`* ships with web *Move the compare
    normalisation to the CLI*; web *manual pairing* and *one-sided resource* follow on the CLI's rule; *version the
    drift observation* rides the first drift contract change.

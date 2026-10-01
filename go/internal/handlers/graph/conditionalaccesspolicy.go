@@ -3,6 +3,7 @@ package graph
 import (
 	"azure-resource-downloader/internal/models"
 	"context"
+	_ "embed"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -10,6 +11,16 @@ import (
 	graphidentity "github.com/microsoftgraph/msgraph-sdk-go/identity"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
+
+// conditionalAccessPromptTemplateText overrides the default documentation
+// prompt template for Conditional Access policies: a policy targets users,
+// groups, roles, applications and sign-in conditions through conditions.*, not
+// through Intune-style assignments, so its targeting gets a Conditions section
+// and the document carries no assignments block or markers. See
+// models.ResourceDocumentation.Template.
+//
+//go:embed conditional_access_prompt.tmpl
+var conditionalAccessPromptTemplateText string
 
 // NewConditionalAccessPolicyHandler creates a handler for Entra conditional
 // access policies (identity/conditionalAccess/policies, Microsoft Graph v1.0).
@@ -60,6 +71,7 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccessconditionset?view=graph-rest-1.0",
 				AdminCenter:     "https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/ConditionalAccessBlade/~/Policies",
 			},
+			Template: conditionalAccessPromptTemplateText,
 		},
 		probe: func(ctx context.Context) error {
 			_, err := client.Identity().ConditionalAccess().Policies().Get(ctx, &graphidentity.ConditionalAccessPoliciesRequestBuilderGetRequestConfiguration{

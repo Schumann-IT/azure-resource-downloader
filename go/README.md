@@ -968,26 +968,45 @@ reference links: the Microsoft Learn API reference, schema and permissions pages
 an admin-center deep link where a Learn page cites the blade). A registry-wide test keeps that metadata honest:
 Learn-only reference links, admin-center links only on `intune.microsoft.com`, `entra.microsoft.com` or
 `portal.azure.com`, API-reference versions that match the Graph client the handler calls, and every scope named
-in an error hint declared. Seven template families cover the type shapes:
+in an error hint declared. Eight template families cover the type shapes:
 
 | Family | Types | What differs |
 |---|---|---|
 | default (`internal/models/documentation_prompt.tmpl`) | every settings-bearing Graph policy, profile, app and script type | full layout: metadata table, assignments block, `References`, `Lifecycle and operations`, `Security`, `Settings` with one collapsible `<details data-setting="…">` per setting |
-| `referenced` | `assignmentFilters`, `roleScopeTags`, `roleDefinitions`, `notificationMessageTemplates`, `namedLocations`, `authenticationStrengthPolicies`, `termsOfUseAgreements` | objects other policies reference *by id*: explains what referencing them means; templates carry the `Used by` block |
-| `group` | `groups` | dynamic membership rule explained clause by clause; `Targeted by` block |
-| `record` | `windowsAutopilotDeviceIdentities`, `deviceCategories`, `mobileThreatDefenseConnectors`, `ndesConnectors` | short registry-record layout, no settings payload, no grouping axes |
+| `conditional-access` (`conditional_access_prompt.tmpl`) | `conditionalAccessPolicies` | `References`, `Conditions`, `Lifecycle and operations`, `Security`, `Settings`: targeting is documented from `conditions.*` (users, groups, roles, applications, locations, platforms, client apps, risk) as a `Condition \| Include \| Exclude` table in `Conditions`; no assignments block |
+| `referenced` | `assignmentFilters`, `roleScopeTags`, `roleDefinitions`, `notificationMessageTemplates`, `namedLocations`, `authenticationStrengthPolicies`, `termsOfUseAgreements`, `reusablePolicySettings` | objects other policies reference *by id*: explains what referencing them means; templates carry the `Used by` block; a referenced type that has assignments of its own (`roleScopeTags`) also gets the assignments block |
+| `group` | `groups` | dynamic membership rule explained clause by clause; usage defers to the `Targeted by` block |
+| `record` | `windowsAutopilotDeviceIdentities`, `deviceCategories`, `mobileThreatDefenseConnectors`, `ndesConnectors` | short registry-record layout, no settings payload, no grouping axes; an exposed credential is called out under `Lifecycle and operations` |
 | `singleton` | `deviceManagement`, `organization`, `organizationalBranding`, `onPremisesSynchronization`, `authenticationMethodsPolicy`, `authorizationPolicy` | tenant-wide single objects |
 | `credential` | `applePushNotificationCertificate`, `depOnboardingSettings`, `vppTokens` | expiry and renewal obligations; masked token values |
 | `arm` (`internal/handlers/arm/arm_prompt.tmpl`) | the three ARM types | ARM-specific metadata and references |
 
 The Graph overrides live in `internal/handlers/graph/*_prompt.tmpl`. A handler picks its family through the
 `Template` field of its `models.ResourceDocumentation`; `models.BuildDocumentationPrompt` renders it and appends
-the grouping vocabulary marker unless the type opts out (`OmitGroupAxes`).
+the grouping vocabulary marker unless the type opts out (`OmitGroupAxes`). Every family shares the same header
+(type, permissions, lifecycle, reference links, related types) and the same evidence rules, kept in
+`internal/models/prompt_partials.tmpl`:
+
+- **Links only to known pages.** A setting gets a reference link only when a specific page is known; there are no
+  approximate or guessed links. `References` lists the curated links from the header (API reference, schema,
+  permissions page, admin center, best-practice baselines).
+- **Recommendations only under a baseline.** A recommended value is given only where a listed best-practice
+  baseline covers the setting; a type without one documents its configured values only.
+- **Facts, not inferences.** The summary takes the purpose from the resource's own description and settings, or
+  says it is not documented, and never infers it from the display name. A review cadence is asked for only where a
+  credential expires. Referenced objects (filters, scope tags, named locations, strengths, templates) stay ids
+  unless a block the run splices in resolves them.
+- **Security** names the read permission and, where the metadata or the permissions page supports it, the admin
+  role needed to change the resource.
+- **Large settings payloads** (more than 30 top-level blocks) are grouped under `###` headings by category.
+- **Embedded payloads** are described as the export delivers them: a decoded payload as decoded, an encoded text
+  payload decoded, binary content stated as present and never reprinted.
 
 Contracts every document must honour, because the browser and the incremental engine depend on them:
 
 - **Closed H2 set.** The `##` headings are fixed per family (`References | Lifecycle and operations | Security
-  | Settings` for the default family) and recorded in the prompt as `<!-- doc-headings: … -->`. The browser
+  | Settings` for the default family, `References | Conditions | Lifecycle and operations | Security | Settings`
+  for Conditional Access) and recorded in the prompt as `<!-- doc-headings: … -->`. The browser
   styles and deep-links sections by heading, so no other H2 may appear.
 - **Frontmatter** with `source`, `sourceSha256`, `promptSha256` and the block hashes (below), plus the
   LLM-authored index signals `summary`, `platformGroup`, `functionGroup` (the allowed grouping values are
@@ -995,10 +1014,11 @@ Contracts every document must honour, because the browser and the incremental en
 - **Marked splice blocks.** Assignments tables sit between `<!-- assignments:start -->`/`end` markers,
   noncompliance-notification references between `<!-- notifications:start -->`/`end`, a group's reverse index
   between `<!-- targeted-by:start -->`/`end`, a template's between `<!-- used-by:start -->`/`end`. They are
-  re-rendered mechanically without regenerating the document.
+  re-rendered mechanically without regenerating the document. An assignments table has the columns
+  `Direction | Target | Filter | Intent` (`Intent` for apps only); Conditional Access documents have none.
 - **Credential redaction.** A credential-shaped value in a free-text field or decoded payload that the service
   did not mask is replaced by `«redacted — secret present in source»`, marked `data-note="security"` and called
-  out under `Security`; the literal stays only in the YAML.
+  out under `Security` (records: `Lifecycle and operations`); the literal stays only in the YAML.
 
 ## Incremental documentation (`docs/generate.md`)
 

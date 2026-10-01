@@ -22,33 +22,37 @@ Reference material for this resource type (treat these as authoritative; prefer 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This is an Azure Resource Manager (ARM) resource: it is governed by Azure RBAC, resource locks and tags — it has no Intune/Entra assignments or targeting, and RBAC role assignments are NOT part of this export, so never invent access information. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the resource's name.
-- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the subscription.
+- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the subscription. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
 - A metadata table stating the resource type, the full ARM resource ID, the location/region, the SKU/kind (if present) and the tags (if present).
 
 Then the following H2 sections, unnumbered, in this order:
 
 References:
-- link each property to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft cloud security benchmark, CIS Azure Foundations).
-- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, best-practice baselines) as a Markdown link labelled with what it is.
+- add a link for an individual setting only under the URL rule below.
+- Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
-- document operational guidance: what happens when the resource is deleted (including cascade effects, e.g. deleting a resource group deletes ALL contained resources), backup/recovery considerations, and a recommended review cadence.
+- document operational guidance: what happens when the resource is deleted (including cascade effects, e.g. deleting a resource group deletes ALL contained resources) and backup/recovery considerations.
 - note missing governance guardrails visible in the YAML (e.g. absent tags or locks).
 
 Security:
-- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.) and any deviations from recommended baselines, including the security impact.
-- give particular attention to: location, tags.
+- name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
+- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.).
 
 Properties:
-- document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does, the recommended/best-practice value and a reference link.
+- document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.
+- give particular attention to: location, tags.
+- No best-practice baseline is listed for this type: document configured values only, without recommended or best-practice values.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="properties.encryption.keySource">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the property is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the ARM API schema and say so explicitly.
+- When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Only describe properties that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 
-These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above, assignment information belongs in the assignments block above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
+These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
 
 <!-- doc-headings: References | Lifecycle and operations | Security | Properties -->
 

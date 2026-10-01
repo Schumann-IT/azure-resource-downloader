@@ -176,8 +176,11 @@ func TestBuildDocumentationPromptTemplateOverride(t *testing.T) {
 // promptPartialNames lists every shared partial of prompt_partials.tmpl.
 var promptPartialNames = []string{
 	"prompt-type", "prompt-subtype", "prompt-permissions", "prompt-lifecycle", "prompt-links",
-	"prompt-related", "prompt-header", "prompt-key-settings", "prompt-url-rule",
-	"prompt-masked-rule", "prompt-redaction-rule", "prompt-closed-set",
+	"prompt-related", "prompt-header", "prompt-key-settings", "prompt-embedded-payloads",
+	"prompt-assignments", "prompt-purpose-rule", "prompt-references", "prompt-url-rule",
+	"prompt-baseline-rule", "prompt-change-role", "prompt-referenced-ids", "prompt-settings-grouping",
+	"prompt-masked-rule", "prompt-redaction-lead", "prompt-redaction-rule", "prompt-redaction-rule-record",
+	"prompt-closed-set",
 }
 
 func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
@@ -346,5 +349,82 @@ func TestPromptLinksAdminCenterOnly(t *testing.T) {
 		"\n\n" + DocumentationGroupsMarker()
 	if got != want {
 		t.Errorf("prompt-links = %q, want %q", got, want)
+	}
+}
+
+// TestPromptClosedSetAssignmentsPointer verifies the closed-set paragraph
+// points at the assignments block only for a type with an assignments concept.
+func TestPromptClosedSetAssignmentsPointer(t *testing.T) {
+	const pointer = "assignment information belongs in the assignments block above"
+	for _, hasAssignments := range []bool{false, true} {
+		doc := ResourceDocumentation{
+			AzureType:      "Microsoft.Test/things",
+			HasAssignments: hasAssignments,
+			Template:       `{{ template "prompt-closed-set" . }}`,
+		}
+		prompt := BuildDocumentationPrompt(doc)
+		if got := strings.Contains(prompt, pointer); got != hasAssignments {
+			t.Errorf("HasAssignments=%v: closed-set contains the assignments pointer = %v", hasAssignments, got)
+		}
+		if !strings.Contains(prompt, "identifying fields belong in the metadata table above") {
+			t.Errorf("HasAssignments=%v: closed-set lost the metadata-table pointer", hasAssignments)
+		}
+	}
+}
+
+// TestPromptEvidenceRules verifies the evidence-bound partials: the URL rule
+// forbids guessed links, a recommended value is tied to a listed baseline (or
+// ruled out when none is listed), and the embedded-payload line decodes only
+// text and never reprints binary content.
+func TestPromptEvidenceRules(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*ResourceDocumentation)
+		present []string
+		absent  []string
+	}{
+		{
+			name:    "URL rule gives no link rather than a guessed one",
+			mutate:  func(*ResourceDocumentation) {},
+			present: []string{"otherwise give it no link — never a guessed or merely nearby URL"},
+			absent:  []string{"approximate"},
+		},
+		{
+			name:    "baseline listed",
+			mutate:  func(*ResourceDocumentation) {},
+			present: []string{"only where a best-practice baseline listed above covers the setting"},
+			absent:  []string{"No best-practice baseline is listed for this type"},
+		},
+		{
+			name:    "no baseline listed",
+			mutate:  func(d *ResourceDocumentation) { d.Links.BestPractices = nil },
+			present: []string{"No best-practice baseline is listed for this type"},
+			absent:  []string{"only where a best-practice baseline listed above covers the setting"},
+		},
+		{
+			name:   "embedded payloads decoded only when text",
+			mutate: func(*ResourceDocumentation) {},
+			present: []string{
+				"A payload the export already decoded (inline in the YAML, or as a sidecar file next to it) is documented as decoded.",
+				"decoded and pretty-printed only when it is text",
+				"binary content (certificates, images) is stated as present and never reprinted",
+			},
+		},
+		{
+			name:   "no review cadence and no inferred purpose",
+			mutate: func(*ResourceDocumentation) {},
+			present: []string{
+				"never infer it from the display name",
+				"otherwise state that the change role is not documented here",
+			},
+			absent: []string{"review cadence"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := fullDoc()
+			tt.mutate(&doc)
+			runPromptAssertions(t, BuildDocumentationPrompt(doc), tt.present, tt.absent)
+		})
 	}
 }

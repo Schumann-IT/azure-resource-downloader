@@ -25,7 +25,10 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/reusablePolicySettings",
 		documentation: models.ResourceDocumentation{
-			Purpose: "An Intune reusable settings group shared by several endpoint security profiles, for example Device control printer or removable-storage groups, Windows Firewall rule remote IP ranges or FQDNs, or the certificates used by Endpoint Privilege Management rules.",
+			// A reusable settings group is referenced by ID from endpoint
+			// security profiles and has no assignments of its own.
+			Template: referencedPromptTemplateText,
+			Purpose:  "An Intune reusable settings group shared by several endpoint security profiles, for example Device control printer or removable-storage groups, Windows Firewall rule remote IP ranges or FQDNs, or the certificates used by Endpoint Privilege Management rules.",
 			EmbeddedPayloads: []string{
 				"settingInstance (nested setting instance; Endpoint Privilege Management certificate groups embed the certificate as a base64 value)",
 			},

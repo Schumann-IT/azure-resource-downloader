@@ -34,8 +34,10 @@ var recordPromptTemplateText string
 
 // referencedPromptTemplateText is the shared prompt template for supporting
 // objects referenced by ID from other policies (e.g. assignment filters,
-// named locations, authentication strengths): they have no assignments of
-// their own — other resources point at them.
+// named locations, authentication strengths, reusable policy settings): other
+// resources point at them. Most have no assignments of their own; a type that
+// does (roleScopeTags) gets the shared assignments block through
+// ResourceDocumentation.HasAssignments.
 //
 //go:embed referenced_prompt.tmpl
 var referencedPromptTemplateText string

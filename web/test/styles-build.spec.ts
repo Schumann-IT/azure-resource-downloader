@@ -118,6 +118,19 @@ describe('Tailwind stylesheet build', () => {
     expect(css).toMatch(/\.doc-section\[data-section=["']references["']\]/);
   });
 
+  it('styles Conditions as a relation section and fixes the density and rail gaps', () => {
+    expect(css).toMatch(
+      /\[data-section=["']conditions["']\][^{]*\{[^}]*--section-color:\s*var\(--sec-relation\)/,
+    );
+    // Nested details in a definition section get the depth rail.
+    expect(css).toMatch(
+      /\.doc-section\[data-section=["']definition["']\]\s+details\s+details/,
+    );
+    // Neither membership (prose) nor conditions (tables) gets the dense mode.
+    expect(css).not.toMatch(/\.doc-section\[data-section=["']membership["']\]/);
+    expect(css).not.toMatch(/\.doc-section\[data-section=["']conditions["']\]/);
+  });
+
   it('includes the setting-block note treatments', () => {
     expect(css).toMatch(/details\[data-note=["']security["']\]/);
     expect(css).toMatch(/details\[data-note=["']inert["']\]/);

@@ -15,16 +15,18 @@ export const SECTION_HEADING_CLASS = 'doc-section-heading';
 
 export const METADATA_TABLE_CLASS = 'doc-metadata';
 
-// The union of the six per-template heading sets, plus the tenant summary's
+// The union of the seven per-template heading sets, plus the tenant summary's
 // own vocabulary. Slugs, not headings: `slugifyHeading` is what maps one to the
 // other, and the stylesheet keys on these values.
 //
 //   default / singleton  references, lifecycle-and-operations, security, settings
 //   arm                  references, lifecycle-and-operations, security, properties
+//   conditional-access   references, conditions, lifecycle-and-operations, security, settings
 //   group                membership, usage-as-assignment-target, security, properties
 //   credential           + expiry-and-renewal
 //   record               references, lifecycle-and-operations, properties
-//   referenced           + usage-and-references, definition
+//   referenced           + usage-and-references, definition (also used by
+//                        roleScopeTags and reusablePolicySettings)
 //   summary.md           management-summary, at-a-glance, assignment-posture,
 //                        coverage-caveats (+ H3 findings, recommendations)
 //
@@ -34,6 +36,7 @@ export const SECTION_VOCABULARY: readonly string[] = [
   'references',
   'lifecycle-and-operations',
   'security',
+  'conditions',
   'settings',
   'properties',
   'definition',

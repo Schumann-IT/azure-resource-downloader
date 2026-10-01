@@ -133,6 +133,15 @@ section of the [repository README](../README.md) for the procedure.
   as a whole line removed and another added. The page counts the differences and links each one to the next,
   with plain links rather than a script.
 
+#### Views and navigation
+
+- **Conditional Access documents get a styled `Conditions` section.** The CLI's new Conditional Access template
+  documents a policy's targeting in a `Conditions` section; the browser now gives it the relations colour and an
+  icon like every other contract section, instead of rendering it as plain prose. A group's `Membership` section,
+  which is prose, no longer gets the dense settings layout, and nested settings inside a `Definition` section get
+  the same depth rail as in `Settings` and `Properties`. Visible once the documentation is regenerated with the
+  new CLI templates; still no client-side JavaScript. (#53)
+
 #### Layout
 
 - **Pages are wider on large screens.** The documentation, drift and compare pages, and the top bar above
