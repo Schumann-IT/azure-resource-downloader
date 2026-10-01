@@ -52,21 +52,21 @@ the branch touched was both added and archived on it, because the backlog file t
 
 **Plan.**
 
-- `scripts/lib/branch.js`: `readBranchFacts` gains `backlogTouched` (initialised `null` like
+- ~~`scripts/lib/branch.js`: `readBranchFacts` gains `backlogTouched` (initialised `null` like
   `backlogChanged`; when a merge-base exists, set after `facts.archived` is computed to
   `facts.backlogChanged || facts.archived.length > 0`). `backlogChanged` keeps its meaning. Update the
-  module comment.
-- `scripts/branch-ready.js` check 6: `backlogChanged` → ok "NEXT-ITERATIONS.md changed on this branch";
+  module comment.~~
+- ~~`scripts/branch-ready.js` check 6: `backlogChanged` → ok "NEXT-ITERATIONS.md changed on this branch";
   else `backlogTouched` → ok "NEXT-ITERATIONS.md delivered on this branch (<n> archived entry(ies))" with
   `n = facts.archived.length`; else the existing failure message, unchanged. Update the check-6 comment to
-  say an archived entry counts.
-- `test/readiness-git.spec.ts` (temp `git init` repositories, never this checkout): the existing
+  say an archived entry counts.~~
+- ~~`test/readiness-git.spec.ts` (temp `git init` repositories, never this checkout): the existing
   archive case also asserts `backlogTouched === true`; new cases on fresh branches of the fixture repository —
   a branch that changes only another `web/` file → `backlogChanged` and `backlogTouched` both `false`; an
   entry added and then removed from the backlog together with a new `.claude/archive/web/*.md` (net-zero
   backlog diff) → `backlogChanged === false`, one `archived` file, `backlogTouched === true`; a file added
   only under `.claude/archive/go/` → `backlogTouched === false`. Without a merge-base `backlogTouched` stays
-  `null` (extend the existing no-merge-base case).
+  `null` (extend the existing no-merge-base case).~~
 - Documentation at *done*: `CHANGELOG.md` gets a `### Fixed` entry (the gate is an operator-facing script,
   and the gate itself refuses an entry archived as done without `[Unreleased]` growing); `README.md`'s
   `npm run branch-ready` paragraph and the Windsurf twins `.windsurf/rules/06-next-iterations.md` and
