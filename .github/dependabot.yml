@@ -1,4 +1,8 @@
 # Dependabot version updates: one grouped pull request per ecosystem per week.
+# The gomod and npm groups carry minor and patch updates only; a major version
+# arrives as its own single-dependency pull request (same commit-message prefix),
+# so one breaking major never blocks the routine updates. github-actions stays
+# unrestricted: action majors are tag moves that touch only .github/workflows/.
 #
 # The commit-message prefixes produce Conventional Commits subjects the branch
 # gates accept as they are — `build(go): bump …`, `build(web): bump …`,
@@ -19,6 +23,7 @@ updates:
     groups:
       go-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     commit-message:
       prefix: "build(go)"
 
@@ -29,6 +34,7 @@ updates:
     groups:
       web-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     commit-message:
       prefix: "build(web)"
 

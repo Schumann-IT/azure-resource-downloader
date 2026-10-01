@@ -235,22 +235,22 @@ needs work, planned — on its own, instead of one breaking major blocking every
 
 **Plan.**
 
-- `.github/dependabot.yml`: in the `gomod` and `npm` groups add `update-types: ["minor", "patch"]`, so majors fall
+- ~~`.github/dependabot.yml`: in the `gomod` and `npm` groups add `update-types: ["minor", "patch"]`, so majors fall
   out of the group and Dependabot opens them as individual pull requests with the same commit-message prefix; keep
   the `github-actions` group as it is (action majors are tag moves and have been green). Keep the header comment
-  accurate: grouping covers minor and patch, majors come one per dependency, and `include: scope` stays out.
-- Test: in `go/scripts/lib/changelog_test.sh`, extend the "all conventional" assertion of
+  accurate: grouping covers minor and patch, majors come one per dependency, and `include: scope` stays out.~~
+- ~~Test: in `go/scripts/lib/changelog_test.sh`, extend the "all conventional" assertion of
   `unconventional_subjects_in` with the three Dependabot subject shapes —
   `build(go): bump the go-dependencies group in /go with 3 updates`,
   `build(go): bump github.com/spf13/cobra from 1.8.1 to 2.0.0 in /go` and
   `ci: bump actions/checkout from 4 to 5` — so a grouped and an individual pull request are both proven to pass
-  the Conventional Commits check.
-- Verify, without editing them, that the dependency-only exemption is independent of grouping: `make -C go
+  the Conventional Commits check.~~
+- ~~Verify, without editing them, that the dependency-only exemption is independent of grouping: `make -C go
   test-scripts` (`go/scripts/lib/branch_test.sh`, cases 6–11: `go.mod` + `go.sum`, `go.sum` alone, plus a `.go`
   file, plus the backlog, outside `go/` only, plus a path outside `go/`) and `npm --prefix web test --
   readiness-git` (`web/test/readiness-git.spec.ts`, `describe('dependency-only branches')`: `package.json` +
   `package-lock.json`, the lock file alone, plus a source file, a nested `package.json`, a changed backlog, paths
-  outside `web/`) both pass; every case fixes changed paths only, none a pull request or a group.
+  outside `web/`) both pass; every case fixes changed paths only, none a pull request or a group.~~
 - User action (no agent can do it): after the merge to `main`, open the repository's Dependabot page (Insights →
   Dependency graph → Dependabot) and confirm the three ecosystems show no configuration error; on the next weekly
   run, confirm the npm majors arrive as individual `build(web): bump … in /web` pull requests.
