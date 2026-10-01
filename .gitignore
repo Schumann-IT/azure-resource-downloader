@@ -10,3 +10,6 @@ azure-rd
 .sonar/
 .scannerwork/
 .sonar-reports/
+
+# Local review outputs: input for backlog work, never committed
+Claude outputs/

@@ -47,6 +47,25 @@ it cannot silently decay again.
 > content fixes and a Conditional Access template* gives the group template the full header — on this branch,
 > before the one regeneration, so no generated document ever misses them.
 >
+> **Metadata review (2026-10-02).** A field-by-field audit of every handler's `ResourceDocumentation` against
+> Microsoft Learn, built on `c2fba77`: 277 changes over the 53 handler files (71 wrong, 10 outdated, 99 missing, 97
+> optional) — Lifecycle 53, KeySettings 48, RelatedTypes 47, BestPractices 41, EmbeddedPayloads 24, AdminCenter 17,
+> Purpose 16, SchemaReference 15, SubtypeNote 8, Permissions 4, EndpointDocs 2, RequiredPermissions 1, Template 1.
+> The ready-to-paste values are in the review's change plan (`Claude outputs/handler-metadata-change-plan.md`,
+> untracked and git-ignored — the implementer's input); they are applied verbatim, so the commit diff is the
+> record. Its eight handler-logic follow-ups are parked ideas under *export & metadata*.
+>
+> **Decision.** From the review: `organizationalBranding` moves to the singleton template; `Microsoft.Graph/roleScopeTags
+> (roleScopeTagIds)` is added to `RelatedTypes` of the 32 scope-tagged Intune types, with the reverse entry on
+> `roleScopeTags`; `EmbeddedPayloads` names only encoded or deeply nested content and says how the export decodes
+> it (the five script types and `deviceConfigurations`); `AdminCenter` only where a Learn page cites the blade;
+> no permission tightening for `authenticationMethodsPolicy`, `authenticationStrengthPolicies` or
+> `deviceConfigurations` (consistent with the permission source rule above).
+>
+> **Overlap.** The `organizationalBranding` template switch is a metadata `Template` value and ships here; the
+> template-selection bullet of *Template content fixes and a Conditional Access template* stays limited to
+> Conditional Access, `reusablePolicySettings` and `roleScopeTags`.
+>
 > **Regeneration-gated.** Every changed value moves the type's `promptSha256`; the new `Links.Permissions` line moves
 > it for every type. Batch with *Template content fixes and a Conditional Access template* and *Run-prompt fixes and
 > the `summary:` frontmatter line* so they share the one scheduled regeneration. Builds on the shared prompt
@@ -120,10 +139,35 @@ it cannot silently decay again.
   `internal/pipeline/testdata/golden/prompts/` change (the exported-YAML goldens stay byte-identical), and each
   type's diff is confined to its permission lines and its *Reference material* block (`groups`: only its
   permission lines, if any, since its template renders no links block yet).~~
+- Apply the metadata review: for each of the 53 files in the change plan, replace exactly the listed fields
+  inside its `models.ResourceDocumentation{…}` literal (ARM handlers: the literal returned by `Documentation()`) —
+  add keys that do not exist yet, delete keys marked `// remove`, put `// in Links:` lines into the nested `Links`
+  literal, leave unlisted fields as they are; `deviceConfigurations` keeps its `requiredPermission` variable. Input:
+  `Claude outputs/handler-metadata-change-plan.md` (untracked, built on `c2fba77`) — stop and report if a file's
+  literal no longer matches what it was built from. Then `make -C go fmt`.
+- Link check: every link added or changed returns HTTP 200 after redirects; an `intune.microsoft.com` /
+  `entra.microsoft.com` / `portal.azure.com` blade (login required) is checked for host and path against the Learn
+  page the change plan cites. A link that fails is left out and listed in the report — never replaced by a guess.
+- Tests: `make -C go test` with `documentation_metadata_test.go` as it is (Learn-only links, admin-center hosts,
+  `?view=` per client, no `/mem/intune/`, hint scopes declared); add one assertion that `organizationalBranding`
+  uses the singleton template.
+- Golden prompts, deliberately: `make -C go golden-update` and review — all 53 files under
+  `testdata/golden/prompts/` change (now `groups` too: its Lifecycle, permissions and related text), no
+  `*.golden.yaml` changes, and each type's diff is confined to the fields the change plan lists for it.
+- Resolve the two open follow-ups of this entry and strike them with this work: `deviceManagement` keeps `EndpointDocs` on the
+  complex-type page, `Links.Permissions` moves to the permissions-reference anchor
+  (`…/graph/permissions-reference#devicemanagementserviceconfigreadall`), and Purpose and KeySettings describe what
+  is actually exported (identifiers only — exporting the settings is the parked idea *export the tenant
+  `deviceManagement.settings`*); `AdminCenter` gets the 17 Learn-cited blades, the rest stay empty by rule.
 - Documentation at *done*: `README.md` "Supported resource types" — move the `mobileThreatDefenseConnectors` and
   `intuneBrandingProfiles` rows to the *enrollment, Autopilot and tenant* (`DeviceManagementServiceConfig.Read.All`)
-  table and reflect any other corrected scope there and in the dedicated-app scope list; `CHANGELOG.md`
-  (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
+  table and reflect any other corrected scope there and in the dedicated-app scope list; *Intune — scripts*:
+  platform-script assignments (`…/deviceManagementScripts/{id}/assignments`) also need
+  `DeviceManagementConfiguration.Read.All` (already in `GRAPH_SCOPES`, no new consent); the
+  `onPremisesSynchronization` row reads "One file per tenant, cloud-only tenants included"; the template-family
+  table moves `organizationalBranding` to the `singleton` row. `CHANGELOG.md`: `### Fixed` for the permissions,
+  `### Changed` for the corrected and completed per-type documentation metadata, with **regenerate the
+  documentation** in bold.
 - Open follow-up: no verified `Links.AdminCenter` deep link exists for any of the 53 types. The Microsoft Learn
   Intune, Entra and Azure documentation cite only the portal roots (and a few blades for other features), so
   every `AdminCenter` stays empty and no "Admin center:" line is rendered yet. Add values per type when a Learn
@@ -259,6 +303,125 @@ branch), L (several branches or a design change).
    normalisation to the CLI*; web *manual pairing* and *one-sided resource* follow on the CLI's rule; *version the
    drift observation* rides the first drift contract change.
 3. **Housekeeping** is opportunistic: a `gocognit` entry is paid off by whichever entry edits its function.
+4. **Export & metadata follow-ups** from the metadata review are independent of each other; *export ADMX
+   presentation values* and *Intune branding images* each need a re-baseline after shipping, so they pair well with
+   a planned re-download; *mask dedicated secret properties* only joins a regeneration if it extends the prompt
+   redaction rule instead of masking.
+
+## Parked ideas — export & metadata
+
+### Idea: export the tenant `deviceManagement.settings`
+
+*Area:* export & metadata · *Impact:* medium · *Effort:* S · *Ships with:* standalone; then turn the type's
+metadata back into tenant-wide settings
+
+`GET /deviceManagement` without `$select` returns only `id`, `intuneAccountId` and `maximumDepTokens`, so the
+`deviceManagement` export carries no configurable setting. Pass `$select=id,intuneAccountId,maximumDepTokens,settings`
+to `client.DeviceManagement().Get` in `getSingleton` (`internal/handlers/graph/devicemanagementsettings.go`) so the
+tenant-wide Intune settings (`deviceManagementSettings`) are exported — notably `settings.secureByDefault` (the switch
+behind "Mark devices with no compliance policy assigned as"), `deviceComplianceCheckinThresholdDays`,
+`deviceInactivityBeforeRetirementInDay`, `enhancedJailBreak` and `androidDeviceAdministratorEnrollmentEnabled`. Then
+the type's metadata becomes "tenant-wide settings" again: Purpose, KeySettings on those `settings.*` paths, and the
+`deviceManagementSettings` page documenting real exported data. Effect: one nested map more per tenant, so drift
+reports one change per tenant once. **Parked** because the metadata review made the type honestly informational and
+nobody has asked for these settings in the export yet. **Revisit** when an operator wants tenant-wide Intune
+settings documented or drift-tracked.
+
+### Idea: export ADMX presentation values for group policy configurations
+
+*Area:* export & metadata · *Impact:* medium · *Effort:* M · *Ships with:* standalone; a re-baseline after it
+ships
+
+`presentationValues` are never fetched, so the values entered for Administrative Templates settings with
+presentations (text boxes, drop-downs, lists) are missing from the export. In `listGroupPolicyDefinitionValues`
+(`internal/handlers/graph/grouppolicyconfiguration.go`) widen the existing `$expand` from `definition` to
+`definition,presentationValues($expand=presentation)`; if the service rejects the nested expand, fall back to one
+`GET …/definitionValues/{id}/presentationValues?$expand=presentation` per definition value (Learn lists
+`DeviceManagementConfiguration.Read.All`, no new scope). Then add `presentationValues` back to the type's
+`EmbeddedPayloads` and a handler test asserting the values are attached. Effect: every Administrative Templates
+profile's YAML grows, so the first drift run reports them all as changed — **re-baseline with `resource download`
+right after shipping**. **Parked** because it changes the export of every such profile and needs that re-baseline.
+**Revisit** when an operator needs the configured ADMX values documented or drift-tracked.
+
+### Idea: mask dedicated secret properties in the export
+
+*Area:* export & metadata · *Impact:* medium · *Effort:* S–M · *Ships with:* the next regeneration, but only if
+the prompt redaction rule is extended instead of masking (*regen-gated* then)
+
+Check that no dedicated secret property reaches disk: `depMacOSEnrollmentProfile.adminAccountPassword` (inside
+`depOnboardingSettings.enrollmentProfiles`), `windowsAutopilotDeviceIdentity.deviceAccountPassword` and
+`vppToken.token`. None occurs in the 2026-10-01 exports (the vppTokens export is empty), so Graph probably never
+returns them. If any can carry a value, mask it in the export with the cleaner's replacement mechanism
+(`CleanPropertiesWithReplace`, `internal/transform/cleaner.go`) or a type-specific remove-key in the default
+transform config, with a `cleaner_test.go` case per key. Only if masking is not done, extend `prompt-redaction-rule`
+to "dedicated secret properties (passwords, tokens)" — that moves every `promptSha256` and must ride a regeneration.
+Effect: YAML changes only where a secret was present. **Parked** because it needs one export from a tenant with VPP
+tokens and a macOS ADE profile that creates a local admin account to confirm. **Revisit** when such a tenant is
+available, or at once if any of the three properties appears in an export.
+
+### Idea: Intune branding images as content summaries
+
+*Area:* export & metadata · *Impact:* low · *Effort:* M · *Ships with:* standalone; a re-baseline or accepting
+the drift
+
+`themeColorLogo`, `lightBackgroundLogo` and `landingPageCustomizedImage` never appear in the
+`intuneBrandingProfiles` export although Learn's GET example returns them. In `fetchItem`
+(`internal/handlers/graph/intunebrandingprofile.go`) fetch each profile with a `$select` naming them and check whether
+Graph then returns the mimeContent `{type, value}`; if so, replace each image in the handler's `normalize` hook with
+`{type, sha256, sizeBytes}` (base64 bytes are large and useless in drift, the digest still shows a logo change) and add
+the three keys to KeySettings. Effect: three small summaries per profile — a one-time re-baseline or accepted drift.
+**Parked** because a logo change is rarely what a review is about. **Revisit** when branding changes need to be
+tracked.
+
+### Idea: organizationalBranding: the documented request shape
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone; needs a tenant with default
+branding to verify
+
+The handler uses `$expand=localizations`, but the Learn Get page supports only `$select` (documented alternative:
+`GET …/branding/localizations`) and marks `Accept-Language` as required. In `fetchItem`
+(`internal/handlers/graph/organizationalbranding.go`) drop the expand, send `Accept-Language: 0` for the default
+branding via `requestConfig.Headers`, read the per-locale overrides with a separate paged
+`GET /organization/{id}/branding/localizations` and attach them with `SetLocalizations`; test the request shape with an
+httptest fixture. Effect: none for the current exports, which have no branding (404). **Parked** because neither
+export tenant has default branding, so the change cannot be observed. **Revisit** when a tenant with branding is
+exported, or the current call starts failing.
+
+### Idea: relax secret resolution to a read scope
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone; needs one consent test
+
+Secret resolution on `deviceConfigurations` declares `DeviceManagementConfiguration.ReadWrite.All`, but Learn lists
+`DeviceManagementConfiguration.Read.All` as least privileged for `getOmaSettingPlainTextValue`. Test once with an app
+registration consented only `Read.All` (export only deviceConfigurations with `resolve-secrets` on, against a custom
+profile with an encrypted OMA-URI value). If plaintext comes back, remove the `requiredPermission` switch in
+`internal/handlers/graph/deviceconfiguration.go`, fix its comment and the README (`GRAPH_SCOPES` loses
+`DeviceManagementConfiguration.ReadWrite.All`) and update the golden prompt; on a 403 keep `ReadWrite.All` and note in
+the comment that Learn's table is wrong. Effect: no export change; one write scope fewer to consent. **Parked** because
+it needs that consent test against a real tenant. **Revisit** when such a test tenant is at hand.
+
+### Idea: name the Global Administrator role for onPremisesSynchronization
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone
+
+Learn: Global Administrator is the only role supported for the delegated GET of
+`onPremisesSynchronization`, so operators without it get a 403 for this type that does not explain itself. Append
+" and the Global Administrator role" to the two hint strings in `internal/handlers/graph/onpremisessynchronization.go`
+(outside the quoted scope, so the metadata test's `requires '…'` check is unaffected) and add the role to the README
+row. Effect: messages and documentation only. **Parked** because nobody has hit the 403 yet. **Revisit** at the first
+report of it, or with any other change to that handler.
+
+### Idea: compliance and settings-catalog assignments through the documented Get
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone
+
+`compliancePolicies` and `deviceManagementConfigurationPolicies` read assignments through a separate
+`/{id}/assignments` call that has no Learn operation page, so its permission is unverified. Both handlers already send
+`$expand` on the item GET (`settings`, plus `scheduledActionsForRule` for compliance): add `assignments` and drop the
+separate call, so assignments come from the documented Get (`DeviceManagementConfiguration.Read.All`); keep the
+best-effort behaviour (`warnAssignmentsFetchFailed` when the expanded list is absent) and verify with one export or the
+golden YAML that the assignment objects are identical. Effect: none expected; one request fewer per policy. **Parked**
+because the current call works. **Revisit** if it starts failing, or with other work on these handlers.
 
 ## Parked ideas — drift & compare
 
