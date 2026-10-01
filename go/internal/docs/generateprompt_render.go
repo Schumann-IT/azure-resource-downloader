@@ -457,8 +457,6 @@ func isDynamicGroup(gi groupInfo) bool {
 	return false
 }
 
-// listOrNone renders a slice as a sorted, comma-joined cell, or "none" when it
-// is empty, for the coverage caveats.
 // notListedWithReasons renders the types that could not be listed, sorted,
 // each followed by its recorded reason in parentheses — "none" when every type
 // listed. A type without a recorded reason (a file written before reasons
@@ -480,6 +478,8 @@ func notListedWithReasons(n NotListedMeta) string {
 	return strings.Join(parts, ", ")
 }
 
+// listOrNone renders a slice as a sorted, comma-joined cell, or "none" when it
+// is empty, for the coverage caveats.
 func listOrNone(items []string) string {
 	if len(items) == 0 {
 		return "none"

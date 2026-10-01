@@ -44,6 +44,8 @@ the run instead of being lost after one debug line.
 > `complete: true`. The browser (`web/src/docs/resources-metadata.ts`) reads only the `resources:` map and the
 > drift observation's `unknownTypes`; neither changes, so no web change follows.
 >
+> **Decision.** Pre-existing TestErrorSummary assertions that encode the old format: adjust them to the new format (Option B).
+>
 > **Owner.** none — every file is under `go/`. No sequencing constraint.
 >
 > **Implementer.** opus — error classification, the metadata schema, and a change to when a download writes
@@ -101,7 +103,7 @@ the run instead of being lost after one debug line.
   the two azcore cases expect a bare `HTTP 403 AuthorizationFailed` (no `: <first line>`), and the two
   multi-line Intune cases expect the hint although their synthetic messages match no permission marker. The
   user decides: adjust those assertions to the new format (and give the Intune fixtures a real
-  permission message), or change the bullet's format. **Decision (user):** adjust the assertions (Option B) — applied.~~
+  permission message), or change the bullet's format.~~
 - Documentation at *done*: `README.md` (the branding row's "no file when unconfigured" note, troubleshooting a
   not-listed type) and a `CHANGELOG.md` `### Fixed` entry.
 

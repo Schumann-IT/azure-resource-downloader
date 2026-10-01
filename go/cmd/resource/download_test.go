@@ -10,6 +10,7 @@ import (
 
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/runprep"
 )
 
 // parseResourceType extracts the resource type from a resource ID
@@ -298,4 +299,32 @@ func TestNothingListed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecuteDownloadEmptyOnly(t *testing.T) {
+	t.Run("real run", func(t *testing.T) {
+		summary, err := executeDownload(context.Background(), &runprep.Prepared{DryRun: false}, nil, nil)
+		if err != nil {
+			t.Fatalf("executeDownload() error = %v", err)
+		}
+		if summary == nil {
+			t.Fatal("executeDownload() returned a nil summary")
+		}
+		if summary.TotalResources != 0 || len(summary.Results) != 0 {
+			t.Errorf("TotalResources=%d Results=%d, want 0 and 0", summary.TotalResources, len(summary.Results))
+		}
+		summary.MarkCompleteness()
+		if !summary.Complete {
+			t.Errorf("Complete = false (%s), want true", summary.IncompleteReason)
+		}
+	})
+	t.Run("dry run", func(t *testing.T) {
+		summary, err := executeDownload(context.Background(), &runprep.Prepared{DryRun: true}, nil, nil)
+		if err != nil {
+			t.Fatalf("executeDownload() error = %v", err)
+		}
+		if summary == nil || !summary.DryRun {
+			t.Errorf("summary = %+v, want DryRun true", summary)
+		}
+	})
 }
