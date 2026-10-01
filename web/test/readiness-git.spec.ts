@@ -163,6 +163,7 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     run(['add', '.']);
     run(['commit', '-q', '-m', 'fix(web): go archive only']);
     facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
+    expect(facts.backlogChanged).toBe(false);
     expect(facts.archived).toEqual([]);
     expect(facts.backlogTouched).toBe(false);
   });
