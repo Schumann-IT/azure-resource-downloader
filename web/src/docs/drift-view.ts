@@ -250,6 +250,8 @@ export function findingGroups(
 
 function findingItem(tenant: string, finding: DriftFinding, audit: DriftAudit | undefined) {
   return {
+    // Not rendered by the page; the PDF export joins its finding sections on it.
+    key: finding.key,
     href: driftHref(tenant, finding.key),
     label: finding.displayName || lastSegment(finding.key),
     previous: finding.previousDisplayName,
@@ -350,7 +352,7 @@ function displayEvent(e: AuditEvent) {
 export function byActor(obs: DriftObservation, audit: DriftAudit, tenant: string) {
   const blocks = new Map<
     string,
-    { actor: string; actorType: string; findings: Array<{ href: string; label: string; badge: Badge; at: string }> }
+    { actor: string; actorType: string; findings: Array<{ key: string; href: string; label: string; badge: Badge; at: string }> }
   >();
   for (const finding of obs.findings) {
     const found = audit.byKey.get(finding.key);
@@ -366,6 +368,7 @@ export function byActor(obs: DriftObservation, audit: DriftAudit, tenant: string
         findings: [],
       };
       block.findings.push({
+        key: finding.key,
         href: driftHref(tenant, finding.key),
         label: finding.displayName || lastSegment(finding.key),
         badge: verdictBadge(finding.verdict),

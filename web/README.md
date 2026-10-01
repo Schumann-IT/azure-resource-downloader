@@ -3,7 +3,7 @@
 A **read-only browser** for the documentation that [`azure-resource-downloader`](../README.md) and its
 documentation agent produce for an Entra ID / Intune tenant. It discovers tenant exports on disk, renders the
 generated Markdown as HTML with the source YAML one click away, lets the reader slice the tenant along the
-operator's taxonomy, and packages a tenant for import into Confluence.
+operator's taxonomy, packages a tenant for import into Confluence, and hands a drift report out as one PDF.
 
 It is the last stage of the pipeline described in the [monorepo README](../README.md): `azure-rd download`
 exports the tenant, an AI agent writes the documents, `azure-rd docs generate-index` writes `docs/index.yaml`
@@ -21,6 +21,7 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
 - [Taxonomy filters](#taxonomy-filters)
 - [Confluence export](#confluence-export)
 - [Drift view](#drift-view)
+- [Drift report PDF](#drift-report-pdf)
 - [Rendering](#rendering)
 - [Security](#security)
 - [Tests](#tests)
@@ -60,6 +61,9 @@ nothing with the Go CLI but the export tree on disk; `DOCS_ROOT` is the only cou
 - **Confluence HTML export** — `GET /:tenant/_export/confluence` streams the whole tenant as a zip ready for
   Confluence's HTML import, offered as a download link per tenant on the picker. **One-way**; see
   [Confluence export](#confluence-export).
+- **Drift report PDF** — `GET /:tenant/_export/drift-pdf` returns the tenant's current drift observation, its
+  analysis and every finding as one PDF, offered as a download link on the tenant drift page. See
+  [Drift report PDF](#drift-report-pdf).
 - **No-restart refresh** — regenerated documents, re-downloaded resources and a regenerated `index.yaml`
   appear on the next request (per-request `stat()` against an mtime/size-keyed cache), including the counts
   and export timestamp shown on the tenant picker and `/healthz`; only a newly generated tenant folder waits
@@ -179,7 +183,8 @@ Discovery and resolution rules:
 | `GET /favicon.ico` | `301` to `/favicon.svg`, the static icon every page links to. Declared so a browser's own probe is not read as a tenant named `favicon.ico`. |
 | `GET /:tenant` | The tenant landing page: `docs/summary.md`, or the `docs/index.yaml` listing when there is none. Takes one repeatable filter parameter per taxonomy axis. |
 | `GET /:tenant/summary` | `302` to `/:tenant` — the summary is that page's body, not a separate document. |
-| `GET /:tenant/_export/confluence` | The whole tenant as an `application/zip` attachment for Confluence's HTML import. Any other format 404s. |
+| `GET /:tenant/_export/confluence` | The whole tenant as an `application/zip` attachment for Confluence's HTML import. |
+| `GET /:tenant/_export/drift-pdf` | The tenant's current drift report as an `application/pdf` attachment, `<tenant>-drift.pdf`. 404 when there is no observation or it is outdated; any other format 404s. |
 | `GET /:tenant/_resource/*path` | The source YAML behind a document, syntax highlighted; the `.yaml` suffix is optional. |
 | `GET /:tenant/_resource/*path?raw` | The same file as `text/plain; charset=utf-8` (`nosniff`), for copy-paste. |
 | `GET /:tenant/_drift` | The drift observation at tenant scope: header, analysis summary and every recorded finding. |
@@ -353,6 +358,46 @@ CLI's job — this app only renders what is on disk, and never acts on it.
     link names no finding of this observation, stays empty. An index written as prose gets no column.
   The app derives nothing: it joins by finding key and shows the recorded facts. Rewriting or deleting
   `audit.yaml` shows on the next request without a restart.
+- **Download.** While the observation is current, the tenant drift page's top bar offers **Download drift
+  report (PDF)** beside **Summary | Drift**, with *A snapshot of this observation; it is not updated.* next to
+  it. See [Drift report PDF](#drift-report-pdf).
+
+## Drift report PDF
+
+`GET /:tenant/_export/drift-pdf` turns what the drift pages show into one A4 PDF, for a reader who has no
+access to the browser or the export tree. It is offered only on the tenant drift page — the report is scoped
+to the drift observation, not the tenant's documentation, so it is not on the picker — and only while the
+observation is current; with no observation or an outdated one the link is absent and the route answers 404.
+
+- **Content.** A cover (tenant, observation time, baseline time, both tool versions, finding count); the
+  observation block as on the drift page — counts, attribution or its outdated caveat, incomplete run,
+  suppressed removals, types that could not be listed, entries that could not be compared; the analysis
+  summary (`drift/index.md`) with its Severity and **Changed by** columns; every finding grouped by type, each
+  with verdict, severity, attribution (the events table or the reason there are none), the *What changed*
+  deltas, the integrity warning when its files no longer match, and its analysis — or *No analysis*; then
+  *By actor*. Every `<details>` block is expanded. A link to another finding of the report jumps inside the
+  PDF; every other link is plain text and images become their alt text. Each page's footer names the tenant,
+  the observation time and the page.
+- **Not included.** No observed YAML payloads and no line diffs — the same line the Confluence export draws at
+  source YAML.
+- **Layout.** Portrait A4. Tables fit the page: short columns are sized to their content, and long unbroken
+  values — dotted paths, GUIDs, underscored names, UPNs, type keys — wrap after `.` `/` `_` `-` `@` `:` `]`
+  (or every 12 characters) at an invisible zero-width space. A table row never splits across a page; the
+  header row repeats on the next.
+- **Fonts.** Roboto, bundled with `pdfmake`, for text; Courier for code a PDF standard font can encode.
+  `→ ← ↔ ⇒ ✓ ✗`, which Roboto lacks, print as `-> <- <-> => yes no` — in the PDF only; the drift pages keep
+  the original characters.
+- **Deterministic.** The PDF's creation date is the observation time, so the same observation downloads as
+  the same bytes.
+- **Read-only and offline.** The report is assembled in memory with `pdfmake` from the same reads the drift
+  pages use and sent once complete — no temporary file, nothing under `DOCS_ROOT` written. `pdfmake` is
+  configured to fetch no URL and to read no local file other than its four Roboto fonts (it also passes the
+  four Courier standard-font names through the same check). A failed build answers a plain `500` *The drift
+  report could not be built.*, never a half-sent attachment, a path or an error message.
+- **Limits.** CJK and emoji have no glyph in Roboto. Copied text carries the invisible break character at
+  the wrap points. The 12-character wrap applies per inline run, so a token spanning two differently
+  formatted runs without whitespace is not cut where they meet. A single table row taller than a page is
+  not broken.
 
 ## Tenant compare
 
@@ -482,7 +527,8 @@ degrades to an escaped `<pre>` rather than an error.
 Printing a page, or saving it as a PDF, yields the document alone: the top bar and the navigation sidebar are
 hidden, the layout un-sticks into a single column and the wide tables wrap instead of scrolling. **Collapsed
 `<details>` blocks print collapsed** — CSS cannot open a disclosure element, and there is no client-side
-JavaScript to do it — so expand the settings blocks you want on paper before printing.
+JavaScript to do it — so expand the settings blocks you want on paper before printing. For drift, the
+[Drift report PDF](#drift-report-pdf) is the whole observation with every block expanded.
 
 ### CSS
 
@@ -544,7 +590,8 @@ built in a temp directory and removed afterwards.
 | `test/compare-normalise.spec.ts` | The compare's normalisation rule — every dropped key, the id shapes kept and dropped, reference resolution with its ambiguous, unresolved and sentinel outcomes, the audience-only variant, scalar stability — and `resources/metadata.yaml` parsing. |
 | `test/tenant-index.spec.ts` | `index.yaml` parsing (malformed file rejected, later schema accepted, `facets`/`programmes`/`groups`/vocabularies), navigation building, every taxonomy-filter rule listed above (OR/AND, selection-aware counts, uncategorised bucket, exempt active document, version-2 synthesis, no-taxonomy passthrough), and `filterableAxes`/`groupByAxis` — the rule the export shares. |
 | `test/section-hooks.spec.ts` | Heading slugs, declared vs undeclared headings, matched/unmatched marker pairs, section wrapping (an H2 inside a spliced block never opens one), metadata-table detection. |
-| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the attribution on both drift pages, the Changed by column, the outdated caveat, an unreachable `audit.yaml` and its no-restart freshness; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
+| `test/docs.e2e.spec.ts` | supertest against fixture tenants: discovery, picker, landing page and its index fallback, the `/summary` redirect, sidebar, `<details>` passthrough, cross-type links, 404s and traversal, `generate.md` not served, no-restart refresh of a document, the summary, the index and a resource; the section hooks in rendered output; the YAML view with `#L` anchors, `?raw` and the switcher; the drift view's buttons, states, gate, integrity check, unreachable tree root and no-restart freshness; the attribution on both drift pages, the Changed by column, the outdated caveat, an unreachable `audit.yaml` and its no-restart freshness; the drift report PDF's content type, filename, identical bytes on repeat, 404s, the generic 500 and its link placement; the Confluence export's content type, archive shape, `EXPORT_INDEX` per request, the invariant that an export changes neither the rendered HTML nor a byte under the docs root, and that it carries nothing from the drift tree; the tenant compare's picker eligibility and selecting state, refused pairs, three-way listing, normalised, raw, audience-only and identical diffs, traversal, no-restart freshness and read-only invariant. |
+| `test/export-drift-pdf.spec.ts` | The drift report PDF's pure modules: the HTML-to-PDF walker (expanded `<details>`, internal and plain links, images, dropped and unwrapped elements), the document definition (cover, observation, groups, deltas, attribution states, *No analysis*, non-Latin names, creation date, no image or URL node), table widths and wrap points, unbroken rows and the symbol substitution. |
 | `test/export.spec.ts` | The exporter's pure modules: page titles, the allowlist serialiser, href rewriting, the format (space, page plan, provenance, overview and its axis index in all three modes), `parseExportIndexMode`, and the shared `<details>` fixture. |
 | `test/styles-build.spec.ts` | Compiles `src/styles.css` with the local Tailwind CLI and asserts the custom rules survive. |
 | `test/readiness-readers.spec.ts` | The `CHANGELOG.md`, `NEXT-ITERATIONS.md` and archive-frontmatter readers behind the readiness reports and the start gate. |
@@ -580,6 +627,7 @@ web/
 │       ├── drift-audit.ts               # drift/audit.yaml parsing + the attribution validity rule
 │       ├── drift.service.ts             # observation / baseline / hash / audit reads, mtime-cached
 │       ├── drift-view.ts                # drift view models: switcher entries, badges, finding lists, attribution
+│       ├── drift-report.service.ts      # the tenant and finding drift reports shared by the drift pages and the PDF
 │       ├── yaml-diff.ts                 # line diff of two YAML texts, hunks + side-by-side rows
 │       ├── file-cache.ts                # mtime + size parsed-file cache shared by drift and compare
 │       ├── resources-metadata.ts        # resources/metadata.yaml parsing + reference lookup
@@ -587,8 +635,10 @@ web/
 │       ├── compare-view.ts              # compare view models: three-way listing, pair comparison
 │       ├── compare.service.ts           # metadata reads (cached) + the two files of a pair
 │       └── export/
-│           ├── export.service.ts        # zip assembly + streaming (the only Nest piece)
+│           ├── export.service.ts        # Confluence zip + drift PDF assembly (the only Nest piece)
 │           ├── confluence.ts            # the format: space, page plan, overview, provenance
+│           ├── drift-pdf.ts             # the drift report PDF's document definition
+│           ├── pdf-content.ts           # rendered HTML → pdfmake content: wrap points, symbols, fonts
 │           ├── export-index-mode.ts     # EXPORT_INDEX → by-type / axis / both overview index
 │           ├── html-allowlist.ts        # rendered HTML → what the importer preserves
 │           └── page-name.ts             # page titles = file names, sanitised and deduplicated
@@ -704,6 +754,6 @@ web/
 Deliberate scope cuts are listed in [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md): no search, no highlighting of
 code fences *inside* documents, no YAML view for resources the index does not list (excluded bulk types,
 unreferenced groups), single-segment tenant routes only, no table of contents for the summary, no explicit
-dark-mode toggle, and no export format other than Confluence HTML (whose own limits are under
-[Confluence export](#confluence-export)). Navigation groups by resource type; the `platformGroup`/`functionGroup`
+dark-mode toggle, and no export format other than Confluence HTML and the drift report PDF (whose own limits
+are under [Confluence export](#confluence-export) and [Drift report PDF](#drift-report-pdf)). Navigation groups by resource type; the `platformGroup`/`functionGroup`
 frontmatter the index can carry is shown as badges when present rather than driving the tree.

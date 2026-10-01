@@ -81,6 +81,10 @@ one place to look per tenant instead of a control repeated on every page.
   *not* be on the picker, because the picker cannot express the scope. Their entry point belongs next to the
   thing being exported — the document top bar next to the **Documentation | YAML** switcher for a single
   document, a sidebar section header for one type — and the picker keeps whole-tenant formats only.
+- **Scoped reports** (the drift report PDF): an export of something other than the tenant's documentation
+  is the same case as a partial export — its link sits on the page of the thing it exports (the tenant drift
+  page, next to the **Summary | Drift** switch), shown only when there is something current to export, and
+  never on the picker.
 - **Media and source YAML as attachments**: no entry point of its own. It changes what an existing export
   *contains*, never where it is offered.
 - **Confluence REST API synchronisation**: not a download, and it mutates a remote system, so it cannot be
@@ -306,7 +310,9 @@ Single-file HTML, DOCX, PDF via a print stylesheet, a Markdown bundle; and expor
 or only the summary. **Parked** deliberately: the Confluence exporter is whole-tenant only, and the
 `src/docs/export/` seam exists so a second format is a second `ExportService` method plus its own format
 module, with the controller and the serialiser untouched. **Revisit** per format when someone actually needs
-it. Preserving the document tree in an export is not expressible through Confluence HTML import at all —
+it. For a PDF of the documentation, the drift report PDF entry brings `pdfmake` and an HTML→PDF content
+walker (`src/docs/export/pdf-content.ts`) — reuse those rather than a print stylesheet or a second engine.
+Preserving the document tree in an export is not expressible through Confluence HTML import at all —
 re-parenting by hand or the REST API are the only routes. Where each of these would be offered is already
 settled, including why the partial exports are the exception: see *Export entry points live on the tenant
 picker*.

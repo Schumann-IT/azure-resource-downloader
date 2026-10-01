@@ -5,6 +5,7 @@ import { MarkdownRendererService } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
 import { ExportService } from './export/export.service';
 import { DriftService } from './drift.service';
+import { DriftReportService } from './drift-report.service';
 import { CompareService } from './compare.service';
 
 @Module({
@@ -15,6 +16,7 @@ import { CompareService } from './compare.service';
     YamlHighlighterService,
     ExportService,
     DriftService,
+    DriftReportService,
     CompareService,
   ],
 })

@@ -30,5 +30,17 @@
         {{/each}}
       </nav>
     {{/if}}
+    {{!-- An optional download beside the switcher, with its caveat as visible
+          text. Only a page that has something to hand out fills it. --}}
+    {{#if download}}
+      <p class="header-download {{#unless views}}ml-auto {{/unless}}flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <a
+          href="{{download.href}}"
+          download
+          class="rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-slate-600 dark:text-slate-300 hover:border-brand-400 dark:hover:border-brand-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        >{{download.label}}</a>
+        <span class="text-slate-500 dark:text-slate-400">{{download.caveat}}</span>
+      </p>
+    {{/if}}
   </div>
 </header>

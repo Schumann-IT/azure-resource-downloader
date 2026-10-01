@@ -4,32 +4,15 @@ import * as path from 'path';
 import { TenantDiscoveryService, TenantInfo } from './tenant-discovery.service';
 import { MarkdownRendererService, RenderEnv } from './markdown-renderer.service';
 import { YamlHighlighterService } from './yaml-highlighter.service';
-import {
-  resolveDriftDocument,
-  resolveResource,
-  resolveWithinTenant,
-} from './path-safety';
+import { resolveResource, resolveWithinTenant } from './path-safety';
 import { DriftService, DriftFiles } from './drift.service';
-import { auditState, AuditState } from './drift-audit';
+import { DriftFinding, DriftObservation, DriftState } from './drift-observation';
+import { DriftReportService } from './drift-report.service';
 import {
-  DriftFinding,
-  DriftObservation,
-  DriftState,
-  driftState,
-  tenantDriftState,
-  typeOfKey,
-} from './drift-observation';
-import {
-  attributionOf,
-  byActor,
-  changedByCells,
   DRIFT_PREFIX,
   driftHref,
   driftPageState,
-  findingGroups,
-  findingHeader,
   lastSegment,
-  observationSummary,
   pickerDrift,
   resourceDriftSwitch,
   stateFlags,
@@ -73,6 +56,11 @@ export const RESOURCE_PREFIX = '_resource';
 // Route prefix for a whole-tenant export. A representation prefix like
 // `_resource`, and safe for the same reason.
 export const EXPORT_PREFIX = '_export';
+
+// The export formats behind `_export`: the whole tenant's documentation as a
+// Confluence import, and the current drift observation as one PDF.
+const CONFLUENCE_FORMAT = 'confluence';
+const DRIFT_PDF_FORMAT = 'drift-pdf';
 
 // Paths at the docs root the CLI writes as tool input, not documentation:
 // generate.md is the agent prompt. They are never served. Matched without the
@@ -128,6 +116,7 @@ export class DocsController {
     private readonly exporter: ExportService,
     private readonly drift: DriftService,
     private readonly compare: CompareService,
+    private readonly reports: DriftReportService,
   ) {}
 
   // Discovered tenants paired with their freshly read index, on every call —
@@ -178,8 +167,8 @@ export class DocsController {
         documented: index.counts.documented,
         pending: index.counts.pending,
         generatedAt: index.generatedAt,
-        drift: pickerDrift(await this.tenantDrift(info, index)),
-        exportHref: `/${info.id}/${EXPORT_PREFIX}/confluence`,
+        drift: pickerDrift(await this.reports.tenantDrift(info, index)),
+        exportHref: `/${info.id}/${EXPORT_PREFIX}/${CONFLUENCE_FORMAT}`,
         compareHref:
           !selecting && canCompare && eligible.has(info.id) ? selectHref(info.id) : null,
         selected: selecting?.id === info.id,
@@ -392,7 +381,7 @@ export class DocsController {
       breadcrumb: [],
       summary,
       exportSummary: exportSummary(index),
-      views: tenantSwitch(await this.tenantDrift(info, index), tenant, 'summary'),
+      views: tenantSwitch(await this.reports.tenantDrift(info, index), tenant, 'summary'),
       nav: this.nav(info, index, '', `/${tenant}`, query),
     });
   }
@@ -413,32 +402,32 @@ export class DocsController {
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, 'tenant', tenant, DRIFT_PREFIX);
 
-    const state = await this.tenantDrift(info, index);
-    const current = state.kind === 'current' ? state.observation : null;
-    const audit = current ? await this.auditOf(info, current) : ({ kind: 'none' } as AuditState);
-    const activeAudit = audit.kind === 'current' ? audit.audit : undefined;
+    const report = await this.reports.tenantReport(info, index);
+    const state = report.state;
     res.render('drift-tenant', {
       title: withTenant('Drift', info.name),
       tenant,
       breadcrumb: [],
       views: tenantSwitch(state, tenant, 'drift'),
+      // Only a current observation can be exported, so only its page offers it.
+      download:
+        state.kind === 'current'
+          ? {
+              href: `/${tenant}/${EXPORT_PREFIX}/${DRIFT_PDF_FORMAT}`,
+              label: 'Download drift report (PDF)',
+              caveat: 'A snapshot of this observation; it is not updated.',
+            }
+          : null,
       nav: this.nav(info, index, '', `/${tenant}/${DRIFT_PREFIX}`, query),
       state: stateFlags(state.kind),
       superseded:
         state.kind === 'superseded'
           ? supersededView(state.observation, state.baselineGeneratedAt)
           : null,
-      observation: current ? observationSummary(current, tenant, audit) : null,
-      groups: current ? findingGroups(current, tenant, activeAudit) : [],
-      actors: current && activeAudit ? byActor(current, activeAudit, tenant) : null,
-      analysis: current
-        ? await this.renderSplit(info.driftIndexPath, {
-            tenant,
-            docDir: '',
-            routeBase: DRIFT_PREFIX,
-            changedBy: current && activeAudit ? changedByCells(current, activeAudit) : undefined,
-          })
-        : null,
+      observation: report.observation,
+      groups: report.groups,
+      actors: report.actors,
+      analysis: report.analysis,
     });
   }
 
@@ -472,7 +461,7 @@ export class DocsController {
     }
 
     const index = await this.discovery.getIndex(info);
-    const state = await this.resourceDrift(info, index, key);
+    const state = await this.reports.resourceDrift(info, index, key);
     if (state.kind === 'none') return this.notFound(res, 'noDrift', tenant, relPath);
     if (state.kind === 'unknown') return this.notFound(res, 'drift', tenant, relPath);
 
@@ -498,9 +487,10 @@ export class DocsController {
   }
 
   // GET /:tenant/_export/:format — the tenant's documentation as an importable
-  // archive. Declared before the document catch-all so the prefix wins. Still
-  // read-only: the archive is assembled in memory and streamed, and nothing is
-  // written under the docs root.
+  // archive (`confluence`), or the current drift observation as one PDF
+  // (`drift-pdf`). Declared before the document catch-all so the prefix wins.
+  // Still read-only: both are assembled in memory, and nothing is written under
+  // the docs root.
   @Get(`:tenant/${EXPORT_PREFIX}/:format`)
   async export(
     @Param('tenant') tenant: string,
@@ -509,14 +499,25 @@ export class DocsController {
   ): Promise<void> {
     const info = await this.discovery.get(tenant);
     if (!info) return this.notFound(res, 'tenant', tenant, EXPORT_PREFIX);
-    if (format !== 'confluence') {
+    if (format !== CONFLUENCE_FORMAT && format !== DRIFT_PDF_FORMAT) {
       return this.notFound(res, 'export', tenant, `${EXPORT_PREFIX}/${format}`);
     }
 
     const index = await this.discovery.getIndex(info);
     if (!index) return this.notFound(res, 'tenant', tenant, EXPORT_PREFIX);
 
-    await this.exporter.confluence(info, index, res);
+    if (format === CONFLUENCE_FORMAT) {
+      await this.exporter.confluence(info, index, res);
+      return;
+    }
+    const outcome = await this.exporter.driftPdf(info, index, res);
+    if (outcome === 'noDrift') {
+      return this.notFound(res, 'noDrift', tenant, `${EXPORT_PREFIX}/${format}`);
+    }
+    if (outcome === 'failed') {
+      // Generic on purpose: no path, no exception message, no half-sent file.
+      res.status(500).type('text/plain; charset=utf-8').send('The drift report could not be built.');
+    }
   }
 
   // GET /:tenant/_resource/*path — the exported source YAML behind a document,
@@ -568,7 +569,7 @@ export class DocsController {
           docPath,
           'resource',
           resourceDriftSwitch(
-            await this.resourceDrift(info, index, docPath),
+            await this.reports.resourceDrift(info, index, docPath),
             tenant,
             docPath,
             false,
@@ -640,7 +641,7 @@ export class DocsController {
               docPath,
               'doc',
               resourceDriftSwitch(
-                await this.resourceDrift(info, index, docPath),
+                await this.reports.resourceDrift(info, index, docPath),
                 tenant,
                 docPath,
                 false,
@@ -719,34 +720,6 @@ export class DocsController {
     ];
   }
 
-  private async tenantDrift(info: TenantInfo, index: TenantIndex | undefined) {
-    return tenantDriftState(
-      await this.drift.observation(info),
-      await this.drift.baselineGeneratedAt(info, index),
-    );
-  }
-
-  // The one drift decision for a resource, read by both its Drift button and
-  // its drift page so the two cannot disagree.
-  private async resourceDrift(
-    info: TenantInfo,
-    index: TenantIndex | undefined,
-    key: string,
-  ): Promise<DriftState> {
-    return driftState(
-      await this.drift.observation(info),
-      await this.drift.baselineGeneratedAt(info, index),
-      index,
-      key,
-    );
-  }
-
-  // The attribution relative to the observation it must describe. Only asked for
-  // a current observation: an audit is never shown for a superseded one.
-  private async auditOf(info: TenantInfo, observation: DriftObservation): Promise<AuditState> {
-    return auditState(await this.drift.audit(info), observation);
-  }
-
   private async renderDrift(
     res: Response,
     info: TenantInfo,
@@ -780,8 +753,10 @@ export class DocsController {
     });
   }
 
-  // The finding-specific part of a drift page. The comparison (deltas, inline
-  // payload) is only filled in when every file it was decided on is intact.
+  // The finding-specific part of a drift page: the report's view of the
+  // finding, plus the page's own links and inline payload. The comparison
+  // (deltas, inline payload) is only filled in when every file it was decided
+  // on is intact.
   private async findingView(
     info: TenantInfo,
     observation: DriftObservation,
@@ -790,20 +765,13 @@ export class DocsController {
     documented: boolean,
   ) {
     const verified = files ?? { baseline: null, payload: null, intact: false };
-    const audit = await this.auditOf(info, observation);
-    const analysis = await this.renderAnalysis(info, finding.key);
+    const audit = await this.reports.auditOf(info, observation);
+    const report = await this.reports.findingReport(info, finding, verified, audit);
     const inline = finding.verdict === 'added' && verified.intact ? verified.payload : null;
     return {
-      finding: findingHeader(finding, analysis?.meta.severity),
-      attribution: attributionOf(finding, audit.kind === 'current' ? audit.audit : undefined),
-      attributionShown: audit.kind === 'current',
-      attributionOutdated: audit.kind === 'outdated',
+      ...report,
       links: this.driftLinks(info.id, finding, verified, documented),
-      intact: verified.intact,
-      deltas: finding.deltas,
-      deltaNote: finding.deltaNote,
       payload: inline ? (await this.highlighter.render(inline)).html : null,
-      analysis: analysis ? analysis.html : null,
     };
   }
 
@@ -838,22 +806,6 @@ export class DocsController {
       links.push({ label: 'Observed YAML (raw)', href: `${href}?raw` });
     }
     return links;
-  }
-
-  // The analysis agent's drift document for a finding, when it has written
-  // one. Its links resolve inside the drift view.
-  private async renderAnalysis(info: TenantInfo, key: string) {
-    const file = resolveDriftDocument(info.driftDir, key);
-    if (!file) return null;
-    try {
-      return await this.renderer.render(file, {
-        tenant: info.id,
-        docDir: typeOfKey(key),
-        routeBase: DRIFT_PREFIX,
-      });
-    } catch {
-      return null;
-    }
   }
 
   private async servePayload(
