@@ -39,6 +39,51 @@ sets.
   and *Lifecycle and operations* sections and record documents' *Security* section are styled like every other
   contract section, once regenerated.
 
+## 2. Per-item context in the sidebar
+
+*Kind:* feat
+
+**Goal.** A reader sees what each document in the sidebar is about without opening it: every tree item whose
+document carries a one-sentence summary shows it as a short second line under its name, so two similarly named
+policies can be told apart at a glance. Items whose document has no summary yet look exactly as they do today.
+
+> **Why now.** The data path is complete: `docs generate-index` copies each document's frontmatter `summary` into
+> `docs/index.yaml`, and `buildNavigation()` (`src/docs/tenant-index.ts`) already fills `NavItem.summary`, which
+> the listing fallback (`views/tenant.hbs`) renders — only `views/partials/sidebar-tree.hbs` draws nothing. The
+> field was empty (0 of 263 and 0 of 148 resources) because the run prompt never asked for it; the go entry
+> *Consistent prompt templates, run-prompt fixes and the `summary:` frontmatter line* makes it required, so it fills
+> on the next regeneration.
+>
+> **Reconciled.** The parked idea assumed the compare pages share the tree partial; they have no sidebar (README,
+> *Sidebar navigation*), so the tree is drawn only through `views/partials/sidebar.hbs` on the document, resource,
+> drift and tenant pages. The `NavItem.note` comment still mentions a compare tree and is corrected here.
+>
+> **Contract.** The browser reads `resources[].summary` from `docs/index.yaml`: one line of plain text, absent or
+> empty meaning no second line. No CLI change.
+>
+> **Decision.** Badges in the tree: summary only for now; badges are the parked idea *Badges in the sidebar tree*.
+>
+> **Owner.** none — every file is under `web/`. Sequencing: ships with or after the prompt-consistency pair;
+> harmless before the regeneration. Not regeneration-gated (the browser moves no hash).
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- `views/partials/sidebar-tree.hbs`: under each item's label render `{{this.summary}}` (escaped) as a second line,
+  only when it is non-empty — small and muted like the item `note`, clamped to two lines, full text in `title`; it
+  stays inside the item's `<a>`, so the item remains one link and no anchor is nested.
+- `src/styles.css` (or Tailwind utilities in the partial — `line-clamp-2` ships with v4): the clamp, a dark
+  variant, and a summary that stays readable on the active item's highlighted background; the existing
+  `:focus-visible` outline is unchanged.
+- `src/docs/tenant-index.ts`: correct the `NavItem.note` comment (no compare tree exists).
+- Tests: `test/docs.e2e.spec.ts` (via `sidebarOf()`) — a resource whose index entry has a `summary` shows it in
+  the sidebar; one without adds no second line; a summary containing `<b>` is escaped; the filter, `exempt` and
+  *pending* behaviour are unchanged. `test/styles-build.spec.ts`: the clamp rule survives the build.
+- Documentation at *done*: `README.md` *Sidebar navigation* (each item shows the document's one-line summary when
+  the index carries one); `CHANGELOG.md` `### Added` (Views and navigation), noting the summaries appear once the
+  documentation is regenerated with the current CLI.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
@@ -53,8 +98,8 @@ branch), L (several branches or a design change).
 
 1. **The pre-regeneration batch**: *Style the Conditional Access `Conditions` section* and go *Template content
    fixes and a Conditional Access template* have shipped; the go batch ends with *run-prompt fixes*, then one
-   documentation regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which
-   *per-item context in the sidebar* and *per-document identity* build on.
+   documentation regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which the
+   scheduled *Per-item context in the sidebar* and the idea *per-document identity* build on.
 2. **The compare track** (cross-project, must): *Move the compare normalisation to the CLI* ships with go
    *`resource compare`*; *manual pairing* and *a one-sided resource* follow.
 3. **The no-JS keystone**: decide *Drop the no-client-side-JavaScript rule* first; *search* (which subsumes the
@@ -67,9 +112,9 @@ branch), L (several branches or a design change).
 6. **Dependencies**: *toolchain* → *NestJS 12* and *rendering stack* (golden test first) → *syntax highlighting*.
 7. **Housekeeping** is opportunistic: the ESLint ledger is paid off by whichever entry edits a baselined file.
 
-**Suggested order after the scheduled batch** (impact over effort): quick wins — *per-item context* (after the
-regeneration), *a resource landing page*, *summary table of contents*; unblockers — *the toolchain upgrade* and
-the no-JS decision; strategic — the compare track, *search*, *further export formats*; then the rest by impact.
+**Suggested order after the scheduled batch** (impact over effort): quick wins — *a resource landing page*,
+*summary table of contents*; unblockers — *the toolchain upgrade* and the no-JS decision; strategic — the compare
+track, *search*, *further export formats*; then the rest by impact.
 
 ## Parked ideas — platform rule
 
@@ -160,25 +205,16 @@ name filter in the sidebar idea below. This is the **first feature that would ju
 own idea below): a server-rendered `GET /:tenant/_search?q=` page is worth trying first, because it needs no
 script at all and would show whether the interactive version is wanted.
 
-### Idea: Per-item context in the sidebar
+### Idea: Badges in the sidebar tree
 
-*Area:* navigation · *Impact:* medium · *Effort:* S · *Ships with:* go *Consistent prompt templates, run-prompt
-fixes and the `summary:` frontmatter line* plus a regeneration; harmless before it
+*Area:* navigation · *Impact:* low · *Effort:* S · *Ships with:* after *Per-item context in the sidebar*
 
-Give each sidebar tree item the context the listing fallback already shows: the document's one-sentence `summary`
-as a second line under its label. **Parked** only because the field is empty: `summary` is present on **0 of
-263** and **0 of 148** resources, since `GenerateIndex` reads it from each document's frontmatter and generated
-documents write only `source` and `generatedAt`. **Revisit** now: the go entry above makes the run prompt require
-`summary:`, so it lights up with the next regeneration and `docs generate-index`.
-
-What is settled if it is picked up. **The data already reaches the view**: `NavItem.summary` and `NavItem.badges`
-are filled by `buildNavigation()` (`src/docs/tenant-index.ts`) and `views/tenant.hbs` renders both in the
-listing fallback; only `views/partials/sidebar-tree.hbs` draws neither. Render the summary escaped, as a second
-line, and nothing when it is empty (documents not yet regenerated, `pending` items); clamp it to the 20rem
-sidebar (CSS `line-clamp`, full text in `title`), with a dark variant and the existing focus outline. Open
-choices: whether the tree also shows the badges (`assignments` 231 of 263, `scope` 93, `platforms` 73,
-`odataType` 137 — likely noise in a 263-item tree), and whether the compare page, which shares the partial,
-shows summaries too or suppresses them.
+Show the count-only badges the listing fallback already shows (`assignments`, `scope`, `platforms`, `@odata.type`)
+under each sidebar tree item, next to its summary line. The data is there: `NavItem.badges` is filled by
+`buildNavigation()` and `views/tenant.hbs` renders it. **Parked** because 263 items with badges would roughly
+double the tree's height, and the facet chips already narrow the tree by scope and platform. **Revisit** when
+readers ask for the badges in the tree, or if the tree gets a compact/expanded view choice (a query parameter,
+like the facets).
 
 ### Idea: A name filter in the sidebar
 
