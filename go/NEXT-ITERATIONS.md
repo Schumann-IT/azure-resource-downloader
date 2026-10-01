@@ -22,9 +22,32 @@ the run instead of being lost after one debug line.
 > (`internal/azure/errors.go:65-105`); and `notListed` keeps type names only (`internal/docs/metadata.go:159-163`),
 > so the real error was never visible. The debug run recorded in the Plan confirmed the 404.
 >
-> Not regeneration-gated. Independent of the other entries; can ship first.
+> Not regeneration-gated: no `*_prompt.tmpl` or `documentation_prompt.tmpl` changes, no `promptSha256` moves.
+> The one prompt-adjacent change is the "Types not listed" line of the non-hashed `docs/generate.md` render
+> (`internal/docs/generateprompt_render.go`), which the run-prompt entry also touches — whichever lands second
+> rebases. Independent of the other entries; can ship first.
 >
-> **Implementer.** sonnet
+> **Scope.** The `--type` run that lists only empty types belongs here: the debug run showed that a tenant with
+> unconfigured branding, downloaded with `--type Microsoft.Graph/organizationalBranding`, ends in
+> `Error: no resources to download` (exit 1) and writes no metadata — so the fix would still not give a clean,
+> complete run, and a branding that was configured earlier and then removed could never be marked absent.
+> The drift observation's `unknownTypes` stays a plain list (no reasons): the browser reads it as `string[]`,
+> and drift prints the improved summary in its own warning.
+>
+> **Contract.** `resources/metadata.yaml` gains one key, additive: `notListed.reasons`, a map from each type in
+> `notListed.types` to its error summary (always written, `{}` when nothing failed; keys sorted). Shape:
+> `notListed: {types: [<type>…], empty: [<type>…], reasons: {<type>: "<summary>"}}`. `notListed.types` and
+> `notListed.empty` keep their names and their `[]string` shape, so older readers and older files keep
+> working (a file without `reasons` reads as an empty map). The summary is deterministic for the same error:
+> `HTTP <status> <code>: <message first line>` for typed Graph/ARM errors, the hint appended only for a 401/403.
+> An unconfigured branding now appears under `notListed.empty`, not `notListed.types`, and its run is
+> `complete: true`. The browser (`web/src/docs/resources-metadata.ts`) reads only the `resources:` map and the
+> drift observation's `unknownTypes`; neither changes, so no web change follows.
+>
+> **Owner.** none — every file is under `go/`. No sequencing constraint.
+>
+> **Implementer.** opus — error classification, the metadata schema, and a change to when a download writes
+> metadata (and so can mark resources absent and prune) are invariant-bearing.
 
 **Plan.**
 
@@ -34,18 +57,45 @@ the run instead of being lost after one debug line.
   not exist or one of its queried reference-property objects are not present. (hint: requires
   'OrganizationalBranding.Read.All' permission in Microsoft Graph)` — Graph's `Request_ResourceNotFound` (404)
   text: no default branding is configured. Not a permission problem; the bullets below apply as written. The
-  same run ended with `Error: no resources to download`, because the selected type was the only one and listed
-  nothing — check that a type which lists as *empty* under `--type` still ends the run without that error, or
-  say why it should stay.
-- Branding handler: a 404 from `GET /organization/{id}/branding` (list and fetch) means "no default branding
-  configured" — no IDs, so the type is recorded as *empty*, not *not listed*. Correct the code comment.
-- `azure.ErrorSummary`: extract the HTTP status and Graph error code from Graph SDK (`odataerrors`) errors; the
-  per-handler permission hint is appended only for a 401/403.
-- `resources/metadata.yaml`: `notListed` records a per-type `reason` (the error summary) — a fact of the run,
-  deterministic for the same error. Check that the browser's `resources/metadata.yaml` reader
-  (`web/src/docs/resources-metadata.ts`) tolerates the new key (read-only check; no web change expected).
-- Tests: the branding handler with a fake 404 (→ empty) and 403 (→ not listed with reason); `ErrorSummary` with a
-  Graph error; metadata round-trip of `notListed` with reasons.
+  same run ended with `Error: no resources to download` — handled by the download bullet below.
+- `internal/azure`: add `HTTPStatus(err error) (int, bool)` — the status of an `*azcore.ResponseError` or of
+  any error matching Kiota's `abstractions.ApiErrorable` via `errors.As` (covers both the v1.0 and the beta
+  `odataerrors.ODataError`, which embed `abstractions.ApiError`) — and `GraphErrorCode(err error) string`,
+  reading `GetErrorEscaped().GetCode()` from either SDK's `*odataerrors.ODataError` (empty when absent).
+  `IsPermissionError` also returns true for a typed 401/403 from `HTTPStatus`.
+- `azure.ErrorSummary`: for a typed error (azcore or Graph) return `HTTP <status>`, then ` <code>` when known,
+  then `: <first line of err.Error()>` (the handler's wrapping context included) with any `(hint: …)`
+  stripped from it; append the handler's
+  `(hint: …)` only when the status is 401 or 403. For an untyped error keep the first-line / JSON-`Message`
+  fallback and append the hint only when `IsPermissionError(err)` is true. Update the doc comment.
+- Branding handler (`organizationalbranding.go`): move the list decision into a pure function
+  `brandingListIDs(branding betamodels.OrganizationalBrandingable, err error) ([]string, error)`: a 404
+  (`azure.HTTPStatus`) → `nil, nil` (no default branding configured — the type lists as *empty*); any other
+  error → wrapped as today, with the permission hint; `nil` body → `nil, nil`; otherwise the ID or the
+  `organizationalBranding` fallback. In `fetchItem` a 404 stays an error but reads
+  `organizational branding is not configured` (no permission hint) — the branding vanished between list and
+  fetch. Correct the handler's doc comment (404, not an empty body).
+- `resource download` (`cmd/resource/download.go`): return `no resources to download` only when the listing
+  produced no requests **and** no type listed as empty (every type in scope could not be listed, or a
+  `--resource-group` run without a subscription). When only empty types were listed, skip the pipeline
+  (`summary := &pipeline.ExecutionSummary{Results: []*models.WriteResult{}}`; under `--dry-run`
+  `pipeline.DryRunSummary(nil)`), attach skipped/empty types, mark completeness, print the summary, write the
+  metadata (the empty types are covered, so their earlier entries are marked absent and — with `prune` on a
+  complete run — pruned, exactly as in a full run) and exit 0. Put the decision in a small pure helper
+  (e.g. `nothingListed(requests, emptyTypes)`) so it is table-testable.
+- `resources/metadata.yaml` (`internal/docs/metadata.go`): `NotListedMeta` gains
+  `Reasons map[string]string \`yaml:"reasons"\`` filled from `SkippedType.Reason` (already
+  `azure.ErrorSummary(err)`; "no subscription available" for ARM types without a subscription), never nil so
+  it marshals as `{}`. Reading a file without the key must not fail.
+- `docs generate-prompt` render (`internal/docs/generateprompt_render.go`): the line becomes
+  `Types not listed: <type> (<reason>), …` (drop the "(permissions)" claim); `none` when empty. Adjust the
+  existing assertion in `internal/docs/generateprompt_test.go`.
+- Tests: `brandingListIDs` with a constructed beta `ODataError` at 404 (→ no IDs, no error), at 403 (→ error
+  whose `ErrorSummary` carries `HTTP 403` and the hint), a nil body and a body with an ID; `HTTPStatus`,
+  `GraphErrorCode` and `ErrorSummary` with v1.0 and beta `ODataError`s (404 without hint, 403 with hint), an
+  azcore 404 (no hint) and 403 (hint), and the untyped fallback; `IsPermissionError` with a typed Graph 403;
+  `nothingListed` table (requests only / empty types only / both empty / neither); metadata round-trip of
+  `notListed` with `reasons`, `reasons: {}` when nothing failed, and an old file without `reasons` loading.
 - Documentation at *done*: `README.md` (the branding row's "no file when unconfigured" note, troubleshooting a
   not-listed type) and a `CHANGELOG.md` `### Fixed` entry.
 
