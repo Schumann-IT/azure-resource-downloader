@@ -11,6 +11,43 @@ its rationale against what is true at that point rather than copying it across.
 
 ## Features
 
+### 1. Style the Conditional Access `Conditions` section and close two section-style gaps
+
+**Goal.** When the regenerated documentation arrives, a Conditional Access policy's new `Conditions` section is
+styled like every other contract section instead of rendering as plain unstyled prose, and the two known gaps in
+the section styling are closed: `membership` is not treated as a `<details>` container, and nested `<details>` in a
+`definition` section get the same depth rail as settings and properties.
+
+> **Why.** The go entry *Template content fixes and a Conditional Access template* gives Conditional Access policies
+> their own template with a new H2, `Conditions`. The browser styles a section only when its slug is in
+> `SECTION_VOCABULARY` (`src/docs/section-hooks.ts`); an unknown H2 renders unstyled. The review of the templates
+> against 411 generated documents also found that `src/styles.css` gives `membership` the dense `<details>`
+> treatment although the group template's Membership section is prose, and that the nested-`<details>` depth rail
+> covers `settings` and `properties` but not `definition`.
+>
+> **Contract.** The heading text is exactly `Conditions` (slug `conditions`), owned by the go entry; it carries
+> targeting prose and tables, not `<details>` blocks, so it gets the section identity (colour, rail) without the
+> dense settings mode. No other heading changes.
+>
+> **Sequencing.** Ships with the go entry in one pair; harmless before the regeneration (the slug simply never
+> occurs in today's documents).
+>
+> **Owner.** none — every file is under `web/`.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- `src/docs/section-hooks.ts`: add `conditions` to `SECTION_VOCABULARY` and the template list in its comment
+  (a `conditional-access` line).
+- `src/styles.css`: a section identity for `conditions` (dark variant included); drop `membership` from the dense
+  `<details>` rules; add `definition` to the nested-`<details>` depth rail.
+- Tests: `test/section-hooks.spec.ts` (a `## Conditions` heading gets `data-section="conditions"`);
+  `test/styles-build.spec.ts` (the `conditions` rule and the `definition` depth rail survive the build, the
+  `membership` dense rule is gone).
+- Documentation at *done*: `README.md` section-styling paragraph (the heading sets per template); `CHANGELOG.md`
+  `### Changed` under the views area.
+
 ## Fixes
 
 Each is a numbered work entry in its own right; none touches a non-negotiable (read-only, no client-side
