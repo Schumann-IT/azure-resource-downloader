@@ -118,3 +118,23 @@ func TestExecuteCancelsOnInterrupt(t *testing.T) {
 		t.Errorf("want the cancellation to surface as the command's error; output:\n%s", errBuf.String())
 	}
 }
+
+// TestRootHelpNamesProfileKeys guards the root help text: client-id and
+// tenant-id are tenant-profile keys, so the help must not send anyone to the
+// removed --client-id/--tenant-id flags or AZURE_RD_* variables.
+func TestRootHelpNamesProfileKeys(t *testing.T) {
+	outBuf, _ := captureRoot(t)
+	rootCmd.SetArgs([]string{"--help"})
+	if code := execute(); code != 0 {
+		t.Fatalf("execute() = %d, want 0", code)
+	}
+	help := outBuf.String()
+	for _, stale := range []string{"--client-id", "--tenant-id", "AZURE_RD_"} {
+		if strings.Contains(help, stale) {
+			t.Errorf("root help still names %q:\n%s", stale, help)
+		}
+	}
+	if !strings.Contains(help, "client-id and tenant-id in the") {
+		t.Errorf("root help does not name the profile keys:\n%s", help)
+	}
+}

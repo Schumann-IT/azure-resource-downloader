@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -33,6 +34,15 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicemanagementscript?view=graph-rest-beta",
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.DeviceManagement().DeviceManagementScripts().Get(ctx, &betadevicemanagement.DeviceManagementScriptsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadevicemanagement.DeviceManagementScriptsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list Windows platform scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

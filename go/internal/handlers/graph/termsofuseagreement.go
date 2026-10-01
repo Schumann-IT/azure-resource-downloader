@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betaidentitygovernance "github.com/microsoftgraph/msgraph-beta-sdk-go/identitygovernance"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -31,6 +32,15 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-1.0",
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.IdentityGovernance().TermsOfUse().Agreements().Get(ctx, &betaidentitygovernance.TermsOfUseAgreementsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betaidentitygovernance.TermsOfUseAgreementsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list terms of use agreements: %w (hint: requires 'Agreement.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

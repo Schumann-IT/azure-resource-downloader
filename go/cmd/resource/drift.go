@@ -104,6 +104,18 @@ Examples:
 	return cmd
 }
 
+// prepareExit maps a failed run preparation to drift's exit codes: a tenant
+// the run cannot pin down and a refused access check mean drift cannot answer
+// (exit 2) — an access-refused comparison would report every unreadable
+// resource as removed — while any other failure stays an ordinary error.
+func prepareExit(err error) error {
+	if errors.Is(err, tenantdir.ErrMismatch) || errors.Is(err, tenantdir.ErrUnresolved) ||
+		errors.Is(err, runprep.ErrAccessRefused) {
+		return cmdutil.WithExitCode(driftExitCannotAnswer, err)
+	}
+	return err
+}
+
 func runDrift(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	log := logger.Default
@@ -116,12 +128,9 @@ func runDrift(cmd *cobra.Command, args []string) error {
 	// compares against and refuses rather than compare the wrong tenant — drift
 	// against another tenant's export is all noise. Those refusals are
 	// "cannot answer", not failures, so they carry the distinct exit code.
-	prep, err := runprep.Prepare(ctx, runprep.Options{Domain: cmdutil.DeclaredDomain(cmd)})
+	prep, err := prepareRun(ctx, runprep.Options{Domain: cmdutil.DeclaredDomain(cmd)})
 	if err != nil {
-		if errors.Is(err, tenantdir.ErrMismatch) || errors.Is(err, tenantdir.ErrUnresolved) {
-			return cmdutil.WithExitCode(driftExitCannotAnswer, err)
-		}
-		return err
+		return prepareExit(err)
 	}
 	expectDomain := prep.Tenant
 	tenantDir := prep.Output

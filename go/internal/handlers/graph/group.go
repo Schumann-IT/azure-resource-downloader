@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	graphgroups "github.com/microsoftgraph/msgraph-sdk-go/groups"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
 
@@ -42,6 +43,15 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0",
 			},
 			Template: groupPromptTemplateText,
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.Groups().Get(ctx, &graphgroups.GroupsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &graphgroups.GroupsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list groups: %w (hint: requires 'Group.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

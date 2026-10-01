@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
+	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/runprep"
 	"azure-resource-downloader/internal/tenantdir"
 
@@ -37,10 +39,16 @@ written".
 Listing yields resource ids. When an export for the tenant already exists under
 the output directory, display names recorded in its resources/metadata.yaml are
 joined in and resources not present in the export are marked as new — nothing is
-ever fetched merely to prettify the listing. A type that could not be listed
-(e.g. missing permissions) is reported as unknown, never as empty, and does not
-fail the command. To see what this build supports instead, use
-'azure-rd resource types'.
+ever fetched merely to prettify the listing.
+
+Before listing, one cheap request per permission group checks that the
+signed-in account may read the selected types; when a group is refused (an
+expired PIM role, a missing Intune or Entra role, no Reader role on the
+subscription) the command fails before listing anything and names what is
+missing. Narrow the selection with --type, the type: list or exclude-type in
+the tenant profile to list the rest. A type whose listing still fails after
+the check is reported as unknown, never as empty. To see what this build
+supports instead, use 'azure-rd resource types'.
 
 This command writes nothing, so --dry-run changes nothing.
 
@@ -94,8 +102,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Unlike `resource types`, nothing about this command's question is
 	// answerable offline, so a missing session is a real error and is surfaced
 	// up front — the same fail-fast the download performs. The device-code path
-	// (--client-id/--tenant-id) is exempt: its sign-in happens at the first
-	// token request.
+	// (client-id/tenant-id in the tenant profile) is exempt: its sign-in happens
+	// at the first token request.
 	if clientID == "" {
 		if err := azure.VerifySession(ctx, lazyCred); err != nil {
 			log.Debug("Session verification failed", "error", err)
@@ -105,23 +113,25 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Info("Authenticating with Azure...")
-	azureClient, err := azure.NewClient(ctx, sub, clientID, tenantID)
+	azureClient, err := runprep.NewSignInLoggingClient(ctx, sub, clientID, tenantID)
 	if err != nil {
-		return fmt.Errorf("failed to create Azure client: %w", err)
+		return err
 	}
 	sub = azureClient.GetSubscriptionID()
 
 	// Secret resolution is a download-only concern, so it is always disabled here.
 	registry := handlers.NewRegistry(azureClient.GetCredential(), sub, false)
 
-	// Enumerate through the exact listing path a download uses to build its
-	// fetch requests: scope, filters and the treatment of unlistable types are
-	// shared code, not a parallel implementation.
-	workerConfig := runprep.BuildWorkerConfig()
-	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, sel.Effective, sub,
-		runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
+	requests, skippedTypes, emptyTypes, err := listTenant(ctx, registry, listScope{
+		resourceIDs:   resourceIDs,
+		resourceGroup: resourceGroup,
+		types:         sel.Effective,
+		subscription:  sub,
+		timeout:       time.Duration(viper.GetInt("timeout")) * time.Second,
+		concurrency:   runprep.ListingConcurrency(runprep.BuildWorkerConfig(), workersFlag, workersExplicit),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to list resources: %w", err)
+		return err
 	}
 
 	// Display names come from a fetch and a transform, so a listing alone
@@ -224,4 +234,32 @@ func exportNames(ctx context.Context, azureClient *azure.Client, baseOutput, dec
 	}
 	log.Info("Display names joined from the existing export", "export", tenantDir)
 	return names, true
+}
+
+// listScope is what listTenant enumerates and how.
+type listScope struct {
+	resourceIDs   []string
+	resourceGroup string
+	types         []string
+	subscription  string
+	timeout       time.Duration
+	concurrency   int
+}
+
+// listTenant checks access for the selection and then enumerates through the
+// exact listing path a download uses to build its fetch requests: scope,
+// filters and the treatment of unlistable types are shared code, not a
+// parallel implementation. A refused access check returns before anything is
+// listed.
+func listTenant(ctx context.Context, registry *handlers.Registry, scope listScope) ([]*models.FetchRequest, []models.SkippedType, []string, error) {
+	probes := runprep.PlanRunProbes(registry, scope.types, scope.subscription, scope.resourceIDs, scope.resourceGroup)
+	if err := runprep.CheckAccess(ctx, registry, probes, scope.subscription, scope.timeout, scope.concurrency); err != nil {
+		return nil, nil, nil, err
+	}
+	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, scope.resourceIDs, scope.resourceGroup, scope.types,
+		scope.subscription, scope.concurrency)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+	return requests, skippedTypes, emptyTypes, nil
 }

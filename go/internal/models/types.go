@@ -171,7 +171,8 @@ type ResourceHandler interface {
 // PermissionScoped is optionally implemented by a ResourceHandler whose
 // resource type needs delegated Microsoft Graph permissions that the Azure CLI
 // first-party app cannot provide, and therefore requires signing in to a
-// dedicated app registration (--client-id/--tenant-id, device-code flow).
+// dedicated app registration (client-id/tenant-id in the tenant profile,
+// device-code flow).
 //
 // Handlers that do not implement it are assumed to work with the default Azure
 // CLI credentials (e.g. ARM types authorised via subscription RBAC). Callers
@@ -202,6 +203,21 @@ type AssignmentCapable interface {
 	// HasAssignments reports whether this resource type has an assignments
 	// concept.
 	HasAssignments() bool
+}
+
+// AccessProber is optionally implemented by a ResourceHandler that can tell,
+// with one cheap request, whether the signed-in account may read its type at
+// all. The access check that runs before a listing probes one type per
+// permission group; a handler without the interface is probed by its List.
+type AccessProber interface {
+	// HasAccessProbe reports whether ProbeAccess is a dedicated cheap request
+	// (one page of one item) rather than a full listing.
+	HasAccessProbe() bool
+
+	// ProbeAccess performs the probe and returns the service's error
+	// unchanged apart from the handler's usual context and permission hint.
+	// Its result is discarded; only the error matters.
+	ProbeAccess(ctx context.Context) error
 }
 
 // PipelineConfig holds configuration for the pipeline

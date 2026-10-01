@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -30,6 +31,15 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolescopetag?view=graph-rest-beta",
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.DeviceManagement().RoleScopeTags().Get(ctx, &betadevicemanagement.RoleScopeTagsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadevicemanagement.RoleScopeTagsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list role scope tags: %w (hint: requires 'DeviceManagementRBAC.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

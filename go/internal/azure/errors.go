@@ -1,6 +1,7 @@
 package azure
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -165,23 +166,41 @@ func ErrorSummary(err error) string {
 		hint = strings.TrimSpace(full[i:])
 	}
 
-	if status, ok := HTTPStatus(err); ok {
-		summary := fmt.Sprintf("HTTP %d", status)
-		if code := errorCode(err); code != "" {
-			summary += " " + code
-		}
-		if line := stripHint(firstLine(full)); line != "" {
-			summary += ": " + line
-		}
-		if hint != "" && isAuthStatus(status) {
-			summary += " " + hint
-		}
-		return summary
+	// Intune nests its own error object in the OData message: an "ErrorCode"
+	// and a "Message" that is itself a JSON string carrying the service
+	// version, the Activity ID and the request URL. Only the operation before
+	// the object and the inner code are worth a summary line; the full error
+	// (Activity ID included) is what callers log at debug.
+	if code, operation, ok := nestedServiceError(withoutHint(full)); ok {
+		return nestedSummary(err, code, operation, hint)
 	}
 
-	// Fall back to the first line of the error message. If the dropped
-	// remainder is a JSON error body with a "Message" field (Intune-style
-	// Graph errors), surface that message so the actual cause is not lost.
+	if status, ok := HTTPStatus(err); ok {
+		return typedSummary(err, status, full, hint)
+	}
+	return untypedSummary(err, full, hint)
+}
+
+// typedSummary renders "HTTP <status>[ <code>][: <first line>]" and appends the
+// permission hint only for a 401 or 403.
+func typedSummary(err error, status int, full, hint string) string {
+	summary := fmt.Sprintf("HTTP %d", status)
+	if code := errorCode(err); code != "" {
+		summary += " " + code
+	}
+	if line := stripHint(firstLine(full)); line != "" {
+		summary += ": " + line
+	}
+	if hint != "" && isAuthStatus(status) {
+		summary += " " + hint
+	}
+	return summary
+}
+
+// untypedSummary falls back to the first line of the error message. If the
+// dropped remainder is a JSON error body with a "Message" field (Intune-style
+// Graph errors), that message is surfaced so the actual cause is not lost.
+func untypedSummary(err error, full, hint string) string {
 	line := firstLine(full)
 	if line != full {
 		if m := jsonMessagePattern.FindStringSubmatch(full); m != nil {
@@ -211,4 +230,100 @@ func stripHint(line string) string {
 		return strings.TrimSpace(line[:i])
 	}
 	return line
+}
+
+// nestedSummary renders the summary of an error whose message carries an
+// Intune-style nested error object: "HTTP <status> <inner code>: <operation>"
+// for a typed error, "<inner code>: <operation>" for an untyped one, each with
+// the handler's hint under the same rule as every other summary.
+func nestedSummary(err error, code, operation, hint string) string {
+	summary := code
+	status, typed := HTTPStatus(err)
+	if typed {
+		summary = fmt.Sprintf("HTTP %d %s", status, code)
+	}
+	if operation != "" {
+		summary += ": " + operation
+	}
+	if hint == "" {
+		return summary
+	}
+	if (typed && isAuthStatus(status)) || (!typed && IsPermissionError(err)) {
+		summary += " " + hint
+	}
+	return summary
+}
+
+// withoutHint returns s without its trailing "(hint: ...)" suffix.
+func withoutHint(s string) string {
+	if i := strings.LastIndex(s, hintMarker); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// nestedServiceError finds the first JSON object in msg that decodes to an
+// object with a non-empty string "ErrorCode" (the error body Intune embeds in
+// a Microsoft Graph error message). It returns that code and the text before
+// the object, trimmed of the separators (" :{") that precede it. The object is
+// decoded, never pattern-matched, so a code or a status number appearing in an
+// Activity ID or a URL cannot be mistaken for one.
+func nestedServiceError(msg string) (code, operation string, found bool) {
+	for i := strings.IndexByte(msg, '{'); i >= 0; {
+		var body map[string]interface{}
+		if json.NewDecoder(strings.NewReader(msg[i:])).Decode(&body) == nil {
+			if c, ok := body["ErrorCode"].(string); ok && c != "" {
+				return c, strings.TrimRight(strings.TrimSpace(msg[:i]), " :{"), true
+			}
+		}
+		next := strings.IndexByte(msg[i+1:], '{')
+		if next < 0 {
+			break
+		}
+		i += next + 1
+	}
+	return "", "", false
+}
+
+// ServiceErrorCode returns the service's own error code for err: the inner
+// "ErrorCode" of an Intune-style nested error body when the message carries
+// one, else the ARM error code of an *azcore.ResponseError, else the OData code
+// of a Microsoft Graph error; "" when err carries none.
+func ServiceErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	if code, _, ok := nestedServiceError(withoutHint(err.Error())); ok {
+		return code
+	}
+	return errorCode(err)
+}
+
+// GraphErrorMessage returns the first line of the OData error message of a
+// Microsoft Graph v1.0 or beta odataerrors.ODataError anywhere in err's chain,
+// or "" when err carries none. Entra services name the roles a request needs
+// in that message, which makes it the most useful hint for a refusal.
+func GraphErrorMessage(err error) string {
+	var main messageGetter
+	var v1Err *odataerrors.ODataError
+	var betaErr *betaodataerrors.ODataError
+	switch {
+	case errors.As(err, &v1Err) && v1Err.GetErrorEscaped() != nil:
+		main = v1Err.GetErrorEscaped()
+	case errors.As(err, &betaErr) && betaErr.GetErrorEscaped() != nil:
+		main = betaErr.GetErrorEscaped()
+	default:
+		return ""
+	}
+	msg := main.GetMessage()
+	if msg == nil {
+		return ""
+	}
+	return firstLine(strings.TrimSpace(*msg))
+}
+
+// messageGetter is the part of the v1.0 and beta odataerrors.MainErrorable
+// interfaces GraphErrorMessage needs.
+type messageGetter interface {
+	GetMessage() *string
 }

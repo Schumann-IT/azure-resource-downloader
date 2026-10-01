@@ -88,6 +88,11 @@ Examples:
 	return cmd
 }
 
+// prepareRun is the run preparation download and drift share. It is a
+// variable only so the command tests can stand in for the sign-in and the
+// access check, which need Azure.
+var prepareRun = runprep.Prepare
+
 func runDownload(cmd *cobra.Command, args []string) error {
 	// The command context is cancelled on interrupt (Ctrl+C), so listing and
 	// fetching stop cleanly: every request still produces a result and the run
@@ -104,7 +109,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	// The preparation shared with `resource drift`: configuration, session
 	// verification, the dedicated-app probe and prompt, authentication, tenant
 	// and output resolution, and the handler registry.
-	prep, err := runprep.Prepare(ctx, runprep.Options{Domain: cmdutil.DeclaredDomain(cmd)})
+	prep, err := prepareRun(ctx, runprep.Options{Domain: cmdutil.DeclaredDomain(cmd)})
 	if err != nil {
 		return err
 	}

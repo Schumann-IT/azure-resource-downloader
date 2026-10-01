@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,5 +165,70 @@ func TestExtractGraphItemID(t *testing.T) {
 				t.Errorf("extractGraphItemID(%q) = %q, want %q", tt.resourceID, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGraphCollectionHandlerAccessProbe(t *testing.T) {
+	t.Run("without a probe the listing stands in", func(t *testing.T) {
+		listed := 0
+		h := &GraphCollectionHandler{listIDs: func(context.Context) ([]string, error) {
+			listed++
+			return nil, errors.New("refused")
+		}}
+		if h.HasAccessProbe() {
+			t.Error("HasAccessProbe() = true without a probe")
+		}
+		if err := h.ProbeAccess(context.Background()); err == nil || listed != 1 {
+			t.Errorf("ProbeAccess() = %v after %d listings, want the listing's error after one", err, listed)
+		}
+	})
+	t.Run("a probe replaces the listing", func(t *testing.T) {
+		listed, probed := 0, 0
+		h := &GraphCollectionHandler{
+			listIDs: func(context.Context) ([]string, error) { listed++; return nil, nil },
+			probe:   func(context.Context) error { probed++; return errors.New("refused") },
+		}
+		if !h.HasAccessProbe() {
+			t.Error("HasAccessProbe() = false with a probe")
+		}
+		if err := h.ProbeAccess(context.Background()); err == nil || probed != 1 || listed != 0 {
+			t.Errorf("ProbeAccess() = %v (probed %d, listed %d), want the probe's error, one probe, no listing", err, probed, listed)
+		}
+	})
+}
+
+// TestAccessProbesPerGroup guards that every collection permission group the
+// plan names has a type with a dedicated probe, so the access check costs one
+// small request per group rather than a full listing.
+func TestAccessProbesPerGroup(t *testing.T) {
+	cred := fakeTokenCredential{}
+	dc, err := NewDeviceConfigurationHandler(cred, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	constructors := map[string]func(azcore.TokenCredential) (*GraphCollectionHandler, error){
+		"DeviceManagementApps":           NewMobileAppHandler,
+		"DeviceManagementServiceConfig":  NewTermsAndConditionsHandler,
+		"DeviceManagementScripts":        NewWindowsPlatformScriptHandler,
+		"DeviceManagementRBAC":           NewRoleScopeTagHandler,
+		"DeviceManagementManagedDevices": NewDeviceCategoryHandler,
+		"Policy":                         NewConditionalAccessPolicyHandler,
+		"Agreement":                      NewTermsOfUseAgreementHandler,
+		"Group":                          NewGroupHandler,
+	}
+	if !dc.HasAccessProbe() {
+		t.Error("DeviceManagementConfiguration: device configurations have no access probe")
+	}
+	for group, newHandler := range constructors {
+		h, err := newHandler(cred)
+		if err != nil {
+			t.Fatalf("%s: %v", group, err)
+		}
+		if !h.HasAccessProbe() {
+			t.Errorf("%s: %s has no access probe", group, h.GetType())
+		}
+		if perms := h.RequiredPermissions(); len(perms) == 0 || !strings.HasPrefix(perms[0], group+".") {
+			t.Errorf("%s: %s declares %v, not a permission of the group", group, h.GetType(), perms)
+		}
 	}
 }

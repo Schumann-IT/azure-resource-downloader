@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
 	msgraphbeta "github.com/microsoftgraph/msgraph-beta-sdk-go"
+	betadevicemanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/devicemanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -63,6 +64,15 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines"},
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.DeviceManagement().DeviceConfigurations().Get(ctx, &betadevicemanagement.DeviceConfigurationsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadevicemanagement.DeviceConfigurationsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list device configurations: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
