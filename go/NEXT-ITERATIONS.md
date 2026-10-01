@@ -75,7 +75,9 @@ it cannot silently decay again.
 > `doc-groups` marker, export path or `metadata.yaml` field is added or renamed. After the regeneration every
 > document carries a new `promptSha256` (the browser shows it as is) and its References section may cite the
 > permissions page and an admin-center link on `intune.microsoft.com`, `entra.microsoft.com` or
-> `portal.azure.com` — plain Markdown links the browser already renders. `web/` needs no change.
+> `portal.azure.com` — plain Markdown links the browser already renders. `organizationalBranding` moving to the
+> singleton template keeps the same `doc-headings` set (`References | Lifecycle and operations | Security |
+> Settings`) as the default template, so its documents keep their H2 sections. `web/` needs no change.
 >
 > **Owner.** none — every file touched is under `go/`. Sequencing: first of the regeneration batch on this branch;
 > *Template content fixes and a Conditional Access template* relies on the `Links.AdminCenter` field and the
@@ -139,26 +141,49 @@ it cannot silently decay again.
   `internal/pipeline/testdata/golden/prompts/` change (the exported-YAML goldens stay byte-identical), and each
   type's diff is confined to its permission lines and its *Reference material* block (`groups`: only its
   permission lines, if any, since its template renders no links block yet).~~
-- Apply the metadata review: for each of the 53 files in the change plan, replace exactly the listed fields
-  inside its `models.ResourceDocumentation{…}` literal (ARM handlers: the literal returned by `Documentation()`) —
-  add keys that do not exist yet, delete keys marked `// remove`, put `// in Links:` lines into the nested `Links`
-  literal, leave unlisted fields as they are; `deviceConfigurations` keeps its `requiredPermission` variable. Input:
-  `Claude outputs/handler-metadata-change-plan.md` (untracked, built on `c2fba77`) — stop and report if a file's
-  literal no longer matches what it was built from. Then `make -C go fmt`.
-- Link check: every link added or changed returns HTTP 200 after redirects; an `intune.microsoft.com` /
-  `entra.microsoft.com` / `portal.azure.com` blade (login required) is checked for host and path against the Learn
-  page the change plan cites. A link that fails is left out and listed in the report — never replaced by a guess.
-- Tests: `make -C go test` with `documentation_metadata_test.go` as it is (Learn-only links, admin-center hosts,
-  `?view=` per client, no `/mem/intune/`, hint scopes declared); add one assertion that `organizationalBranding`
-  uses the singleton template.
-- Golden prompts, deliberately: `make -C go golden-update` and review — all 53 files under
-  `testdata/golden/prompts/` change (now `groups` too: its Lifecycle, permissions and related text), no
-  `*.golden.yaml` changes, and each type's diff is confined to the fields the change plan lists for it.
-- Resolve the two open follow-ups of this entry and strike them with this work: `deviceManagement` keeps `EndpointDocs` on the
-  complex-type page, `Links.Permissions` moves to the permissions-reference anchor
-  (`…/graph/permissions-reference#devicemanagementserviceconfigreadall`), and Purpose and KeySettings describe what
-  is actually exported (identifiers only — exporting the settings is the parked idea *export the tenant
-  `deviceManagement.settings`*); `AdminCenter` gets the 17 Learn-cited blades, the rest stay empty by rule.
+- Apply the metadata review. Precondition: `git diff --quiet c2fba77 HEAD -- go/internal/handlers` holds (the
+  change plan was built on `c2fba77`); if it does not, stop and report the changed handler files instead of
+  pasting. Input: `Claude outputs/handler-metadata-change-plan.md` (untracked, git-ignored), section *Changes per
+  file*. For each of its 53 per-file sections, replace exactly the fields of its `go` block inside the handler's
+  `models.ResourceDocumentation{…}` literal (ARM handlers: the literal returned by `Documentation()`): add keys
+  that do not exist yet, delete a field marked `// remove` (`organizationalBranding` loses `EmbeddedPayloads`),
+  put the lines under `// in Links: models.ResourceLinks{…}` into the nested `Links` literal, leave every field
+  the section does not list as it is. Values are pasted verbatim; `deviceConfigurations` keeps its
+  `requiredPermission` variable; `deviceManagementScripts` (`windowsplatformscript.go`) gets
+  `RequiredPermissions: {"DeviceManagementScripts.Read.All", "DeviceManagementConfiguration.Read.All"}` in that
+  order (the first permission keeps the type in its access-probe group; the second is already in `GRAPH_SCOPES`,
+  so no new consent, and audit routing stays on `IntuneAuditLogs`). The change plan's *Not applied* and *Code
+  follow-ups* sections are not implemented (the follow-ups are parked ideas). Then `make -C go fmt` and
+  `make -C go build`.
+- Link check, before the tests: every URL added or changed by the change plan is fetched with redirects followed
+  (`curl -sSL -o /dev/null -w '%{http_code} %{url_effective}'`) and must answer 200. A Learn link that redirects
+  to another `learn.microsoft.com/en-us/` URL is replaced by its final URL; one that fails is reverted to its
+  previous value (or left out when it is new) and listed in the report — never replaced by a guess. The 17
+  `Links.AdminCenter` blades (login required, not fetchable) are checked only for host — `intune.microsoft.com`
+  for Intune types, `entra.microsoft.com` for Entra types, `portal.azure.com` for ARM types — and for the blade
+  path the change plan cites; the report lists any that do not match.
+- Tests: `make -C go test` passes with `internal/handlers/documentation_metadata_test.go` unchanged (Learn-only
+  links, admin-center hosts, `?view=` per client, no `/mem/intune/`, hint scopes declared, no repeated
+  `BestPractices` link). Add an `organizationalBranding` case to `TestSharedPromptTemplateOverrides`
+  (`internal/handlers/graph/prompt_templates_test.go`): `NewOrganizationalBrandingHandler`, marker
+  `tenant-wide singleton`, description "organizationalBranding uses the singleton template" — the table already
+  asserts the default template's assignments text is absent.
+- Golden prompts, deliberately: `make -C go golden-update`, then review the diff — exactly the 53 files under
+  `internal/pipeline/testdata/golden/prompts/` change and no `*.golden.yaml` does. Each type's diff is confined
+  to the fields the change plan lists for it, as far as its template renders them: `organizationalBranding`'s
+  prompt is rewritten as a whole (template switch); `groups` (`group_prompt.tmpl` renders only type/Purpose,
+  permissions, Lifecycle, `EndpointDocs` and KeySettings) changes only its *About this resource type*,
+  *Lifecycle notes* and *give particular attention to* lines — its new `RelatedTypes` and `Links.AdminCenter`
+  stay unrendered until *Template content fixes and a Conditional Access template* gives it the full header;
+  `EmbeddedPayloads` appears only in default-template prompts.
+- Resolve the two open follow-ups of this entry: rewrite each to its outcome, then strike it with this work.
+  `deviceManagement`: Microsoft Learn has no `deviceManagement` entity or Get page, so `EndpointDocs` stays on the
+  `deviceManagementSettings` complex-type page and `SchemaReference` stays empty; `Links.Permissions` is the
+  permissions-reference anchor (`https://learn.microsoft.com/en-us/graph/permissions-reference#devicemanagementserviceconfigreadall`);
+  Purpose and KeySettings describe what is exported (identifiers and `maximumDepTokens` only — exporting the
+  settings is the parked idea *export the tenant `deviceManagement.settings`*). `AdminCenter`: the 17 blades a
+  Learn page cites are set, every other type stays empty by rule; `windowsAutopilotDeploymentProfiles`'
+  `Links.Permissions` is now the List page of `azureADWindowsAutopilotDeploymentProfile`.
 - Documentation at *done*: `README.md` "Supported resource types" — move the `mobileThreatDefenseConnectors` and
   `intuneBrandingProfiles` rows to the *enrollment, Autopilot and tenant* (`DeviceManagementServiceConfig.Read.All`)
   table and reflect any other corrected scope there and in the dedicated-app scope list; *Intune — scripts*:
