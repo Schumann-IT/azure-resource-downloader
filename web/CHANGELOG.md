@@ -22,7 +22,7 @@ section of the [repository README](../README.md) for the procedure.
   now passes `npm run branch-ready` without a backlog entry, reported as `dependency-only branch: backlog check
   not required`, word for word as in the go gate. Every other check still applies; a bump that also edits
   `version` still fails. Its tests, lint and build still run in `ci-web`. **Open npm Dependabot pull requests
-  need `@dependabot rebase` once this is on `main`.**
+  need `@dependabot rebase` once this is on `main`.** (#40)
 
 #### Release workflow
 

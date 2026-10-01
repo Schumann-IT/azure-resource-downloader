@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-01
 branch: build/dependency-updates
+pr: 40
 changelog: Unreleased
 ---
 ## Accept a dependency-only branch in the branch gate

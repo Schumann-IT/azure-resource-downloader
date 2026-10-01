@@ -23,7 +23,7 @@ This project is released independently of the documentation browser in `web/`: i
   `make golden-update` are the matching targets. A branch whose only changes under `go/` are `go.mod` and
   `go.sum` now passes the branch gate without a backlog entry (`dependency-only branch: backlog check not
   required`); every other check still applies. The investigation of the two Graph SDKs is recorded in the parked
-  idea on consolidating them.
+  idea on consolidating them. (#40)
 
 #### Release workflow
 
@@ -123,7 +123,7 @@ This project is released independently of the documentation browser in `web/`: i
 - **Go dependencies updated, exported bytes unchanged:** `azcore` v1.23.2, `kiota-abstractions-go` v1.11.1
   (indirect: `azure-sdk-for-go/sdk/internal` v1.13.0, `microsoft-authentication-library-for-go` v1.10.1); every
   other direct module was already current. The golden test stayed byte-identical. The READMEs now say Go 1.26+,
-  as `go.mod` requires.
+  as `go.mod` requires. (#40)
 
 #### Release workflow
 
