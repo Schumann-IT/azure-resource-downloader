@@ -193,8 +193,10 @@ an edit in the sibling project cannot block it. It then runs the project's own p
 `web/`: tests, lint and build) and reports: nothing left struck out in `NEXT-ITERATIONS.md`, the remaining
 entries numbered `1..N`, `## [Unreleased]` written, the branch is not `main`, `NEXT-ITERATIONS.md` changed or
 an entry was archived on the branch (every change starts as an entry — except a **dependency-only** branch that
-changes only `go/go.mod`/`go.sum` or `web/package.json`/`package-lock.json`, such as a weekly Dependabot pull
-request from `.github/dependabot.yml`; its `ci-*` checks and the Go golden test prove it), and every entry
+changes only `go/go.mod`/`go.sum` or `web/package.json`/`package-lock.json`, such as a Dependabot pull request
+from `.github/dependabot.yml` — a weekly group of minor and patch updates, or one major version on its own; its
+`ci-*` checks and the Go golden test prove it, and a red major is closed or planned as an entry rather than
+merged), and every entry
 archived as done on the branch grew
 `## [Unreleased]`; `web/` also checks that `version` was left alone (`go/` has no version file — its version
 is the tag). The branch checks use read-only git (`rev-parse`, `merge-base` against `RELEASE_BRANCH`, `diff`,

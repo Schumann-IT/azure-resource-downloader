@@ -154,7 +154,7 @@ assert_eq "no frontmatter block" "" "$(printf 'status: done\n' | frontmatter_val
 # commit subjects
 subjects=$(printf '%s\n' 'feat(go): add a thing' 'fix(web): repair a thing' 'chore: tidy' 'docs(go): plan the audit entry' 'chore(release): go v0.4.0, web v0.4.0' 'feat(go)!: drop the flag' 'Feat(go): capitalised type' 'feat(api): unknown scope' 'feat(go): Trailing period.' 'update stuff' 'feat: ')
 assert_eq "unconventional subjects" $'Feat(go): capitalised type\nfeat(api): unknown scope\nfeat(go): Trailing period.\nupdate stuff\nfeat: ' "$(printf '%s\n' "$subjects" | unconventional_subjects_in)"
-assert_eq "all conventional" "" "$(printf 'feat(web): x\nrevert: y\n' | unconventional_subjects_in)"
+assert_eq "all conventional" "" "$(printf 'feat(web): x\nrevert: y\nbuild(go): bump the go-dependencies group in /go with 3 updates\nbuild(go): bump github.com/spf13/cobra from 1.8.1 to 2.0.0 in /go\nci: bump actions/checkout from 4 to 5\n' | unconventional_subjects_in)"
 
 echo ""
 if [[ "$failed" -gt 0 ]]; then

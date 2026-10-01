@@ -118,6 +118,15 @@ This project is released independently of the documentation browser in `web/`: i
 
 ### Changed
 
+#### Release workflow
+
+- **Dependabot groups only minor and patch updates.** The first weekly npm group bundled 26 updates with about
+  16 major versions and failed `npm ci` before any test ran, so one breaking major blocked every routine
+  update. The go and npm groups now carry minor and patch updates only; a major arrives as its own pull request
+  (`build(go): bump … in /go`, `build(web): bump … in /web`), is merged only when green, and is otherwise closed
+  and planned as an entry. GitHub Actions updates stay grouped. **After merging, check under Insights →
+  Dependency graph → Dependabot that the configuration shows no error.** (#44)
+
 #### Dependencies
 
 - **Go dependencies updated, exported bytes unchanged:** `azcore` v1.23.2, `kiota-abstractions-go` v1.11.1
