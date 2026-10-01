@@ -265,6 +265,91 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
 - Documentation at *done*: `CHANGELOG.md` `### Changed` (the updated modules with versions) and *Release workflow*
   (Dependabot, the dependency-only exemption); `README.md` toolchain and the golden test in the testing section.
 
+## 6. Sign in once: a cached device-code session, and a measured answer on scoped az login
+
+**Goal.** Signing in stops being a per-run chore, by two routes pursued together: the dedicated-app sign-in is
+done once with device code and later runs get their tokens silently from a persistent, OS-protected token cache
+(until the refresh token expires or is revoked); and the tool shows, for the selected handlers, which declared
+Graph permissions the `az login` session's token actually carries — so one recorded experiment settles whether a
+scoped `az login` could stand in for the dedicated app. The documentation stops contradicting itself and stops
+naming flags that no longer exist.
+
+> **Why.** Two sign-in paths exist: the `az login` session (`AzureCLICredential`, used when the tenant profile has no
+> `client-id`) and a device-code sign-in to a dedicated app registration (`client-id` + `tenant-id` in the profile;
+> `newCredential`, `internal/azure/client.go:156-185`). The device-code credential has no persistent cache, so every
+> run prompts again. Every Graph type is treated as needing the dedicated app — `worksWithCLICredential` is never set
+> (`internal/handlers/graph/collection.go:35-42, 101-103`), `DedicatedAppRequirements` is static metadata
+> (`internal/handlers/registry.go:100-116`), `VerifySession` only mints a token (`client.go:51-59`) — and nothing
+> decodes a token's `scp`; `--debug` (`cmd/root.go:204-283`) prints identity claims only. The README contradicts
+> itself: `README.md:540-546` says the Intune and policy scopes are not consentable for the first-party CLI app, so a
+> CLI token can never carry them, while `:679-681` advises `az login --scope https://graph.microsoft.com/.default`
+> for "required scopes are missing" on an ARM-only run, where no Graph call happens.
+>
+> **Reconciled from the parked idea** *review the sign-in surface — can a scoped `az login` replace the dedicated-app
+> device-code path?*: the `--client-id` / `--tenant-id` flags and `AZURE_RD_*` variables it names are gone —
+> `client-id` / `tenant-id` are tenant-scoped config keys only (`internal/config/keys.go:62-63`), and tests assert
+> the flags and variables are absent; and azidentity's CLI credential calls `az account get-access-token
+> --resource …`, never `--scope`, so whatever a scoped login granted must appear in the token minted for the Graph
+> resource. Stale wording is still live: the user-facing error at `client.go:168` (names the removed flags and
+> `AZURE_RD_TENANT_ID`), the `cmd/root.go:52` help text, comments in `models/types.go:174`, `registry.go:99`,
+> `collection.go:41`, `cmd/resource/list.go:97`, and `README.md:544` ("the flags are unset").
+>
+> **Decision.** How far the review goes: instrument, run the experiment, then decide — the prompt's scoped-login
+> recommendation is built only if the experiment says yes.
+>
+> **Decision.** The user added a cached device-code session (sign in once, later runs silent), independent of the
+> experiment's outcome.
+>
+> **Out of scope, revisit note.** Removing the dedicated-app path would be breaking (two tenant-scoped keys go) and
+> needs the experiment's "yes" on a representative tenant first; record it under `Breaking` if it ever ships.
+>
+> Not regeneration-gated.
+>
+> **Implementer.** opus — the token cache touches credential handling.
+
+**Plan.**
+
+- Token claims: `internal/azure/identity.go` gains a pure decoder for a Graph token's `appid`, `app_displayname`
+  and `scp`, beside `parseIdentityClaims`; tested with synthetic JWT payloads. The token itself is never logged.
+- Coverage helper (pure): given declared permissions and a scope list, return covered and missing; a `ReadWrite`
+  scope covers its `Read` counterpart, matching is case-insensitive; table-tested.
+- `--debug` (`runDebugReport`): a "Graph token" section with `appid` / `app_displayname` and the sorted `scp`, and
+  for the effective type selection (`runprep.SelectTypesFromConfig` plus `DedicatedAppRequirements`) every declared
+  permission marked covered or missing. It runs on the CLI credential when the profile has no `client-id`, otherwise
+  on the dedicated app's token, and writes nothing.
+- Cached device-code session: `newCredential` builds the device-code credential with a persistent cache from the
+  `azidentity/cache` module (new direct dependency). The first run calls `Authenticate` once (the device-code
+  prompt) and stores the returned `AuthenticationRecord` (tenant, client id, account, authority — no secret) at
+  `os.UserConfigDir()/azure-rd/auth/<tenant-id>-<client-id>.json`, mode 0600 — never in the repository, the config
+  directory or `output/`; the tokens stay in the OS store (macOS Keychain, Windows DPAPI, Linux libsecret). Later
+  runs pass the record as `DeviceCodeCredentialOptions.AuthenticationRecord` with `DisableAutomaticAuthentication`
+  kept on, so tokens come silently from the cached refresh token. No secure store (e.g. Linux without a keyring):
+  warn once and keep today's per-run sign-in — never store tokens unencrypted. An expired or revoked refresh token,
+  or a record whose tenant or client differs from the profile: device code once more, and the record is replaced.
+  No new config key — caching is on whenever the profile names a `client-id`; `--debug` reports "token cache:
+  active (record from <date>)" or "unavailable (<reason>)". Tests: record round-trip, path and file mode, tenant /
+  client mismatch, credential construction with the cache option stubbed; no real tokens.
+- Operator check, recorded here: on cb-gmbh.com sign in once, then a second `resource download --dry-run` must not
+  prompt.
+- The experiment, an operator step recorded here: on cb-gmbh.com `az logout && az login --scope
+  https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
+  --domain cb-gmbh.com` with no `client-id` in the profile; record `appid`, the `scp` list and the covered/missing
+  table. If everything is covered, also run one `resource download --dry-run` per dedicated-app type without
+  `client-id` and record the outcome — a service may gate on the calling application, not only on the scopes.
+- Follow-up, built only if the experiment covers every declared permission: `PromptForDedicatedApp`
+  (`internal/cmdutil/prompt.go`) first prints the exact `az login --scope …` command derived from the selected types
+  and offers device code as the fallback. If the experiment says no, this bullet goes back to the parked ideas,
+  rewritten with the evidence, and the README states the measured answer.
+- Stale wording: the `client.go:168` error reads "tenant-id is required when client-id is set in the tenant profile";
+  the `cmd/root.go:52` help text and the comments in `models/types.go`, `registry.go`, `collection.go`,
+  `cmd/resource/list.go` name the profile keys, not flags.
+- Documentation at *done*: `README.md` — resolve the contradiction (`:540-546` vs `:679-681`) with the measured
+  result; `:544` "the profile sets no `client-id`"; the `--debug` section documents the Graph token section and
+  replaces the shell token-decoder one-liner (`:518-523`); the cached device-code session (where the record and the
+  tokens live, how to forget a session by deleting the record, the fallback without a keyring). `CHANGELOG.md`:
+  `### Added` (the cached device-code session; the `--debug` Graph token and coverage section), `### Fixed` (the
+  error message and help text naming removed flags).
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
@@ -443,46 +528,6 @@ shape is constrained — these are invariants that keep it safe, not open questi
 - **`config.example.yaml` stays inert** — the feature needs no new config key (it reuses `taxonomy:` labels as
   an optional hint), so loading the example unmodified still produces byte-identical output including every
   hash in `resources/metadata.yaml`.
-
-### Idea: review the sign-in surface — can a scoped `az login` replace the dedicated-app device-code path?
-
-The tool carries two sign-in paths. The default reuses the `az login` session; `--client-id`/`--tenant-id`
-starts a device-code sign-in against a dedicated app registration. The second path exists for exactly one
-reason: `az account get-access-token` always mints tokens for the Azure CLI *first-party* app — regardless of
-how the user logged in — and that app's Graph token has lacked the delegated scopes most Graph handlers
-declare (`DeviceManagementConfiguration.*`, `DeviceManagementApps.*`, `DeviceManagementScripts.*`,
-`Policy.Read.All`, …). But `az login` accepts `--scope`: signing in with
-`az login --scope https://graph.microsoft.com/.default` (or explicit scopes) asks Entra to add delegated
-Graph scopes to that same CLI session — the README's own troubleshooting hint already leans on it for the
-"required scopes are missing" failure. If a scoped login reliably lands every declared scope in the session's
-Graph token, the entire second path becomes removable: the device-code credential branch, the two flags and
-their env/config equivalents, the `PermissionScoped` probe (`RequiresDedicatedApp` /
-`DedicatedAppRequirements`), the interactive dedicated-app prompt, and the app-registration setup in
-`README.md` — collapsing authentication to one path and one instruction. Even a partial "yes" has value: the
-dedicated-app prompt could recommend the exact scoped re-login first and fall back to device code only when
-the CLI app genuinely cannot obtain a scope. **Not planned — parked deliberately**, for three reasons:
-
-- **The answer is not in this repository.** Whether a scope lands in the CLI token's `scp` claim depends on
-  the tenant's consent policy and on which scopes Microsoft lets its first-party app request — both outside
-  the tool's control and changeable by Microsoft without notice. Only a live-tenant experiment settles it:
-  perform a scoped `az login`, decode the token's `scp`, verify that azidentity's CLI credential (which
-  shells out to `az account get-access-token` per request) actually surfaces the scopes granted at login,
-  then run a full download of every dedicated-app-gated type — including `--resolve-secrets`, which needs
-  `DeviceManagementConfiguration.ReadWrite.All`.
-- **A positive result on one tenant does not generalize.** Consent policies differ per tenant, Microsoft has
-  been progressively hardening what the first-party CLI app may do, and some services may gate on the calling
-  application rather than the token's scopes alone — only a live call against each gated endpoint settles
-  that. The dedicated app registration is the escape hatch the operator controls; deleting it trades
-  resilience for a smaller surface.
-- **Removal is a breaking change to the auth surface** — the flags, their `AZURE_RD_*` variables and config
-  keys — so it should ride a major, not a hygiene pass.
-
-**Revisit when** an operator confirms on a representative tenant that a scoped `az login` yields every
-permission the handlers declare, or the next time the authentication surface is reworked anyway. If promoted,
-soften before deleting: first teach the dedicated-app prompt to recommend the exact `az login --scope …`
-command derived from the selected types' declared permissions, keeping device code as the fallback; only
-retire the flags once the CLI path has covered every `PermissionScoped` type against a live tenant, and
-record the removal under `Breaking`.
 
 ### Idea: clear the `gocognit` baseline
 
