@@ -200,42 +200,47 @@ per-item context.
 
 ## Parked ideas
 
-### Idea: version the drift observation, and name `drift/` a Go → web contract
+**Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
+headings), **templates** (documentation and analysis prompts; *regen-gated* when it moves `promptSha256`),
+**export & metadata** (what `resource download` fetches and records), **drift & compare**, **navigation**
+(sidebar, breadcrumbs, landing pages, search, routing), **document view** (how one article renders), **export
+formats**, **platform rule** (a non-negotiable itself), **dependencies**, **housekeeping** (lint ledgers,
+caching internals). *Impact* — operator value: high / medium / low. *Effort* — S (a day or less), M (one
+branch), L (several branches or a design change).
 
-`drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
-`drift/<key>.md` and `drift/index.md` are read by the browser, joined by the shared `<type>/<name>` key,
-gated on `baseline.generatedAt` and verified by hash — part of the Go → web contract the root `CLAUDE.md`
-lists, so a change to the observation schema, to the per-finding frontmatter (`verdict`, `severity`,
-`observedAt`, `baselineGeneratedAt`) or to the index's `severities:` line already ships as a go/web pair. The observation carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to
-need. **Not planned — parked deliberately**: nothing has broken, and adding the field alone is cheap but
-pointless until a consumer branches on it.
+**Overview.** Scheduled entries first, then the ideas in the order of the sections below (by area,
+then priority).
 
-**Revisit when** the observation schema or the per-finding frontmatter next changes for another reason: add
-`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and mark `drift/`
-as versioned in the root `CLAUDE.md`'s contract list.
+| Item | Area | Impact | Effort | Ships with / after |
+|---|---|---|---|---|
+| 1 · Shared prompt partials | templates (not gated) | medium | M | first: the base for the three below |
+| 2 · Per-handler documentation metadata | export & metadata, templates (*regen-gated*) | high | M–L | one regeneration with 3, 4 and web *Conditions*; feeds web *sidebar by a taxonomy axis* |
+| 3 · Template content fixes + CA template | templates (*regen-gated*), contract | high | L | **must** pair with web *Style the CA `Conditions` section* |
+| 4 · Run-prompt fixes + `summary:` | templates, contract | medium | S | unblocks web *per-item context in the sidebar* and *per-document identity* |
+| *resource compare* | drift & compare, contract | high | L | **must** ship with web *Move the compare normalisation to the CLI*; carries `version:` from day one |
+| *version the drift observation* | contract | low | S | rides the next change to the drift schema or per-finding frontmatter (web accepts `>= 1` in the same pair) |
+| *per-finding severity in `Security`* | templates (*regen-gated*) | low | M | only worth it riding a regeneration already scheduled; web colours or filters the tags |
+| *bootstrap the taxonomy from LLM suggestions* | templates (*regen-gated*), contract | low | M–L | only worth it riding a regeneration already scheduled |
+| *clear the `gocognit` baseline* | housekeeping | low | S per function | opportunistic: any entry that edits a listed function (`GeneratePrompt`, `GenerateIndex`, `drift.Compare`, …) |
 
-### Idea: per-finding severity in document `Security` sections
+**Ships together.**
 
-Tag every individual security callout *inside each resource's document* with `**[risk]**` / `**[review]**` /
-`**[ok]**`, so the web side can colour or filter them. **Not planned — parked deliberately**, for three
-reasons:
+1. **The pre-regeneration batch** (scheduled): *Shared prompt partials* first, then *per-handler metadata*,
+   *template content fixes and a CA template* and *run-prompt fixes and `summary:`* together with web *Style the
+   Conditional Access `Conditions` section* — one documentation regeneration for all of them. The two
+   regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*) either join that batch, decided before
+   *per-handler metadata* starts, or wait for the next regeneration.
+2. **The compare track** (cross-project, must): *`resource compare`* ships with web *Move the compare
+   normalisation to the CLI*; web *manual pairing* and *one-sided resource* follow on the CLI's rule; *version the
+   drift observation* rides the first drift contract change.
+3. **Housekeeping** is opportunistic: a `gocognit` entry is paid off by whichever entry edits its function.
 
-- **It is a subjective, model-only judgement.** Nothing in the export can compute or validate whether a given
-  setting is risk / review / ok.
-- **It is made 400+ times** (once per callout across every document), so a bad or inconsistent batch is
-  likely — and the only fix is regenerating everything.
-- **Low marginal benefit.** Section-level styling (the `Security` H2 slug) already gives the frontend most of
-  the visual win without the per-item risk.
-
-This is the opposite trade-off from the tenant-summary findings severity, which is decided once per tenant on
-at most six findings — tiny blast radius, easy to eyeball — and was therefore done.
-
-**Revisit only if both hold:** (1) the closed-heading contract has proven stable across a real regeneration,
-with no drift observed in practice; and (2) the web side needs per-item severity that section-level styling
-cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
-seven templates and regenerate every document — and accept that it cannot be automatically validated.
+## Parked ideas — drift & compare
 
 ### Idea: `resource compare` — an offline comparison of two exports, and the home of the cross-tenant identity rule
+
+*Area:* drift & compare, contract · *Impact:* high · *Effort:* L · *Ships with:* **must** ship with web *Move the
+compare normalisation to the CLI*; carries `version:` from day one
 
 Compare two tenants' exports on disk — stage against prod — the way `resource drift` compares one tenant
 against its own export: a verdict per resource key (only in A, only in B, same, different), dotted-path deltas
@@ -291,7 +296,56 @@ browser then depends on.
 The comparison reads names from `metadata.yaml`; the exported YAML keeps ids as facts and never embeds another
 object's name.
 
+## Parked ideas — contract
+
+### Idea: version the drift observation, and name `drift/` a Go → web contract
+
+*Area:* contract · *Impact:* low · *Effort:* S · *Ships with:* rides the next change to the drift schema or
+per-finding frontmatter (web accepts `>= 1` in the same pair)
+
+`drift/metadata.yaml`, the payloads at `drift/<key>.yaml`, the analysis prompt and the agent-written
+`drift/<key>.md` and `drift/index.md` are read by the browser, joined by the shared `<type>/<name>` key, gated on
+`baseline.generatedAt` and verified by hash — part of the Go → web contract the root `CLAUDE.md` lists, so a
+change to the observation schema, to the per-finding frontmatter (`verdict`, `severity`, `observedAt`,
+`baselineGeneratedAt`) or to the index's `severities:` line already ships as a go/web pair. The observation
+carries a `toolVersion` but no schema `version:` — the field `index.yaml` learned to need. **Not planned — parked
+deliberately**: nothing has broken, and adding the field alone is cheap but pointless until a consumer branches
+on it.
+
+**Revisit when** the observation schema or the per-finding frontmatter next changes for another reason: add
+`version: 1` to `drift/metadata.yaml` in that same change, have the browser accept `>= 1`, and mark `drift/`
+as versioned in the root `CLAUDE.md`'s contract list.
+
+## Parked ideas — templates
+
+### Idea: per-finding severity in document `Security` sections
+
+*Area:* templates (*regen-gated*) · *Impact:* low · *Effort:* M · *Ships with:* only worth it riding a
+regeneration already scheduled; web colours or filters the tags
+
+Tag every individual security callout *inside each resource's document* with `**[risk]**` / `**[review]**` /
+`**[ok]**`, so the web side can colour or filter them. **Not planned — parked deliberately**, for three
+reasons:
+
+- **It is a subjective, model-only judgement.** Nothing in the export can compute or validate whether a given
+  setting is risk / review / ok.
+- **It is made 400+ times** (once per callout across every document), so a bad or inconsistent batch is
+  likely — and the only fix is regenerating everything.
+- **Low marginal benefit.** Section-level styling (the `Security` H2 slug) already gives the frontend most of
+  the visual win without the per-item risk.
+
+This is the opposite trade-off from the tenant-summary findings severity, which is decided once per tenant on
+at most six findings — tiny blast radius, easy to eyeball — and was therefore done.
+
+**Revisit only if both hold:** (1) the closed-heading contract has proven stable across a real regeneration,
+with no drift observed in practice; and (2) the web side needs per-item severity that section-level styling
+cannot deliver. If promoted, treat it as its own one-shot: extend the `Security:` instruction across all
+seven templates and regenerate every document — and accept that it cannot be automatically validated.
+
 ### Idea: bootstrap the curated taxonomy from per-document LLM suggestions
+
+*Area:* templates (*regen-gated*), contract · *Impact:* low · *Effort:* M–L · *Ships with:* only worth it riding
+a regeneration already scheduled
 
 Have the doc-generation model suggest, per resource, which programmes it belongs to (as *labels* with a short
 rationale, never ids), then harvest those suggestions at index time into `docs/taxonomy-suggestions.yaml` — a
@@ -330,7 +384,12 @@ shape is constrained — these are invariants that keep it safe, not open questi
   an optional hint), so loading the example unmodified still produces byte-identical output including every
   hash in `resources/metadata.yaml`.
 
+## Parked ideas — housekeeping
+
 ### Idea: clear the `gocognit` baseline
+
+*Area:* housekeeping · *Impact:* low · *Effort:* S per function · *Ships with:* opportunistic: any entry that
+edits a listed function (`GeneratePrompt`, `GenerateIndex`, `drift.Compare`, …)
 
 Split up the 26 functions named in the baseline at the end of `.golangci.yml`'s `exclusions.rules` — the ones
 that already exceeded the Sonar cognitive-complexity threshold when `gocognit` was switched on, across 20 files —
@@ -358,4 +417,3 @@ in the same commit — that is how this shrinks without a campaign), when a func
 change safely in practice rather than merely scoring high, or if the baseline ever stops shrinking, which would
 mean it has started collecting new debt instead of recording old. How to split, measure and record is the ledger
 procedure in `.claude/rules/go-style.md`.
-

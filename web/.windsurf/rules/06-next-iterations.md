@@ -75,6 +75,18 @@ rule (`.claude/rules/`, e.g. `web-export.md` for export entry points), never a b
 ## Parked ideas
 - A trailing `## Parked ideas` area; each idea is `### Idea: <title>` stating what it is, **why it is parked**
   and the explicit **revisit conditions**.
+- **The overview keeps it navigable.** `## Parked ideas` opens with a legend, an **Overview** table (scheduled
+  entries first, then every idea: area, impact, effort, ships with / after) and a **Ships together** list naming
+  what must or should ship as one — inside the backlog and across go/web, siblings named by title, never by
+  number. The ideas follow in `## Parked ideas — <area>` sections, by priority within each, and every idea starts
+  with one tag line under its heading: `*Area:* … · *Impact:* … · *Effort:* … · *Ships with:* …`.
+- **Areas**: contract, templates (*regen-gated* when it moves `promptSha256`), export & metadata, drift &
+  compare, navigation, document view, export formats, platform rule, dependencies, housekeeping. **Impact**:
+  high / medium / low (operator value). **Effort**: S (a day or less), M (one branch), L (several branches or a
+  design change). A new area needs a reason; extend the legend in both backlogs.
+- **Keep it current in the same edit**: adding, refining, promoting or dropping an idea, or scheduling,
+  finishing or dropping an entry, updates its table row, its tag line and the *Ships with* of its siblings
+  — in the sibling project's backlog too when the coupling crosses.
 - **Promotion is a review, not a copy.** In Claude Code, `/promote-idea <title>` locates the block, enters
   plan mode seeded with it, and on approval transcribes the plan file into the entry anatomy — Context →
   Goal and Notes (with the reconciled revisit conditions), work steps and verification → Plan bullets —

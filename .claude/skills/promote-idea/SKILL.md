@@ -26,5 +26,7 @@ existing entry. The rule `.claude/rules/next-iterations.md` applies throughout.
      documentation included (`README.md`, `CHANGELOG.md`, rule files if they change).
    Write it as the next `## N.` with its `*Kind:*` line,
    delete the `### Idea` block (for `plan item N`: replace the entry in place), and keep `1..N` contiguous.
+   Move its row in the *Overview* table to the scheduled entries and update the *Ships with* of its siblings
+   and the *Ships together* list (`.claude/rules/next-iterations.md`, *Parked ideas*).
 4. **Commit** `docs(<project>): plan <title>` (only the backlog file). Stop: implementation is a separate
    `implement item N`, and the start gate needs the entry in `HEAD`.
