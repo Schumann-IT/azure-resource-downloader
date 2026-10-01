@@ -299,10 +299,10 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
   previous version in `go.mod` by hand (git writes are blocked), run `make -C go deps`, rerun the group without it,
   and add an unstruck follow-up bullet to this entry naming the module, the version tried and the golden case that
   changed with its first differing lines. API breaks are fixed at their call sites, with tests.~~
-- Follow-up: `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (`v0.4.0`) is a direct requirement in `go.mod`
+- ~~Follow-up: `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (`v0.4.0`) is a direct requirement in `go.mod`
   but was not in the Azure SDK group above, so it was not updated; run
   `make -C go deps-update MODULES="github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache"`, then `make -C go test` and
-  `make -C go build` (the golden files must stay byte-identical).
+  `make -C go build` (the golden files must stay byte-identical). Outcome: already newest at v0.4.0.~~
 - ~~Investigation, no code change, offline: for each beta endpoint the handlers call (the `msgraphbeta` request
   builders in `internal/handlers/graph/`), check whether the updated v1.0 SDK in the module cache (default
   `~/go/pkg/mod/github.com/microsoftgraph/msgraph-sdk-go@<version>/`) has the matching request builder and model —
