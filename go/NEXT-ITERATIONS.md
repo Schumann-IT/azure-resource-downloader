@@ -420,13 +420,17 @@ naming flags that no longer exist.
   to get the Keychain cache). `CHANGELOG.md`:
   `### Added` (the cached device-code session; the `--debug` Graph token and coverage section), `### Fixed` (the
   error message and help text naming removed flags).
-- Follow-up, found while implementing — operator check first: azidentity keeps CAE and non-CAE tokens in separate
+- ~~Follow-up, found while implementing — operator check first: azidentity keeps CAE and non-CAE tokens in separate
   cache partitions (`azure-rd` and `azure-rd.cae`, separate MSAL clients), and the sign-in authenticates only the
   partition of the request that needed it (the request's `EnableCAE` is carried into `Authenticate`). A run whose
   token requests mix both (the Graph SDK and azcore's bearer policy request CAE tokens; `VerifySession` and
   `SignedInIdentity` do not) may therefore prompt twice on its first sign-in, and silently after that. The cache
   check above should record how many prompts the first run showed; if two, sign in once and seed the other
-  partition from the same session, or drop the mixed request.
+  partition from the same session, or drop the mixed request.~~
+  **Result (2026-10-01, cb-gmbh.com, macOS):** with the session forgotten (sign-in record and both Keychain items
+  deleted), the first `resource download --dry-run --log-level debug` showed exactly **one** device-code prompt and
+  listed all 50 types; the second run did not prompt at all. The two cache partitions do not cause a second prompt
+  in practice; nothing to change.
 
 ## 7. Check access before listing, and refuse a run that would be mostly refused
 
@@ -476,6 +480,15 @@ refusals and ending as a mostly empty, incomplete run.
 - Tests: the probe planner (groups from a selection, one probe per group, types without a probe), the classifier
   (401/403 refused; 404, 429, 5xx not), the refusal message, `ErrorSummary` with the nested Intune body, and the
   runprep integration with a stub prober (refused → no listing, exit code; all clear → unchanged run). No network.
+- Follow-up, seen in the cached-session runs (2026-10-01): "Authentication successful" is logged before the lazy
+  device-code sign-in actually happens; log that the credential is ready instead, and "Signed in" (with the
+  account) once the first token has been obtained.
+- Follow-up: an empty type is reported twice — a per-type `No resources found` warning whose note still offers
+  "(2) Insufficient permissions", and the summary's `Empty type` line. With the access check refusing a run without
+  access, an empty listing is a real empty: log it once at info level, without the permissions note; the summary
+  line stays.
+- Follow-up: "Secret resolution enabled" (and its debug explanation) is logged twice per run — once during
+  configuration loading and once during run preparation; log it once.
 - Documentation at *done*: `README.md` — the access check before listing (what it probes, what refuses, how to
   narrow a run) in the sign-in / permissions section and the exit codes; `CHANGELOG.md` `### Added` (the access
   check) and `### Changed` (the readable Intune error summary).
