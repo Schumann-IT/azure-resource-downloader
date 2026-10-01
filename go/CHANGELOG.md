@@ -159,7 +159,7 @@ This project is released independently of the documentation browser in `web/`: i
   permissions page of the operation it calls, and — for 17 types — the admin-center blade where it is managed.
   Reference links now match the Graph API version the handler calls, and `organizationalBranding` is documented as
   the tenant-wide singleton it is. A registry-wide test keeps the metadata from decaying again. Every type's prompt
-  changes, so **regenerate the documentation**.
+  changes, so **regenerate the documentation**. (#52)
 
 - **Both management summaries now lead with the verdict.** The tenant summary the documentation agent writes
   opens with short bold-led paragraphs on what is managed, whether the settings are consistent and whether the
@@ -199,7 +199,7 @@ This project is released independently of the documentation browser in `web/`: i
   `DeviceManagementScripts.Read.All` and `notificationMessageTemplates` `DeviceManagementConfiguration.Read.All` —
   in the permission errors, the dedicated-app consent message and the access check's grouping alike. Windows
   platform scripts also declare `DeviceManagementConfiguration.Read.All`, which reading their assignments needs.
-  All of these scopes are already in the documented dedicated-app scope list, so no new consent is needed.
+  All of these scopes are already in the documented dedicated-app scope list, so no new consent is needed. (#52)
 
 - **A tenant without organizational branding no longer makes every export incomplete.** Graph answers 404 when
   no default branding is configured; the CLI read that as *could not be listed* and blamed a missing permission,
