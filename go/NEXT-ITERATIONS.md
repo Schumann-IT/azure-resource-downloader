@@ -189,6 +189,64 @@ per-item context.
 - Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
   (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
 
+## 5. Monitor CI in the background instead of waiting for it
+
+**Goal.** After the session pushes a branch (end of `/implement-pair` or `/implement-item`, `/close-branch`) or
+opens a pull request (`/pull-request`), it no longer blocks until GitHub Actions finish. It starts a background
+monitor on the run or the pull request's checks and reports back when they finish — green with the run link, or
+red with the failing jobs and their log excerpt — so the operator can keep working, and reviews and merges on
+GitHub once the monitor has reported.
+
+> **Why.** The blocking waits buy no safety: branch protection on `main` already requires `ci-go`, `ci-web`,
+> `branch-ready-go` and `branch-ready-web`, so nothing red can be merged whether or not the session waited. They
+> only hold the session for minutes per push. Tried by hand on 2026-10-01 (pull requests #37 and the push before
+> it): pushing without waiting and reading the result later worked.
+>
+> **What changes in meaning.** A step that used to end on "CI green" now ends on "gates green locally, pushed, CI
+> pending, monitor running", and the session must say *pending*, never *green*, until the monitor reports. The
+> red-CI fix round of `/implement-pair` becomes asynchronous: it applies only when the failed run is still for the
+> branch's current `HEAD`; a failure of an older commit is reported as stale. The monitor reports only while the
+> session is alive — GitHub's page stays the source of truth.
+>
+> **Owner.** The files are outside `go/`: `.claude/skills/implement-pair/SKILL.md`,
+> `.claude/skills/close-branch/SKILL.md`, `.claude/skills/pull-request/SKILL.md`, the root `CLAUDE.md`,
+> `.claude/rules/next-iterations.md` and its Windsurf twins `go/.windsurf/rules/06-next-iterations.md` and
+> `web/.windsurf/rules/06-next-iterations.md`. No code, no web change; no sequencing.
+>
+> Not regeneration-gated.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- The monitor, one procedure shared by the three skills (written once, in `implement-pair` §6, and referenced by
+  the others): after the push, find the push run for `$(git rev-parse HEAD)` (`gh run list --branch <branch>
+  --event push --commit <sha> …`, retried briefly until it registers), then start `gh run watch <id>
+  --exit-status` as a **background** command, so the session is notified when it exits. On the notification:
+  read `gh run view <id> --json jobs,url,headSha`; `ci-go` / `ci-web` `success` or `skipped` → report green with
+  the run URL; otherwise report the failing jobs with a `gh run view <id> --log-failed` excerpt. Without a
+  background capability, fall back to the blocking wait and say so.
+- `/implement-pair` §6 and §7: push, start the monitor, and finish the final report with "CI pending (monitor
+  running)" and the run URL instead of the result. When a red report arrives and the run's `headSha` is still
+  `HEAD`, offer the existing fix round (one QA round with the log excerpt, commit, push, new monitor; at most
+  twice) — the user confirms, nothing is fixed unprompted; a red run of an older commit is reported as stale.
+- `/close-branch` §6: push and start the monitor; the branch counts as closed once the local reports are green and
+  the push is done — the report says CI is pending. Remove "Only when both are green is the branch closed".
+- `/pull-request`: the preflight accepts a pending push run (it says so in the Verification section instead of
+  quoting a green run) but refuses a red one for `HEAD`; after the link-back commit is pushed, start the monitor on
+  the pull request — `gh pr checks <N> --watch` in the background, once the checks of the final commit have
+  registered — and report the merge-gate checks (`branch-ready-*`) and `ci-*` when it finishes. The step ends with
+  the URL and "checks pending (monitor running)"; merging stays the user's action.
+- Wording: root `CLAUDE.md` (the agent-pipeline line "pushes once after QA and waits for CI" and "`/close-branch`
+  … pushes and waits for CI to be green") and the `implement pair` row of `.claude/rules/next-iterations.md`
+  ("pushes once, and waits for the `ci-*` jobs") say "pushes and starts a CI monitor that reports back"; the two
+  Windsurf twins get the same row.
+- Verification: run this branch's own `/close-branch` and `/pull-request` with the new procedure — both return
+  immediately, and each monitor reports once its run or checks finish.
+- Documentation at *done*: `CHANGELOG.md` (both projects, *Release workflow* area, `### Changed`): the session
+  monitors CI in the background instead of waiting; merging stays manual. No README change (the workflow lives in
+  `CLAUDE.md` and the skills).
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
