@@ -87,7 +87,7 @@ agent's.
 
 ## Prerequisites
 
-- **Go 1.24+** (build only).
+- **Go 1.26+** (build only; per `go.mod`).
 - **Azure CLI**, signed in with `az login` as a user who can read the tenant. The CLI session provides the
   default token and the tenant/subscription defaults.
 - **An Entra app registration** with delegated Microsoft Graph permissions. Every `Microsoft.Graph/*` type
@@ -1454,6 +1454,8 @@ make fmt-check       # reports unformatted files, rewrites nothing
 make check           # fmt-check + lint-check + test + test-scripts — modifies nothing, so it can report on a commit as-is
 make ci              # check + build (the default goal)
 make deps            # download + tidy
+make deps-update MODULES="<module paths>"  # go get -u the named modules, then tidy
+make golden-update   # rewrite the exported-YAML golden files on purpose — review the diff before committing
 make test-coverage   # coverage.html
 make test-scripts    # tests for the readers behind the readiness reports and the start gate
 make start-item N=2  # gate: may entry 2 of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)
@@ -1461,6 +1463,14 @@ make release-ready   # report whether a release can be cut (changes nothing); ta
 make branch-ready    # gate: clean tree, ci, then is this feature/fix branch ready to ship? (changes nothing)
 make branch-ready-report  # the same gate without the pipeline: what CI runs on the pull request
 ```
+
+**Dependency updates are proven byte-neutral.** `make test` runs an offline golden test
+(`internal/pipeline/golden_test.go`): synthetic Graph responses under `internal/pipeline/testdata/golden/` go
+through the production parse, transform and YAML path and must match the checked-in `*.golden.yaml` byte for
+byte. A Graph SDK, Kiota or YAML update that would change exported bytes — and so move `sourceSha256` for
+resources that did not change in the tenant — fails here, offline, in CI. Accepting such a change is a
+deliberate `make golden-update` plus a reviewed diff, and belongs with a documentation regeneration.
+Dependabot (`.github/dependabot.yml`) proposes one grouped update per week as `build(go): …`.
 
 ### Linting and the editor
 
@@ -1538,8 +1548,10 @@ Conventions that CI and review expect:
 - `make branch-ready` (or `make branch-ready-go` from the repository root) reports whether a feature or fix
   branch is ready to ship: `make ci` passes, nothing is left struck out in `NEXT-ITERATIONS.md` (done entries
   archived) and the rest is numbered contiguously, `## [Unreleased]` records the work, the branch is not the
-  release branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch, and every entry
-  archived as done on the branch grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it
+  release branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch — or the branch is
+  **dependency-only** (its only changes under `go/` are `go.mod` and `go.sum`, as in a Dependabot pull request;
+  reported as `dependency-only branch: backlog check not required`) — and every entry archived as done on the
+  branch grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it
   reports every check and **exits non-zero if any of them failed**, so it can gate a merge. An empty
   `[Unreleased]` is reported, not failed: a branch with no user-visible effect legitimately has none. There is
   no version check — this project's version is the `go/vX.Y.Z` tag, not a file. On GitHub the pipeline (`make

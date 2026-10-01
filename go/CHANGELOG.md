@@ -15,6 +15,18 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Release workflow
 
+- **Dependency updates are proposed every week and proven byte-neutral.** Dependabot opens one grouped pull
+  request per week for the Go modules (`build(go): …`), the web packages (`build(web): …`) and the GitHub
+  Actions (`ci: …`). A new offline golden test runs synthetic Graph responses through the production parse,
+  transform and YAML path and compares the exported bytes, so an SDK update that would move `sourceSha256` —
+  and read as mass drift — fails in CI instead of in a tenant. `make deps-update MODULES="…"` and
+  `make golden-update` are the matching targets. A branch whose only changes under `go/` are `go.mod` and
+  `go.sum` now passes the branch gate without a backlog entry (`dependency-only branch: backlog check not
+  required`); every other check still applies. The investigation of the two Graph SDKs is recorded in the parked
+  idea on consolidating them.
+
+#### Release workflow
+
 - **Work starts from the backlog, and the tooling now says so.** Every change begins as a numbered entry in
   `NEXT-ITERATIONS.md`, committed before it is implemented: `make start-item N=<n>` is the gate that checks
   this — not on the release branch, a clean `go/`, entry `N` present in `HEAD`'s backlog with an outstanding
@@ -105,6 +117,13 @@ This project is released independently of the documentation browser in `web/`: i
   `--type`.** See `README.md` (*Access check before listing*). (#39)
 
 ### Changed
+
+#### Dependencies
+
+- **Go dependencies updated, exported bytes unchanged:** `azcore` v1.23.2, `kiota-abstractions-go` v1.11.1
+  (indirect: `azure-sdk-for-go/sdk/internal` v1.13.0, `microsoft-authentication-library-for-go` v1.10.1); every
+  other direct module was already current. The golden test stayed byte-identical. The READMEs now say Go 1.26+,
+  as `go.mod` requires.
 
 #### Release workflow
 

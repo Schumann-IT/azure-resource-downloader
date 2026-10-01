@@ -55,8 +55,10 @@ constrain ideas without being work items.
   delivered entry keeps its unstruck items here and only its struck ones are archived (the archive file
   accumulates across branches). Archived entries lose their number.
 - **The gates check it.** `branch-ready` fails while any strikeout is left, when numbering has a gap, when a
-  branch that changed the project neither changed the backlog nor archived an entry, and when an entry
-  archived as done did not grow `[Unreleased]`; `release-ready` repeats the strikeout check and lists the archive files it will stamp.
+  branch that changed the project neither changed the backlog nor archived an entry (except a dependency-only
+  branch: only `go/go.mod`/`go.sum` or `web/package.json`/`package-lock.json` changed, e.g. a Dependabot pull
+  request — `ci-*` and the Go golden test prove it), and when an entry archived as done did not grow
+  `[Unreleased]`; `release-ready` repeats the strikeout check and lists the archive files it will stamp.
 - **Numbering is presentational**; never cite `§N` from other files — describe the work. Stale `§N`
   references in released changelog sections are history.
 - **Entries are self-contained**: restate what an entry needs rather than pointing at a sibling.
