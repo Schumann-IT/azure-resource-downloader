@@ -89,12 +89,12 @@ This project is released independently of the documentation browser in `web/`: i
   usable store the run warns and keeps signing in every run; tokens are never written unencrypted. Deleting the
   record forgets the session. **The profile's `tenant-id` must be the tenant GUID** — a domain never matches the
   record and every run would prompt. Adds the `azidentity/cache` module (v0.4.0). See `README.md`
-  (*Cached sign-in*).
+  (*Cached sign-in*). (#39)
 - **`--debug` shows what the session's Graph token can actually read.** It decodes the token's app and scopes and
   marks every declared permission of the selected types as covered or missing, and reports whether a cached
   session is active. It settled the open question whether a scoped `az login` could replace the dedicated app:
   measured on a production tenant, such a token belongs to the Azure CLI app and covers 1 of 51 declared
-  permissions — it cannot; the README now says so instead of contradicting itself.
+  permissions — it cannot; the README now says so instead of contradicting itself. (#39)
 - **A run checks access before it lists anything.** `resource download`, `resource drift` and `resource list` send
   one cheap read per permission group the selection needs and, when the account is refused (401/403, or a failed
   sign-in) — typically an expired PIM role — stop before listing or writing anything, with one readable line per
@@ -102,7 +102,7 @@ This project is released independently of the documentation browser in `web/`: i
   collected dozens of refusals and ended as a mostly empty, incomplete export. Exit `1` (drift: `2`); `--dry-run`
   refuses the same way. **A full run by an account without Reader on the configured subscription is now refused
   instead of skipping the ARM types: exclude them in the tenant profile (`exclude-type`) or select types with
-  `--type`.** See `README.md` (*Access check before listing*).
+  `--type`.** See `README.md` (*Access check before listing*). (#39)
 
 ### Changed
 
@@ -136,7 +136,7 @@ This project is released independently of the documentation browser in `web/`: i
   device-code sign-in had even started. Intune's nested error bodies collapse to one line (`HTTP 401 Forbidden:
   failed to list …`, without activity id and URL) in warnings and in `notListed.reasons`; Azure and other Graph
   summaries are unchanged. An empty type is logged once at info level, without the misleading "insufficient
-  permissions" note, and the secret-resolution notice appears once per run.
+  permissions" note, and the secret-resolution notice appears once per run. (#39)
 
 ### Fixed
 
@@ -174,7 +174,7 @@ This project is released independently of the documentation browser in `web/`: i
 
 - **No message names the removed sign-in flags any more.** The error for a profile with `client-id` but no
   `tenant-id`, and the root help, still pointed at `--client-id` / `--tenant-id` and `AZURE_RD_TENANT_ID`,
-  which no longer exist; both name the tenant profile's keys now.
+  which no longer exist; both name the tenant profile's keys now. (#39)
 
 ### Breaking
 

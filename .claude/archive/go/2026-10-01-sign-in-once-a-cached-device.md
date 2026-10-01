@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-01
 branch: docs/plan-dependency-updates
+pr: 39
 changelog: Unreleased
 ---
 ## Sign in once: a cached device-code session, and a measured answer on scoped az login
