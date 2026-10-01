@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-02
 branch: feat/ca-template-and-conditions
+pr: 53
 changelog: Unreleased
 ---
 ## Style the Conditional Access `Conditions` section and close two section-style gaps

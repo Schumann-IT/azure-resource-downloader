@@ -161,7 +161,7 @@ This project is released independently of the documentation browser in `web/`: i
   read permission and, where documented, the role needed to change it. Groups get the full set of reference
   links, role scope tags get their assignments, reusable policy settings are documented as the referenced objects
   they are, records redact exposed credentials, and embedded payloads are described as the export delivers them.
-  Every type's prompt changes, so **regenerate the documentation**.
+  Every type's prompt changes, so **regenerate the documentation**. (#53)
 
 - **Per-type documentation metadata corrected and completed.** Every resource type's documentation prompt now
   carries metadata checked field by field against Microsoft Learn: what the type is and what the export actually

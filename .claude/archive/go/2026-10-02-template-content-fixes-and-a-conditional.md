@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-02
 branch: feat/ca-template-and-conditions
+pr: 53
 changelog: Unreleased
 ---
 ## Template content fixes and a Conditional Access template

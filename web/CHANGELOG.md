@@ -140,7 +140,7 @@ section of the [repository README](../README.md) for the procedure.
   icon like every other contract section, instead of rendering it as plain prose. A group's `Membership` section,
   which is prose, no longer gets the dense settings layout, and nested settings inside a `Definition` section get
   the same depth rail as in `Settings` and `Properties`. Visible once the documentation is regenerated with the
-  new CLI templates; still no client-side JavaScript.
+  new CLI templates; still no client-side JavaScript. (#53)
 
 #### Layout
 
