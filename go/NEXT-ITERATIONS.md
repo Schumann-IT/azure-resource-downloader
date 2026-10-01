@@ -189,6 +189,79 @@ per-item context.
 - Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
   (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
 
+## 5. A tenant-scoped exclude-type key
+
+**Goal.** A tenant profile can name resource types that are never listed for that tenant — typically the ARM types
+of an Intune/Entra-only tenant whose account holds no subscription role — and runs that leave them out stay
+**complete**, so absence, prune and drift removals keep working. A drift run can never compare silently across a
+changed exclusion.
+
+> **Why.** On cb-gmbh.com `virtualMachines`, `storageAccounts` and `resourceGroups` fail listing with `HTTP 403
+> AuthorizationFailed` on every run (2026-10-01), which keeps every export and drift run incomplete although the
+> tenant's documentation never covers ARM. The only workaround is the general `type:` allow-list in the base file:
+> it applies to every tenant in the config directory, must list all ~50 wanted types, and silently stops exporting
+> any type a later release registers.
+>
+> **What is true now.** `filters` is tenant-scoped, `type` general (`internal/config/keys.go:54-92`); each file is
+> validated against its side before merging (`internal/config/load.go:89-117`). `--type` is bound to the same viper
+> key as `type:` (`cmd/resource.go:56`), so it *replaces* the config list — the flag help
+> (`internal/cmdutil/flags.go:54`) wrongly says "narrows". Requests are built in `Registry.BuildFetchRequests`
+> (`internal/handlers/requests.go:26-69`, precedence id → group → types → all); the dedicated-app probe mirrors it
+> in `SelectedTypeNames` (`internal/runprep/runprep.go:331-352`). Unknown types are caught only lazily during
+> listing, and registry lookup is case-sensitive while filters and audit compare case-insensitively. Coverage is
+> what was actually listed (`coveredTypes`, `internal/docs/metadata.go:518-537`, mirrored in
+> `internal/drift/drift.go:473-489`): a type never requested is neither covered nor skipped, so leaving it out keeps
+> a run complete with no change to `MarkCompleteness` (`internal/pipeline/pipeline.go:240-257`). Comparability:
+> `filtersSha256` / `transformConfigSha256` refuse a drift run on mismatch (`drift.go:56-90`, `ErrNotComparable`,
+> exit 2); the type scope is never compared today.
+>
+> **Decision.** A `--type` or `type:` naming a type the profile excludes: refuse with an error naming the type and
+> the profile — the profile is the tenant's record, a one-off flag does not override it.
+>
+> **Decision.** Drift against a baseline downloaded with a different exclusion: refuse like `filters` — the exclusion
+> is recorded in the export metadata and any difference is not comparable (exit 2); a baseline without the field
+> counts as excluding nothing.
+>
+> **Contract.** None with the browser: it does not read the run scope.
+>
+> Not regeneration-gated: no prompt template and no `promptSha256` is touched.
+>
+> **Implementer.** opus — it touches coverage, the drift preflight and config validation.
+
+**Plan.**
+
+- Config key: `exclude-type` in `keyScopes` as **tenant-scoped** (`internal/config/keys.go`), a list read with
+  `viper.GetStringSlice`. Validated at load against the registered handler types, case-insensitively, each name
+  normalised to its registered spelling; an unknown type is a fatal error naming it; duplicates collapse. Per
+  `/add-config-option`: `config.example.domain.yaml` gets a commented-out example with the three ARM types (the file
+  stays a no-op), `config.example.yaml` a pointer to the profile, `cmd/config_test.go` the partition and no-op
+  coverage.
+- Selection: `runprep.Prepare` computes the effective types as the allow-list (`--type`, else config `type:`, else
+  all registered) minus `exclude-type`, in one pure function. A `--type` / `type:` naming an excluded type refuses
+  before sign-in with an error naming the type and the profile. `--resource-id` / `--resource-group` runs are
+  unaffected (they enumerate no type). The same effective set feeds `BuildFetchRequests`, `SelectedTypeNames` (the
+  dedicated-app scope prompt no longer asks for an excluded type's scopes), `resource list` and `resource types`;
+  the excluded types are logged once at info level.
+- Metadata: `resources/metadata.yaml` records `run.scope.excludedTypes` (sorted, omitted when empty, so existing
+  exports stay byte-identical). Coverage needs no change: excluded types are never requested, so they are neither
+  covered nor skipped and their earlier entries stay untouched. An otherwise full run with exclusions keeps
+  `lastCoveredBy: full`.
+- Drift comparability: `drift.Preflight` compares the current exclusion set with the baseline's
+  `run.scope.excludedTypes` (missing = empty); any difference refuses with `ErrNotComparable` (exit 2), naming the
+  added and removed types and saying to download a new baseline first. The drift observation records the exclusion
+  in its `run.scope`. `resource audit` needs no change — it only filters drift findings, which never contain excluded
+  types.
+- `--type` flag help (`internal/cmdutil/flags.go:54`): "replaces the configured types", not "narrows".
+- Tests: config partition, unknown and case-insensitive names, no-op examples; the effective-type function
+  table-tested (all minus excluded; `type:` minus excluded; a clash refuses; id/group runs unaffected);
+  `SelectedTypeNames` without excluded types; metadata `excludedTypes` round-trip, omitted when empty, and a run with
+  exclusions is `complete` with the excluded types' entries untouched; drift preflight — same set passes, different
+  set refuses, a baseline without the field plus a current exclusion refuses, neither passes.
+- Documentation at *done*: `README.md` — profile keys and partition table, a selection subsection (allow-list, then
+  exclusion, then the `--type` clash), the coverage rules and the `run.scope.excludedTypes` metadata example, the
+  drift "must match" list and comparability paragraph; `CHANGELOG.md` `### Added`, with **after adding or changing
+  `exclude-type`, run `resource download` before the next `resource drift`** in bold.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
@@ -457,28 +530,3 @@ mean it has started collecting new debt instead of recording old. If picked up, 
 golangci-lint does not report an exclusion that matched nothing, so re-measure by commenting the block out. Each
 split is internal and needs no `CHANGELOG.md` entry; deleting the block at the end does.
 
-### Idea: a tenant-scoped `exclude-type` key
-
-Let a tenant profile (`<config-dir>/<domain>.yaml`) name resource types that are never listed for that tenant —
-e.g. the three ARM types for an Intune/Entra-only tenant where the signed-in account has no Reader role on the
-subscription. Today the only way to leave a type out is the general `type:` allow-list in the base file: it
-applies to every tenant in the config directory, must list all ~50 wanted types, and silently stops exporting any
-type a later release registers. Seen on cb-gmbh.com (2026-10-01): `virtualMachines`, `storageAccounts` and
-`resourceGroups` fail listing with `HTTP 403 AuthorizationFailed` on every run, which keeps the export and every
-drift run **incomplete** although the tenant's documentation never covers ARM. **Parked** because the base-file
-`type:` allow-list works today for a config directory whose tenants are all Graph-only, and the key touches two
-invariants that need deciding rather than a quick add:
-
-- **Partition and comparability.** It would be a tenant-scoped key (the reason it belongs in the profile), and it
-  changes which types a run covers — so it must take part in drift comparability like `filters` does
-  (`filtersSha256`), or a drift run with a different exclusion than its baseline would read the excluded types as
-  removed or never compared. An excluded type must count as *out of scope*, not as *not listed*, so the run stays
-  `complete`.
-- **Interaction with `type:` and `--type`.** Exclusion applied after the allow-list (base `type:` or `--type`),
-  with an exclusion of an explicitly requested `--type` reported rather than silently honoured; an unknown type in
-  the list is a fatal error naming it, like every other key.
-
-**Revisit when** a config directory holds tenants that need different type sets, or the allow-list has to be
-maintained across a release that adds types. When promoted: `/add-config-option` (key partition, defaults, both
-example files, README), the comparability hash, the scoped-run coverage rule in `internal/docs/metadata.go` and
-`internal/drift`, and tests for complete-with-exclusions.
