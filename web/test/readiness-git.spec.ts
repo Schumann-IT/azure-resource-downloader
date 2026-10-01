@@ -206,8 +206,11 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
       const f = facts();
       expect(f.dependencyOnly).toBe(false);
       const check = backlogCheck(f);
-      expect(check.ok).toBe(false);
-      expect(check.message).toContain('NEXT-ITERATIONS.md is unchanged on this branch');
+      expect(check).toEqual({
+        ok: false,
+        message:
+          'NEXT-ITERATIONS.md is unchanged on this branch — every branch that changes web/ delivers, refines or adds an entry (a small fix still gets a small entry)',
+      });
     });
 
     it('rejects a nested package.json', async () => {

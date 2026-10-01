@@ -10,8 +10,9 @@
 // in progress; "item N is done" moves them to ../.claude/archive/web/), touched
 // the backlog at all (every change starts as an entry; a dependency-only branch,
 // where only package.json and package-lock.json changed, is the one exception),
-// was not made on the release branch, and has left `version` alone: bumping it and closing the
-// changelog are the release step, which `release-ready` reports on.
+// was not made on the release branch, and has left `version` alone: bumping it
+// and closing the changelog are the release step, which `release-ready`
+// reports on.
 //
 // Unlike that report, this one is a gate: it exits non-zero if a single check
 // fails.
