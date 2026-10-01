@@ -8,38 +8,7 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## 1. Shared prompt partials, without changing a byte
-
-*Kind:* refactor
-
-**Goal.** The seven documentation prompt templates repeat the same blocks six or seven times (header, reference
-links, `<details>` rules, redaction rule, closed-set paragraph), and they have already drifted apart (the group
-template renders only one link). Move the shared text into partials so later template work changes one place —
-while proving that this refactor moves no `promptSha256` and therefore forces no regeneration.
-
-> **Why first.** The two regeneration-gated entries below (per-handler metadata, template content) both edit the
-> shared blocks; doing it once in partials keeps them small and consistent. The golden test this entry adds is
-> what makes their intended hash moves explicit and reviewable.
->
-> **Not regeneration-gated** by construction: the rendered bytes stay identical, which the golden test proves.
->
-> **Implementer.** sonnet
-
-**Plan.**
-
-- Move the duplicated blocks of `internal/models/documentation_prompt.tmpl` and the overrides
-  (`internal/handlers/graph/*_prompt.tmpl`, `internal/handlers/arm/arm_prompt.tmpl`) into `{{define}}` partials,
-  parsed together with each template in `parsePromptTemplate` (`internal/models/documentation.go:82`). Per-type
-  differences (persona, layout, section bodies, `doc-headings`) stay in each template.
-- A golden test over every handler registered by `NewRegistry` pins the assembled `doc-prompt.md` bytes (or their
-  SHA-256) per type, captured before the refactor; the refactor must leave all of them unchanged. The golden file
-  stays, so a later deliberate change updates it in the same diff.
-- Documentation at *done*: none in `README.md` (no user-visible change). `CHANGELOG.md`: nothing of its own — but
-  the branch gate refuses an entry archived as done unless `[Unreleased]` grew on the branch, so close it on the
-  same branch as a regeneration-gated entry whose changelog line covers it, or add one line under the release
-  workflow area.
-
-## 2. Correct and complete the per-handler documentation metadata
+## 1. Correct and complete the per-handler documentation metadata
 
 *Kind:* fix
 
@@ -66,7 +35,7 @@ it cannot silently decay again.
 >
 > **Regeneration-gated.** Every changed value moves the type's `promptSha256`. Batch with *Template content fixes
 > and a Conditional Access template* and *Run-prompt fixes and the `summary:` frontmatter line* so they share the
-> one scheduled regeneration. Depends on *Shared prompt partials* (the new link renders from the shared partial).
+> one scheduled regeneration. Builds on the shared prompt partials (done; the new link goes into `prompt-links`).
 >
 > **Implementer.** sonnet
 
@@ -90,7 +59,7 @@ it cannot silently decay again.
 - Documentation at *done*: `README.md` "Supported resource types" permissions column and the dedicated-app scope
   list; `CHANGELOG.md` (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
 
-## 3. Template content fixes and a Conditional Access template
+## 2. Template content fixes and a Conditional Access template
 
 *Kind:* feat
 
@@ -127,7 +96,7 @@ replaced by evidence-bound ones — so the scheduled regeneration yields better 
 >
 > **Regeneration-gated.** Moves `promptSha256` for every type whose template changes (all but record types where
 > nothing changes). Batch with *Correct and complete the per-handler documentation metadata* and *Run-prompt fixes
-> and the `summary:` frontmatter line*; ship together with the web entry; depends on *Shared prompt partials*.
+> and the `summary:` frontmatter line*; ship together with the web entry; builds on the shared prompt partials (done).
 >
 > **Implementer.** opus
 
@@ -162,7 +131,7 @@ replaced by evidence-bound ones — so the scheduled regeneration yields better 
 - Documentation at *done*: `README.md` (documentation section: the CA template and its `Conditions` section, the
   templates' evidence rules); `CHANGELOG.md` `### Changed`, with **regenerate the documentation** in bold.
 
-## 4. Run-prompt fixes and the `summary:` frontmatter line
+## 3. Run-prompt fixes and the `summary:` frontmatter line
 
 *Kind:* feat
 
@@ -210,7 +179,7 @@ branch), L (several branches or a design change).
 
 **Ships together.**
 
-1. **The pre-regeneration batch** (scheduled): *Shared prompt partials* first, then *per-handler metadata*,
+1. **The pre-regeneration batch** (scheduled, on the shared prompt partials already shipped): *per-handler metadata*,
    *template content fixes and a CA template* and *run-prompt fixes and `summary:`* together with web *Style the
    Conditional Access `Conditions` section* — one documentation regeneration for all of them. The two
    regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*) either join that batch, decided before
