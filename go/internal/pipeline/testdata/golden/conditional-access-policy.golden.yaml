@@ -1,0 +1,55 @@
+'@odata.type': '#microsoft.graph.conditionalAccessPolicy'
+conditions:
+    applications:
+        includeApplications:
+            - All
+    clientAppTypes:
+        - browser
+        - mobileAppsAndDesktopClients
+    locations:
+        excludeLocations:
+            - AllTrusted
+            - a1b2c3d4-0000-4000-8000-0000000000aa
+        includeLocations:
+            - All
+    userRiskLevels:
+        - high
+        - medium
+    users:
+        excludeGroups:
+            - a1b2c3d4-0000-4000-8000-0000000000c1
+        excludeUsers:
+            - a1b2c3d4-0000-4000-8000-0000000000b1
+            - a1b2c3d4-0000-4000-8000-0000000000b2
+        includeGuestsOrExternalUsers:
+            externalTenants:
+                '@odata.type': '#microsoft.graph.conditionalAccessAllExternalTenants'
+                membershipKind: all
+            guestOrExternalUserTypes: internalGuest,b2bCollaborationGuest,b2bCollaborationMember
+        includeRoles:
+            - 194ae4cb-b126-40b2-bd5b-6091b380977d
+            - 62e90394-69f5-4237-9190-012177145e10
+createdDateTime: "2025-03-04T08:15:30Z"
+displayName: Require MFA for guests and administrators
+goldenUnknownProperty: not in the SDK model
+grantControls:
+    builtInControls:
+        - compliantDevice
+        - mfa
+    operator: OR
+id: a1b2c3d4-0000-4000-8000-000000000001
+modifiedDateTime: "2026-01-20T17:45:00Z"
+sessionControls:
+    disableResilienceDefaults: false
+    persistentBrowser:
+        '@odata.type': '#microsoft.graph.persistentBrowserSessionControl'
+        isEnabled: true
+        mode: never
+    signInFrequency:
+        '@odata.type': '#microsoft.graph.signInFrequencySessionControl'
+        authenticationType: primaryAndSecondaryAuthentication
+        frequencyInterval: timeBased
+        isEnabled: true
+        type: hours
+        value: 4
+state: enabledForReportingButNotEnforced

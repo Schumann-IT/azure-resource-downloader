@@ -1,0 +1,66 @@
+{
+  "@odata.type": "#microsoft.graph.conditionalAccessPolicy",
+  "id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "templateId": null,
+  "displayName": "Require MFA for guests and administrators",
+  "createdDateTime": "2025-03-04T08:15:30.1234567Z",
+  "modifiedDateTime": "2026-01-20T17:45:00Z",
+  "state": "enabledForReportingButNotEnforced",
+  "goldenUnknownProperty": "not in the SDK model",
+  "conditions": {
+    "userRiskLevels": ["high", "medium"],
+    "signInRiskLevels": [],
+    "clientAppTypes": ["mobileAppsAndDesktopClients", "browser"],
+    "servicePrincipalRiskLevels": [],
+    "platforms": null,
+    "locations": {
+      "includeLocations": ["All"],
+      "excludeLocations": ["a1b2c3d4-0000-4000-8000-0000000000aa", "AllTrusted"]
+    },
+    "applications": {
+      "includeApplications": ["All"],
+      "excludeApplications": [],
+      "includeUserActions": [],
+      "includeAuthenticationContextClassReferences": []
+    },
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": ["a1b2c3d4-0000-4000-8000-0000000000b2", "a1b2c3d4-0000-4000-8000-0000000000b1"],
+      "includeGroups": [],
+      "excludeGroups": ["a1b2c3d4-0000-4000-8000-0000000000c1"],
+      "includeRoles": ["62e90394-69f5-4237-9190-012177145e10", "194ae4cb-b126-40b2-bd5b-6091b380977d"],
+      "excludeRoles": [],
+      "includeGuestsOrExternalUsers": {
+        "guestOrExternalUserTypes": "internalGuest,b2bCollaborationGuest,b2bCollaborationMember",
+        "externalTenants": {
+          "@odata.type": "#microsoft.graph.conditionalAccessAllExternalTenants",
+          "membershipKind": "all"
+        }
+      },
+      "excludeGuestsOrExternalUsers": null
+    }
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": ["mfa", "compliantDevice"],
+    "customAuthenticationFactors": [],
+    "termsOfUse": [],
+    "authenticationStrength": null
+  },
+  "sessionControls": {
+    "disableResilienceDefaults": false,
+    "applicationEnforcedRestrictions": null,
+    "cloudAppSecurity": null,
+    "persistentBrowser": {
+      "mode": "never",
+      "isEnabled": true
+    },
+    "signInFrequency": {
+      "value": 4,
+      "type": "hours",
+      "authenticationType": "primaryAndSecondaryAuthentication",
+      "frequencyInterval": "timeBased",
+      "isEnabled": true
+    }
+  }
+}

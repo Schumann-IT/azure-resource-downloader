@@ -17,6 +17,15 @@ section of the [repository README](../README.md) for the procedure.
 
 #### Release workflow
 
+- **A dependency-only branch passes the branch gate.** A branch whose only changes under `web/` are
+  `package.json` and `package-lock.json` — a Dependabot npm pull request (`build(web): …`), or a manual bump —
+  now passes `npm run branch-ready` without a backlog entry, reported as `dependency-only branch: backlog check
+  not required`, word for word as in the go gate. Every other check still applies; a bump that also edits
+  `version` still fails. Its tests, lint and build still run in `ci-web`. **Open npm Dependabot pull requests
+  need `@dependabot rebase` once this is on `main`.** (#40)
+
+#### Release workflow
+
 - **Work starts from the backlog, and the tooling now says so.** Every change begins as a numbered entry in
   `NEXT-ITERATIONS.md`, committed before it is implemented: `npm run start-item -- <n>` is the gate that
   checks this — not on the release branch, a clean `web/`, entry `n` present in `HEAD`'s backlog with an

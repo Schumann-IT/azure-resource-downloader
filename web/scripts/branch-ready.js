@@ -8,9 +8,11 @@
 // recorded its work under `## [Unreleased]`, has archived the entries it
 // delivered out of NEXT-ITERATIONS.md (they are struck through while the work is
 // in progress; "item N is done" moves them to ../.claude/archive/web/), touched
-// the backlog at all (every change starts as an entry), was not made on the
-// release branch, and has left `version` alone: bumping it and closing the
-// changelog are the release step, which `release-ready` reports on.
+// the backlog at all (every change starts as an entry; a dependency-only branch,
+// where only package.json and package-lock.json changed, is the one exception),
+// was not made on the release branch, and has left `version` alone: bumping it
+// and closing the changelog are the release step, which `release-ready`
+// reports on.
 //
 // Unlike that report, this one is a gate: it exits non-zero if a single check
 // fails.
@@ -21,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const { readChangelog, readStruckLines, readEntryNumbers, unconventionalSubjects } = require('./lib/changelog');
-const { readBranchFacts } = require('./lib/branch');
+const { readBranchFacts, backlogCheck } = require('./lib/branch');
 
 const root = path.resolve(__dirname, '..');
 const changelogPath = path.join(root, 'CHANGELOG.md');
@@ -133,15 +135,14 @@ if (!facts.available) {
     // 6. Every branch that changes web/ touches its backlog: it delivers, refines
     //    or adds an entry. A small fix still gets a small entry. An entry added and
     //    archived on the same branch leaves the file identical to the base, so an
-    //    archive file added on the branch counts as well.
-    if (facts.backlogChanged) {
-      ok('NEXT-ITERATIONS.md changed on this branch');
-    } else if (facts.backlogTouched) {
-      ok(`NEXT-ITERATIONS.md delivered on this branch (${facts.archived.length} archived entry(ies))`);
+    //    archive file added on the branch counts as well. The one exception is a
+    //    dependency-only branch (only package.json / package-lock.json changed, e.g.
+    //    a Dependabot update): ci-web proves it, so it needs no backlog entry.
+    const backlog = backlogCheck(facts);
+    if (backlog.ok) {
+      ok(backlog.message);
     } else {
-      fail(
-        'NEXT-ITERATIONS.md is unchanged on this branch — every branch that changes web/ delivers, refines or adds an entry (a small fix still gets a small entry)',
-      );
+      fail(backlog.message);
     }
 
     // 7. Every commit on the branch follows Conventional Commits (the squash

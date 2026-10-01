@@ -1,0 +1,31 @@
+{
+  "@odata.type": "#microsoft.graph.iosCustomConfiguration",
+  "id": "a1b2c3d4-0000-4000-8000-000000000004",
+  "lastModifiedDateTime": "2026-03-10T07:05:00Z",
+  "roleScopeTagIds": ["0"],
+  "supportsScopeTags": true,
+  "deviceManagementApplicabilityRuleOsEdition": null,
+  "deviceManagementApplicabilityRuleOsVersion": null,
+  "deviceManagementApplicabilityRuleDeviceMode": null,
+  "createdDateTime": "2025-09-09T09:09:09Z",
+  "description": "Corporate Wi-Fi profile",
+  "displayName": "iOS - Corporate Wi-Fi",
+  "version": 3,
+  "payloadName": "Contoso Wi-Fi",
+  "payloadFileName": "wifi.mobileconfig",
+  "payload": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHBsaXN0IHZlcnNpb249IjEuMCI+CjxkaWN0PgogIDxrZXk+UGF5bG9hZERpc3BsYXlOYW1lPC9rZXk+CiAgPHN0cmluZz5Db250b3NvIFdpLUZpPC9zdHJpbmc+CiAgPGtleT5QYXlsb2FkVmVyc2lvbjwva2V5PgogIDxpbnRlZ2VyPjE8L2ludGVnZXI+CjwvZGljdD4KPC9wbGlzdD4K",
+  "goldenUnknownProperty": "kept in additionalData",
+  "assignments": [
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000004_1",
+      "source": "direct",
+      "sourceId": "a1b2c3d4-0000-4000-8000-000000000004",
+      "intent": "apply",
+      "target": {
+        "@odata.type": "#microsoft.graph.allDevicesAssignmentTarget",
+        "deviceAndAppManagementAssignmentFilterId": null,
+        "deviceAndAppManagementAssignmentFilterType": "none"
+      }
+    }
+  ]
+}

@@ -58,35 +58,6 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
 deleted, and the remaining entries are renumbered.
 
-### 2. Accept a dependency-only branch in the branch gate
-
-**Goal.** A Dependabot npm pull request — or a manual dependency bump — that changes only `web/package.json` and
-`web/package-lock.json` passes `branch-ready-web` without a backlog entry, while its tests, lint and build still run
-in `ci-web`.
-
-> **Why.** The go entry *Routine dependency updates with a byte-neutrality guard, and Dependabot* adds Dependabot
-> for npm; the web gate refuses any branch that touches `web/` without a backlog change (check 6, `backlogTouched`
-> in `scripts/lib/branch.js`), so its pull requests could never pass the required check.
->
-> **Contract.** The dependency-only rule and the ok-line wording ("dependency-only branch: backlog check not
-> required") are identical to the go gate's.
->
-> Not regeneration-gated.
->
-> **Owner.** none.
->
-> **Implementer.** sonnet
-
-**Plan.**
-
-- `scripts/lib/branch.js`: a fact `dependencyOnly` — the changed files under `web/` are only `package.json` and
-  `package-lock.json`; check 6 (backlog touched) and the archive checks are skipped when it holds, with the shared ok
-  line. The `version` check still applies, so a bump that edits `version` still fails.
-- `test/readiness-git.spec.ts`: deps-only passes; deps plus a source file fails; deps with a changed `version`
-  fails.
-- Documentation at *done*: `CHANGELOG.md` *Release workflow*; `README.md` gate-checks list: the dependency-only
-  exception.
-
 ## Standing decisions
 
 Decisions that are not work items but constrain the ideas below, recorded so the next iteration does not

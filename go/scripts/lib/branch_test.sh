@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the branch facts in lib/branch.sh: whether a branch touched the
-# backlog, or delivered it by archiving an entry. They run against throw-away
+# backlog, delivered it by archiving an entry, or changed only go.mod / go.sum
+# (dependency-only). They run against throw-away
 # git repositories under a temp directory (removed on exit), never this checkout.
 #
 # Usage: scripts/lib/branch_test.sh   (normally via `make test-scripts`)
@@ -102,6 +103,64 @@ commit_all "feat(go): other"
 base=$(git merge-base HEAD main)
 assert_eq "web archive only: state empty" "" "$(backlog_state "$base")"
 assert_eq "web archive only: no go archived files" "" "$(archived_files "$base")"
+
+# dep_only <base> — dependency_only as a word, for assert_eq.
+dep_only() {
+  if dependency_only "$1"; then echo yes; else echo no; fi
+}
+
+# 6. go.mod and go.sum changed: a dependency-only branch.
+new_repo depboth
+printf 'module x\n' >go.mod
+printf 'sum\n' >go.sum
+commit_all "build(go): bump modules"
+base=$(git merge-base HEAD main)
+assert_eq "go.mod + go.sum: dependency-only" "yes" "$(dep_only "$base")"
+assert_eq "go.mod + go.sum: backlog state empty" "" "$(backlog_state "$base")"
+
+# 7. go.sum alone: a dependency-only branch.
+new_repo depsum
+printf 'sum\n' >go.sum
+commit_all "build(go): bump a transitive module"
+base=$(git merge-base HEAD main)
+assert_eq "go.sum alone: dependency-only" "yes" "$(dep_only "$base")"
+
+# 8. go.mod and a .go file: not dependency-only, and the backlog is untouched,
+#    so the gate fails as before.
+new_repo depcode
+printf 'module x\n' >go.mod
+printf 'package main\n' >main.go
+commit_all "build(go): bump and fix a call site"
+base=$(git merge-base HEAD main)
+assert_eq "go.mod + .go file: not dependency-only" "no" "$(dep_only "$base")"
+assert_eq "go.mod + .go file: backlog state empty" "" "$(backlog_state "$base")"
+
+# 9. go.mod and the backlog: not dependency-only; the backlog changed.
+new_repo depbacklog
+printf 'module x\n' >go.mod
+printf '# Next iterations\n\n## 1. Thing\n' >NEXT-ITERATIONS.md
+commit_all "build(go): bump and plan"
+base=$(git merge-base HEAD main)
+assert_eq "go.mod + backlog: not dependency-only" "no" "$(dep_only "$base")"
+assert_eq "go.mod + backlog: changed" "changed" "$(backlog_state "$base")"
+
+# 10. A change only outside go/: not dependency-only (nothing under go/ changed).
+new_repo depoutside
+mkdir -p ../.github
+printf 'version: 2\n' >../.github/dependabot.yml
+commit_all "ci: add dependabot"
+base=$(git merge-base HEAD main)
+assert_eq "outside go/ only: not dependency-only" "no" "$(dep_only "$base")"
+
+# 11. go.mod plus a change outside go/: dependency-only (outside paths count
+#     neither way).
+new_repo depmixed
+printf 'module x\n' >go.mod
+mkdir -p ../.github
+printf 'version: 2\n' >../.github/dependabot.yml
+commit_all "build(go): bump with dependabot config"
+base=$(git merge-base HEAD main)
+assert_eq "go.mod + outside go/: dependency-only" "yes" "$(dep_only "$base")"
 
 if [[ "$failed" -gt 0 ]]; then
   echo "❌ branch_test: $failed of $((passed + failed)) assertions failed" >&2

@@ -69,8 +69,9 @@ concerns and are edited by hand only when the user asks.
 - `make branch-ready-go`, `make branch-ready-web`, `make branch-ready` — each refuses while its own folder has
   uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`
   (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not failed),
-  `web/` `version` untouched, not on `main`, the backlog changed or an entry was archived on the branch,
-  Conventional Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit
+  `web/` `version` untouched, not on `main`, the backlog changed or an entry was archived on the branch (a
+  dependency-only branch — only `go/go.mod`/`go.sum` or `web/package.json`/`package-lock.json` changed, e.g. a
+  Dependabot pull request — needs no backlog change), Conventional Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit
   non-zero on any failed check. **Commit first, then run**; fix, commit, rerun. The `-report` variants (`make
   branch-ready-report-go` / `-web`) run the same checks without the pipeline.
 - **CI is the quality authority.** The `branch-ready` workflow runs the pipelines (`ci-go`, `ci-web`) on
@@ -117,6 +118,6 @@ Per-project pipelines (all read-only): `make -C go check` / `make -C go ci`; in 
 
 ## Toolchain
 
-Go per `go/go.mod` (currently 1.26; the READMEs still say 1.24+), Node.js >= 20, Azure CLI (`az login`),
+Go per `go/go.mod` (currently 1.26), Node.js >= 20, Azure CLI (`az login`),
 golangci-lint v2, `gh` for releases. The `branch-ready` workflow runs both gates on every pull request into
 `main`; branch protection requires them, so the local gates and the CI gate are the same scripts.

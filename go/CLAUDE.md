@@ -59,7 +59,7 @@ repo-wide rules: `../CLAUDE.md`. Path-scoped detail loads automatically from `..
 | `make test`, `make test-race`, `make test-coverage` | `go test …` |
 | `make lint-check` (reports), `make lint` (rewrites) | `golangci-lint run` |
 | `make fmt-check` (reports), `make fmt` (rewrites) | `gofmt`, `go fmt` |
-| `make deps` | `go mod tidy` |
+| `make deps`, `make deps-update MODULES="…"` (bump named modules), `make golden-update` (rewrite the golden test's files on purpose) | `go mod tidy`, `go get -u` |
 | `make check` = fmt-check + lint-check + test + test-scripts; `make ci` = check + build (default goal) | |
 | `make start-item N=<n>` (gate before implementing entry n), `make branch-ready` (gate), `make release-ready` (report) | editing versions or tags by hand |
 

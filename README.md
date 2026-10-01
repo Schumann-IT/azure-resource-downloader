@@ -55,7 +55,7 @@ Re-running the whole loop after a tenant change regenerates only what actually m
 
 ## Prerequisites
 
-- **Go 1.24+** to build the CLI, **Node.js 20+** to run the browser.
+- **Go 1.26+** to build the CLI, **Node.js 20+** to run the browser.
 - **Azure CLI**, signed in with `az login` as a user who can read the tenant's Intune / Entra configuration.
 - **An Entra app registration** for device-code sign-in. Every Microsoft Graph resource type needs delegated
   scopes the Azure CLI's first-party app cannot obtain (`DeviceManagementConfiguration.Read.All`,
@@ -106,7 +106,7 @@ Repeat from step 1 whenever the tenant changes; steps 2–4 only touch what move
 
 ```
 azure-resource-downloader/
-├── go/          azure-rd CLI (Go 1.24) — see go/README.md
+├── go/          azure-rd CLI (Go 1.26) — see go/README.md
 ├── web/         documentation browser (NestJS, TypeScript) — see web/README.md
 ├── output/      export tree, gitignored: output/<tenant>/{resources,docs}/
 ├── .claude/     Claude Code rules and skills; archive/<project>/ keeps every finished backlog entry with its plan
@@ -191,8 +191,11 @@ Each gate first **refuses to run while its own folder has uncommitted changes** 
 `git status --porcelain` scoped to that folder, so the verdict describes the commit that will be merged and
 an edit in the sibling project cannot block it. It then runs the project's own pipeline (`go/`: `make ci`;
 `web/`: tests, lint and build) and reports: nothing left struck out in `NEXT-ITERATIONS.md`, the remaining
-entries numbered `1..N`, `## [Unreleased]` written, the branch is not `main`, `NEXT-ITERATIONS.md` changed on
-the branch (every change starts as an entry), and every entry archived as done on the branch grew
+entries numbered `1..N`, `## [Unreleased]` written, the branch is not `main`, `NEXT-ITERATIONS.md` changed or
+an entry was archived on the branch (every change starts as an entry — except a **dependency-only** branch that
+changes only `go/go.mod`/`go.sum` or `web/package.json`/`package-lock.json`, such as a weekly Dependabot pull
+request from `.github/dependabot.yml`; its `ci-*` checks and the Go golden test prove it), and every entry
+archived as done on the branch grew
 `## [Unreleased]`; `web/` also checks that `version` was left alone (`go/` has no version file — its version
 is the tag). The branch checks use read-only git (`rev-parse`, `merge-base` against `RELEASE_BRANCH`, `diff`,
 `show`) and are skipped with a note outside a clone. An empty `[Unreleased]` is reported, not failed: a

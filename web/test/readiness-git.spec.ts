@@ -10,7 +10,7 @@ import * as path from 'path';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { git, isRepo } = require('../scripts/lib/git');
 const { startItem } = require('../scripts/start-item');
-const { readBranchFacts } = require('../scripts/lib/branch');
+const { readBranchFacts, backlogCheck } = require('../scripts/lib/branch');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const BACKLOG = ['# Next iterations', '', '## 1. First entry', '', '**Goal.** G.', '', '**Plan.**', '', '- open item', '', '## 2. ~~Done entry~~', '', '**Goal.** D.', '', '**Plan.**', '', '- ~~done~~', ''].join(
@@ -124,6 +124,7 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     expect(facts.base).toBeNull();
     expect(facts.backlogChanged).toBeNull();
     expect(facts.backlogTouched).toBeNull();
+    expect(facts.dependencyOnly).toBeNull();
   });
 
   it('counts only a net backlog change or a web archive file as touching the backlog', async () => {
@@ -137,6 +138,7 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     expect(facts.folderChanged).toBe(true);
     expect(facts.backlogChanged).toBe(false);
     expect(facts.backlogTouched).toBe(false);
+    expect(facts.dependencyOnly).toBe(false);
 
     run(['switch', '-q', 'main']);
     run(['switch', '-q', '-c', 'fix/added-and-archived']);
@@ -166,5 +168,96 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     expect(facts.backlogChanged).toBe(false);
     expect(facts.archived).toEqual([]);
     expect(facts.backlogTouched).toBe(false);
+    expect(facts.dependencyOnly).toBe(false);
+  });
+
+  describe('dependency-only branches', () => {
+    const DEP_OK = { ok: true, message: 'dependency-only branch: backlog check not required' };
+
+    async function branchWith(name: string, files: Record<string, string>): Promise<void> {
+      run(['switch', '-q', 'main']);
+      run(['switch', '-q', '-c', name]);
+      for (const [rel, content] of Object.entries(files)) {
+        const abs = path.join(repo, rel);
+        await fsp.mkdir(path.dirname(abs), { recursive: true });
+        await fsp.writeFile(abs, content);
+      }
+      run(['add', '.']);
+      run(['commit', '-q', '-m', 'build(web): bump']);
+    }
+
+    const facts = () => readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
+
+    it('accepts package.json and package-lock.json only', async () => {
+      await branchWith('build/deps', { 'web/package.json': '{}\n', 'web/package-lock.json': '{}\n' });
+      const f = facts();
+      expect(f.dependencyOnly).toBe(true);
+      expect(f.backlogTouched).toBe(false);
+      expect(backlogCheck(f)).toEqual(DEP_OK);
+    });
+
+    it('accepts package-lock.json alone', async () => {
+      await branchWith('build/lock', { 'web/package-lock.json': '{"a":1}\n' });
+      expect(facts().dependencyOnly).toBe(true);
+    });
+
+    it('rejects package.json plus a source file', async () => {
+      await branchWith('build/with-src', { 'web/package.json': '{"a":2}\n', 'web/src/x.ts': 'x\n' });
+      const f = facts();
+      expect(f.dependencyOnly).toBe(false);
+      const check = backlogCheck(f);
+      expect(check).toEqual({
+        ok: false,
+        message:
+          'NEXT-ITERATIONS.md is unchanged on this branch — every branch that changes web/ delivers, refines or adds an entry (a small fix still gets a small entry)',
+      });
+    });
+
+    it('rejects a nested package.json', async () => {
+      await branchWith('build/nested', { 'web/sub/package.json': '{}\n' });
+      expect(facts().dependencyOnly).toBe(false);
+    });
+
+    it('lets a changed backlog win over the exemption', async () => {
+      await branchWith('build/with-backlog', {
+        'web/package.json': '{"a":3}\n',
+        'web/NEXT-ITERATIONS.md': `${BACKLOG}\n- extra\n`,
+      });
+      const f = facts();
+      expect(f.dependencyOnly).toBe(false);
+      expect(backlogCheck(f)).toEqual({ ok: true, message: 'NEXT-ITERATIONS.md changed on this branch' });
+    });
+
+    it('ignores paths outside web/', async () => {
+      await branchWith('build/with-github', {
+        'web/package-lock.json': '{"a":4}\n',
+        '.github/dependabot.yml': 'version: 2\n',
+      });
+      expect(facts().dependencyOnly).toBe(true);
+    });
+
+    it('does not treat a change outside web/ as a web change', async () => {
+      await branchWith('build/github-only', { '.github/dependabot.yml': 'version: 3\n' });
+      const f = facts();
+      expect(f.folderChanged).toBe(false);
+      expect(f.dependencyOnly).toBe(false);
+    });
+  });
+
+  describe('backlogCheck', () => {
+    it('reports a changed backlog', () => {
+      expect(backlogCheck({ backlogChanged: true, backlogTouched: true, archived: [], dependencyOnly: false })).toEqual({
+        ok: true,
+        message: 'NEXT-ITERATIONS.md changed on this branch',
+      });
+    });
+
+    it('reports a delivered backlog', () => {
+      const archived = [{ path: 'a.md', status: 'done' }];
+      expect(backlogCheck({ backlogChanged: false, backlogTouched: true, archived, dependencyOnly: false })).toEqual({
+        ok: true,
+        message: 'NEXT-ITERATIONS.md delivered on this branch (1 archived entry(ies))',
+      });
+    });
   });
 });
