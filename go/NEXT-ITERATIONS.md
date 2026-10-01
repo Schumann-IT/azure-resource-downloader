@@ -548,3 +548,29 @@ mean it has started collecting new debt instead of recording old. If picked up, 
 (a refactor that needs a test edited is a redesign, not a split), and remember that a stale entry is invisible —
 golangci-lint does not report an exclusion that matched nothing, so re-measure by commenting the block out. Each
 split is internal and needs no `CHANGELOG.md` entry; deleting the block at the end does.
+
+### Idea: a tenant-scoped `exclude-type` key
+
+Let a tenant profile (`<config-dir>/<domain>.yaml`) name resource types that are never listed for that tenant —
+e.g. the three ARM types for an Intune/Entra-only tenant where the signed-in account has no Reader role on the
+subscription. Today the only way to leave a type out is the general `type:` allow-list in the base file: it
+applies to every tenant in the config directory, must list all ~50 wanted types, and silently stops exporting any
+type a later release registers. Seen on cb-gmbh.com (2026-10-01): `virtualMachines`, `storageAccounts` and
+`resourceGroups` fail listing with `HTTP 403 AuthorizationFailed` on every run, which keeps the export and every
+drift run **incomplete** although the tenant's documentation never covers ARM. **Parked** because the base-file
+`type:` allow-list works today for a config directory whose tenants are all Graph-only, and the key touches two
+invariants that need deciding rather than a quick add:
+
+- **Partition and comparability.** It would be a tenant-scoped key (the reason it belongs in the profile), and it
+  changes which types a run covers — so it must take part in drift comparability like `filters` does
+  (`filtersSha256`), or a drift run with a different exclusion than its baseline would read the excluded types as
+  removed or never compared. An excluded type must count as *out of scope*, not as *not listed*, so the run stays
+  `complete`.
+- **Interaction with `type:` and `--type`.** Exclusion applied after the allow-list (base `type:` or `--type`),
+  with an exclusion of an explicitly requested `--type` reported rather than silently honoured; an unknown type in
+  the list is a fatal error naming it, like every other key.
+
+**Revisit when** a config directory holds tenants that need different type sets, or the allow-list has to be
+maintained across a release that adds types. When promoted: `/add-config-option` (key partition, defaults, both
+example files, README), the comparability hash, the scoped-run coverage rule in `internal/docs/metadata.go` and
+`internal/drift`, and tests for complete-with-exclusions.
