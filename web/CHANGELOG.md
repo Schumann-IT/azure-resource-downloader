@@ -95,7 +95,7 @@ section of the [repository README](../README.md) for the procedure.
   stay out, as source YAML does in the Confluence export. The same observation always yields the same file;
   the report is built in memory from the same reads as the drift pages, so the app stays read-only, offline
   and script-free, and a failed build never sends a partial file. An outdated observation offers no link.
-  Content and limits are in `README.md`; it adds the `pdfmake` dependency.
+  Content and limits are in `README.md`; it adds the `pdfmake` dependency. (#35)
 
 ### Changed
 
