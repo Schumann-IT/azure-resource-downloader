@@ -1,0 +1,103 @@
+{
+  "@odata.type": "#microsoft.graph.win32LobApp",
+  "id": "a1b2c3d4-0000-4000-8000-000000000005",
+  "displayName": "Example Agent 5.2",
+  "description": "Endpoint agent",
+  "publisher": "Example Corp",
+  "largeIcon": null,
+  "createdDateTime": "2025-04-01T00:00:00Z",
+  "lastModifiedDateTime": "2026-04-01T13:14:15.999Z",
+  "isFeatured": false,
+  "privacyInformationUrl": "",
+  "informationUrl": "https://www.example.com/agent",
+  "owner": "",
+  "developer": "",
+  "notes": "",
+  "uploadState": 1,
+  "publishingState": "published",
+  "isAssigned": true,
+  "roleScopeTagIds": ["0"],
+  "dependentAppCount": 0,
+  "supersedingAppCount": 0,
+  "supersededAppCount": 0,
+  "committedContentVersion": "1",
+  "fileName": "ExampleAgent.intunewin",
+  "size": 52428800,
+  "installCommandLine": "setup.exe /quiet",
+  "uninstallCommandLine": "setup.exe /uninstall /quiet",
+  "applicableArchitectures": "x86,x64",
+  "allowedArchitectures": null,
+  "minimumFreeDiskSpaceInMB": null,
+  "minimumMemoryInMB": 4096,
+  "minimumNumberOfProcessors": null,
+  "minimumCpuSpeedInMHz": null,
+  "setupFilePath": "setup.exe",
+  "minimumSupportedWindowsRelease": "1607",
+  "displayVersion": "5.2.0",
+  "allowAvailableUninstall": true,
+  "goldenUnknownProperty": ["z", "a"],
+  "minimumSupportedOperatingSystem": {
+    "v8_0": false,
+    "v10_0": false,
+    "v10_1607": true,
+    "v10_21H1": false
+  },
+  "rules": [
+    {
+      "@odata.type": "#microsoft.graph.win32LobAppRegistryRule",
+      "ruleType": "detection",
+      "check32BitOn64System": false,
+      "keyPath": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Example\\Agent",
+      "valueName": "Version",
+      "operationType": "version",
+      "operator": "greaterThanOrEqual",
+      "comparisonValue": "5.2.0"
+    },
+    {
+      "@odata.type": "#microsoft.graph.win32LobAppFileSystemRule",
+      "ruleType": "requirement",
+      "path": "C:\\Program Files\\Example",
+      "fileOrFolderName": "agent.exe",
+      "check32BitOn64System": false,
+      "operationType": "exists",
+      "operator": "notConfigured",
+      "comparisonValue": null
+    }
+  ],
+  "installExperience": {
+    "runAsAccount": "system",
+    "maxRunTimeInMinutes": 60,
+    "deviceRestartBehavior": "basedOnReturnCode"
+  },
+  "returnCodes": [
+    {"returnCode": 0, "type": "success"},
+    {"returnCode": 3010, "type": "softReboot"},
+    {"returnCode": 1618, "type": "retry"}
+  ],
+  "msiInformation": null,
+  "assignments": [
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000005_0_0",
+      "intent": "required",
+      "source": "direct",
+      "sourceId": null,
+      "target": {
+        "@odata.type": "#microsoft.graph.allLicensedUsersAssignmentTarget",
+        "deviceAndAppManagementAssignmentFilterId": null,
+        "deviceAndAppManagementAssignmentFilterType": "none"
+      },
+      "settings": {
+        "@odata.type": "#microsoft.graph.win32LobAppAssignmentSettings",
+        "notifications": "showReboot",
+        "deliveryOptimizationPriority": "foreground",
+        "restartSettings": {
+          "gracePeriodInMinutes": 1440,
+          "countdownDisplayBeforeRestartInMinutes": 15,
+          "restartNotificationSnoozeDurationInMinutes": 240
+        },
+        "installTimeSettings": null,
+        "autoUpdateSettings": null
+      }
+    }
+  ]
+}

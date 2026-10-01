@@ -1,4 +1,4 @@
-.PHONY: build install clean test test-race test-coverage test-scripts run help lint lint-check fmt fmt-check deps check ci loc release-ready branch-ready branch-ready-report start-item
+.PHONY: build install clean test test-race test-coverage test-scripts golden-update run help lint lint-check fmt fmt-check deps deps-update check ci loc release-ready branch-ready branch-ready-report start-item
 
 # Binary name
 BINARY_NAME=azure-rd
@@ -56,6 +56,15 @@ test-race:
 	@echo "🏁 Running tests with race detector..."
 	@$(GOTEST) -race ./...
 
+# Rewrite the golden files of the exported-YAML golden test
+# (internal/pipeline/testdata/golden/*.golden.yaml) from the current code and
+# dependencies instead of comparing against them. A deliberate step: review the
+# diff before committing it. `make test` and CI never set UPDATE_GOLDEN.
+golden-update:
+	@echo "✨ Rewriting golden files..."
+	@UPDATE_GOLDEN=1 $(GOTEST) ./internal/pipeline/
+	@echo "✅ Golden files rewritten — review the diff before committing"
+
 # Run tests with coverage
 test-coverage:
 	@echo "🧪 Running tests with coverage..."
@@ -69,6 +78,21 @@ deps:
 	@$(GOMOD) download
 	@$(GOMOD) tidy
 	@echo "✅ Dependencies updated"
+
+# Update the named modules to their newest minor/patch release, then tidy. The
+# one sanctioned way to upgrade a dependency (raw `go get` is off-limits). Run
+# `make test` afterwards: the golden test in internal/pipeline proves the
+# update leaves the exported YAML byte-identical.
+# Usage: make deps-update MODULES="github.com/spf13/cobra github.com/spf13/viper"
+deps-update:
+	@if [ -z "$(MODULES)" ]; then \
+		echo "❌ MODULES is empty — usage: make deps-update MODULES=\"<module path> [<module path> ...]\"" >&2; \
+		exit 1; \
+	fi
+	@echo "⬆️  Updating $(MODULES)..."
+	@$(GOCMD) get -u $(MODULES)
+	@$(GOMOD) tidy
+	@echo "✅ Modules updated — run 'make test' to prove the exported YAML is unchanged"
 
 # Run the application with example args
 run:
@@ -197,6 +221,8 @@ help:
 	@echo "  make test-coverage  - Run tests with coverage report"
 	@echo "  make test-scripts   - Test the readers behind the readiness reports and the start gate"
 	@echo "  make deps           - Download and tidy dependencies"
+	@echo "  make deps-update MODULES=\"<paths>\" - Update the named modules (go get -u), then tidy"
+	@echo "  make golden-update  - Rewrite the exported-YAML golden files (review the diff before committing)"
 	@echo "  make run            - Run the application"
 	@echo "  make fmt            - Format code (rewrites files)"
 	@echo "  make fmt-check      - Report unformatted files without rewriting them"

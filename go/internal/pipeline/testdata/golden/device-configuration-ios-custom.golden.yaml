@@ -1,0 +1,29 @@
+'@odata.type': '#microsoft.graph.iosCustomConfiguration'
+assignments:
+    - id: a1b2c3d4-0000-4000-8000-000000000004_1
+      intent: apply
+      source: direct
+      target:
+        '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget'
+        deviceAndAppManagementAssignmentFilterType: none
+createdDateTime: "2025-09-09T09:09:09Z"
+description: Corporate Wi-Fi profile
+displayName: iOS - Corporate Wi-Fi
+goldenUnknownProperty: kept in additionalData
+id: a1b2c3d4-0000-4000-8000-000000000004
+lastModifiedDateTime: "2026-03-10T07:05:00Z"
+payload: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <plist version="1.0">
+    <dict>
+      <key>PayloadDisplayName</key>
+      <string>Contoso Wi-Fi</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+    </plist>
+payloadFileName: wifi.mobileconfig
+payloadName: Contoso Wi-Fi
+roleScopeTagIds:
+    - "0"
+version: 3

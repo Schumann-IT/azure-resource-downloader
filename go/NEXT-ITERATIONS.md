@@ -260,7 +260,7 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
 
 **Plan.**
 
-- Golden test first, on the current versions: `internal/pipeline/golden_test.go`, package `pipeline`, so it runs
+- ~~Golden test first, on the current versions: `internal/pipeline/golden_test.go`, package `pipeline`, so it runs
   the production transform stage rather than a copy of it. Setup: `handlers.NewRegistry(<test-local fake
   azcore.TokenCredential>, "00000000-0000-0000-0000-000000000000", false)` — the production registry, whose
   construction builds the Graph clients and so registers the SDK's JSON parse-node factory with the backing store
@@ -271,8 +271,8 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
   fixture → factory (no parse hook is added to the handlers). Then `transformResource(&models.FetchResult{…,
   RawData: parsed})` must succeed and `MarshalResourceYAML(result.CleanedData)` must equal the checked-in
   `<case>.golden.yaml` byte for byte; on mismatch the failure names the case and the first differing line. Runs in
-  `make test`, offline.
-- Fixtures under `internal/pipeline/testdata/golden/`: `<case>.json` + `<case>.golden.yaml`, synthetic only
+  `make test`, offline.~~
+- ~~Fixtures under `internal/pipeline/testdata/golden/`: `<case>.json` + `<case>.golden.yaml`, synthetic only
   (made-up GUIDs, names and domains, no tenant data). Cases: a conditional access policy (v1.0; conditions, grant
   and session controls), a group (v1.0; unsorted `proxyAddresses`), a settings-catalog policy
   (`deviceManagementConfigurationPolicies`, beta) with expanded `settings` holding nested choice and
@@ -280,17 +280,17 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
   (e.g. `#microsoft.graph.iosCustomConfiguration`), and a `mobileApps` subtype with `assignments` (e.g.
   `#microsoft.graph.win32LobApp`). Across the set the fixtures exercise an `@odata.type` discriminator, a
   `DateTimeOffset`, an enum and a flags enum, an explicit `null`, an integer, a property unknown to the model (lands
-  in `AdditionalData`) and nested collections.
-- Golden regeneration is a deliberate manual step: a missing golden file fails the test (never auto-created); with
+  in `AdditionalData`) and nested collections.~~
+- ~~Golden regeneration is a deliberate manual step: a missing golden file fails the test (never auto-created); with
   `UPDATE_GOLDEN=1` set the test rewrites the golden files instead of comparing. New `go/Makefile` target
   `golden-update` runs the `internal/pipeline` tests with `UPDATE_GOLDEN=1` and is listed in `make help`; `make test`
-  and CI never set it.
-- New `go/Makefile` target `deps-update`: refuses with a usage message when `MODULES` is empty, otherwise runs
+  and CI never set it.~~
+- ~~New `go/Makefile` target `deps-update`: refuses with a usage message when `MODULES` is empty, otherwise runs
   `$(GOCMD) get -u $(MODULES)` and then `$(GOMOD) tidy`; listed in `make help`. It is how the update below runs
   (raw `go get` is off-limits; `make -C go …` is on the agents' allow list and the agent guard does not block it).
   It needs network to `proxy.golang.org`, which was reachable from the agent sandbox at review time; if it is not,
-  report it under *Could not do* and the session runs the same targets.
-- The update, one module group at a time, each followed by `make -C go test` and `make -C go build`: Azure SDK
+  report it under *Could not do* and the session runs the same targets.~~
+- ~~The update, one module group at a time, each followed by `make -C go test` and `make -C go build`: Azure SDK
   (`azcore`, `azidentity`, `azlogs`, `armcompute/v5`, `armresources`, `armsubscriptions`, `armstorage`),
   Graph/Kiota (`msgraph-sdk-go`, `msgraph-beta-sdk-go` and every direct `kiota-*` / `msgraph-sdk-go-core`
   requirement in `go.mod`), CLI libraries (`cobra`, `pflag`, `viper`, `charmbracelet/log`, `yaml.v3`), each via
@@ -298,29 +298,33 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
   must stay `1.26.x`. A module whose bump changes a golden file or needs a newer Go minor is held back: restore its
   previous version in `go.mod` by hand (git writes are blocked), run `make -C go deps`, rerun the group without it,
   and add an unstruck follow-up bullet to this entry naming the module, the version tried and the golden case that
-  changed with its first differing lines. API breaks are fixed at their call sites, with tests.
-- Investigation, no code change, offline: for each beta endpoint the handlers call (the `msgraphbeta` request
+  changed with its first differing lines. API breaks are fixed at their call sites, with tests.~~
+- Follow-up: `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (`v0.4.0`) is a direct requirement in `go.mod`
+  but was not in the Azure SDK group above, so it was not updated; run
+  `make -C go deps-update MODULES="github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache"`, then `make -C go test` and
+  `make -C go build` (the golden files must stay byte-identical).
+- ~~Investigation, no code change, offline: for each beta endpoint the handlers call (the `msgraphbeta` request
   builders in `internal/handlers/graph/`), check whether the updated v1.0 SDK in the module cache (default
   `~/go/pkg/mod/github.com/microsoftgraph/msgraph-sdk-go@<version>/`) has the matching request builder and model —
   the v1.0 SDK is generated from the v1.0 OpenAPI description, so it is the evidence; a Microsoft Learn cross-check
   is optional and the session's (the implementer has no web tool). Conclude which consolidation direction is viable —
   drop v1.0 (seven handlers to beta), drop beta (only if every Intune endpoint exists on v1.0), or neither — and
   write the dated result, with a compact endpoint → v1.0 yes/no list, into the parked idea *consolidate on one
-  Microsoft Graph SDK* as its revisit evidence.
-- `.github/dependabot.yml` (`version: 2`), three `updates` entries, each with `schedule.interval: weekly` and one
+  Microsoft Graph SDK* as its revisit evidence.~~
+- ~~`.github/dependabot.yml` (`version: 2`), three `updates` entries, each with `schedule.interval: weekly` and one
   `groups` entry with `patterns: ["*"]`, so version updates arrive as one pull request per ecosystem: `gomod` on
   `/go` with `commit-message.prefix: "build(go)"`, `npm` on `/web` with `"build(web)"`, `github-actions` on `/` with
   `"ci"`; no `include: scope` (it would write `build(go)(deps):`, which the gates refuse). Every module held back
   above gets an `ignore` entry (`dependency-name`) with a comment naming its follow-up bullet, so the grouped pull
-  request is not permanently red. Resulting subjects: `build(go): bump …`, `build(web): bump …`, `ci: bump …`.
-- Dependency-only exemption in the go gate: `scripts/lib/branch.sh` gains `dependency_only <base>`, which succeeds
+  request is not permanently red. Resulting subjects: `build(go): bump …`, `build(web): bump …`, `ci: bump …`.~~
+- ~~Dependency-only exemption in the go gate: `scripts/lib/branch.sh` gains `dependency_only <base>`, which succeeds
   when `git diff --name-only --relative "$base" HEAD -- .` (run from `go/`; without `--relative` git prints
   repository-root paths) is non-empty and every line is `go.mod` or `go.sum`. In the gate script's check 5, when
   `backlog_state` is empty and `dependency_only` holds, report `ok "dependency-only branch: backlog check not
   required"` instead of the failure; checks 1–4, 6 and 7 stay unchanged. Tests in `scripts/lib/branch_test.sh`
   (`make -C go test-scripts`): `go.mod` + `go.sum` → dependency-only; `go.sum` alone → dependency-only; `go.mod` + a
   `.go` file → not (and `backlog_state` empty, so the gate fails as before); `go.mod` + `NEXT-ITERATIONS.md` → not
-  (`backlog_state` is `changed`); a change only outside `go/` (`.github/dependabot.yml`) → not.
+  (`backlog_state` is `changed`); a change only outside `go/` (`.github/dependabot.yml`) → not.~~
 - Stale Go version (documentation, at *done*): `go/README.md` and the root `README.md` say Go 1.26+ (from
   `go.mod`); drop the mismatch note in the root `CLAUDE.md`.
 - Rules wording (documentation, at *done*): the root `CLAUDE.md` gates paragraph, `.claude/rules/next-iterations.md`
@@ -381,6 +385,32 @@ regenerates their documents; dropping beta instead is only possible once every I
 time becomes a felt cost, or a security advisory forces an SDK change anyway. **Regeneration-gated** when picked up:
 batch it with a scheduled regeneration; move the handlers one at a time, each proven with the golden test, and drop
 the module only at the end.
+
+**Evidence (2026-10-01, `msgraph-sdk-go v1.103.0`, `msgraph-beta-sdk-go v0.166.0`, read from the module cache —
+request builders only; a Microsoft Learn cross-check is still open).** *Drop beta* is **not viable**: 21 of the beta
+endpoints the handlers call have no v1.0 request builder, among them the Settings Catalog. *Drop v1.0* is
+**technically viable**: all seven v1.0 endpoints (`identity/conditionalAccess/policies`,
+`policies/authenticationStrengthPolicies`, `policies/authenticationMethodsPolicy`, `policies/authorizationPolicy`,
+`directory/onPremisesSynchronization`, `groups`, `organization`) exist on beta, and beta has its own `odataerrors`
+for `GraphErrorCode`; the cost stays the one stated above (beta churn, one YAML/hash move per type). Beta endpoint →
+on v1.0:
+- `deviceManagement`: `applePushNotificationCertificate` yes; `appleUserInitiatedEnrollmentProfiles` no;
+  `assignmentFilters` no; `compliancePolicies` no; `configurationPolicies` no; `depOnboardingSettings` no;
+  `deviceCategories` yes; `deviceCompliancePolicies` yes (+ assignments); `deviceComplianceScripts` no;
+  `deviceConfigurations` yes (+ assignments, `getOmaSettingPlainTextValue`); `deviceCustomAttributeShellScripts` no;
+  `deviceEnrollmentConfigurations` yes (+ assignments); `deviceHealthScripts` no; `deviceManagementScripts` no;
+  `deviceShellScripts` no; `groupPolicyConfigurations` no; `intents` no; `intuneBrandingProfiles` no;
+  `mobileThreatDefenseConnectors` yes; `ndesConnectors` no; `notificationMessageTemplates` yes;
+  `reusablePolicySettings` no; `roleDefinitions` yes; `roleScopeTags` no; `termsAndConditions` yes (+ assignments);
+  `windowsAutopilotDeploymentProfiles` no; `windowsAutopilotDeviceIdentities` yes; `windowsDriverUpdateProfiles` no;
+  `windowsFeatureUpdateProfiles` no; `windowsQualityUpdateProfiles` no; the `deviceManagement` singleton (settings)
+  yes.
+- `deviceAppManagement` (each with its assignments where the handler reads them): `androidManagedAppProtections`,
+  `iosManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `mobileAppConfigurations`, `mobileApps`,
+  `targetedManagedAppConfigurations`, `vppTokens`, `windowsInformationProtectionPolicies` yes;
+  `windowsManagedAppProtections` no.
+- `identity/conditionalAccess/namedLocations` yes; `identityGovernance/termsOfUse/agreements` yes;
+  `organization` and `organization/{id}/branding` yes.
 
 ### Idea: per-finding severity in document `Security` sections
 

@@ -26,3 +26,15 @@ backlog_state() {
     echo "delivered $n"
   fi
 }
+
+# dependency_only <base> — succeeds when the branch changed something under go/
+# and every changed path under go/ between <base> and HEAD is go.mod or go.sum
+# (a Dependabot or manual dependency update). Paths outside go/ count neither
+# way. --relative prints the paths relative to go/; without it git prints
+# repository-root paths.
+dependency_only() {
+  local changed
+  changed=$(git diff --name-only --relative "$1" HEAD -- .)
+  [[ -n "$changed" ]] || return 1
+  ! grep -qvxE 'go\.(mod|sum)' <<<"$changed"
+}

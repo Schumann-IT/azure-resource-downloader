@@ -1,0 +1,33 @@
+{
+  "@odata.type": "#microsoft.graph.group",
+  "id": "a1b2c3d4-0000-4000-8000-000000000002",
+  "deletedDateTime": null,
+  "classification": null,
+  "createdDateTime": "2024-11-02T10:00:00Z",
+  "description": "All sales staff (dynamic)",
+  "displayName": "Sales - All Staff",
+  "expirationDateTime": null,
+  "groupTypes": ["Unified", "DynamicMembership"],
+  "isAssignableToRole": null,
+  "mail": "sales-all@example.com",
+  "mailEnabled": true,
+  "mailNickname": "sales-all",
+  "membershipRule": "(user.department -eq \"Sales\")",
+  "membershipRuleProcessingState": "On",
+  "onPremisesSyncEnabled": null,
+  "proxyAddresses": [
+    "smtp:sales-all@example.onmicrosoft.com",
+    "SMTP:sales-all@example.com",
+    "smtp:sales@example.com"
+  ],
+  "renewedDateTime": "2024-11-02T10:00:00Z",
+  "resourceBehaviorOptions": [],
+  "resourceProvisioningOptions": ["Team"],
+  "securityEnabled": false,
+  "securityIdentifier": "S-1-12-1-1111111111-2222222222-3333333333-4444444444",
+  "theme": null,
+  "visibility": "Private",
+  "goldenUnknownProperty": {"nested": [3, 1, 2], "flag": true},
+  "onPremisesProvisioningErrors": [],
+  "serviceProvisioningErrors": []
+}

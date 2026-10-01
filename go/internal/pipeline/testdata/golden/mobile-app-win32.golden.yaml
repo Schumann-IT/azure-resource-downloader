@@ -1,0 +1,70 @@
+'@odata.type': '#microsoft.graph.win32LobApp'
+allowAvailableUninstall: true
+applicableArchitectures: x86,x64
+assignments:
+    - id: a1b2c3d4-0000-4000-8000-000000000005_0_0
+      intent: required
+      settings:
+        '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings'
+        deliveryOptimizationPriority: foreground
+        notifications: showReboot
+        restartSettings:
+            countdownDisplayBeforeRestartInMinutes: 15
+            gracePeriodInMinutes: 1440
+            restartNotificationSnoozeDurationInMinutes: 240
+      source: direct
+      target:
+        '@odata.type': '#microsoft.graph.allLicensedUsersAssignmentTarget'
+        deviceAndAppManagementAssignmentFilterType: none
+committedContentVersion: "1"
+description: Endpoint agent
+displayName: Example Agent 5.2
+displayVersion: 5.2.0
+fileName: ExampleAgent.intunewin
+goldenUnknownProperty:
+    - a
+    - z
+id: a1b2c3d4-0000-4000-8000-000000000005
+informationUrl: https://www.example.com/agent
+installCommandLine: setup.exe /quiet
+installExperience:
+    deviceRestartBehavior: basedOnReturnCode
+    maxRunTimeInMinutes: 60
+    runAsAccount: system
+isFeatured: false
+minimumMemoryInMB: 4096
+minimumSupportedOperatingSystem:
+    v8_0: false
+    v10_0: false
+    v10_21H1: false
+    v10_1607: true
+minimumSupportedWindowsRelease: "1607"
+publisher: Example Corp
+publishingState: published
+returnCodes:
+    - returnCode: 0
+      type: success
+    - returnCode: 3010
+      type: softReboot
+    - returnCode: 1618
+      type: retry
+roleScopeTagIds:
+    - "0"
+rules:
+    - '@odata.type': '#microsoft.graph.win32LobAppRegistryRule'
+      check32BitOn64System: false
+      comparisonValue: 5.2.0
+      keyPath: HKEY_LOCAL_MACHINE\SOFTWARE\Example\Agent
+      operationType: version
+      operator: greaterThanOrEqual
+      ruleType: detection
+      valueName: Version
+    - '@odata.type': '#microsoft.graph.win32LobAppFileSystemRule'
+      check32BitOn64System: false
+      fileOrFolderName: agent.exe
+      operationType: exists
+      operator: notConfigured
+      path: C:\Program Files\Example
+      ruleType: requirement
+setupFilePath: setup.exe
+uninstallCommandLine: setup.exe /uninstall /quiet

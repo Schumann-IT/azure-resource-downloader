@@ -1,0 +1,29 @@
+'@odata.type': '#microsoft.graph.group'
+createdDateTime: "2024-11-02T10:00:00Z"
+description: All sales staff (dynamic)
+displayName: Sales - All Staff
+goldenUnknownProperty:
+    flag: true
+    nested:
+        - 3
+        - 1
+        - 2
+groupTypes:
+    - DynamicMembership
+    - Unified
+id: a1b2c3d4-0000-4000-8000-000000000002
+mail: sales-all@example.com
+mailEnabled: true
+mailNickname: sales-all
+membershipRule: (user.department -eq "Sales")
+membershipRuleProcessingState: "On"
+proxyAddresses:
+    - SMTP:sales-all@example.com
+    - smtp:sales-all@example.onmicrosoft.com
+    - smtp:sales@example.com
+renewedDateTime: "2024-11-02T10:00:00Z"
+resourceProvisioningOptions:
+    - Team
+securityEnabled: false
+securityIdentifier: S-1-12-1-1111111111-2222222222-3333333333-4444444444
+visibility: Private

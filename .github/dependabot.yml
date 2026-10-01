@@ -1,0 +1,43 @@
+# Dependabot version updates: one grouped pull request per ecosystem per week.
+#
+# The commit-message prefixes produce Conventional Commits subjects the branch
+# gates accept as they are — `build(go): bump …`, `build(web): bump …`,
+# `ci: bump …`. Do not add `include: scope`: it would write `build(go)(deps): …`,
+# which the gates refuse. A branch that changes only go/go.mod and go/go.sum
+# (or web/package.json and web/package-lock.json) is dependency-only and needs
+# no backlog entry; ci-go / ci-web and the golden test prove it.
+#
+# A module held back because its update changes the exported YAML gets an
+# `ignore` entry naming its follow-up in go/NEXT-ITERATIONS.md, so the grouped
+# pull request does not stay red. None is held back today.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /go
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(go)"
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(web)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"

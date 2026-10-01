@@ -120,11 +120,20 @@ else
     #    or adds an entry. A small fix still gets a small entry. An entry planned
     #    and archived on the same branch leaves the backlog identical to the
     #    base, so an archived entry (the archive file is the evidence) counts too.
+    #    The one exception is a dependency-only branch (only go.mod / go.sum
+    #    changed under go/, e.g. a Dependabot update): ci-go and the golden test
+    #    prove it, so it needs no backlog entry.
     state=$(backlog_state "$base")
     case "$state" in
       changed) ok "$next changed on this branch" ;;
       delivered\ *) ok "$next delivered on this branch (${state#delivered } archived entry(ies))" ;;
-      *) fail "$next is unchanged on this branch — every branch that changes go/ delivers, refines or adds an entry (a small fix still gets a small entry)" ;;
+      *)
+        if dependency_only "$base"; then
+          ok "dependency-only branch: backlog check not required"
+        else
+          fail "$next is unchanged on this branch — every branch that changes go/ delivers, refines or adds an entry (a small fix still gets a small entry)"
+        fi
+        ;;
     esac
 
     # 6. Every commit on the branch follows Conventional Commits (the squash
