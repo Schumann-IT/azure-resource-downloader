@@ -15,6 +15,11 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Release workflow
 
+- **Documentation prompts are pinned byte for byte.** `make test` now also compares every type's assembled
+  documentation prompt with a checked-in golden file, so a template or metadata change that would move
+  `promptSha256` — and force a documentation regeneration — can no longer happen by accident: it fails until
+  the golden files are updated deliberately with `make golden-update`. The prompt templates now share their
+  common blocks; no prompt changed, so **no regeneration is needed**.
 - **Dependency updates are proposed every week and proven byte-neutral.** Dependabot opens one grouped pull
   request per week for the Go modules (`build(go): …`), the web packages (`build(web): …`) and the GitHub
   Actions (`ci: …`). A new offline golden test runs synthetic Graph responses through the production parse,

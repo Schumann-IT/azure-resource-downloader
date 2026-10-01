@@ -1455,7 +1455,7 @@ make check           # fmt-check + lint-check + test + test-scripts — modifies
 make ci              # check + build (the default goal)
 make deps            # download + tidy
 make deps-update MODULES="<module paths>"  # go get -u the named modules, then tidy
-make golden-update   # rewrite the exported-YAML golden files on purpose — review the diff before committing
+make golden-update   # rewrite the exported-YAML and documentation-prompt golden files on purpose — review the diff before committing
 make test-coverage   # coverage.html
 make test-scripts    # tests for the readers behind the readiness reports and the start gate
 make start-item N=2  # gate: may entry 2 of NEXT-ITERATIONS.md be implemented? (branch, clean tree, entry committed, plan open)
@@ -1470,6 +1470,12 @@ through the production parse, transform and YAML path and must match the checked
 byte. A Graph SDK, Kiota or YAML update that would change exported bytes — and so move `sourceSha256` for
 resources that did not change in the tenant — fails here, offline, in CI. Accepting such a change is a
 deliberate `make golden-update` plus a reviewed diff, and belongs with a documentation regeneration.
+The same test pins every registered type's assembled documentation prompt
+(`internal/pipeline/testdata/golden/prompts/<resource type>/doc-prompt.md`, the bytes hashed into
+`promptSha256`): a template or per-type metadata change that would force a regeneration fails `make test`
+until its golden files are updated in the same diff, so every prompt change is explicit and reviewable. The
+templates share their repeated blocks (header, reference links, rules, closed-set paragraph) through
+`internal/models/prompt_partials.tmpl`, so such a change is made in one place.
 Dependabot (`.github/dependabot.yml`) proposes one grouped pull request per week with the **minor and patch**
 updates (`build(go): …`); a **major** version arrives as its own single-dependency pull request with the same
 prefix and is merged only when green — otherwise it is closed and, if wanted, planned as an entry.
