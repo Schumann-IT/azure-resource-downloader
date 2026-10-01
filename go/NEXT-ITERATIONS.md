@@ -7,28 +7,229 @@ review while `CHANGELOG.md` records the what and why. Ideas that are deliberatel
 *Parked ideas* at the end, so they persist as the entries around them ship. `README.md` stays the single source
 of truth for what the tool *does today*.
 
+## 1. Treat unconfigured organizational branding as empty, and keep why a type could not be listed
+
+**Goal.** `Microsoft.Graph/organizationalBranding` is listed as "could not be listed" in every run of both
+reference tenants, which marks every export and every drift run **incomplete**. A tenant without a configured
+default branding must export as *empty*, and whenever a type really cannot be listed, the reason must survive
+the run instead of being lost after one debug line.
+
+> **Why.** `organization` exports fine with the same token, so `Organization.Read.All` is present. The branding
+> handler assumes Graph answers an empty body when no branding is configured
+> (`internal/handlers/graph/organizationalbranding.go:21-25, :59-75`); Graph documents a **404** for that case.
+> Every listing error lands in the "could not be listed" path (`internal/handlers/requests.go:115-123`) with a hint
+> that blames the permission; `azure.ErrorSummary` extracts no HTTP status from Graph SDK errors
+> (`internal/azure/errors.go:65-105`); and `notListed` keeps type names only (`internal/docs/metadata.go:159-163`),
+> so the real error was never visible. Diagnosis confidence is medium until the debug run below: a 403 (consent
+> for `OrganizationalBranding.Read.All` missing) would produce the same symptom.
+>
+> Not regeneration-gated. Independent of the other entries; can ship first.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- **User action, first:** run `./azure-rd resource download --type Microsoft.Graph/organizationalBranding --debug`
+  against one reference tenant and record the status and error code of the "Listing failed" line in this entry.
+  A **403** turns the remaining bullets into a consent/README fix; a **404 / `ResourceNotFound`** confirms them.
+- Branding handler: a 404 from `GET /organization/{id}/branding` (list and fetch) means "no default branding
+  configured" — no IDs, so the type is recorded as *empty*, not *not listed*. Correct the code comment.
+- `azure.ErrorSummary`: extract the HTTP status and Graph error code from Graph SDK (`odataerrors`) errors; the
+  per-handler permission hint is appended only for a 401/403.
+- `resources/metadata.yaml`: `notListed` records a per-type `reason` (the error summary) — a fact of the run,
+  deterministic for the same error. Check that the browser's `resources/metadata.yaml` reader
+  (`web/src/docs/resources-metadata.ts`) tolerates the new key (read-only check; no web change expected).
+- Tests: the branding handler with a fake 404 (→ empty) and 403 (→ not listed with reason); `ErrorSummary` with a
+  Graph error; metadata round-trip of `notListed` with reasons.
+- Documentation at *done*: `README.md` (the branding row's "no file when unconfigured" note, troubleshooting a
+  not-listed type) and a `CHANGELOG.md` `### Fixed` entry.
+
+## 2. Shared prompt partials, without changing a byte
+
+**Goal.** The seven documentation prompt templates repeat the same blocks six or seven times (header, reference
+links, `<details>` rules, redaction rule, closed-set paragraph), and they have already drifted apart (the group
+template renders only one link). Move the shared text into partials so later template work changes one place —
+while proving that this refactor moves no `promptSha256` and therefore forces no regeneration.
+
+> **Why first.** The two regeneration-gated entries below (per-handler metadata, template content) both edit the
+> shared blocks; doing it once in partials keeps them small and consistent. The golden test this entry adds is
+> what makes their intended hash moves explicit and reviewable.
+>
+> **Not regeneration-gated** by construction: the rendered bytes stay identical, which the golden test proves.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- Move the duplicated blocks of `internal/models/documentation_prompt.tmpl` and the overrides
+  (`internal/handlers/graph/*_prompt.tmpl`, `internal/handlers/arm/arm_prompt.tmpl`) into `{{define}}` partials,
+  parsed together with each template in `parsePromptTemplate` (`internal/models/documentation.go:82`). Per-type
+  differences (persona, layout, section bodies, `doc-headings`) stay in each template.
+- A golden test over every handler registered by `NewRegistry` pins the assembled `doc-prompt.md` bytes (or their
+  SHA-256) per type, captured before the refactor; the refactor must leave all of them unchanged. The golden file
+  stays, so a later deliberate change updates it in the same diff.
+- Documentation at *done*: none in `README.md` (no user-visible change). `CHANGELOG.md`: nothing of its own — but
+  the branch gate refuses an entry archived as done unless `[Unreleased]` grew on the branch, so close it on the
+  same branch as a regeneration-gated entry whose changelog line covers it, or add one line under the release
+  workflow area.
+
+## 3. Correct and complete the per-handler documentation metadata
+
+**Goal.** Every handler's `models.ResourceDocumentation` is accurate and complete: the right read permission, an
+API reference for the API version the handler actually calls, a link to the permissions page, a deep link to the
+admin center blade where the resource is managed, and type-specific best-practice links — guarded by a test so
+it cannot silently decay again.
+
+> **Review findings (2026-10-01, 51 handlers).** `EndpointDocs` is set everywhere; `BestPractices` on 7;
+> `SchemaReference` and `Links.Permissions` on none; there is no admin-center link kind. `namedLocations`
+> (`namedlocation.go:33`) and `termsOfUseAgreements` (`termsofuseagreement.go:32`) link `?view=graph-rest-1.0`
+> but call the beta client. `deviceManagement` (`devicemanagementsettings.go:47`) links the
+> `deviceManagementSettings` complex type, not the root entity it exports. `mobileThreatDefenseConnectors`
+> (`mobilethreatdefenseconnector.go:30`) and `intuneBrandingProfiles` (`intunebrandingprofile.go:28`) declare
+> scopes Microsoft's "Get" pages do not list (`DeviceManagementServiceConfig.Read.All` is documented). All
+> `mem/intune/...` links use the retired path; the best-practice URLs are generic and duplicated across types.
+>
+> **Runtime effect, not only docs.** `RequiredPermissions` feeds the dedicated-app scope message
+> (`internal/handlers/registry.go:100-116`, `internal/runprep/runprep.go:178`) and the audit routing
+> (`internal/audit/route.go`), so the two permission fixes change what an operator is told to consent.
+>
+> **Decision.** Link kinds: fill the existing `Links.Permissions` on every handler and add a new
+> `Links.AdminCenter`; no PowerShell link.
+>
+> **Regeneration-gated.** Every changed value moves the type's `promptSha256`. Batch with *Template content fixes
+> and a Conditional Access template* and *Run-prompt fixes and the `summary:` frontmatter line* so they share the
+> one scheduled regeneration. Depends on *Shared prompt partials* (the new link renders from the shared partial).
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- Permissions: `mobileThreatDefenseConnectors` and `intuneBrandingProfiles` → `DeviceManagementServiceConfig.Read.All`,
+  including their error-hint text; verify every other handler's `RequiredPermissions` against its Learn "Get"/"List"
+  page and correct what differs.
+- Links: `namedLocations`, `termsOfUseAgreements` → `?view=graph-rest-beta`; `deviceManagement` → the root
+  `deviceManagement` entity page (the settings complex type may stay as a second reference); every
+  `learn.microsoft.com/en-us/mem/intune/...` → its current `/intune/intune-service/...` path; `BestPractices` made
+  type-specific, generic duplicates removed rather than kept.
+- `Links.Permissions` on all handlers: the Learn page of the "Get"/"List" operation, which lists scopes and roles.
+- New `Links.AdminCenter` field (`internal/models/documentation.go`), rendered by the shared links partial as
+  "Admin center:" so every template shows it; set only where a stable Intune / Entra / Azure portal blade URL
+  exists, empty otherwise — never guessed.
+- Registry-wide test over `NewRegistry`: every handler has `EndpointDocs`, `RequiredPermissions` and
+  `Links.Permissions`; every link is `https://` on `learn.microsoft.com` or an allowed portal host
+  (`intune.microsoft.com`, `entra.microsoft.com`, `portal.azure.com`); a Graph link's `?view=` matches the SDK
+  client the handler uses (beta vs v1.0). Update the golden prompt test deliberately.
+- Documentation at *done*: `README.md` "Supported resource types" permissions column and the dedicated-app scope
+  list; `CHANGELOG.md` (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
+
+## 4. Template content fixes and a Conditional Access template
+
+**Goal.** The documentation prompts describe each type as it really is and stop inviting guesses: Conditional
+Access gets its own template built around its conditions, mismatched types get the right template, the shared
+rules are consistent, and the instructions that produced invented links, recommendations and boilerplate are
+replaced by evidence-bound ones — so the scheduled regeneration yields better documents, not just new ones.
+
+> **Review findings (2026-10-01, 7 templates, 411 generated documents in two tenants).** The heading contract and
+> frontmatter hold everywhere. Problems:
+> - *Fact mismatches.* Conditional Access uses the generic template's group-only assignments table although CA
+>   targets users, roles and apps through `conditions.*`; its 37 documents carry assignments markers that are
+>   never resolved or re-spliced. `roleScopeTags` has `hasAssignments: true` but gets the referenced template
+>   ("no assignments of its own"), so the block landed under an H2. `reusablePolicySettings` is a referenced
+>   object but gets the policy template.
+> - *Inconsistencies.* Six overrides say "assignment information belongs in the assignments block above" without
+>   having one; `KeySettings` lands in Settings, Security or Lifecycle depending on the template; the group
+>   template drops `SubtypeNote`, `RelatedTypes` and all links but `EndpointDocs`; the record template lacks the
+>   credential-redaction rule; the credential template's Lifecycle duplicates its Expiry section.
+> - *Guess- and boilerplate-inducing instructions.* A mandatory link per setting plus the "flag as approximate"
+>   escape (116 of 263 documents carry approximate URLs); a "recommended value" for every setting without a cited
+>   baseline; a forced review cadence (178 of 263); purpose inferred from names; "search sibling directories"
+>   prose the spliced *Targeted by* / *Used by* blocks have replaced.
+> - *Missing guidance.* Nothing tells the model what to do with `RequiredPermissions` (2 documents mention a
+>   scope); no change-role / least-privilege statement; assignment-table columns and intent unspecified (tables
+>   differ); dependencies (filters, scope tags, named locations, strengths) not asked for by ID with links; large
+>   settings-catalog payloads not grouped (largest document 2394 lines, ~27 H3s across 263 documents).
+>
+> **Decision.** Conditional Access: a dedicated template with a `Conditions` section (not a splice fix inside the
+> generic template).
+>
+> **Contract.** The new H2 is exactly `Conditions` (slug `conditions`); the web entry *Style the Conditional Access
+> `Conditions` section* adds it to the browser's section vocabulary. No other H2 is added or renamed.
+>
+> **Regeneration-gated.** Moves `promptSha256` for every type whose template changes (all but record types where
+> nothing changes). Batch with *Correct and complete the per-handler documentation metadata* and *Run-prompt fixes
+> and the `summary:` frontmatter line*; ship together with the web entry; depends on *Shared prompt partials*.
+>
+> **Implementer.** opus
+
+**Plan.**
+
+- New `internal/handlers/graph/conditional_access_prompt.tmpl` for `conditionalAccessPolicies`: targeting is
+  documented from `conditions.*` (users, groups, roles, applications, locations, platforms, client apps, risk) in a
+  `Conditions` section, with no group-only assignments block; IDs are resolved only through the existing reference
+  maps and an unresolved role or application id is stated as such, never named. `doc-headings: References |
+  Conditions | Lifecycle and operations | Security | Settings`. Check how the CA handler's `hasAssignments` and the
+  assignments splice interact so CA documents no longer carry unresolved markers.
+- Template selection: `reusablePolicySettings` → referenced template; `roleScopeTags` keeps the referenced template
+  but, having `hasAssignments: true`, gets the assignments block above the first H2 (a referenced-template variant
+  or a template flag, whichever keeps the partials simple).
+- Closed-set paragraph per template names only the blocks that template defines.
+- Consistency: `KeySettings` always in the settings-like section; group template gets the full header (links,
+  `SubtypeNote`, `RelatedTypes`); record template gets the redaction rule; credential Lifecycle drops what Expiry
+  and renewal covers.
+- Evidence-bound instructions: a reference link per setting only when a specific page is known, otherwise none —
+  no "approximate" links; the curated `Links` (incl. Admin center) must appear under References; a recommended
+  value only where a cited `BestPractices` baseline covers the setting; review cadence only for types with expiry or
+  renewal; the summary states purpose from the resource's own `description` and settings, or says it is not
+  documented — never inferred from the name; drop the "search sibling directories" usage prose in favour of the
+  spliced *Targeted by* / *Used by* blocks.
+- New guidance: Security names the read permission (`RequiredPermissions`) and the admin role needed to change the
+  resource (least privilege); assignment tables use the fixed columns `Direction | Target | Intent | Filter
+  (mode)`; referenced objects (assignment filters, scope tags, named locations, authentication strengths,
+  notification templates) are documented by id with a relative link to their document; large payloads are grouped
+  under H3s by category.
+- Tests: golden prompt test updated deliberately; template selection for CA, `roleScopeTags`,
+  `reusablePolicySettings`; the CA `doc-headings` line; existing per-template tests kept green.
+- Documentation at *done*: `README.md` (documentation section: the CA template and its `Conditions` section, the
+  templates' evidence rules); `CHANGELOG.md` `### Changed`, with **regenerate the documentation** in bold.
+
+## 5. Run-prompt fixes and the `summary:` frontmatter line
+
+**Goal.** The run prompt (`docs/generate.md`) agrees with the type templates, asks for the one frontmatter field the
+browser is still missing, and fixes link formatting — so the scheduled regeneration also lights up the sidebar's
+per-item context.
+
+> Promoted from the parked idea *emit `summary:` in the generated document frontmatter*: the plumbing is complete
+> on both sides (`docFrontmatter.Summary`, `GenerateIndex`, the browser's per-item context), the field is absent
+> from every document only because the template never asks for it, and the web idea *a name filter and per-item
+> context in the sidebar* waits on it. `platformGroup` / `functionGroup`, already required but empty in the
+> reference exports that predate them, fill in on the same regeneration.
+>
+> **Review findings (2026-10-01).** `generate_prompt_template.md:151-154` puts the source filename under the title
+> while every type template puts the summary there (only 201 of 263 documents carry the line);
+> `:143-145` says "a `Properties` or `Settings` section", forgetting `Definition`; documents mix bare URLs (~2800)
+> and Markdown links (~1400) and do not link sibling documents.
+>
+> **Regeneration-gated in effect.** `generate_prompt_template.md` is not hashed, but no existing document gets the
+> new frontmatter without regeneration. Batch with *Correct and complete the per-handler documentation metadata*
+> and *Template content fixes and a Conditional Access template*.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- `internal/docs/generate_prompt_template.md`: require `summary:` in the frontmatter — one sentence, taken from the
+  document's summary paragraph, plain text; Markdown links only, and relative links to sibling documents under
+  `docs/`; the source filename goes into the metadata table, not under the title; the settings-like section reads
+  "`Settings`, `Properties` or `Definition`"; the Python heading check includes the Conditional Access heading set.
+- Tests: the rendered `generate.md` contains the `summary:` rule and the CA heading set (existing generate-prompt
+  render tests).
+- Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
+  (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
 ship and are archived. Each records why it is parked and what would make it worth doing.
-
-### Idea: emit `summary:` in the generated document frontmatter
-
-The prompt template's *Frontmatter (required)* section lists `source`, `sourceSha256`, `promptSha256`,
-`platformGroup`, `functionGroup` and `generatedAt` — and never asks for `summary:`. The plumbing on both
-sides is complete: `docFrontmatter` has a `Summary` field, `GenerateIndex` copies it into each `index.yaml`
-resource, and the browser renders it as per-item context when present — so it is absent from every
-document by construction, not by model behaviour, and the web idea *a name filter and per-item context in
-the sidebar* is blocked on this one template line. **Not planned — parked deliberately**, because the change
-is **regeneration-gated**: the line itself rides `generate_prompt_template.md`, which is not hashed, but no
-existing document carries the field, so filling it means regenerating every document anyway. It must not
-ship alone.
-
-**Revisit when** a documentation regeneration is scheduled for another reason; fold it in with the other
-regeneration-gated ideas below (per-finding severity, taxonomy bootstrap) so they share one regeneration.
-When promoted: one frontmatter line plus its rule text in the template, and a note that `platformGroup` /
-`functionGroup` — already required by the template but empty in the reference exports, which predate it —
-fill in on the same regeneration with no further change.
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
