@@ -413,3 +413,141 @@ func TestPrunableKeysSelectsAbsentCoveredEntries(t *testing.T) {
 		t.Error("prunableKeys must refuse when the run had failures")
 	}
 }
+
+func TestNotListedReasonsRoundTrip(t *testing.T) {
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	metaPath := filepath.Join(resourcesDir, MetadataFileName)
+
+	// Out of order on purpose: the file must sort them.
+	skipped := []models.SkippedType{
+		{ResourceType: "Microsoft.Storage/storageAccounts", Reason: "no subscription available"},
+		{ResourceType: "Microsoft.Graph/conditionalAccessPolicies", Reason: "HTTP 403 Authorization_RequestDenied: failed to list policies: denied (hint: requires 'Policy.Read.All' permission in Microsoft Graph)"},
+	}
+	run := exportRun(output, newSummary(false, nil, []string{"Microsoft.Graph/organizationalBranding"}, skipped), RunScope{}, false)
+	if err := WriteExportMetadata(run); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	raw := string(data)
+	ca := strings.Index(raw, "        Microsoft.Graph/conditionalAccessPolicies: ")
+	st := strings.Index(raw, "        Microsoft.Storage/storageAccounts: no subscription available")
+	if !strings.Contains(raw, "    reasons:\n") || ca < 0 || st < 0 || ca > st {
+		t.Errorf("notListed.reasons must be written with sorted keys:\n%s", raw)
+	}
+
+	meta, err := loadMetadata(metaPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	wantTypes := []string{"Microsoft.Graph/conditionalAccessPolicies", "Microsoft.Storage/storageAccounts"}
+	if strings.Join(meta.NotListed.Types, ",") != strings.Join(wantTypes, ",") {
+		t.Errorf("notListed.types = %v, want %v", meta.NotListed.Types, wantTypes)
+	}
+	if len(meta.NotListed.Reasons) != len(skipped) {
+		t.Fatalf("notListed.reasons = %v, want one per skipped type", meta.NotListed.Reasons)
+	}
+	for _, st := range skipped {
+		if got := meta.NotListed.Reasons[st.ResourceType]; got != st.Reason {
+			t.Errorf("reason for %s = %q, want %q", st.ResourceType, got, st.Reason)
+		}
+	}
+	if len(meta.NotListed.Empty) != 1 || meta.NotListed.Empty[0] != "Microsoft.Graph/organizationalBranding" {
+		t.Errorf("notListed.empty = %v", meta.NotListed.Empty)
+	}
+}
+
+func TestNotListedReasonsEmptyWhenNothingFailed(t *testing.T) {
+	output := t.TempDir()
+	run := exportRun(output, newSummary(true, nil, []string{testType}, nil), RunScope{}, false)
+	if err := WriteExportMetadata(run); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(output, models.ResourcesDirName, MetadataFileName))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(data), "    reasons: {}\n") {
+		t.Errorf("notListed.reasons must be written as {} when nothing failed:\n%s", data)
+	}
+}
+
+func TestLoadMetadataWithoutReasons(t *testing.T) {
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	if err := os.MkdirAll(resourcesDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	metaPath := filepath.Join(resourcesDir, MetadataFileName)
+	old := "generatedAt: \"2026-01-01T00:00:00Z\"\ntenant: example.com\nnotListed:\n    types:\n        - " + testType + "\n    empty: []\n"
+	if err := os.WriteFile(metaPath, []byte(old), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	meta, err := loadMetadata(metaPath)
+	if err != nil {
+		t.Fatalf("an older file without notListed.reasons must load: %v", err)
+	}
+	if meta.NotListed.Reasons == nil || len(meta.NotListed.Reasons) != 0 {
+		t.Errorf("missing reasons must read as an empty map, got %#v", meta.NotListed.Reasons)
+	}
+	if len(meta.NotListed.Types) != 1 || meta.NotListed.Types[0] != testType {
+		t.Errorf("notListed.types = %v", meta.NotListed.Types)
+	}
+	if _, err := LoadExportMetadata(output); err != nil {
+		t.Errorf("LoadExportMetadata: %v", err)
+	}
+}
+
+// TestEmptyOnlyRunMarksAbsentAndPrunes covers a download whose only listed
+// type came back empty (no requests, no pipeline): the type is covered, so
+// its earlier entry is marked absent and, with prune on a complete run,
+// deleted — exactly as in a full run.
+func TestEmptyOnlyRunMarksAbsentAndPrunes(t *testing.T) {
+	for _, prune := range []bool{false, true} {
+		t.Run(map[bool]string{false: "absent", true: "pruned"}[prune], func(t *testing.T) {
+			output := t.TempDir()
+			resourcesDir := filepath.Join(output, models.ResourcesDirName)
+			scope := RunScope{Types: []string{testType}}
+			key := testType + "/alpha.yaml"
+
+			aPath := writeYAML(t, resourcesDir, testType, "alpha")
+			if err := WriteExportMetadata(exportRun(output, newSummary(true, []*models.WriteResult{
+				successResult(aPath, testType, "alpha", "id-a"),
+			}, nil, nil), scope, false)); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+
+			emptyOnly := &pipeline.ExecutionSummary{Results: []*models.WriteResult{}, EmptyTypes: []string{testType}}
+			emptyOnly.MarkCompleteness()
+			if !emptyOnly.Complete {
+				t.Fatalf("an empty-only run must be complete: %s", emptyOnly.IncompleteReason)
+			}
+			if err := WriteExportMetadata(exportRun(output, emptyOnly, scope, prune)); err != nil {
+				t.Fatalf("empty-only run: %v", err)
+			}
+
+			meta, err := loadMetadata(filepath.Join(resourcesDir, MetadataFileName))
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			entry, ok := meta.Resources[key]
+			if prune {
+				if ok {
+					t.Error("entry should be removed after prune")
+				}
+				if _, err := os.Stat(aPath); !os.IsNotExist(err) {
+					t.Errorf("alpha.yaml should have been pruned, stat err = %v", err)
+				}
+				return
+			}
+			if !ok || entry.PresentInTenant {
+				t.Errorf("entry should be retained and marked absent, got %+v (ok=%v)", entry, ok)
+			}
+		})
+	}
+}

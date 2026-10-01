@@ -156,11 +156,17 @@ type ResourceMeta struct {
 	TransformConfigSha256 string `yaml:"transformConfigSha256,omitempty"`
 }
 
-// NotListedMeta records this run's types that could not be listed (permissions)
-// and types that listed to zero resources.
+// NotListedMeta records this run's types that could not be listed, why each
+// could not, and the types that listed to zero resources.
 type NotListedMeta struct {
 	Types []string `yaml:"types"`
 	Empty []string `yaml:"empty"`
+	// Reasons maps each type in Types to the error summary of its failed
+	// listing (azure.ErrorSummary, or "no subscription available" for an ARM
+	// type without a subscription), so the cause survives the run. Always
+	// written — {} when nothing failed; a file written before the key existed
+	// reads as an empty map.
+	Reasons map[string]string `yaml:"reasons"`
 }
 
 // HashTransformConfig returns a stable SHA-256 over the effective transform
@@ -300,6 +306,10 @@ func loadMetadata(metaPath string) (Metadata, error) {
 	if m.Resources == nil {
 		m.Resources = map[string]ResourceMeta{}
 	}
+	// Files written before notListed.reasons existed carry no reasons.
+	if m.NotListed.Reasons == nil {
+		m.NotListed.Reasons = map[string]string{}
+	}
 	return m, nil
 }
 
@@ -367,8 +377,9 @@ func mergeMetadata(m Metadata, run ExportRun, resourcesDir string) Metadata {
 		Pruned:                false,
 	}
 	m.NotListed = NotListedMeta{
-		Types: skippedTypeNames(s.SkippedTypes),
-		Empty: sortedCopy(s.EmptyTypes),
+		Types:   skippedTypeNames(s.SkippedTypes),
+		Empty:   sortedCopy(s.EmptyTypes),
+		Reasons: skippedTypeReasons(s.SkippedTypes),
 	}
 
 	coveredBy := coverageLabel(run.Scope)
@@ -507,6 +518,17 @@ func skippedTypeNames(skipped []models.SkippedType) []string {
 		names = append(names, st.ResourceType)
 	}
 	return sortedCopy(names)
+}
+
+// skippedTypeReasons maps each type that could not be listed to the reason
+// recorded for it. Never nil, so it marshals as {} when nothing failed (the
+// YAML encoder sorts the keys).
+func skippedTypeReasons(skipped []models.SkippedType) map[string]string {
+	reasons := make(map[string]string, len(skipped))
+	for _, st := range skipped {
+		reasons[st.ResourceType] = st.Reason
+	}
+	return reasons
 }
 
 // coveredTypes returns the set of resource types this run listed successfully.

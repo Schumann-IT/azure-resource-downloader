@@ -10,6 +10,7 @@ import (
 
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/runprep"
 )
 
 // parseResourceType extracts the resource type from a resource ID
@@ -274,4 +275,56 @@ func TestBuildFetchRequestsResourceGroup(t *testing.T) {
 	if !reflect.DeepEqual(requests[0], expected) {
 		t.Errorf("BuildFetchRequests() = %+v, want %+v", requests[0], expected)
 	}
+}
+
+func TestNothingListed(t *testing.T) {
+	req := []*models.FetchRequest{{ResourceID: "id-1", ResourceType: "Microsoft.Graph/groups"}}
+	empty := []string{"Microsoft.Graph/organizationalBranding"}
+
+	tests := []struct {
+		name       string
+		requests   []*models.FetchRequest
+		emptyTypes []string
+		want       bool
+	}{
+		{name: "requests only", requests: req, want: false},
+		{name: "empty types only", emptyTypes: empty, want: false},
+		{name: "requests and empty types", requests: req, emptyTypes: empty, want: false},
+		{name: "neither", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nothingListed(tt.requests, tt.emptyTypes); got != tt.want {
+				t.Errorf("nothingListed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExecuteDownloadEmptyOnly(t *testing.T) {
+	t.Run("real run", func(t *testing.T) {
+		summary, err := executeDownload(context.Background(), &runprep.Prepared{DryRun: false}, nil, nil)
+		if err != nil {
+			t.Fatalf("executeDownload() error = %v", err)
+		}
+		if summary == nil {
+			t.Fatal("executeDownload() returned a nil summary")
+		}
+		if summary.TotalResources != 0 || len(summary.Results) != 0 {
+			t.Errorf("TotalResources=%d Results=%d, want 0 and 0", summary.TotalResources, len(summary.Results))
+		}
+		summary.MarkCompleteness()
+		if !summary.Complete {
+			t.Errorf("Complete = false (%s), want true", summary.IncompleteReason)
+		}
+	})
+	t.Run("dry run", func(t *testing.T) {
+		summary, err := executeDownload(context.Background(), &runprep.Prepared{DryRun: true}, nil, nil)
+		if err != nil {
+			t.Fatalf("executeDownload() error = %v", err)
+		}
+		if summary == nil || !summary.DryRun {
+			t.Errorf("summary = %+v, want DryRun true", summary)
+		}
+	})
 }
