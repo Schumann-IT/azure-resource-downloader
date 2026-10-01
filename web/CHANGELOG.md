@@ -108,7 +108,7 @@ section of the [repository README](../README.md) for the procedure.
   is acted on only while it is still for the branch's `HEAD`, and a fix round runs only after the user confirms;
   merging stays the user's action on GitHub. Waiting bought no safety — branch protection already requires all
   four checks before a merge — it only held the session. The app itself is unchanged. See the root `CLAUDE.md`
-  and the workflow skills.
+  and the workflow skills. (#38)
 
 #### Drift view
 

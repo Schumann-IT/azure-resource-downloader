@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-01
 branch: docs/plan-exclude-type
+pr: 38
 changelog: Unreleased
 ---
 ## A tenant-scoped exclude-type key

@@ -78,7 +78,7 @@ This project is released independently of the documentation browser in `web/`: i
   fatal error, `resource types` marks excluded types instead of querying them, and the exclusion is recorded with
   the export (`run.scope.excludedTypes`) so drift cannot compare across a changed one. **After adding or changing
   `exclude-type`, run `resource download` before the next `resource drift`** — drift refuses until the baseline
-  carries the same exclusion. See `README.md` (*Excluding types per tenant*).
+  carries the same exclusion. See `README.md` (*Excluding types per tenant*). (#38)
 
 ### Changed
 
@@ -91,7 +91,7 @@ This project is released independently of the documentation browser in `web/`: i
   is acted on only while it is still for the branch's `HEAD`, and a fix round runs only after the user confirms;
   merging stays the user's action on GitHub. Waiting bought no safety — branch protection already requires all
   four checks before a merge — it only held the session. The app itself is unchanged. See the root `CLAUDE.md`
-  and the workflow skills.
+  and the workflow skills. (#38)
 
 #### Documentation and drift analysis
 
@@ -135,7 +135,7 @@ This project is released independently of the documentation browser in `web/`: i
 
 - **`--type` help no longer claims to narrow the configured types.** It replaces the base file's `type` list for
   that run, as the README always said; the help text now says so, and that the tenant profile's `exclude-type`
-  still applies.
+  still applies. (#38)
 
 ### Breaking
 
