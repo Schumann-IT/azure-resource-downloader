@@ -34,6 +34,7 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-iosmanagedappprotection?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-iosmanagedappprotection-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

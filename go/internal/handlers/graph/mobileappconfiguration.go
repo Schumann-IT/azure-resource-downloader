@@ -34,6 +34,7 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 			SubtypeNote:         "Platform-polymorphic managed-device app configuration (iosMobileAppConfiguration, androidManagedStoreAppConfiguration) - identify the platform from @odata.type.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-apps-manageddevicemobileappconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-apps-manageddevicemobileappconfiguration-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

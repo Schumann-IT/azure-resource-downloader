@@ -27,11 +27,12 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 			OmitGroupAxes:       true,
 			Purpose:             "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
 			KeySettings:         []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
-			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle:           []string{"Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-onboarding-mobilethreatdefenseconnector-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -40,7 +41,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list mobile threat defense connectors: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list mobile threat defense connectors: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -61,7 +62,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().MobileThreatDefenseConnectors().ByMobileThreatDefenseConnectorId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get mobile threat defense connector: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get mobile threat defense connector: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

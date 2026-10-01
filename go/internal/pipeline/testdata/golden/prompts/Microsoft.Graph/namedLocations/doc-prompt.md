@@ -18,7 +18,8 @@ Lifecycle notes for this resource type:
 - Keep trusted-IP ranges current.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
-- API reference: https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-1.0
+- API reference: https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-namedlocations?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies

@@ -34,6 +34,7 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			SubtypeNote:         "Highly polymorphic (win32LobApp, winGetApp, macOSPkgApp, iosStoreApp, officeSuiteApp, ...) - identify the concrete app type from @odata.type first; detection/requirement rules and install experience are subtype-specific.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-mobileapp?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-mobileapp-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

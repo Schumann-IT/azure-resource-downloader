@@ -17,6 +17,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccesspolicy?view=graph-rest-1.0
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0
 - Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):

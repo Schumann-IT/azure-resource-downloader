@@ -30,6 +30,7 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 			RelatedTypes:        []string{"Microsoft.Graph/namedLocations", "Microsoft.Graph/authenticationStrengthPolicies", "Microsoft.Graph/termsOfUseAgreements", "Microsoft.Graph/groups (include/exclude targets)"},
 			Links: models.ResourceLinks{
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccesspolicy?view=graph-rest-1.0",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0",
 				BestPractices: []string{"https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access"},
 			},
 		},

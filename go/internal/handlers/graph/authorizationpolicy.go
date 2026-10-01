@@ -44,6 +44,7 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 			Lifecycle:           []string{"Tenant-wide singleton controlling default user role permissions, guest access levels and consent defaults; changes apply tenant-wide immediately and should be reviewed regularly."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authorizationpolicy-get?view=graph-rest-1.0",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

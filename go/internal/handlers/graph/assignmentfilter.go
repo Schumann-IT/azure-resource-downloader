@@ -30,6 +30,7 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 			RelatedTypes:        []string{"all assignable Intune types (policies, profiles and apps reference filters by ID in their assignments)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-policyset-deviceandappmanagementassignmentfilter?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-policyset-deviceandappmanagementassignmentfilter-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

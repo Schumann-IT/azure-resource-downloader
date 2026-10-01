@@ -9,7 +9,7 @@ Azure resource type: Microsoft.Graph/intuneBrandingProfiles
 About this resource type: An Intune Company Portal branding profile controlling the end-user portal appearance.
 
 Permissions required to read this resource type:
-- DeviceManagementApps.Read.All
+- DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
 - Company Portal branding; changes appear when the portal refreshes.
@@ -17,6 +17,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-wip-intunebrandingprofile?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-wip-intunebrandingprofile-list?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/organizationalBranding (Entra sign-in branding)

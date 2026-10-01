@@ -30,7 +30,8 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
 			SubtypeNote:         "Polymorphic: ipNamedLocation (CIDR ranges, trusted flag) vs countryNamedLocation (country list, unknown-area handling) - identify the concrete type from @odata.type.",
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-1.0",
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-namedlocations?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

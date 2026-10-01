@@ -9,13 +9,14 @@ Azure resource type: Microsoft.Graph/mobileThreatDefenseConnectors
 About this resource type: An Intune Mobile Threat Defense connector integrating a third-party MTD partner.
 
 Permissions required to read this resource type:
-- DeviceManagementConfiguration.Read.All
+- DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
 - Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-onboarding-mobilethreatdefenseconnector-list?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)

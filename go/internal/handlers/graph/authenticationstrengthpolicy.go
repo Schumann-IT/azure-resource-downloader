@@ -30,6 +30,7 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationstrengthpolicy?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authenticationstrengthroot-list-policies?view=graph-rest-1.0",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

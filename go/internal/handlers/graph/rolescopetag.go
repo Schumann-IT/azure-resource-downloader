@@ -30,6 +30,7 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			RelatedTypes:        []string{"Microsoft.Graph/roleDefinitions"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolescopetag?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-rbac-rolescopetag-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

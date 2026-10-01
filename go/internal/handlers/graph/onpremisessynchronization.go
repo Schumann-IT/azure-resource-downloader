@@ -34,6 +34,7 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 			Lifecycle:           []string{"Reflects Entra Connect / Cloud Sync configuration; managed from the sync client, not writable here.", "Absent in cloud-only tenants."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/onpremisesdirectorysynchronization?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/onpremisesdirectorysynchronization-get?view=graph-rest-1.0",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

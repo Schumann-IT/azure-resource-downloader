@@ -108,9 +108,15 @@ func (h *GraphCollectionHandler) GetType() string {
 // this resource type, tailored via the per-type metadata set by the type's
 // constructor.
 func (h *GraphCollectionHandler) GetDocumentationPrompt() string {
+	return models.BuildDocumentationPrompt(h.Documentation())
+}
+
+// Documentation returns the per-type documentation metadata with AzureType
+// filled in from the handler. It satisfies models.Documented.
+func (h *GraphCollectionHandler) Documentation() models.ResourceDocumentation {
 	doc := h.documentation
 	doc.AzureType = h.azureType
-	return models.BuildDocumentationPrompt(doc)
+	return doc
 }
 
 // RequiresDedicatedApp reports whether this Microsoft Graph type needs a

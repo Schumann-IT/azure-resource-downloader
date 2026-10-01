@@ -58,6 +58,7 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			RelatedTypes:        []string{"Microsoft.Graph/organization", "Microsoft.Graph/intuneBrandingProfiles (Company Portal branding)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organizationalbranding?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/organizationalbranding-get?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

@@ -16,6 +16,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-windowsinformationprotectionpolicy?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-mam-windowsinformationprotectionpolicy-list?view=graph-rest-beta
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 

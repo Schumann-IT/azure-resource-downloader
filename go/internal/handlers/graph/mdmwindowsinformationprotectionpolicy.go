@@ -30,6 +30,7 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 			Lifecycle:           []string{"Windows Information Protection is DEPRECATED by Microsoft (sunset began July 2022) and unsupported on Windows 11; keep for historical reference and plan migration to Microsoft Purview DLP."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-mdmwindowsinformationprotectionpolicy?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-mdmwindowsinformationprotectionpolicy-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

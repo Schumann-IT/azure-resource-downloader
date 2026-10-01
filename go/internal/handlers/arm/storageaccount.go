@@ -32,7 +32,13 @@ func (h *StorageAccountHandler) GetType() string {
 
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *StorageAccountHandler) GetDocumentationPrompt() string {
-	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+	return models.BuildDocumentationPrompt(h.Documentation())
+}
+
+// Documentation returns the per-type documentation metadata the prompt is built
+// from. It satisfies models.Documented.
+func (h *StorageAccountHandler) Documentation() models.ResourceDocumentation {
+	return models.ResourceDocumentation{
 		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
@@ -41,9 +47,10 @@ func (h *StorageAccountHandler) GetDocumentationPrompt() string {
 		Lifecycle:           []string{"Deleting a storage account is irreversible once retention lapses; enable soft delete/versioning, and rotate access keys regularly (rotation breaks clients using shared-key auth)."},
 		Links: models.ResourceLinks{
 			EndpointDocs:  "https://learn.microsoft.com/en-us/rest/api/storagerp/storage-accounts",
+			Permissions:   "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",
 			BestPractices: []string{"https://learn.microsoft.com/en-us/azure/storage/blobs/security-recommendations"},
 		},
-	})
+	}
 }
 
 // List returns the IDs of all storage accounts in the subscription.

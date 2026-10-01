@@ -37,7 +37,8 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 			ReferencesNotificationTemplates: true,
 			Links: models.ResourceLinks{
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementcompliancepolicy?view=graph-rest-beta",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/device-compliance-get-started"},
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementcompliancepolicy-list?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/compliance/overview"},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

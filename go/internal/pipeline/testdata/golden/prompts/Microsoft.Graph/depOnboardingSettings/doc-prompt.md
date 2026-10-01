@@ -16,6 +16,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-deponboardingsetting?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-deponboardingsetting-list?view=graph-rest-beta
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a service credential or token record (e.g. a certificate or a service token): its documentation must focus on validity, renewal and the operational impact of expiry — not on configurable settings, and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 

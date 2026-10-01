@@ -30,6 +30,7 @@ func NewWindowsAutopilotDeploymentProfileHandler(credential azcore.TokenCredenti
 			RelatedTypes:        []string{"Microsoft.Graph/windowsAutopilotDeviceIdentities (registered devices)", "Microsoft.Graph/deviceEnrollmentConfigurations (Enrollment Status Page)", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeploymentprofile?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeploymentprofile-get?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

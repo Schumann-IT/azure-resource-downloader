@@ -32,6 +32,7 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementreusablepolicysetting?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementreusablepolicysetting-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

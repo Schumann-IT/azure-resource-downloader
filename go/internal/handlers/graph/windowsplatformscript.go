@@ -33,6 +33,7 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			RelatedTypes:        []string{"Microsoft.Graph/deviceHealthScripts (Remediations, for recurring scripts)", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicemanagementscript?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-devicemanagementscript-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

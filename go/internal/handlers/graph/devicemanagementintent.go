@@ -35,7 +35,9 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 			Lifecycle:           []string{"Legacy Endpoint Security templates (intents) are being replaced by Settings Catalog based policies; plan migration.", "Deleting an intent removes its settings enforcement at next check-in."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceintent-devicemanagementintent-list?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview"},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

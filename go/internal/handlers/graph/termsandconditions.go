@@ -30,6 +30,7 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-companyterms-termsandconditions?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-companyterms-termsandconditions-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

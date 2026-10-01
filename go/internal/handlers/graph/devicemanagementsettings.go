@@ -45,6 +45,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 			Lifecycle:           []string{"Tenant-wide Intune settings singleton; changes apply to the whole tenant immediately."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicemanagementsettings?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/permissions-reference",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

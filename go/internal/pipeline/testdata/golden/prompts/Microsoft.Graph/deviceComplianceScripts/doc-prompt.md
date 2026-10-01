@@ -9,7 +9,7 @@ Azure resource type: Microsoft.Graph/deviceComplianceScripts
 About this resource type: An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.
 
 Permissions required to read this resource type:
-- DeviceManagementConfiguration.Read.All
+- DeviceManagementScripts.Read.All
 
 Lifecycle notes for this resource type:
 - Custom compliance scripts are referenced by Windows compliance policies; deleting a script breaks policies that reference it.
@@ -17,6 +17,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecompliancescript?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-devices-devicecompliancescript-list?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)

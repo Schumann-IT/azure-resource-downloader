@@ -31,6 +31,7 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 			Lifecycle:           []string{"Reflects the state of the on-premises Certificate Connector; keep the connector software current and renew its certificates before expiry to avoid SCEP issuance outages."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-ndesconnector?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-ndesconnector-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

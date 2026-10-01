@@ -32,7 +32,13 @@ func (h *VirtualMachineHandler) GetType() string {
 
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *VirtualMachineHandler) GetDocumentationPrompt() string {
-	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+	return models.BuildDocumentationPrompt(h.Documentation())
+}
+
+// Documentation returns the per-type documentation metadata the prompt is built
+// from. It satisfies models.Documented.
+func (h *VirtualMachineHandler) Documentation() models.ResourceDocumentation {
+	return models.ResourceDocumentation{
 		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Virtual Machine, including its compute size, OS profile, storage, networking and security configuration.",
@@ -41,9 +47,10 @@ func (h *VirtualMachineHandler) GetDocumentationPrompt() string {
 		Lifecycle:           []string{"Deallocating stops compute billing but keeps disks; deleting the VM can orphan NICs and disks unless delete-with-VM is configured.", "Keep OS patching and backup policies in place."},
 		Links: models.ResourceLinks{
 			EndpointDocs:  "https://learn.microsoft.com/en-us/rest/api/compute/virtual-machines",
+			Permissions:   "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",
 			BestPractices: []string{"https://learn.microsoft.com/en-us/azure/virtual-machines/security-policy"},
 		},
-	})
+	}
 }
 
 // List returns the IDs of all virtual machines in the subscription.

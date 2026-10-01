@@ -29,6 +29,7 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 			Lifecycle:           []string{"Categories are chosen by users during enrollment or set by admins; deleting a category leaves devices without a category but does not affect their management."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicecategory?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-devicecategory-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

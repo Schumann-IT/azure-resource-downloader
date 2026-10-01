@@ -31,6 +31,7 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 			RelatedTypes:        []string{"Microsoft.Graph/roleScopeTags"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-roledefinition?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-rbac-roledefinition-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

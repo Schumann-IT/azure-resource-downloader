@@ -56,6 +56,7 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 			Lifecycle:           []string{"The Apple MDM push certificate expires yearly and must be renewed with the SAME Apple ID; letting it expire or renewing with a different Apple ID forces re-enrollment of all Apple devices."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-applepushnotificationcertificate?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-applepushnotificationcertificate-get?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

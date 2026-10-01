@@ -34,6 +34,7 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 			Lifecycle:           []string{"Apple ADE (DEP) tokens expire yearly and must be renewed in Apple Business Manager; an expired token stops device syncs and automated enrollment."},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-deponboardingsetting?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-enrollment-deponboardingsetting-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

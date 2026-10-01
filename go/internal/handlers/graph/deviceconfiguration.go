@@ -61,8 +61,8 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
 			SubtypeNote:         "Legacy profiles are heavily polymorphic (windows10CustomConfiguration, macOSCustomConfiguration, windows10EndpointProtectionConfiguration, ...) - identify the concrete profile type from @odata.type first.",
 			Links: models.ResourceLinks{
-				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines"},
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-deviceconfiguration-list?view=graph-rest-beta",
 			},
 		},
 		probe: func(ctx context.Context) error {

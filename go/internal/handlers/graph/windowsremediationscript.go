@@ -33,6 +33,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicehealthscript?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicehealthscript-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

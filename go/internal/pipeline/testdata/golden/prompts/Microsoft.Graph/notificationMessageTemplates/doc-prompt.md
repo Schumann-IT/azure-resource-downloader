@@ -9,7 +9,7 @@ Azure resource type: Microsoft.Graph/notificationMessageTemplates
 About this resource type: An Intune notification message template used for compliance and other notifications.
 
 Permissions required to read this resource type:
-- DeviceManagementServiceConfig.Read.All
+- DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
 - Referenced by compliance policies noncompliance actions; deleting a template breaks those actions.
@@ -17,6 +17,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-notification-notificationmessagetemplate-list?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)

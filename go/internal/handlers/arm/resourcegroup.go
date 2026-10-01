@@ -32,7 +32,13 @@ func (h *ResourceGroupHandler) GetType() string {
 
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *ResourceGroupHandler) GetDocumentationPrompt() string {
-	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
+	return models.BuildDocumentationPrompt(h.Documentation())
+}
+
+// Documentation returns the per-type documentation metadata the prompt is built
+// from. It satisfies models.Documented.
+func (h *ResourceGroupHandler) Documentation() models.ResourceDocumentation {
+	return models.ResourceDocumentation{
 		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
 		Purpose:             "An Azure Resource Group, the logical container that holds related Azure resources and governs their lifecycle, location and tags.",
@@ -41,8 +47,9 @@ func (h *ResourceGroupHandler) GetDocumentationPrompt() string {
 		Lifecycle:           []string{"Deleting a resource group irreversibly deletes ALL contained resources; use resource locks and consistent tagging for governance."},
 		Links: models.ResourceLinks{
 			EndpointDocs: "https://learn.microsoft.com/en-us/rest/api/resources/resource-groups",
+			Permissions:  "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",
 		},
-	})
+	}
 }
 
 // List returns the IDs of all resource groups in the subscription.

@@ -16,6 +16,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/rest/api/resources/resource-groups
+- Required permissions: https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This is an Azure Resource Manager (ARM) resource: it is governed by Azure RBAC, resource locks and tags — it has no Intune/Entra assignments or targeting, and RBAC role assignments are NOT part of this export, so never invent access information. Produce well-structured Markdown documentation with this layout:
 

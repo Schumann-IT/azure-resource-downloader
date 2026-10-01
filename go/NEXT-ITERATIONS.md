@@ -66,18 +66,18 @@ it cannot silently decay again.
 
 **Plan.**
 
-- Accessor first, bytes unchanged: a `models.Documented` interface (`Documentation() models.ResourceDocumentation`,
+- ~~Accessor first, bytes unchanged: a `models.Documented` interface (`Documentation() models.ResourceDocumentation`,
   `AzureType` filled in) in `internal/models/types.go`, implemented by `GraphCollectionHandler` and the three ARM
   handlers (`internal/handlers/arm/*.go`: move the inline `ResourceDocumentation` literal into `Documentation()`);
   each `GetDocumentationPrompt` becomes `models.BuildDocumentationPrompt(h.Documentation())`. `make -C go test`
-  must pass with the golden prompts untouched before any metadata changes.
-- `Links.AdminCenter string` in `models.ResourceLinks` (`internal/models/documentation.go`, doc comment: the admin
+  must pass with the golden prompts untouched before any metadata changes.~~
+- ~~`Links.AdminCenter string` in `models.ResourceLinks` (`internal/models/documentation.go`, doc comment: the admin
   center blade where the resource is managed; empty when no verified deep link exists). `prompt-links` in
   `internal/models/prompt_partials.tmpl`: add `.Links.AdminCenter` to the block's `or` condition and render
   `- Admin center: <url>` after the `- Required permissions:` line; update the `Template` field's doc comment if it
   lists the partials' content. A `models` unit test renders a `ResourceDocumentation` with only `AdminCenter` set
-  and with all link kinds set, and asserts the block appears with the lines in that order.
-- Permissions: `mobileThreatDefenseConnectors` (`mobilethreatdefenseconnector.go`) and `intuneBrandingProfiles`
+  and with all link kinds set, and asserts the block appears with the lines in that order.~~
+- ~~Permissions: `mobileThreatDefenseConnectors` (`mobilethreatdefenseconnector.go`) and `intuneBrandingProfiles`
   (`intunebrandingprofile.go`) → `DeviceManagementServiceConfig.Read.All`, in `RequiredPermissions` and in every
   `hint: requires '…'` string of the file. Then check every other handler against the permission source rule in
   the Notes (fetch each operation's Learn page); correct only a declared scope the page does not list, together
@@ -86,23 +86,27 @@ it cannot silently decay again.
   `OnPremDirectorySynchronization.Read.All`, `DeviceManagement*`) must also be added to `entraPermissions` in
   `internal/audit/route.go` (`TestRouteEveryRegisteredType` fails otherwise) and named in the implementation
   report as a new consent. A page that cannot be fetched leaves the value as is and is listed in the report as
-  unverified — never guessed.
-- Links, Graph `?view=` per the client the handler builds: `namedLocations` (`namedlocation.go`) and
+  unverified — never guessed.~~
+- ~~Links, Graph `?view=` per the client the handler builds: `namedLocations` (`namedlocation.go`) and
   `termsOfUseAgreements` (`termsofuseagreement.go`) → `?view=graph-rest-beta` (both call `newBetaGraphClient`).
-  `deviceManagement` (`devicemanagementsettings.go`): `EndpointDocs` → the beta `deviceManagement` entity resource
-  page; the `deviceManagementSettings` complex-type page moves to `SchemaReference`. No other `SchemaReference` is
-  added. Every `learn.microsoft.com/en-us/mem/intune/...` URL → its current `learn.microsoft.com/en-us/intune/
-  intune-service/...` page (follow the redirect, use the final URL).
-- `BestPractices`: keep a link only where the page is about this type's feature (a planning, hardening or baseline
+  Every `learn.microsoft.com/en-us/mem/intune/...` URL → its current `learn.microsoft.com/en-us/intune/
+  intune-service/...` page (follow the redirect, use the final URL).~~
+- `deviceManagement` (`devicemanagementsettings.go`): `EndpointDocs` → the beta `deviceManagement` entity resource
+  page; the `deviceManagementSettings` complex-type page moves to `SchemaReference`. Open: Microsoft Learn has no
+  `deviceManagement` entity page (the Graph docs hold no `resources/…devicemanagement` and no `GET /deviceManagement`
+  page, and the guessed names return 404), so `EndpointDocs` still points at the complex-type page and
+  `SchemaReference` stays empty; its `Links.Permissions` is the Graph permissions reference. Revisit when such a page
+  appears, or decide to keep it as is.
+- ~~`BestPractices`: keep a link only where the page is about this type's feature (a planning, hardening or baseline
   guide for it); remove generic ones (e.g. `protect/security-baselines` on `deviceConfigurations`, which security
-  baselines do not use); add one only where such a page exists. Empty is acceptable.
-- `Links.Permissions` on all 53 types: for Graph, the Learn page of the List (collection) or Get (singleton)
+  baselines do not use); add one only where such a page exists. Empty is acceptable.~~
+- ~~`Links.Permissions` on all 53 types: for Graph, the Learn page of the List (collection) or Get (singleton)
   operation the handler calls, at its API version (`?view=` as above); for the three ARM types, the Azure built-in
-  *Reader* role section on Learn.
-- `Links.AdminCenter` where a deep link is verified: the blade URL cited by a Learn page for that feature, or one
+  *Reader* role section on Learn.~~
+- ~~`Links.AdminCenter` where a deep link is verified: the blade URL cited by a Learn page for that feature, or one
   confirmed to open the blade, on `intune.microsoft.com` (Intune types), `entra.microsoft.com` (Entra types) or
-  `portal.azure.com` (ARM types); empty otherwise. The implementation report lists the types left empty.
-- Registry-wide test `internal/handlers/documentation_metadata_test.go` over `NewRegistry(stubCredential{}, …,
+  `portal.azure.com` (ARM types); empty otherwise. The implementation report lists the types left empty.~~
+- ~~Registry-wide test `internal/handlers/documentation_metadata_test.go` over `NewRegistry(stubCredential{}, …,
   false)`: every handler implements `models.Documented`; `EndpointDocs`, `RequiredPermissions` and
   `Links.Permissions` are non-empty; `EndpointDocs`, `SchemaReference`, `Permissions` and `BestPractices` are
   `https://learn.microsoft.com/en-us/…`; `AdminCenter` is empty or `https://` on one of the three portal hosts; no
@@ -111,15 +115,20 @@ it cannot silently decay again.
   (`newBetaGraphClient(` or the `msgraph-beta-sdk-go` import) xor v1.0 (`newGraphClient(` or `msgraph-sdk-go`),
   and every `/graph/api/` link of that type carries the matching `?view=graph-rest-beta` / `?view=graph-rest-1.0`;
   every scope named in a `requires '…'` hint is in that type's `RequiredPermissions`. Every registered Graph type
-  is matched by exactly one file.
-- Golden prompts, deliberately: `make -C go golden-update`, then review the diff — only files under
+  is matched by exactly one file.~~
+- ~~Golden prompts, deliberately: `make -C go golden-update`, then review the diff — only files under
   `internal/pipeline/testdata/golden/prompts/` change (the exported-YAML goldens stay byte-identical), and each
   type's diff is confined to its permission lines and its *Reference material* block (`groups`: only its
-  permission lines, if any, since its template renders no links block yet).
+  permission lines, if any, since its template renders no links block yet).~~
 - Documentation at *done*: `README.md` "Supported resource types" — move the `mobileThreatDefenseConnectors` and
   `intuneBrandingProfiles` rows to the *enrollment, Autopilot and tenant* (`DeviceManagementServiceConfig.Read.All`)
   table and reflect any other corrected scope there and in the dedicated-app scope list; `CHANGELOG.md`
   (`### Fixed` for the permissions, `### Changed` for the richer per-type references).
+- Open follow-up: no verified `Links.AdminCenter` deep link exists for any of the 53 types. The Microsoft Learn
+  Intune, Entra and Azure documentation cite only the portal roots (and a few blades for other features), so
+  every `AdminCenter` stays empty and no "Admin center:" line is rendered yet. Add values per type when a Learn
+  page or a confirmed blade URL is available. `windowsAutopilotDeploymentProfiles` has no List page on Learn (its
+  Permissions link is the Get page).
 
 ## 2. Template content fixes and a Conditional Access template
 

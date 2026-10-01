@@ -25,11 +25,12 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Company Portal branding profile controlling the end-user portal appearance.",
 			EmbeddedPayloads:    []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
-			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle:           []string{"Company Portal branding; changes appear when the portal refreshes.", "Distinct from Entra sign-in branding (organizationalBranding)."},
 			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding (Entra sign-in branding)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-wip-intunebrandingprofile?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-wip-intunebrandingprofile-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -38,7 +39,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list Intune branding profiles: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list Intune branding profiles: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -59,7 +60,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().IntuneBrandingProfiles().ByIntuneBrandingProfileId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get Intune branding profile: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get Intune branding profile: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
 			if assignments, err := client.DeviceManagement().IntuneBrandingProfiles().ByIntuneBrandingProfileId(itemID).Assignments().Get(ctx, nil); err != nil {
 				warnAssignmentsFetchFailed("Microsoft.Graph/intuneBrandingProfiles", itemID, err)

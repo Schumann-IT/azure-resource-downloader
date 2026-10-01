@@ -41,6 +41,7 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			RelatedTypes:        []string{"all assignable types (groups are the assignment targets referenced by ID)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/group-list?view=graph-rest-1.0",
 			},
 			Template: groupPromptTemplateText,
 		},

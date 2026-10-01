@@ -34,6 +34,7 @@ func NewDeviceEnrollmentConfigurationHandler(credential azcore.TokenCredential) 
 			SubtypeNote:         "Polymorphic (@odata.type): enrollment limits, platform restrictions, Windows Hello for Business, ESP (windows10EnrollmentCompletionPageConfiguration), enrollment notifications - identify the concrete type first.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-deviceenrollmentconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-deviceenrollmentconfiguration-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

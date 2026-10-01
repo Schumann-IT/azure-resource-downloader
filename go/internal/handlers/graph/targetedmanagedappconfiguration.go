@@ -33,6 +33,7 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (targeted apps)", "Microsoft.Graph/groups (assignment target groups)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-targetedmanagedappconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-targetedmanagedappconfiguration-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

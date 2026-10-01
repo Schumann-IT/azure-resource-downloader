@@ -16,6 +16,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-ndesconnector?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-ndesconnector-list?view=graph-rest-beta
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 

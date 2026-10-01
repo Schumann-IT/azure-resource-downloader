@@ -19,7 +19,8 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicecompliancepolicy?view=graph-rest-beta
-- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/device-compliance-get-started
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-devicecompliancepolicy-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/compliance/overview
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)

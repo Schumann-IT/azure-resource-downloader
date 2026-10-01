@@ -44,6 +44,7 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies", "Microsoft.Graph/authenticationStrengthPolicies"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodspolicy?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authenticationmethodspolicy-get?view=graph-rest-1.0",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

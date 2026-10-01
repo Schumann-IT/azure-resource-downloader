@@ -28,11 +28,12 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune notification message template used for compliance and other notifications.",
 			EmbeddedPayloads:    []string{"localizedNotificationMessages (per-locale subject and message body)"},
-			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle:           []string{"Referenced by compliance policies noncompliance actions; deleting a template breaks those actions.", "Localized messages fall back to the default locale."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-notification-notificationmessagetemplate-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -41,7 +42,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list notification message templates: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list notification message templates: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -62,7 +63,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().NotificationMessageTemplates().ByNotificationMessageTemplateId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get notification message template: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get notification message template: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
 			// localizedNotificationMessages (the per-locale subject and message
 			// body) is a navigation property Graph omits from a plain item GET,

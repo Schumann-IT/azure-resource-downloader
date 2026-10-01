@@ -29,11 +29,12 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 			Purpose:             "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck"},
 			EmbeddedPayloads:    []string{"detectionScriptContent (base64 PowerShell)"},
-			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
 			Lifecycle:           []string{"Custom compliance scripts are referenced by Windows compliance policies; deleting a script breaks policies that reference it.", "Script changes apply at the next compliance evaluation."},
 			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecompliancescript?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicecompliancescript-list?view=graph-rest-beta",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -42,7 +43,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list device compliance scripts: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list device compliance scripts: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -63,7 +64,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().DeviceComplianceScripts().ByDeviceComplianceScriptId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get device compliance script: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get device compliance script: %w (hint: requires 'DeviceManagementScripts.Read.All' permission in Microsoft Graph)", err)
 			}
 			if assignments, err := client.DeviceManagement().DeviceComplianceScripts().ByDeviceComplianceScriptId(itemID).Assignments().Get(ctx, nil); err != nil {
 				warnAssignmentsFetchFailed("Microsoft.Graph/deviceComplianceScripts", itemID, err)

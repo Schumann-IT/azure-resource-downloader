@@ -168,6 +168,14 @@ type ResourceHandler interface {
 	GetDocumentationPrompt() string
 }
 
+// Documented is implemented by every registered handler: it exposes the
+// per-type documentation metadata the documentation prompt is built from
+// (AzureType filled in), so tests and tooling can inspect it without rendering.
+type Documented interface {
+	// Documentation returns the handler's documentation metadata.
+	Documentation() ResourceDocumentation
+}
+
 // PermissionScoped is optionally implemented by a ResourceHandler whose
 // resource type needs delegated Microsoft Graph permissions that the Azure CLI
 // first-party app cannot provide, and therefore requires signing in to a

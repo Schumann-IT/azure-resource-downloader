@@ -30,6 +30,7 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organization?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/organization-list?view=graph-rest-1.0",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

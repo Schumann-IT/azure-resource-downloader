@@ -16,6 +16,7 @@ Lifecycle notes for this resource type:
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/authorizationpolicy-get?view=graph-rest-1.0
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 

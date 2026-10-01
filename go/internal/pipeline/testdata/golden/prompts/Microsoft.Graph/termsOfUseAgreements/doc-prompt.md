@@ -16,7 +16,8 @@ Lifecycle notes for this resource type:
 - Acceptance records are retained for compliance.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
-- API reference: https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-1.0
+- API reference: https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/termsofusecontainer-list-agreements?view=graph-rest-beta
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)
