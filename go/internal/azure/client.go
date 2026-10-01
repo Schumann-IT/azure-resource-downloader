@@ -2,6 +2,7 @@ package azure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -14,6 +15,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
 )
+
+// ErrTenantIDRequired is returned when the tenant profile names a client-id but
+// no tenant-id: a device-code sign-in to a single-tenant app registration needs
+// the tenant.
+var ErrTenantIDRequired = errors.New("tenant-id is required when client-id is set in the tenant profile")
 
 // Client wraps Azure SDK clients
 type Client struct {
@@ -85,7 +91,8 @@ func NewCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
 // but guaranteed never to prompt: the device-code variant is constructed with
 // automatic authentication disabled, so a token request that would need user
 // interaction fails with an authentication-required error instead of starting
-// the sign-in flow. Commands for which a token is a convenience rather than a
+// the sign-in flow. With a cached device-code session it still gets its tokens
+// silently. Commands for which a token is a convenience rather than a
 // requirement (e.g. enriching an offline answer with tenant counts) must use
 // this constructor, so they can never block on a login prompt.
 func NewNonInteractiveCredential(clientID, tenantID string) (azcore.TokenCredential, error) {
@@ -147,9 +154,10 @@ func NewClientWithCredential(ctx context.Context, cred azcore.TokenCredential, s
 
 // newCredential builds the token credential used for all ARM and Microsoft Graph
 // requests. With no clientID it reuses the existing Azure CLI session (az login).
-// When clientID is provided it starts an interactive device-code sign-in against
-// the given app registration so that delegated scopes unavailable to the Azure
-// CLI first-party app can be requested. disableAutomaticAuth applies only to the
+// When clientID is provided it signs in with device code to the given app
+// registration so that delegated scopes unavailable to the Azure CLI
+// first-party app can be requested; with a persistent token cache that sign-in
+// happens once and later runs reuse the cached session. disableAutomaticAuth applies only to the
 // device-code variant (the Azure CLI credential never prompts — it fails fast
 // without a session): when set, a token request that would require interaction
 // returns an authentication-required error instead of starting the sign-in.
@@ -165,23 +173,10 @@ func newCredential(clientID, tenantID string, disableAutomaticAuth bool) (azcore
 	// A single-tenant app registration requires an explicit tenant; without it
 	// the device-code endpoint rejects the request with AADSTS50059.
 	if tenantID == "" {
-		return nil, fmt.Errorf("--tenant-id is required when --client-id is set (device-code sign-in needs a tenant; pass --tenant-id or set AZURE_RD_TENANT_ID)")
+		return nil, ErrTenantIDRequired
 	}
 
-	opts := &azidentity.DeviceCodeCredentialOptions{
-		ClientID: clientID,
-		TenantID: tenantID,
-		UserPrompt: func(_ context.Context, msg azidentity.DeviceCodeMessage) error {
-			logger.Default.Info("Device-code sign-in required", "instructions", msg.Message)
-			return nil
-		},
-		DisableAutomaticAuthentication: disableAutomaticAuth,
-	}
-	cred, err := azidentity.NewDeviceCodeCredential(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start device-code sign-in: %w (hint: ensure the app registration allows public client flows)", err)
-	}
-	return cred, nil
+	return newDeviceCodeCredential(clientID, tenantID, disableAutomaticAuth)
 }
 
 // getDefaultSubscription retrieves the default subscription from Azure

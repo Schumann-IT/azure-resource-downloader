@@ -49,7 +49,8 @@ It's designed to be easily extensible with support for multiple Azure resource t
 Authentication reuses your existing Azure CLI session (run 'az login' first); the
 same delegated token is used for both ARM and Microsoft Graph calls. To download
 Microsoft Graph/Intune types that need scopes the Azure CLI app cannot provide,
-sign in to a dedicated app registration with --client-id/--tenant-id (device-code flow).
+sign in to a dedicated app registration: set client-id and tenant-id in the
+tenant's configuration profile (device-code flow).
 
 Run 'azure-rd --debug' (with no subcommand) to print a diagnostic report of the
 current Azure session — how the tool is authenticated, who is signed in, and which
@@ -199,8 +200,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 }
 
 // runDebugReport authenticates exactly as `download` would and reports how the
-// tool is authenticated, who is signed in, and which tenant, subscription and
-// output directory a download would use right now. It writes nothing.
+// tool is authenticated, who is signed in, which tenant, subscription and
+// output directory a download would use right now, and which declared Graph
+// permissions the session's token carries. It writes nothing.
 func runDebugReport(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 	log := logger.Default
@@ -216,6 +218,7 @@ func runDebugReport(cmd *cobra.Command) error {
 	if clientID != "" {
 		log.Info("Authentication", "method", "device-code sign-in (dedicated app registration)",
 			"client_id", clientID, "tenant_id", tenantID)
+		log.Info("Token cache", "status", azure.TokenCacheStatus(tenantID, clientID))
 	} else {
 		log.Info("Authentication", "method", "Azure CLI session (az login)")
 	}
@@ -278,6 +281,11 @@ func runDebugReport(cmd *cobra.Command) error {
 	// local operation; secret resolution is a download-only concern, so off here.
 	registry := handlers.NewRegistry(azureClient.GetCredential(), sub, false)
 	log.Info("Registered resource type handlers", "count", len(registry.GetAllTypes()))
+
+	// Which declared Graph permissions this session's token actually carries,
+	// for the types a download would select: the CLI session's token without a
+	// client-id, the dedicated app's otherwise.
+	reportGraphToken(ctx, log, azureClient.GetCredential(), registry)
 
 	return nil
 }

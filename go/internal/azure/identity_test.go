@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -140,6 +141,82 @@ func TestSignedInIdentity(t *testing.T) {
 		}}
 		if _, err := SignedInIdentity(ctx, cred); err == nil {
 			t.Fatal("expected an error when every scope is denied, got nil")
+		}
+	})
+}
+
+func TestParseTokenClaims(t *testing.T) {
+	tests := []struct {
+		name    string
+		token   string
+		want    TokenClaims
+		wantErr bool
+	}{
+		{
+			name:  "app and scopes, sorted and de-duplicated",
+			token: makeJWT(`{"appid":"04b07795-8ddb-461a-bbee-02f9e1bf7b46","app_displayname":"Microsoft Azure CLI","scp":"User.Read Policy.Read.All  Group.Read.All User.Read"}`),
+			want: TokenClaims{
+				AppID:          "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+				AppDisplayName: "Microsoft Azure CLI",
+				Scopes:         []string{"Group.Read.All", "Policy.Read.All", "User.Read"},
+			},
+		},
+		{
+			name:  "no scp claim",
+			token: makeJWT(`{"appid":"app-1"}`),
+			want:  TokenClaims{AppID: "app-1"},
+		},
+		{
+			name:    "not a JWT",
+			token:   "opaque-token",
+			wantErr: true,
+		},
+		{
+			name:    "claims segment not valid JSON",
+			token:   makeJWT(`{not json`),
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseTokenClaims(tt.token)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got nil (claims=%+v)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseTokenClaims() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGraphTokenClaims(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("requests the Graph scope", func(t *testing.T) {
+		cred := fakeCredential{tokenByScope: map[string]string{
+			graphScope: makeJWT(`{"appid":"app-1","scp":"User.Read"}`),
+		}}
+		got, err := GraphTokenClaims(ctx, cred)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.AppID != "app-1" || !reflect.DeepEqual(got.Scopes, []string{"User.Read"}) {
+			t.Errorf("GraphTokenClaims() = %+v", got)
+		}
+	})
+
+	t.Run("token failure is returned", func(t *testing.T) {
+		cause := errors.New("denied")
+		cred := fakeCredential{errByScope: map[string]error{graphScope: cause}}
+		if _, err := GraphTokenClaims(ctx, cred); !errors.Is(err, cause) {
+			t.Errorf("GraphTokenClaims() error = %v, want it to wrap %v", err, cause)
 		}
 	})
 }

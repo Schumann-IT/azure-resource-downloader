@@ -171,7 +171,8 @@ type ResourceHandler interface {
 // PermissionScoped is optionally implemented by a ResourceHandler whose
 // resource type needs delegated Microsoft Graph permissions that the Azure CLI
 // first-party app cannot provide, and therefore requires signing in to a
-// dedicated app registration (--client-id/--tenant-id, device-code flow).
+// dedicated app registration (client-id/tenant-id in the tenant profile,
+// device-code flow).
 //
 // Handlers that do not implement it are assumed to work with the default Azure
 // CLI credentials (e.g. ARM types authorised via subscription RBAC). Callers

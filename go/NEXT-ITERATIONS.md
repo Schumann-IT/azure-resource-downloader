@@ -342,31 +342,31 @@ naming flags that no longer exist.
 
 **Plan.**
 
-- Token claims: `internal/azure/identity.go` gains a pure decoder for a Graph token's `appid`, `app_displayname`
-  and `scp`, beside `parseIdentityClaims`; tested with synthetic JWT payloads. The token itself is never logged.
-- Coverage helper (pure): given declared permissions and a scope list, return covered and missing; a `ReadWrite`
-  scope covers its `Read` counterpart, matching is case-insensitive; table-tested.
-- `--debug` (`runDebugReport`): a "Graph token" section with `appid` / `app_displayname` and the sorted `scp`, and
+- ~~Token claims: `internal/azure/identity.go` gains a pure decoder for a Graph token's `appid`, `app_displayname`
+  and `scp`, beside `parseIdentityClaims`; tested with synthetic JWT payloads. The token itself is never logged.~~
+- ~~Coverage helper (pure): given declared permissions and a scope list, return covered and missing; a `ReadWrite`
+  scope covers its `Read` counterpart, matching is case-insensitive; table-tested.~~
+- ~~`--debug` (`runDebugReport`): a "Graph token" section with `appid` / `app_displayname` and the sorted `scp`, and
   for the effective type selection (`runprep.SelectTypesFromConfig` plus `DedicatedAppRequirements`) every declared
   permission marked covered or missing. It runs on the CLI credential when the profile has no `client-id`, otherwise
   on the dedicated app's token, and writes nothing. The section is built by a pure function from the decoded claims
   and the coverage result (tested with fixed inputs, sorted output); `runDebugReport` only fetches the Graph token
-  and logs the result.
-- Dependency: add `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (latest release, `v0.4.0` at review) as
+  and logs the result.~~
+- ~~Dependency: add `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (latest release, `v0.4.0` at review) as
   a direct requirement, then `make deps`; `go.sum` gains the module and its two new indirects (Keychain accessor,
-  go-keychain). No other module version moves.
-- Platform split, so a build without the store still compiles: the only file importing `azidentity/cache` is
+  go-keychain). No other module version moves.~~
+- ~~Platform split, so a build without the store still compiles: the only file importing `azidentity/cache` is
   `internal/azure/tokencache_supported.go` (`//go:build (darwin && cgo) || linux || windows`), exposing
   `newPersistentCache() (azidentity.Cache, error)`; `internal/azure/tokencache_other.go` (the negated constraint)
   returns an error "persistent token cache unavailable on this platform/build" — the "no secure store" path below.
-  The factory is a package variable so tests replace it and never touch a real store.
-- Authentication record store (`internal/azure/authrecord.go`): `authRecordPath(tenantID, clientID)` →
+  The factory is a package variable so tests replace it and never touch a real store.~~
+- ~~Authentication record store (`internal/azure/authrecord.go`): `authRecordPath(tenantID, clientID)` →
   `os.UserConfigDir()/azure-rd/auth/<tenant-id>-<client-id>.json` (directory created 0700, file written 0600 via a
   temp file and rename); `loadAuthRecord` returns the record, or none when the file is missing, unparsable, or its
   `TenantID` / `ClientID` differ from the profile (case-insensitive) — a mismatched or corrupt file is treated as
   absent and overwritten on the next sign-in, never trusted. Never under the repository, `--config-dir` or
-  `output/`; it holds no token or secret.
-- Cached device-code session in `newCredential` (only when the profile names a `client-id`; no new config key):
+  `output/`; it holds no token or secret.~~
+- ~~Cached device-code session in `newCredential` (only when the profile names a `client-id`; no new config key):
   build the persistent cache (`Name: "azure-rd"`); on error, warn once ("token cache unavailable: <reason>; signing
   in on every run") and construct today's credential unchanged — never store tokens unencrypted. With a cache, wrap
   an `azidentity.DeviceCodeCredential` built with `Cache`, the loaded `AuthenticationRecord` (if any) and
@@ -377,15 +377,15 @@ naming flags that no longer exist.
   prompt, saves the returned record (replacing the old one), and retries `GetToken`; the non-interactive variant
   (`NewNonInteractiveCredential`) returns the error unchanged and never prompts, but now succeeds silently whenever
   a cached session exists. Construction stays network-free (`NewCredential`'s contract). Any other error passes
-  through unchanged.
-- `--debug` token-cache line: "Token cache" `active (record from <file mtime, date>)`, `no session yet (the next run
-  signs in once)` or `unavailable (<reason>)`; printed only when the profile names a `client-id`.
-- Tests (all with the cache factory and the inner credential stubbed; no real tokens, no real store): record
+  through unchanged.~~
+- ~~`--debug` token-cache line: "Token cache" `active (record from <file mtime, date>)`, `no session yet (the next run
+  signs in once)` or `unavailable (<reason>)`; printed only when the profile names a `client-id`.~~
+- ~~Tests (all with the cache factory and the inner credential stubbed; no real tokens, no real store): record
   round-trip; path shape, directory 0700 and file 0600 (skipped on Windows); tenant mismatch, client mismatch and
   corrupt file load as absent; cache-unavailable falls back to the plain credential and warns once; silent success
   never calls `Authenticate`; `AuthenticationRequiredError` → one `Authenticate`, record saved, retry succeeds;
   non-interactive variant never calls `Authenticate`; N concurrent `GetToken` calls on a fresh session call
-  `Authenticate` once (run under `make test-race`); other errors pass through.
+  `Authenticate` once (run under `make test-race`); other errors pass through.~~
 - Operator step, not for the implementer — stays unstruck until the result is recorded here: on cb-gmbh.com, with
   the dedicated app in the profile, sign in once, then a second `resource download --dry-run` must not prompt;
   record the platform and whether it prompted.
@@ -399,10 +399,10 @@ naming flags that no longer exist.
   (`internal/cmdutil/prompt.go`) first prints the exact `az login --scope …` command derived from the selected types
   and offers device code as the fallback. If the experiment says no, this bullet goes back to the parked ideas,
   rewritten with the evidence, and the README states the measured answer.
-- Stale wording: the `client.go:168` error reads "tenant-id is required when client-id is set in the tenant profile";
+- ~~Stale wording: the `client.go:168` error reads "tenant-id is required when client-id is set in the tenant profile";
   the `cmd/root.go:52` help text and the comments in `models/types.go`, `registry.go`, `collection.go`,
   `cmd/resource/list.go` name the profile keys, not flags. A test asserts the new error text and that neither it nor
-  the root help mentions `--client-id`, `--tenant-id` or `AZURE_RD_`.
+  the root help mentions `--client-id`, `--tenant-id` or `AZURE_RD_`.~~
 - Documentation at *done*: `README.md` — resolve the contradiction (`:540-546` vs `:679-681`) with the measured
   result; `:544` "the profile sets no `client-id`"; the `--debug` section documents the Graph token section and
   replaces the shell token-decoder one-liner (`:518-523`); the cached device-code session (where the record and the
@@ -411,6 +411,13 @@ naming flags that no longer exist.
   to get the Keychain cache). `CHANGELOG.md`:
   `### Added` (the cached device-code session; the `--debug` Graph token and coverage section), `### Fixed` (the
   error message and help text naming removed flags).
+- Follow-up, found while implementing — operator check first: azidentity keeps CAE and non-CAE tokens in separate
+  cache partitions (`azure-rd` and `azure-rd.cae`, separate MSAL clients), and the sign-in authenticates only the
+  partition of the request that needed it (the request's `EnableCAE` is carried into `Authenticate`). A run whose
+  token requests mix both (the Graph SDK and azcore's bearer policy request CAE tokens; `VerifySession` and
+  `SignedInIdentity` do not) may therefore prompt twice on its first sign-in, and silently after that. The cache
+  check above should record how many prompts the first run showed; if two, sign in once and seed the other
+  partition from the same session, or drop the mixed request.
 
 ## Parked ideas
 

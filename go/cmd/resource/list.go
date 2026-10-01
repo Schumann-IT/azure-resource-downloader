@@ -94,8 +94,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Unlike `resource types`, nothing about this command's question is
 	// answerable offline, so a missing session is a real error and is surfaced
 	// up front — the same fail-fast the download performs. The device-code path
-	// (--client-id/--tenant-id) is exempt: its sign-in happens at the first
-	// token request.
+	// (client-id/tenant-id in the tenant profile) is exempt: its sign-in happens
+	// at the first token request.
 	if clientID == "" {
 		if err := azure.VerifySession(ctx, lazyCred); err != nil {
 			log.Debug("Session verification failed", "error", err)

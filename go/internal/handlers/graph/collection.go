@@ -37,8 +37,9 @@ type GraphCollectionHandler struct {
 	// collection here reads admin/Intune data via delegated scopes the Azure CLI
 	// first-party app cannot consent to (e.g. Policy.Read.All,
 	// DeviceManagementConfiguration.Read.All), so by default these types need a
-	// dedicated app (--client-id/--tenant-id). A constructor may set this true
-	// for a type that is readable with the plain az login session.
+	// dedicated app (client-id/tenant-id in the tenant profile). A constructor
+	// may set this true for a type that is readable with the plain az login
+	// session.
 	worksWithCLICredential bool
 	// hasAssignments marks a type that has an assignments concept (its fetchItem
 	// populates assignments). It is surfaced via HasAssignments so the export can

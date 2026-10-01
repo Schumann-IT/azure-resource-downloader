@@ -96,7 +96,7 @@ func (r *Registry) AssignmentCapableTypes() map[string]bool {
 // mapping each such type to the delegated permissions it declares. Types that
 // work with the default Azure CLI credentials (or have no registered handler)
 // are omitted. Callers use this before authenticating to decide whether they
-// must obtain --client-id/--tenant-id.
+// must obtain a client-id/tenant-id for the tenant profile.
 func (r *Registry) DedicatedAppRequirements(resourceTypes []string) map[string][]string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
