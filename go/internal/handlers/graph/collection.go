@@ -112,10 +112,13 @@ func (h *GraphCollectionHandler) GetDocumentationPrompt() string {
 }
 
 // Documentation returns the per-type documentation metadata with AzureType
-// filled in from the handler. It satisfies models.Documented.
+// and HasAssignments filled in from the handler, so the prompt templates branch
+// on the same assignments fact the export records. It satisfies
+// models.Documented.
 func (h *GraphCollectionHandler) Documentation() models.ResourceDocumentation {
 	doc := h.documentation
 	doc.AzureType = h.azureType
+	doc.HasAssignments = h.hasAssignments
 	return doc
 }
 

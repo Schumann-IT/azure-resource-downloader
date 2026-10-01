@@ -89,14 +89,14 @@ replaced by evidence-bound ones — so the scheduled regeneration yields better 
 
 **Plan.**
 
-- `models.ResourceDocumentation` gains `HasAssignments bool`, filled by `GraphCollectionHandler.Documentation()`
+- ~~`models.ResourceDocumentation` gains `HasAssignments bool`, filled by `GraphCollectionHandler.Documentation()`
   from `h.hasAssignments` (ARM handlers leave it false), so templates branch on the same fact the export records
   in `metadata.yaml` instead of a second per-handler flag. Extract the default template's assignments bullet into
   a partial `prompt-assignments` (the explanation, the table built with the run's splice columns
   `Direction | Target | Filter | Intent` — `Intent` only for apps, empty columns dropped — bare group GUIDs, never
   invented names) and call it from the default template and, under `{{ if .HasAssignments }}`, the referenced
-  template.
-- New `internal/handlers/graph/conditional_access_prompt.tmpl`, embedded in `conditionalaccesspolicy.go` the way
+  template.~~
+- ~~New `internal/handlers/graph/conditional_access_prompt.tmpl`, embedded in `conditionalaccesspolicy.go` the way
   `group.go` embeds its template, wired through `Template`; `hasAssignments` stays false. Layout: title, summary,
   metadata table (type, id, `state`, created / modified) and no assignments block or markers. `Conditions`:
   a `Condition | Include | Exclude` table with one row per `conditions.*` dimension present (users, groups, roles,
@@ -108,47 +108,47 @@ replaced by evidence-bound ones — so the scheduled regeneration yields better 
   `conditions.*` (`state`, `grantControls`, `sessionControls`, timestamps …) as `<details data-setting>` blocks,
   with the KeySettings bullet. `Security`: report-only vs enforced, whether any user or group is excluded (without
   claiming an exclusion is an emergency-access account), grant and session controls that weaken or strengthen
-  access. `<!-- doc-headings: References | Conditions | Lifecycle and operations | Security | Settings -->`.
-- Template selection: `reusablePolicySettings` → `referencedPromptTemplateText` (no `hasAssignments`);
+  access. `<!-- doc-headings: References | Conditions | Lifecycle and operations | Security | Settings -->`.~~
+- ~~Template selection: `reusablePolicySettings` → `referencedPromptTemplateText` (no `hasAssignments`);
   `roleScopeTags` keeps the referenced template and, through `HasAssignments`, gets the `prompt-assignments` block
-  above the first H2 and an intro that no longer claims "no assignments of its own".
-- `prompt-closed-set` mentions "assignment information belongs in the assignments block above" only under
+  above the first H2 and an intro that no longer claims "no assignments of its own".~~
+- ~~`prompt-closed-set` mentions "assignment information belongs in the assignments block above" only under
   `{{ if .HasAssignments }}`; the CA template says targeting belongs in `Conditions`; every template keeps the
-  forbidden-heading list.
-- Consistency: `prompt-key-settings` called from the settings-like section of every template (`Settings`,
+  forbidden-heading list.~~
+- ~~Consistency: `prompt-key-settings` called from the settings-like section of every template (`Settings`,
   `Properties` or `Definition`); `group_prompt.tmpl` uses `{{ template "prompt-header" . }}` (subtype, links incl.
   Admin center, related types); `record_prompt.tmpl` gets the redaction rule in a record wording — the exposed
   credential is called out in `Lifecycle and operations` (record has no `Security` H2) and its data-note bullet
   allows `security` for the redacted block only; a new `prompt-embedded-payloads` partial (the rewritten line from
   scope choice 1) is called from the settings-like section of the default, referenced and credential templates;
   credential `Lifecycle and operations` keeps deprecation / migration / deletion and leaves expiry, renewal and
-  cadence to `Expiry and renewal`.
-- Evidence-bound instructions, in every template: `prompt-url-rule` becomes "link a setting only to a specific page
+  cadence to `Expiry and renewal`.~~
+- ~~Evidence-bound instructions, in every template: `prompt-url-rule` becomes "link a setting only to a specific page
   you know; otherwise give no link — never an approximate or guessed URL"; `References` must list the curated
   `Links` from the header (API reference, schema, permissions, Admin center, baselines) where the template has that
   section; a recommended / best-practice value only where a listed `BestPractices` baseline covers the setting
   (otherwise the body documents the configured value only); "recommended review cadence" removed everywhere except
   `Expiry and renewal`; the summary states purpose from the resource's own `description` and settings or says the
-  purpose is not documented — never inferred from the display name (group: drop "likely purpose").
-- Reverse references: the group `Usage as assignment target` section says the tool-spliced `Targeted by` block
+  purpose is not documented — never inferred from the display name (group: drop "likely purpose").~~
+- ~~Reverse references: the group `Usage as assignment target` section says the tool-spliced `Targeted by` block
   lists every assigning resource and asks only for the rename / delete impact; the referenced `Usage and
   references` section explains how referencing policies use the object and what breaks on deletion — no "search
-  sibling directories" prose and no hand-made list of referencing resources in either.
-- New guidance: `Security` (record: `Lifecycle and operations`) names the read permission from the header's
+  sibling directories" prose and no hand-made list of referencing resources in either.~~
+- ~~New guidance: `Security` (record: `Lifecycle and operations`) names the read permission from the header's
   `RequiredPermissions`, and the least-privileged role able to change the resource only when the curated metadata
   or the linked permissions page supports it — otherwise it says the change role is not documented here; referenced
   objects (assignment filters, `roleScopeTagIds`, named locations, authentication strengths, notification
   templates, reusable settings) are documented by id, named and linked only per scope choice 2; when `Settings`
   would hold more than 30 top-level blocks, group them under H3s by the leading segment of the setting path
-  (settings catalog: the `settingDefinitionId` category prefix), never by invented themes.
-- Tests: `prompt_templates_test.go` — CA renders the `Conditions:` section, the exact CA `doc-headings` line and no
+  (settings catalog: the `settingDefinitionId` category prefix), never by invented themes.~~
+- ~~Tests: `prompt_templates_test.go` — CA renders the `Conditions:` section, the exact CA `doc-headings` line and no
   assignments instruction; `reusablePolicySettings` and `roleScopeTags` render `Usage and references:`, and only
   `roleScopeTags` the assignments instruction; group renders `- Admin center:` and `Related resource types`; record
   renders the redaction placeholder. A registry-wide test in `internal/handlers`: the assignments instruction
   appears iff `HasAssignments()`, every type with `EmbeddedPayloads` renders them, no prompt contains
   "approximate" or "search sibling", and only credential prompts contain "review cadence". Golden prompts rewritten with
   `make -C go golden-update` and the diff reviewed type by type; `internal/handlers/arm/prompt_templates_test.go`
-  and `internal/models/documentation_test.go` kept green.
+  and `internal/models/documentation_test.go` kept green.~~
 - Documentation at *done*: `README.md` (documentation section: the CA template and its `Conditions` section, the
   templates' evidence rules); `CHANGELOG.md` `### Changed`, with **regenerate the documentation** in bold.
 

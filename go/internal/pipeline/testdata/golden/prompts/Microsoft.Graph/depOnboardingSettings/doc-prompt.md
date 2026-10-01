@@ -34,19 +34,19 @@ Related resource types exported alongside this one (cross-reference their YAML d
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a service credential or token record (e.g. a certificate or a service token): its documentation must focus on validity, renewal and the operational impact of expiry — not on configurable settings, and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the credential's display name or identifier (e.g. the Apple ID, token name or certificate subject).
-- Directly below the title, without a heading: a short summary paragraph describing what this credential enables in the tenant and which service it connects.
+- Directly below the title, without a heading: a short summary paragraph describing what this credential enables in the tenant and which service it connects. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
 - A metadata table stating the resource type, the resource ID, the issuing/owning identity (e.g. Apple ID, organization) and — most importantly — the expiration date and current state, if present.
 
 Then the following H2 sections, unnumbered, in this order:
 
 References:
-- link to the authoritative Microsoft documentation (Microsoft Learn) for this credential type and its renewal procedure.
-- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, best-practice baselines) as a Markdown link labelled with what it is.
+- add a link for an individual setting only under the URL rule below.
+- Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
-- document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned
-- renewal/expiry obligations
-- recommended review cadence.
+- document operational guidance: deprecation or migration status, and what happens when the credential is deleted.
+- leave expiry, renewal and review cadence to the Expiry and renewal section.
 
 Expiry and renewal:
 - state the expiration date from the YAML and explain exactly what stops working when this credential expires.
@@ -54,18 +54,22 @@ Expiry and renewal:
 - recommend a reminder lead time and a review cadence.
 
 Security:
+- name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
 - call out the sensitivity of this credential and who should have access to the account that can renew or revoke it.
-- give particular attention to: tokenExpirationDateTime, appleIdentifier, tokenType, tokenName, syncedDeviceCount, lastSuccessfulSyncDateTime, lastSyncErrorCode, enrollmentProfiles.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property means and any operational relevance.
+- give particular attention to: tokenExpirationDateTime, appleIdentifier, tokenType, tokenName, syncedDeviceCount, lastSuccessfulSyncDateTime, lastSyncErrorCode, enrollmentProfiles.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="expirationDateTime">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the property is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
+- When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
+- Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
+- This resource carries embedded or encoded payloads: enrollmentProfiles[].managementCertificates[].certificate (base64 management certificate). Document each inside its owning setting's expanded body. A payload the export already decoded (inline in the YAML, or as a sidecar file next to it) is documented as decoded. A payload still encoded is decoded and pretty-printed only when it is text (XML, JSON, a script), documenting each contained key/value the same way, with nested `<details>` blocks for the payload's keys where that aids readability; binary content (certificates, images) is stated as present and never reprinted.
 - Only describe properties that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 
-These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above, assignment information belongs in the assignments block above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
+These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
 
 <!-- doc-headings: References | Lifecycle and operations | Expiry and renewal | Security | Properties -->
 

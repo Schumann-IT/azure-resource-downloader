@@ -26,35 +26,41 @@ Related resource types exported alongside this one (cross-reference their YAML d
 - Microsoft.Graph/vppTokens (VPP apps and books inherit the token's tags)
 - Microsoft.Graph/deviceConfigurations, Microsoft.Graph/deviceCompliancePolicies, Microsoft.Graph/mobileApps and every other Intune type that carries roleScopeTagIds (tagged objects)
 
-The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): it has no assignments of its own — instead, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
+The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): besides its own assignments, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the object's display name.
-- Directly below the title, without a heading: a short summary paragraph describing what this object defines and how referencing policies use it.
+- Directly below the title, without a heading: a short summary paragraph describing what this object defines and how referencing policies use it. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
 - A metadata table stating the resource type, the resource ID and the object's key identifying fields, where present.
+- Directly after the metadata table, without a heading: a short explanation of assignments/targeting — who or what receives this resource, and what each include, exclude and filter means — followed by a table of any assignments/targeting present (include/exclude targets, assignment filters) with the columns the documentation run splices in: `Direction | Target | Filter | Intent`, `Intent` only for apps, and a column that is empty for every row dropped. Give each target as its bare group GUID (or the built-in All users / All devices target) and each filter as its bare id with its include/exclude mode, or `none`. Assignment targets contain group IDs only — group names are NOT resolved in the export (groups are exported separately as Microsoft.Graph/groups); never invent group names.
 
 Then the following H2 sections, unnumbered, in this order:
 
 References:
-- link each setting to the authoritative Microsoft documentation (Microsoft Learn) and, where relevant, to a recognized hardening/best-practice baseline.
-- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, best-practice baselines) as a Markdown link labelled with what it is.
+- add a link for an individual setting only under the URL rule below.
+- Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Usage and references:
-- explain that other exported resources reference this object only by its `id`; readers can search sibling resource-type directories for this ID to find every policy that uses it.
-- recommend reviewing those referencing resources before renaming or deleting this object, and describe what breaks in referencing policies when it is deleted.
+- explain how referencing policies use this object — what it decides or supplies in them — and what breaks in a referencing policy when this object is changed or deleted.
+- do not list the referencing resources yourself; where the documentation run provides a list of them, it splices that block in.
 
 Lifecycle and operations:
-- document deprecation or migration status, edit/versioning behavior, and a recommended review cadence.
+- document deprecation or migration status and edit/versioning behavior.
 
 Security:
-- call out security-sensitive content and any deviations from recommended baselines, including the impact on every policy that references this object.
-- give particular attention to: assignments[].target (groups whose devices get the tag), isBuiltIn.
+- name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
+- call out security-sensitive content and any deviations from the best-practice baselines listed above, including the impact on every policy that references this object.
 
 Definition:
-- document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
+- document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.
+- give particular attention to: assignments[].target (groups whose devices get the tag), isBuiltIn.
+- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="rule">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the object contains a rule or filter expression (e.g. an assignment filter `rule`), explain the expression clause by clause in plain language and flag clauses that rely on mutable or spoofable attributes.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
+- When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
+- Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.

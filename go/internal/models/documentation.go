@@ -118,6 +118,12 @@ type ResourceDocumentation struct {
 	// referenced template is renamed — the forward counterpart of a template's
 	// reverse "Used by" block.
 	ReferencesNotificationTemplates bool
+	// HasAssignments marks a type with an assignments concept, the same fact
+	// the export records per type in metadata.yaml (hasAssignments). Templates
+	// branch on it — the assignments block and the closed-set paragraph's
+	// pointer to it — instead of on a second per-handler flag. Graph handlers
+	// fill it from their own hasAssignments; ARM handlers leave it false.
+	HasAssignments bool
 	// Links holds curated reference URLs for this resource type. All subfields
 	// are optional and are omitted from the prompt when empty.
 	Links ResourceLinks

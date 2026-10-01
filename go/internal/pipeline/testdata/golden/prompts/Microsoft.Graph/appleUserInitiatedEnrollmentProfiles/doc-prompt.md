@@ -30,34 +30,37 @@ Related resource types exported alongside this one (cross-reference their YAML d
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the resource's display name.
-- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the tenant.
+- Directly below the title, without a heading: a short summary paragraph describing what this specific resource is and its purpose within the tenant. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
 - Directly after the summary paragraph, a metadata table stating the resource type, the concrete subtype (`@odata.type`, if present), the resource ID, and other identifying top-level fields where present (e.g. platform, technologies).
-- Directly after the metadata table, without a heading: a short explanation of assignments/targeting and what they mean, followed by a table of any assignments/targeting present, (include/exclude targets, assignment filters). Assignment targets contain group IDs only — group names are NOT resolved in the export (groups are exported separately as Microsoft.Graph/groups); never invent group names.
+- Directly after the metadata table, without a heading: a short explanation of assignments/targeting — who or what receives this resource, and what each include, exclude and filter means — followed by a table of any assignments/targeting present (include/exclude targets, assignment filters) with the columns the documentation run splices in: `Direction | Target | Filter | Intent`, `Intent` only for apps, and a column that is empty for every row dropped. Give each target as its bare group GUID (or the built-in All users / All devices target) and each filter as its bare id with its include/exclude mode, or `none`. Assignment targets contain group IDs only — group names are NOT resolved in the export (groups are exported separately as Microsoft.Graph/groups); never invent group names.
 
 Then the following H2 sections, unnumbered, in this order:
 
 References:
-- link each setting to the authoritative Microsoft documentation (Microsoft Learn)
-- and, where relevant, to a recognized hardening/best-practice baseline (e.g. Microsoft security baselines, CIS Benchmarks)
-- Use real, verifiable URLs; if you are unsure of an exact URL, link to the closest canonical Microsoft Learn page and flag it as approximate.
+- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, best-practice baselines) as a Markdown link labelled with what it is.
+- add a link for an individual setting only under the URL rule below.
+- Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
 - document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned
-- renewal/expiry obligations
-- recommended review cadence.
+- renewal/expiry obligations.
 
 Security:
+- name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
 - call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)
-- any deviations from recommended baselines, including the security impact.
+- any deviations from the best-practice baselines listed above, including the security impact.
 
 Settings:
 - document EVERY setting/property present in the YAML.
 - give particular attention to: defaultEnrollmentType, availableEnrollmentTypeOptions, platform, priority.
-- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
+- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.
+- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
+- When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
+- Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
