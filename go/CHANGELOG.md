@@ -88,7 +88,8 @@ This project is released independently of the documentation browser in `web/`: i
   directory, so later runs get their tokens silently until the refresh token expires or is revoked. Without a
   usable store the run warns and keeps signing in every run; tokens are never written unencrypted. Deleting the
   record forgets the session. **The profile's `tenant-id` must be the tenant GUID** — a domain never matches the
-  record and every run would prompt. See `README.md` (*Cached sign-in*).
+  record and every run would prompt. Adds the `azidentity/cache` module (v0.4.0). See `README.md`
+  (*Cached sign-in*).
 - **`--debug` shows what the session's Graph token can actually read.** It decodes the token's app and scopes and
   marks every declared permission of the selected types as covered or missing, and reports whether a cached
   session is active. It settled the open question whether a scoped `az login` could replace the dedicated app:
