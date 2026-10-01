@@ -733,7 +733,9 @@ web/
   fix branch is ready to ship: tests, lint and build pass, nothing is left struck out in `NEXT-ITERATIONS.md`
   (done entries archived) and the rest is numbered contiguously, `## [Unreleased]` records the work, `version`
   is untouched — bumping it and closing the changelog belong to the release — the branch is not the release
-  branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch, and every entry archived as
+  branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch — or the branch is
+  **dependency-only** (its only changes under `web/` are `package.json` and `package-lock.json`, as in a
+  Dependabot pull request; reported as `dependency-only branch: backlog check not required`) — and every entry archived as
   done on the branch grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every
   check and **exits non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is
   reported, not failed: a branch with no user- or operator-visible effect legitimately has none. On GitHub the
