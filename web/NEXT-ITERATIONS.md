@@ -94,18 +94,18 @@ in `ci-web`.
 
 **Plan.**
 
-- `scripts/lib/branch.js` `readBranchFacts`: a new fact `dependencyOnly` (`null` while `base` is `null`, like
+- ~~`scripts/lib/branch.js` `readBranchFacts`: a new fact `dependencyOnly` (`null` while `base` is `null`, like
   the other diff facts), read through the existing `git()` wrapper as
   `git(['diff', '--name-only', '--relative', base, 'HEAD', '--', '.'], { cwd: root })` — non-empty output whose
-  every non-empty line is `package.json` or `package-lock.json`. Update the file's header comment to name it.
-- `scripts/lib/branch.js`: export a pure `backlogCheck(facts)` returning `{ ok: boolean, message: string }` with
+  every non-empty line is `package.json` or `package-lock.json`. Update the file's header comment to name it.~~
+- ~~`scripts/lib/branch.js`: export a pure `backlogCheck(facts)` returning `{ ok: boolean, message: string }` with
   the four outcomes in order — `NEXT-ITERATIONS.md changed on this branch`; `NEXT-ITERATIONS.md delivered on this
   branch (<n> archived entry(ies))`; `dependency-only branch: backlog check not required`; the existing
-  unchanged-backlog failure text — so the spec can pin the shared ok line without running the report.
-- `scripts/branch-ready.js` check 6: call `backlogCheck(facts)` and route to `ok()` / `fail()`; extend the
+  unchanged-backlog failure text — so the spec can pin the shared ok line without running the report.~~
+- ~~`scripts/branch-ready.js` check 6: call `backlogCheck(facts)` and route to `ok()` / `fail()`; extend the
   check's comment (and the header's "touched the backlog at all") with the dependency-only exception. Checks 1–5,
-  7 and 8 are not touched.
-- `test/readiness-git.spec.ts` (the existing temp `git init` fixture; new branches off `main`):
+  7 and 8 are not touched.~~
+- ~~`test/readiness-git.spec.ts` (the existing temp `git init` fixture; new branches off `main`):
   `package.json` + `package-lock.json` only → `dependencyOnly` true, `backlogTouched` false, and `backlogCheck`
   is ok with exactly `dependency-only branch: backlog check not required`; `package-lock.json` alone → true;
   `package.json` plus `src/x.ts` → false and `backlogCheck` fails with the unchanged-backlog text;
@@ -113,7 +113,7 @@ in `ci-web`.
   `package-lock.json` plus `.github/dependabot.yml` at the repository root → true; only
   `.github/dependabot.yml` → `folderChanged` false and `dependencyOnly` false; the existing `fix/other-file`
   and `fix/go-archive` branches assert `dependencyOnly` false; the no-merge-base case asserts `dependencyOnly`
-  null. Pure `backlogCheck` cases for the changed and delivered lines (facts literals, no git).
+  null. Pure `backlogCheck` cases for the changed and delivered lines (facts literals, no git).~~
 - Documentation at *done*: `CHANGELOG.md` *Release workflow*; `README.md` gate-checks list: the dependency-only
   exception.
 
