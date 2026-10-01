@@ -41,6 +41,9 @@ func TestScopeOfPartitionsEveryKnownKey(t *testing.T) {
 		// A workspace from another tenant returns no rows, which reads as
 		// "nobody changed it".
 		AuditWorkspaceKey: ScopeTenant,
+		// Recorded in the export metadata where it gates drift comparability,
+		// and which types an account can read is a property of one tenant.
+		ExcludeTypeKey: ScopeTenant,
 		// Moved to the command line.
 		"dry-run":   ScopeFlagOnly,
 		"log-level": ScopeFlagOnly,
@@ -202,6 +205,30 @@ func TestLoadAcceptsAWorkspaceGUID(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsAnExcludeTypeList: the accepted shape is a list of type
+// names, read back unchanged — normalising the names against the registry is
+// runprep's job, not the loader's.
+func TestLoadAcceptsAnExcludeTypeList(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "contoso.example.com.yaml"),
+		ExcludeTypeKey+":\n  - Microsoft.Compute/virtualMachines\n  - microsoft.storage/storageaccounts\n")
+
+	v := viper.New()
+	if _, err := Load(v, Options{ConfigDir: dir, Domain: "contoso.example.com"}); err != nil {
+		t.Fatalf("Load() = %v, want a list of type names accepted", err)
+	}
+	want := []string{"Microsoft.Compute/virtualMachines", "microsoft.storage/storageaccounts"}
+	if got := v.GetStringSlice(ExcludeTypeKey); !reflect.DeepEqual(got, want) {
+		t.Errorf("%s = %v, want %v", ExcludeTypeKey, got, want)
+	}
+
+	empty := t.TempDir()
+	write(t, filepath.Join(empty, "contoso.example.com.yaml"), ExcludeTypeKey+": []\n")
+	if _, err := Load(viper.New(), Options{ConfigDir: empty, Domain: "contoso.example.com"}); err != nil {
+		t.Errorf("Load() = %v, want an empty list accepted", err)
+	}
+}
+
 // TestLoadWithoutConfigDirAppliesDefaults: the zero-config path must keep
 // working, and the settings that lost their flag must still get their built-in
 // default from somewhere.
@@ -283,6 +310,38 @@ func TestLoadRefusals(t *testing.T) {
 			if !strings.Contains(err.Error(), AuditWorkspaceKey) || !strings.Contains(err.Error(), "contoso.example.com.yaml") {
 				t.Errorf("error %q should name the key and the profile file", err)
 			}
+		}
+	})
+
+	t.Run("exclude-type that is not a list of non-empty strings", func(t *testing.T) {
+		for _, value := range []string{
+			`"Microsoft.Compute/virtualMachines"`,
+			`{Microsoft.Compute/virtualMachines: true}`,
+			`[""]`,
+			`["  "]`,
+			`[Microsoft.Compute/virtualMachines, 42]`,
+			`[[nested]]`,
+		} {
+			dir := t.TempDir()
+			write(t, filepath.Join(dir, "contoso.example.com.yaml"), ExcludeTypeKey+": "+value+"\n")
+			_, err := Load(viper.New(), Options{ConfigDir: dir, Domain: "contoso.example.com"})
+			if err == nil {
+				t.Errorf("Load() accepted %s %s", ExcludeTypeKey, value)
+				continue
+			}
+			if !strings.Contains(err.Error(), ExcludeTypeKey) || !strings.Contains(err.Error(), "contoso.example.com.yaml") {
+				t.Errorf("error %q should name the key and the profile file", err)
+			}
+		}
+	})
+
+	t.Run("exclude-type in the base file", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, BaseFileName), ExcludeTypeKey+": [Microsoft.Compute/virtualMachines]\n")
+		write(t, filepath.Join(dir, "contoso.example.com.yaml"), "")
+		_, err := Load(viper.New(), Options{ConfigDir: dir, Domain: "contoso.example.com"})
+		if err == nil || !strings.Contains(err.Error(), ExcludeTypeKey) {
+			t.Fatalf("Load() error = %v, want the base file refused naming %q", err, ExcludeTypeKey)
 		}
 	})
 

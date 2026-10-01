@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -444,28 +445,28 @@ func TestPreflight(t *testing.T) {
 	comparable := baseline(nil)
 
 	t.Run("comparable baseline passes without warnings", func(t *testing.T) {
-		warnings, err := Preflight(comparable, testTenant, testCfgSha, testFilters)
+		warnings, err := Preflight(comparable, testTenant, testCfgSha, testFilters, nil)
 		if err != nil || len(warnings) != 0 {
 			t.Errorf("Preflight = (%v, %v), want clean pass", warnings, err)
 		}
 	})
 
 	t.Run("tenant mismatch refuses", func(t *testing.T) {
-		_, err := Preflight(comparable, "other.example.com", testCfgSha, testFilters)
+		_, err := Preflight(comparable, "other.example.com", testCfgSha, testFilters, nil)
 		if !errors.Is(err, docs.ErrTenantMismatch) {
 			t.Errorf("err = %v, want ErrTenantMismatch", err)
 		}
 	})
 
 	t.Run("transform config mismatch refuses", func(t *testing.T) {
-		_, err := Preflight(comparable, testTenant, "a-different-config", testFilters)
+		_, err := Preflight(comparable, testTenant, "a-different-config", testFilters, nil)
 		if !errors.Is(err, ErrNotComparable) {
 			t.Errorf("err = %v, want ErrNotComparable", err)
 		}
 	})
 
 	t.Run("filter config mismatch refuses", func(t *testing.T) {
-		_, err := Preflight(comparable, testTenant, testCfgSha, "different-filters")
+		_, err := Preflight(comparable, testTenant, testCfgSha, "different-filters", nil)
 		if !errors.Is(err, ErrNotComparable) {
 			t.Errorf("err = %v, want ErrNotComparable", err)
 		}
@@ -475,7 +476,7 @@ func TestPreflight(t *testing.T) {
 		old := baseline(nil)
 		old.Run.TransformConfigSha256 = ""
 		old.Run.FiltersSha256 = ""
-		warnings, err := Preflight(old, testTenant, testCfgSha, testFilters)
+		warnings, err := Preflight(old, testTenant, testCfgSha, testFilters, nil)
 		if err != nil {
 			t.Fatalf("err = %v, want nil for a pre-field baseline", err)
 		}
@@ -483,6 +484,91 @@ func TestPreflight(t *testing.T) {
 			t.Errorf("warnings = %v, want two (transform + filters unattested)", warnings)
 		}
 	})
+}
+
+func TestPreflightExclusions(t *testing.T) {
+	const vm = "Microsoft.Compute/virtualMachines"
+	const storage = "Microsoft.Storage/storageAccounts"
+	const rg = "Microsoft.Resources/resourceGroups"
+	withExclusion := func(types ...string) docs.Metadata {
+		m := baseline(nil)
+		m.Run.Scope.ExcludedTypes = types
+		return m
+	}
+
+	t.Run("the same set passes, in any order", func(t *testing.T) {
+		if _, err := Preflight(withExclusion(vm, storage), testTenant, testCfgSha, testFilters, []string{storage, vm}); err != nil {
+			t.Errorf("err = %v, want nil", err)
+		}
+	})
+
+	t.Run("neither excludes anything", func(t *testing.T) {
+		if _, err := Preflight(baseline(nil), testTenant, testCfgSha, testFilters, nil); err != nil {
+			t.Errorf("err = %v, want nil", err)
+		}
+	})
+
+	t.Run("a different set refuses naming added and removed", func(t *testing.T) {
+		_, err := Preflight(withExclusion(vm, storage), testTenant, testCfgSha, testFilters, []string{vm, rg})
+		if !errors.Is(err, ErrNotComparable) {
+			t.Fatalf("err = %v, want ErrNotComparable", err)
+		}
+		for _, want := range []string{"newly excluded: " + rg, "no longer excluded: " + storage, "resource download"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q should contain %q", err, want)
+			}
+		}
+		if strings.Contains(err.Error(), "excluded: "+vm) {
+			t.Errorf("error %q names %s, which both exclude", err, vm)
+		}
+	})
+
+	t.Run("a baseline without the field plus a current exclusion refuses", func(t *testing.T) {
+		_, err := Preflight(baseline(nil), testTenant, testCfgSha, testFilters, []string{vm})
+		if !errors.Is(err, ErrNotComparable) || !strings.Contains(err.Error(), vm) {
+			t.Errorf("err = %v, want ErrNotComparable naming %s", err, vm)
+		}
+	})
+
+	t.Run("an exclusion dropped since the baseline refuses", func(t *testing.T) {
+		_, err := Preflight(withExclusion(vm), testTenant, testCfgSha, testFilters, nil)
+		if !errors.Is(err, ErrNotComparable) || !strings.Contains(err.Error(), "no longer excluded: "+vm) {
+			t.Errorf("err = %v, want ErrNotComparable naming %s as no longer excluded", err, vm)
+		}
+	})
+}
+
+// TestObservationRecordsTheExclusion: the observation's run.scope carries the
+// exclusion sorted, and omits the key when there is none.
+func TestObservationRecordsTheExclusion(t *testing.T) {
+	marshal := func(excluded []string) string {
+		rep := Compare(Options{
+			Baseline:               baseline(nil),
+			CurrentTransformSha256: testCfgSha,
+			Scope:                  docs.RunScope{ExcludedTypes: excluded},
+		})
+		data, err := yaml.Marshal(&rep.Observation)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		return string(data)
+	}
+
+	rep := Compare(Options{
+		Baseline:               baseline(nil),
+		CurrentTransformSha256: testCfgSha,
+		Scope:                  docs.RunScope{ExcludedTypes: []string{"Microsoft.Storage/storageAccounts", "Microsoft.Compute/virtualMachines"}},
+	})
+	want := []string{"Microsoft.Compute/virtualMachines", "Microsoft.Storage/storageAccounts"}
+	if got := rep.Observation.Run.Scope.ExcludedTypes; !reflect.DeepEqual(got, want) {
+		t.Errorf("run.scope.excludedTypes = %v, want %v (sorted)", got, want)
+	}
+	if got := marshal(want); !strings.Contains(got, "excludedTypes:") {
+		t.Errorf("observation should record excludedTypes:\n%s", got)
+	}
+	if got := marshal(nil); strings.Contains(got, "excludedTypes") {
+		t.Errorf("observation without exclusions must not carry excludedTypes:\n%s", got)
+	}
 }
 
 func TestBase64FileModeWarning(t *testing.T) {

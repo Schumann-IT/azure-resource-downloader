@@ -99,6 +99,17 @@ section of the [repository README](../README.md) for the procedure.
 
 ### Changed
 
+#### Release workflow
+
+- **The session no longer blocks on CI after a push; it monitors the run and reports back.** After
+  `/implement-pair` (or `/implement-item`), `/close-branch` and `/pull-request` push, the session starts a
+  background monitor on that commit's push run — or, for a pull request, on its checks — and says *pending*
+  until the monitor reports: green with the run URL, or red with the failing jobs and a log excerpt. A red result
+  is acted on only while it is still for the branch's `HEAD`, and a fix round runs only after the user confirms;
+  merging stays the user's action on GitHub. Waiting bought no safety — branch protection already requires all
+  four checks before a merge — it only held the session. The app itself is unchanged. See the root `CLAUDE.md`
+  and the workflow skills. (#38)
+
 #### Drift view
 
 - **The YAML diff of a changed or renamed resource now shows baseline and observed side by side.** A changed

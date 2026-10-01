@@ -48,6 +48,12 @@ const (
 // Unset means attribution is off.
 const AuditWorkspaceKey = "audit-workspace-id"
 
+// ExcludeTypeKey names the resource types a tenant never lists — typically the
+// ARM types of an Intune/Entra-only tenant whose account holds no subscription
+// role. Excluded types are never requested, so leaving them out keeps a run
+// complete.
+const ExcludeTypeKey = "exclude-type"
+
 // keyScopes is the single truth for the configuration partition. Every key the
 // tool recognises appears exactly once; anything absent is rejected as unknown,
 // which is what turns a typo into an error instead of a silently ignored line.
@@ -62,6 +68,11 @@ var keyScopes = map[string]Scope{
 	// next and return no rows — which reads as "nobody changed it" — so it is
 	// tenant-scoped and has no flag.
 	AuditWorkspaceKey: ScopeTenant,
+	// The resource types this tenant never lists. Which types a tenant's
+	// account can read is a property of that tenant, and the exclusion is
+	// recorded in the export metadata where it gates drift comparability, so
+	// a shared value would silently re-scope every tenant's baseline.
+	ExcludeTypeKey: ScopeTenant,
 
 	// General: base only.
 	"output":          ScopeGeneral,

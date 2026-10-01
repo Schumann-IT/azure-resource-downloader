@@ -62,16 +62,37 @@ project, entry number, its side's `should` findings and `BASE`. No git in the ag
   `refactor(<side>): review and ci fixes for <title>`.
 
 ## 6. Push and CI
-`git push -u origin <branch>`; find the push run (`gh run list --branch <branch> --event push --commit
-$(git rev-parse HEAD) --json databaseId,status,conclusion --limit 1`), wait for it (`gh run watch <id>
---exit-status`), read the jobs (`gh run view <id> --json jobs`): `ci-go` / `ci-web` must be `success` or
-`skipped`. A failed job → `gh run view <id> --log-failed`, one more QA round on that side with the log
-excerpt, commit, push, wait. Still red → stop with the log.
+`git push -u origin <branch>`, then start the CI monitor below and carry on to the final report: CI is
+**pending**, never "green", until the monitor reports. The monitor's report arrives while the session is
+alive; GitHub's Actions page stays the source of truth.
+
+### CI monitor
+(Shared by `/close-branch` and `/pull-request`, which refer to it by this name.) After the push record
+`SHA=$(git rev-parse HEAD)` and start **one** Bash command with `run_in_background: true` and an explicit
+`timeout` of 3600000 ms that
+- (a) polls `gh run list --branch <branch> --event push --commit $SHA --json databaseId -q '.[0].databaseId // empty'`
+  every 5 s, at most 24 times, until the result is non-empty, i.e. the run registered (the poll lives inside
+  the background command because a foreground `sleep` is blocked); otherwise it exits non-zero with
+  "no push run for <sha>";
+- (b) then runs `gh run watch <id> --exit-status`.
+
+The session is notified when the command exits. Then read `gh run view <id> --json jobs,url,headSha`:
+`ci-go` / `ci-web` `success` or `skipped` → report green with the run URL. Otherwise report the failing jobs
+with a `gh run view <id> --log-failed` excerpt (tail, at most ~60 lines per job). No run registered or the
+background timeout hit → report "CI still pending/unknown" with the branch's Actions URL. Never report green
+without having read the jobs. Without a background capability, run the same command in the foreground and
+report its result, saying so.
+
+A red report is acted on only when its `headSha` is still `HEAD`; a red run of an older commit is reported
+as **stale**. For a current red run offer the fix round — one QA round on that side with the log excerpt,
+commit, push, new monitor; at most twice — and run it only after the user confirms. Nothing is fixed
+unprompted, and merging stays the user's action on GitHub.
 
 ## 7. Final report, then stop
 Per side: entry title, commit SHAs, bullets struck/open, **Surface changes** and **Deferred to done** from
 the implementer's report (verbatim — the done step writes `README.md` and `CHANGELOG.md` from them), review
-verdict, QA state, the CI run URL and result, user actions still owed (from the plan review), follow-ups
-added to the entry. End with: "Verify the work; then `item N is done` writes the README and changelog and
-archives the entry, and `/close-branch` runs the gate." Do **not** write documentation, do not archive, do
-not run `branch-ready`, do not merge.
+verdict, QA state, the CI state, user actions still owed (from the plan review), follow-ups added to the
+entry. For CI: "CI pending (monitor running)" and the branch's Actions URL; the run URL and result are the
+monitor's report, posted when it arrives. End with: "Verify the work; then `item N is done` writes the
+README and changelog and archives the entry, and `/close-branch` runs the gate." Do **not** write
+documentation, do not archive, do not run `branch-ready`, do not merge.

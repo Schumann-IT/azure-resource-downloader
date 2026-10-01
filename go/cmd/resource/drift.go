@@ -140,7 +140,7 @@ func runDrift(cmd *cobra.Command, args []string) error {
 	currentTransformSha := docs.HashTransformConfig(prep.TransformerConfigs, prep.ResolveSecrets)
 	currentFiltersSha := docs.HashResourceFilters(prep.ResourceFilters)
 
-	warnings, err := drift.Preflight(meta, expectDomain, currentTransformSha, currentFiltersSha)
+	warnings, err := drift.Preflight(meta, expectDomain, currentTransformSha, currentFiltersSha, prep.ExcludedTypes)
 	if err != nil {
 		return cmdutil.WithExitCode(driftExitCannotAnswer, err)
 	}
@@ -187,7 +187,7 @@ func runDrift(cmd *cobra.Command, args []string) error {
 		Baseline:               meta,
 		ResourcesDir:           filepath.Join(tenantDir, models.ResourcesDirName),
 		CurrentTransformSha256: currentTransformSha,
-		Scope:                  docs.RunScope{Types: prep.SelectedTypes, ResourceIDs: prep.ResourceIDs, ResourceGroup: prep.ResourceGroup},
+		Scope:                  docs.RunScope{Types: prep.SelectedTypes, ResourceIDs: prep.ResourceIDs, ResourceGroup: prep.ResourceGroup, ExcludedTypes: prep.ExcludedTypes},
 		TotalRequests:          len(requests),
 		Results:                results,
 		SkippedTypes:           skippedTypes,

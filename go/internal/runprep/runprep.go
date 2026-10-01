@@ -20,6 +20,7 @@ import (
 	"azure-resource-downloader/internal/models"
 	"azure-resource-downloader/internal/tenantdir"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/spf13/viper"
 )
 
@@ -62,9 +63,18 @@ type Prepared struct {
 	// Graph permission and the bytes the transform produces.
 	ResolveSecrets bool
 	// ResourceIDs, SelectedTypes and ResourceGroup are the selection.
+	// SelectedTypes is the allow-list as asked (--type, else the configured
+	// type: list) and is what the metadata records as the run's scope.
 	ResourceIDs   []string
 	SelectedTypes []string
 	ResourceGroup string
+	// ExcludedTypes is the tenant profile's exclude-type list in the
+	// registered spelling, sorted. It is recorded in the export metadata on
+	// every run and gates drift comparability.
+	ExcludedTypes []string
+	// EffectiveTypes are the types a listing enumerates: SelectedTypes, else
+	// every registered type, minus ExcludedTypes.
+	EffectiveTypes []string
 	// WorkersFlag and WorkersExplicit carry the --workers value and whether it
 	// was set explicitly; WorkerConfig is the effective worker configuration.
 	WorkersFlag     int
@@ -97,6 +107,20 @@ func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 		WorkersFlag:     workers,
 		WorkersExplicit: workersExplicit,
 	}
+
+	// The offline registry: a lazy credential (no network, no token fetch
+	// until first use) is enough to know the registered types and their
+	// static per-type metadata. The selection is resolved against it first,
+	// so an excluded or unknown type refuses before any sign-in.
+	offlineCred, err := azure.NewCredential("", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare Azure credentials: %w", err)
+	}
+	offlineRegistry := handlers.NewRegistry(offlineCred, p.Subscription, p.ResolveSecrets)
+	if err := p.resolveSelection(offlineRegistry.GetAllTypes()); err != nil {
+		return nil, err
+	}
+
 	p.WorkerConfig = BuildWorkerConfig()
 	p.TransformerConfigs = BuildTransformerConfigs()
 	p.ResourceFilters = BuildResourceFilters()
@@ -107,7 +131,7 @@ func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 		log.Info("No subscription specified, will use default from Azure CLI session")
 	}
 
-	clientID, tenantID, err := p.resolveCredentials(ctx)
+	clientID, tenantID, err := p.resolveCredentials(ctx, offlineCred, offlineRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -136,25 +160,35 @@ func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 	return p, nil
 }
 
+// resolveSelection applies the tenant profile's exclude-type to the
+// selection: it records the normalised exclusion and the effective type list,
+// and refuses a selection that names an excluded type.
+func (p *Prepared) resolveSelection(registered []string) error {
+	sel, err := SelectTypesFromConfig(registered, p.SelectedTypes, p.ResourceIDs, p.ResourceGroup)
+	if err != nil {
+		return err
+	}
+	p.ExcludedTypes = sel.Excluded
+	p.EffectiveTypes = sel.Effective
+	return nil
+}
+
 // resolveCredentials decides which identity this run signs in with: the Azure
 // CLI session, or the dedicated app registration the tenant's profile names. It
 // proves the CLI session exists before anything depends on it, and asks for an
 // app registration when a selected resource type cannot be read without one.
-func (p *Prepared) resolveCredentials(ctx context.Context) (clientID, tenantID string, err error) {
+//
+// probeCred and probeRegistry are the offline credential and registry Prepare
+// built: before authenticating, it determines whether any selected resource
+// type needs a dedicated app registration (Microsoft Graph scopes the Azure CLI
+// app cannot provide). Building the probe registry is a local operation (no
+// network) and only reads static per-type metadata, so a plain Azure CLI
+// credential is enough here regardless of the final sign-in method.
+func (p *Prepared) resolveCredentials(ctx context.Context, probeCred azcore.TokenCredential, probeRegistry *handlers.Registry) (clientID, tenantID string, err error) {
 	log := logger.Default
 
 	clientID = viper.GetString("client-id")
 	tenantID = viper.GetString("tenant-id")
-
-	// Before authenticating, determine whether any selected resource type needs
-	// a dedicated app registration (Microsoft Graph scopes the Azure CLI app
-	// cannot provide). Building the probe registry is a local operation (no
-	// network) and only reads static per-type metadata, so a plain Azure CLI
-	// credential is enough here regardless of the final sign-in method.
-	probeCred, err := azure.NewCredential("", "")
-	if err != nil {
-		return "", "", fmt.Errorf("failed to prepare Azure credentials: %w", err)
-	}
 
 	// Without a configured client-id, this run leans on the Azure CLI session —
 	// for the token itself, or at least for the tenant default of the
@@ -174,9 +208,10 @@ func (p *Prepared) resolveCredentials(ctx context.Context) (clientID, tenantID s
 		}
 	}
 
-	probeRegistry := handlers.NewRegistry(probeCred, p.Subscription, p.ResolveSecrets)
+	// The effective list, not the allow-list: an excluded type is never
+	// listed, so the prompt must never ask for its scopes.
 	requirements := probeRegistry.DedicatedAppRequirements(
-		SelectedTypeNames(probeRegistry, p.SelectedTypes, p.ResourceGroup, p.ResourceIDs))
+		SelectedTypeNames(probeRegistry, p.EffectiveTypes, p.ResourceGroup, p.ResourceIDs))
 	if len(requirements) == 0 || (clientID != "" && tenantID != "") {
 		return clientID, tenantID, nil
 	}
@@ -230,10 +265,12 @@ func (p *Prepared) resolveTenantDir(ctx context.Context, declaredDomain string) 
 
 // BuildRequests expands the prepared selection into individual fetch requests
 // through the registry's shared listing path, bounding the per-type listing
-// concurrency the same way for every caller.
+// concurrency the same way for every caller. It lists the effective types, so
+// an excluded type is never requested: it is then neither covered nor skipped,
+// and the run stays complete.
 func (p *Prepared) BuildRequests(ctx context.Context) ([]*models.FetchRequest, []models.SkippedType, []string, error) {
 	listConcurrency := ListingConcurrency(p.WorkerConfig, p.WorkersFlag, p.WorkersExplicit)
-	return p.Registry.BuildFetchRequests(ctx, p.ResourceIDs, p.ResourceGroup, p.SelectedTypes, p.Subscription, listConcurrency)
+	return p.Registry.BuildFetchRequests(ctx, p.ResourceIDs, p.ResourceGroup, p.EffectiveTypes, p.Subscription, listConcurrency)
 }
 
 // EffectiveType returns the single selected resource type when exactly one is
@@ -343,7 +380,7 @@ func SelectedTypeNames(registry *handlers.Registry, selectedTypes []string, reso
 		}
 		return types
 	case resourceGroup != "":
-		return []string{"Microsoft.Resources/resourceGroups"}
+		return []string{resourceGroupType}
 	case len(selectedTypes) > 0:
 		return selectedTypes
 	default:

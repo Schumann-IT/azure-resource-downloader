@@ -58,6 +58,7 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
 deleted, and the remaining entries are renumbered.
 
+
 ## Standing decisions
 
 Decisions that are not work items but constrain the ideas below, recorded so the next iteration does not

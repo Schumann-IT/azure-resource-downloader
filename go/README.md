@@ -41,6 +41,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Navigation index (`docs/index.yaml`)](#navigation-index-docsindexyaml)
 - [Supported resource types](#supported-resource-types)
 - [Transformations](#transformations)
+- [Excluding types per tenant](#excluding-types-per-tenant)
 - [Filters](#filters)
 - [Concurrency, retries and timeouts](#concurrency-retries-and-timeouts)
 - [Dry-run](#dry-run)
@@ -169,7 +170,7 @@ azure-rd resource download --config-dir ~/.azure-rd --domain contoso.onmicrosoft
 
 | Flag | Meaning |
 |---|---|
-| `--type` (repeatable) | Restrict to these resource types for this run, replacing the configured `type` list. Selection precedence: `--resource-id` > `--resource-group` > `--type` > everything. |
+| `--type` (repeatable) | Restrict to these resource types for this run, replacing the configured `type` list; the tenant profile's [`exclude-type`](#excluding-types-per-tenant) still applies, and naming an excluded type is refused. Selection precedence: `--resource-id` > `--resource-group` > `--type` > everything. |
 | `--resource-id`, `--resource-group` | Explicit ARM selection. A run scoped this way covers no *type*, so it never marks anything absent (see [metadata](#export-metadata-metadatayaml)). Command-line only: a forgotten entry in a file would silently scope every later run. |
 | `--domain` | Assert which tenant to act on, and select its configuration profile. Refused when it differs from the signed-in tenant, so a typo cannot write one tenant's export under another's name. |
 | `--output` | Redirect this run's export root, e.g. to download elsewhere and compare. |
@@ -217,9 +218,9 @@ azure-rd resource drift --exit-code                       # exit 3 when drift wa
 | `--domain` | Assert which export folder to compare against. Refused when it differs from the signed-in tenant — drift against another tenant's export is all noise. |
 | `--exit-code` | Exit `3` when drift was found (default: drift is a report, not a failure). |
 
-The settings that must match how the baseline was written — `transformers`, `filters`, `resolve-secrets` — are
-configuration precisely so they cannot be typed differently here than they were for the download; the
-comparability preflight refuses when the recorded hashes disagree.
+The settings that must match how the baseline was written — `transformers`, `filters`, `resolve-secrets`,
+`exclude-type` — are configuration precisely so they cannot be typed differently here than they were for the
+download; the comparability preflight refuses when the recorded hashes or the recorded exclusion disagree.
 
 **The export is the baseline and stays untouched.** Drift writes nothing under `resources/` or `docs/` and
 never prunes; its only output is the `<tenant>/drift/` tree (see [Output layout](#output-layout)): an
@@ -231,8 +232,12 @@ definition. Re-baselining is a normal `resource download`. To have an LLM judge 
 follow up with [`docs analyze-drift`](#docs-analyze-drift) before re-baselining.
 
 **Comparability is a precondition.** The command refuses (exit `2`) when there is no baseline, when the
-export belongs to a different tenant, or when the export's recorded transform or filter configuration differs
-from this run's — comparing across a different configuration would report every resource as drifted.
+export belongs to a different tenant, or when the export's recorded transform or filter configuration, or its
+recorded type exclusion (`run.scope.excludedTypes`; a baseline without it excludes nothing), differs from this
+run's — comparing across a different configuration would report every resource as drifted, or a re-included
+type as entirely *added*. After adding or changing `exclude-type`, run `resource download` first. A drift run
+whose own selection names an excluded type, or whose `exclude-type` names an unknown type, is refused earlier
+with exit `1`.
 Individual entries written under an older configuration (or by a tool version predating the per-entry
 attestation) are reported as **unattested** and excluded from the verdict counts, never counted as drift.
 
@@ -334,7 +339,9 @@ appear is decided by the session, never by a flag — and the session is probed 
 sign-in that would require interaction (device-code, browser) counts as “no session”, and the command prints
 the offline map with a note saying so. The output always states which of the two it printed. A type whose
 listing was refused (missing permissions, no subscription) is counted as **unknown — never 0**, which would
-mean “listed and found nothing”; unknown or omitted counts never make the command fail.
+mean “listed and found nothing”; unknown or omitted counts never make the command fail. A type the tenant
+profile excludes ([`exclude-type`](#excluding-types-per-tenant)) stays in the map, marked
+`excluded=exclude-type`, and is never counted — so it never shows as unknown.
 
 ```bash
 azure-rd resource types                                   # the full map (works offline)
@@ -693,12 +700,13 @@ Configuration splits in two, and the split is **enforced**: a key on the wrong s
 | | Where | Settings |
 |---|---|---|
 | **General** | base file | `output`, `type`, `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`, `transformers`, `taxonomy` |
-| **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters`, `audit-workspace-id` |
+| **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters`, `exclude-type`, `audit-workspace-id` |
 
 The split is not bookkeeping. `transformers` is hashed into `transformConfigSha256`, so a per-tenant override
 would make an export non-comparable with its own baseline and with every other tenant; `output` is the export
 root and the tenant is already a subdirectory of it; `filters` is hashed into `filtersSha256`, which gates
-drift comparability, so it must be stable *per tenant* rather than shared. `audit-workspace-id` names the Log
+drift comparability, so it must be stable *per tenant* rather than shared; `exclude-type` names what *this*
+tenant never exports and is recorded with the export for the same reason. `audit-workspace-id` names the Log
 Analytics workspace that holds *this* tenant's audit tables (see [`resource audit`](#resource-audit)); it must
 be a workspace GUID — anything else is a fatal error naming the key and the profile — and it has no default,
 no flag and no environment variable.
@@ -818,6 +826,7 @@ run:
   complete: true                 # every type in scope listed, nothing cancelled, every request produced a result
   incompleteReason: ""
   scope: { types: [], resourceIds: [], resourceGroup: "" }   # empty = full export
+  # scope.excludedTypes: [...]  # the tenant profile's exclude-type, sorted; omitted when empty
   transformConfigSha256: 7f…     # hash of the effective transformer config + resolve-secrets switch
   filtersSha256: c41…            # hash of the effective resource-filter config (drift refuses across a change)
   resolveSecrets: false
@@ -1142,6 +1151,40 @@ The effective transformer configuration plus the resolve-secrets switch are hash
 `run.transformConfigSha256` in `metadata.yaml`, so a later diff can attribute a mass movement of resource hashes
 to a config change rather than to edits in the tenant. Note that spelling a transformer's default settings out
 explicitly changes that hash even though the output is identical — add only the keys you override.
+
+## Excluding types per tenant
+
+`exclude-type` (tenant profile only, config-only) names resource types that are **never listed** for that
+tenant — typically the ARM types of an Intune/Entra-only tenant whose account holds no subscription role, which
+would otherwise fail listing with a 403 on every run and keep every export incomplete:
+
+```yaml
+# <config-dir>/contoso.com.yaml
+exclude-type:
+  - Microsoft.Compute/virtualMachines
+  - Microsoft.Storage/storageAccounts
+  - Microsoft.Resources/resourceGroups
+```
+
+- **Selection.** A run lists the allow-list — `--type`, else the base file's `type`, else every registered type
+  — minus the exclusion. `download`, `drift`, `resource list` and `resource types` all apply it, and the
+  dedicated-app sign-in never asks for an excluded type's scopes. The excluded types are logged once per run.
+- **Completeness.** An excluded type is never requested, so it is neither covered nor *could not be listed*: the
+  run stays complete, and absence, prune and drift removals keep working for every other type. Earlier files and
+  metadata entries of an excluded type are left as they are and never pruned. An otherwise full run still
+  records `lastCoveredBy: full`.
+- **Refusals,** before any sign-in and naming the type and the profile: a `--type` or `type` entry that is
+  excluded; a `--resource-id` whose type is excluded; `--resource-group` while
+  `Microsoft.Resources/resourceGroups` is excluded (a bare Graph id carries no type and passes); an excluded name
+  that is not a registered type; an exclusion that leaves no type at all; and a value that is not a list of type
+  names. Names match case-insensitively and are recorded in the registered spelling.
+- **Recorded and compared.** The effective exclusion is written to `run.scope.excludedTypes` in
+  `resources/metadata.yaml` and in the drift observation (omitted when empty). `resource drift` refuses (exit `2`)
+  when it differs from the baseline's — **after adding or changing `exclude-type`, run `resource download` before
+  the next `resource drift`.**
+
+This is unrelated to `counts.excluded` in `docs/index.yaml`, which counts what the taxonomy leaves out of the
+documentation.
 
 ## Filters
 

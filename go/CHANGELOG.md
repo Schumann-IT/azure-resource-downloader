@@ -65,7 +65,33 @@ This project is released independently of the documentation browser in `web/`: i
   to that app and grant admin consent again**; without it the sign-in fails with `AADSTS650057`. See
   **resource audit** and **Create the app registration** in the [README](README.md). (#33)
 
+#### Command-line surface and configuration
+
+- **A tenant profile can exclude resource types instead of the base file listing every wanted one.** The new
+  `exclude-type` key (tenant profile only) names types that are never listed for that tenant — typically the
+  ARM types of an Intune/Entra-only tenant whose account has no subscription role, which otherwise fail with a
+  403 on every run and keep every export and drift run incomplete. The only alternative was a base-file `type`
+  allow-list of every wanted type, shared by all tenants of the config directory and silently missing any type a
+  later release adds. Excluded types are never requested, so the run stays complete and absence, prune and
+  removals keep working; their earlier files are left alone. A `--type`, `--resource-id` or `--resource-group`
+  that targets an excluded type is refused rather than quietly overriding the profile, an unknown name is a
+  fatal error, `resource types` marks excluded types instead of querying them, and the exclusion is recorded with
+  the export (`run.scope.excludedTypes`) so drift cannot compare across a changed one. **After adding or changing
+  `exclude-type`, run `resource download` before the next `resource drift`** — drift refuses until the baseline
+  carries the same exclusion. See `README.md` (*Excluding types per tenant*). (#38)
+
 ### Changed
+
+#### Release workflow
+
+- **The session no longer blocks on CI after a push; it monitors the run and reports back.** After
+  `/implement-pair` (or `/implement-item`), `/close-branch` and `/pull-request` push, the session starts a
+  background monitor on that commit's push run — or, for a pull request, on its checks — and says *pending*
+  until the monitor reports: green with the run URL, or red with the failing jobs and a log excerpt. A red result
+  is acted on only while it is still for the branch's `HEAD`, and a fix round runs only after the user confirms;
+  merging stays the user's action on GitHub. Waiting bought no safety — branch protection already requires all
+  four checks before a merge — it only held the session. The app itself is unchanged. See the root `CLAUDE.md`
+  and the workflow skills. (#38)
 
 #### Documentation and drift analysis
 
@@ -104,6 +130,12 @@ This project is released independently of the documentation browser in `web/`: i
   example `--type Microsoft.Graph/organizationalBranding` on such a tenant — records the metadata and exits `0`
   instead of failing with *no resources to download*; that error is now reserved for a run where nothing could
   be listed at all. No action needed: the next download records the branding as empty. (#37)
+
+#### Command-line surface and configuration
+
+- **`--type` help no longer claims to narrow the configured types.** It replaces the base file's `type` list for
+  that run, as the README always said; the help text now says so, and that the tenant profile's `exclude-type`
+  still applies. (#38)
 
 ### Breaking
 

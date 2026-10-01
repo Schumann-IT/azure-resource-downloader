@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -549,5 +550,100 @@ func TestEmptyOnlyRunMarksAbsentAndPrunes(t *testing.T) {
 				t.Errorf("entry should be retained and marked absent, got %+v (ok=%v)", entry, ok)
 			}
 		})
+	}
+}
+
+// TestExcludedTypesRoundTripSortedAndOmittedWhenEmpty: the profile's exclusion
+// is recorded sorted under run.scope.excludedTypes and read back; without one
+// the key is absent, so an export without exclusions stays byte-identical.
+func TestExcludedTypesRoundTripSortedAndOmittedWhenEmpty(t *testing.T) {
+	write := func(scope RunScope) (string, Metadata) {
+		output := t.TempDir()
+		resourcesDir := filepath.Join(output, models.ResourcesDirName)
+		p := writeYAML(t, resourcesDir, testType, "alpha")
+		run := exportRun(output, newSummary(true, []*models.WriteResult{successResult(p, testType, "alpha", "id-a")}, nil, nil), scope, false)
+		if err := WriteExportMetadata(run); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(resourcesDir, MetadataFileName))
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		meta, err := loadMetadata(filepath.Join(resourcesDir, MetadataFileName))
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		return string(data), meta
+	}
+
+	withNil, _ := write(RunScope{})
+	withEmpty, _ := write(RunScope{ExcludedTypes: []string{}})
+	if strings.Contains(withNil, "excludedTypes") {
+		t.Errorf("metadata.yaml without exclusions must not carry excludedTypes:\n%s", withNil)
+	}
+	if withNil != withEmpty {
+		t.Errorf("an empty exclusion must serialise like none\n--- nil ---\n%s\n--- empty ---\n%s", withNil, withEmpty)
+	}
+
+	data, meta := write(RunScope{ExcludedTypes: []string{"Microsoft.Storage/storageAccounts", "Microsoft.Compute/virtualMachines"}})
+	want := []string{"Microsoft.Compute/virtualMachines", "Microsoft.Storage/storageAccounts"}
+	if got := meta.Run.Scope.ExcludedTypes; len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("run.scope.excludedTypes = %v, want %v (sorted)", got, want)
+	}
+	if !strings.Contains(data, "excludedTypes:") {
+		t.Errorf("metadata.yaml should record excludedTypes:\n%s", data)
+	}
+}
+
+// TestFullRunWithExclusionsIsCompleteAndLeavesExcludedEntries: an excluded type
+// is never requested, so a full run that leaves it out is still complete and
+// labelled full, its earlier entries stay untouched (never marked absent), and
+// prune never removes their files.
+func TestFullRunWithExclusionsIsCompleteAndLeavesExcludedEntries(t *testing.T) {
+	const vmType = "Microsoft.Compute/virtualMachines"
+	output := t.TempDir()
+	resourcesDir := filepath.Join(output, models.ResourcesDirName)
+	aPath := writeYAML(t, resourcesDir, testType, "alpha")
+	vmPath := writeYAML(t, resourcesDir, vmType, "vm1")
+
+	// Seed: a full run before the exclusion covered both types.
+	if err := WriteExportMetadata(exportRun(output, newSummary(true, []*models.WriteResult{
+		successResult(aPath, testType, "alpha", "id-a"),
+		successResult(vmPath, vmType, "vm1", "id-vm"),
+	}, nil, nil), RunScope{}, false)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	seeded, err := loadMetadata(filepath.Join(resourcesDir, MetadataFileName))
+	if err != nil {
+		t.Fatalf("load seed: %v", err)
+	}
+
+	// A full run with the VM type excluded, pruning: the VM type is neither
+	// covered nor skipped.
+	if err := WriteExportMetadata(exportRun(output, newSummary(true, []*models.WriteResult{
+		successResult(aPath, testType, "alpha", "id-a"),
+	}, nil, nil), RunScope{ExcludedTypes: []string{vmType}}, true)); err != nil {
+		t.Fatalf("excluding run: %v", err)
+	}
+
+	meta, err := loadMetadata(filepath.Join(resourcesDir, MetadataFileName))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !meta.Run.Complete {
+		t.Errorf("run.complete = false (%s), want true for a full run with exclusions", meta.Run.IncompleteReason)
+	}
+	if got := meta.Types[testType].LastCoveredBy; got != coveredByFull {
+		t.Errorf("lastCoveredBy = %q, want %q", got, coveredByFull)
+	}
+	vmKey := vmType + "/vm1.yaml"
+	if got, want := meta.Resources[vmKey], seeded.Resources[vmKey]; !reflect.DeepEqual(got, want) {
+		t.Errorf("excluded type's entry changed:\n got %+v\nwant %+v", got, want)
+	}
+	if got, want := meta.Types[vmType], seeded.Types[vmType]; !reflect.DeepEqual(got, want) {
+		t.Errorf("excluded type's type entry changed:\n got %+v\nwant %+v", got, want)
+	}
+	if _, err := os.Stat(vmPath); err != nil {
+		t.Errorf("prune removed the excluded type's file: %v", err)
 	}
 }

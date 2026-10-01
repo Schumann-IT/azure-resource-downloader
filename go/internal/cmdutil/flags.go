@@ -34,10 +34,11 @@ const (
 
 // AddSelectionFlags registers the selection triad locally on cmd:
 // --resource-id, --type and --resource-group. These stay on the command line
-// because scoping a single run is the ad-hoc case: --type narrows the
-// configured type list for this invocation, and the two ARM selectors have no
-// config key at all, so a stale entry in a tenant profile can never silently
-// scope every future run.
+// because scoping a single run is the ad-hoc case: --type replaces the
+// configured type list for this invocation (the tenant profile's exclude-type
+// still applies, and naming an excluded type is refused), and the two ARM
+// selectors have no config key at all, so a stale entry in a tenant profile
+// can never silently scope every future run.
 func AddSelectionFlags(cmd *cobra.Command) {
 	defineSelectionFlags(cmd.Flags())
 }
@@ -51,7 +52,7 @@ func AddPersistentSelectionFlags(cmd *cobra.Command) {
 // defineSelectionFlags is the single definition of the selection triad.
 func defineSelectionFlags(f *pflag.FlagSet) {
 	f.StringSlice("resource-id", []string{}, "explicit Azure resource ID to act on; repeatable")
-	f.StringSlice("type", []string{}, "resource type to act on; repeatable, narrows the configured types for this run (default: all registered types)")
+	f.StringSlice("type", []string{}, "resource type to act on; repeatable, replaces the configured types for this run; the tenant profile's exclude-type still applies (default: all registered types)")
 	f.String("resource-group", "", "act on resources in this resource group")
 }
 

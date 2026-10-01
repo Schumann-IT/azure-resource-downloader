@@ -191,6 +191,16 @@ func TestPartitionIsEnforced(t *testing.T) {
 			wantInErr: "audit-workspace-id",
 		},
 		{
+			name:      "exclude-type in the base file",
+			base:      "exclude-type: [Microsoft.Compute/virtualMachines]\n",
+			wantInErr: "exclude-type",
+		},
+		{
+			name:      "exclude-type that is not a list",
+			profile:   "exclude-type: Microsoft.Compute/virtualMachines\n",
+			wantInErr: "exclude-type",
+		},
+		{
 			name:      "an unknown key is a typo, not a no-op",
 			base:      "timeoutt: 42\n",
 			wantInErr: "not a known setting",
@@ -329,6 +339,12 @@ func TestConfigExampleDomainIsNoOp(t *testing.T) {
 	}
 	if viper.IsSet("filters") {
 		t.Errorf("config.example.domain.yaml sets 'filters' = %v, want unset (it must stay commented out)", viper.Get("filters"))
+	}
+	// An exclusion is recorded in the export metadata and gates drift, so the
+	// stub must exclude nothing.
+	if viper.IsSet(config.ExcludeTypeKey) {
+		t.Errorf("config.example.domain.yaml sets %q = %v, want unset (it must stay commented out)",
+			config.ExcludeTypeKey, viper.Get(config.ExcludeTypeKey))
 	}
 	if got := runprep.BuildResourceFilters(); len(got) != 0 {
 		t.Errorf("BuildResourceFilters() from the profile stub = %+v, want none", got)

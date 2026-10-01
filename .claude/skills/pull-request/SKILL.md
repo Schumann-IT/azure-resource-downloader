@@ -12,8 +12,10 @@ Merges are squash-and-merge, so the **title becomes the commit on `main`** and m
 
 1. **Preflight, fail fast.** `gh auth status` must succeed — otherwise stop with "run `gh auth login`".
    Branch ≠ `main`; `git status --porcelain` empty; `origin` exists. Base = `git merge-base HEAD main`.
-   `/close-branch` must have run on this commit (report green, CI green); otherwise run
-   `make branch-ready-report-go` / `-web` now and check the push run with `gh`; a ❌ stops here.
+   `/close-branch` must have run on this commit (report green); otherwise run
+   `make branch-ready-report-go` / `-web` now. Check the push run for `HEAD` with `gh`: a pending run is
+   accepted (the Verification section says "push run pending" instead of quoting a green run), a red run
+   for `HEAD` or a ❌ stops here.
 2. **Gather the facts** (all read-only): the projects touched (`git diff --stat <base>..HEAD -- go web`);
    the archive files added on the branch (`git diff --name-only --diff-filter=A <base>..HEAD --
    .claude/archive`) and, from their frontmatter, the entries closed; entries still open but advanced
@@ -34,7 +36,17 @@ Merges are squash-and-merge, so the **title becomes the commit on `main`** and m
    "<title>" --body-file <scratchpad file>`. Record the number `N` from the output.
 7. **Link back.** Add `pr: N` to the frontmatter of each archive file added on the branch (after
    `branch:`), and append ` (#N)` to the last line of each changelog bullet the branch added under
-   `[Unreleased]`. Commit `docs: link pull request #N`, push, then wait for the pull request's checks
-   (`gh pr checks N --watch`): `branch-ready-go` / `branch-ready-web` are the merge gate and must be green,
-   `ci-*` must be green or skipped.
-8. Report the URL, the title, and what was linked. Do not merge; merging is the user's action on GitHub.
+   `[Unreleased]`. Commit `docs: link pull request #N`, push, then start the pull request's **checks
+   monitor**: one Bash command with `run_in_background: true` and an explicit `timeout` of 3600000 ms (same
+   procedure as the CI monitor in `/implement-pair` §6) that polls every 5 s, at most 24 times, until
+   `gh pr view N --json headRefOid -q .headRefOid` equals the pushed `HEAD` and
+   `gh pr checks N --json name -q length` is greater than 0, then runs `gh pr checks N --watch`. If the
+   polls run out the command exits non-zero and the report is "checks still pending/unknown" with the
+   pull-request URL. On its notification read `gh pr checks N --json name,state,bucket,link` and report the
+   merge-gate checks (`branch-ready-go` / `branch-ready-web`) and `ci-*`; base the green test on `bucket`
+   (`pass` / `fail` / `pending` / `skipping`; `ci-*` skipping counts as green). A merge-gate check absent
+   from the list counts as pending, never green; never report green without having read them. Without a
+   background capability, run the same command in the foreground and report its result, saying so.
+8. Report the URL, the title, what was linked and "checks pending (monitor running)". When the monitor
+   reports, tell the user the pull request is ready for review and merge on GitHub, or what is red. Do not
+   merge; merging is the user's action on GitHub.
