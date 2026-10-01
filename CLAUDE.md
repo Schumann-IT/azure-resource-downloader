@@ -14,13 +14,20 @@ Each project has its own `README.md` (the single source of truth for what it doe
 Go rules do not apply under `web/` and vice versa, and `web/` must never import from, shell out to or depend
 on `go/` — `DOCS_ROOT` pointing at an export tree is the only coupling.
 
+**The Go → web contract** is what the CLI writes and the browser reads in that tree: `docs/index.yaml`
+(versioned), the `drift/` tree (observation, payloads, the agent's per-finding frontmatter and the index's
+`severities:` line), document frontmatter (`source`, `generatedAt`, `summary`, `platformGroup`, `functionGroup`),
+the summary's H2 set and every template's section H2s (the browser styles sections by slug), and
+`resources/metadata.yaml` (read by the tenant compare). A change to any of these is cross-project: it ships as a
+go/web pair (`/implement-pair`) with a `Contract` note on both entries.
+
 ## Where guidance lives
 
 | Location | Scope |
 |---|---|
 | this file | monorepo layout, workflow, gates, release |
 | `go/CLAUDE.md`, `web/CLAUDE.md` | per-project context, layout, non-negotiables, commands (loaded when working in that folder) |
-| `.claude/rules/*.md` | path-scoped detail: Go style, handlers, export safety; web style; changelog policy; backlog lifecycle |
+| `.claude/rules/*.md` | path-scoped detail: Go style, handlers, export safety; web style, exports; changelog policy; backlog lifecycle |
 | `.claude/skills/*/SKILL.md` | procedures: `new-handler`, `add-command`, `add-config-option`, `test-failure-report`; workflow: `promote-idea`, `implement-item`, `implement-pair`, `item-done`, `archive`, `close-branch`, `pull-request`, `release` |
 | `.claude/agents/*.md`, `.claude/hooks/` | the pipeline agents (`plan-reviewer`, `implementer`, `impl-reviewer`, `qa`) and the Bash guard they run under; launched only by `/implement-pair`. `session-start.sh` reports at startup whether `gh` is logged in |
 | `.github/PULL_REQUEST_TEMPLATE.md` | the pull request description every PR follows; `/pull-request` fills it |

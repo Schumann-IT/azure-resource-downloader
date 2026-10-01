@@ -36,10 +36,14 @@ records the findings that already existed when the sonarjs rules were switched o
 rule, so the gates are usable while every rule stays enabled. **Never run `npm run lint:baseline` to make your
 own change go green** — a new violation exceeding a recorded count is exactly the signal the baseline exists to
 preserve. It only ever shrinks, opportunistically: when you are editing a baselined file anyway, pay its finding
-off and run `npm run lint:prune` (the standing parked idea in `NEXT-ITERATIONS.md` describes what is left).
-Growing it is a deliberate decision that needs the user's agreement and a `CHANGELOG.md`
-entry; a one-off finding you have judged acceptable is silenced at its site with an `eslint-disable-next-line`,
-not hidden in the ledger.
+off and run `npm run lint:prune` (the parked idea in `NEXT-ITERATIONS.md` describes what is left). Pay it off a
+rule at a time and run `npm run lint:prune` after each, so the diff shows what was paid off; a finding you decide
+to keep becomes an `eslint-disable-next-line` with its reason at the site, never a ledger entry (a baseline must
+not be where a standing choice hides). Paying off is internal (no changelog unless a reader sees a difference; a
+rewritten regex gets a spec case pinning the same accepted and rejected inputs); deleting the ledger and its two
+scripts is operator-visible and gets one. Growing it is a deliberate decision that needs the user's agreement and
+a `CHANGELOG.md` entry; a one-off finding you have judged acceptable is silenced at its site with an
+`eslint-disable-next-line`, not hidden in the ledger.
 
 ## TypeScript style
 - Match `tsconfig.json`: CommonJS modules, `strictNullChecks: true`, `noImplicitAny: false`.
@@ -76,7 +80,15 @@ not hidden in the ledger.
 - Interactive elements keep a visible `:focus-visible` outline.
 - `{{{body}}}` (triple-stache) is used **only** for already-rendered Markdown HTML. All other values
   use `{{ }}` escaping.
-- Do not introduce client-side JavaScript or a frontend framework.
+- Do not introduce client-side JavaScript or a frontend framework. HTML interactivity (`<details>`, `:target`,
+  `:focus-visible`, `prefers-color-scheme`, `<form method="get">`) is in bounds; shipped script and client-side
+  state are not.
+- Read a document's headings from `markdown-it`'s tokens, the way `section-hooks.ts` does, never with a
+  line-based regex: generated documents contain `##` lines inside fenced code blocks.
+- **Query-parameter options** (facets, export options, view switches): a named choice with a stable id, so a
+  chosen variant has exactly one URL; an unknown or malformed value falls back to the default, never a 404 —
+  the way `parseFacetSelection()` validates a selection; every option has a default, so an option-less URL keeps
+  working.
 
 ## Testing
 - Jest, `*.spec.ts`, under `test/`.

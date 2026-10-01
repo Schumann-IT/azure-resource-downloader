@@ -16,7 +16,9 @@ here. `README.md` in this folder is the single source of truth (no further Markd
 - **Stack**: Node >= 20, TypeScript (CommonJS output), NestJS 11 + Express, Handlebars (`hbs`),
   Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`), `shiki`,
   `gray-matter`, `js-yaml`, `diff` (jsdiff), Jest + supertest.
-- **No client-side JavaScript.** Everything is server-rendered.
+- **No client-side JavaScript.** Everything is server-rendered; state lives in the URL. The ban is on shipped
+  script and client-side state, not on HTML interactivity (`<details>`/`<summary>`, `:target`, `:focus-visible`,
+  `prefers-color-scheme`, `<form method="get">`). Where export entry points live: `03-exports.md`.
 
 ## Layout
 - `src/main.ts` → bootstrap, reads `PORT` via `resolvePort`.

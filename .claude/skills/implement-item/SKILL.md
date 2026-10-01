@@ -27,7 +27,7 @@ agent; you orchestrate and commit, agents never do. Use the inline procedure bel
    `item N is done`, after the user has verified the work; leave documentation-only bullets unstruck. Strike
    the title once every code bullet is struck. Never add scope; a discovery becomes a follow-up bullet
    (unstruck) or a note to the user.
-3. **Commit as you go** in coherent commits (`feat(<project>): …`, `fix(<project>): …`), never on `main`.
+3. **Commit as you go** in coherent commits (`<kind>(<project>): …`, `<kind>` from the entry's `*Kind:*` line), never on `main`.
 4. **When the plan is delivered, stop.** Report what shipped, with every operator-visible effect listed (the
    done step writes the documentation from it), and ask the user for follow-ups. Do not write
    documentation, do not archive (`item N is done` is the user's call), do not run the branch gate, do not

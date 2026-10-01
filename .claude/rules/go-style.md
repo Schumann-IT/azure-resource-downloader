@@ -16,9 +16,12 @@ paths:
   own function to it** — split the function, or `//nolint:gocognit` with a reason if the finding is genuinely
   wrong. It only shrinks: when editing a listed function anyway, split it and delete its entry in the same
   commit (golangci-lint does not report an exclusion that matched nothing, so a stale entry is invisible).
-  Growing it needs the user's agreement and a changelog entry. The two path-scoped `gocognit` exclusions
-  above it are permanent parity decisions mirrored in `sonar-project.properties`; the baseline is not
-  mirrored on purpose.
+  Work one function at a time, with `make test-race` when it touches the pipeline; a split that needs a test
+  edited is a redesign, not a split — the tests pinning the absence, coverage, prune and
+  one-result-per-request invariants stay unchanged. Re-measure by commenting the block out. Splits are
+  internal (no changelog); deleting the block at the end is not. Growing it needs the user's agreement and a
+  changelog entry. The two path-scoped `gocognit` exclusions above it are permanent parity decisions mirrored
+  in `sonar-project.properties`; the baseline is not mirrored on purpose.
 
 ## Errors
 - Wrap with `fmt.Errorf("…: %w", err)` — `%w`, never `%v`. Sentinels: `var ErrX = errors.New("x")` at package

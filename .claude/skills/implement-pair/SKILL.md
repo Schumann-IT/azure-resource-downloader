@@ -42,7 +42,7 @@ file, launch the dependent side after the owner's report.
 - `partial` (turn budget) → one `SendMessage(to: "implementer-<side>", "continue, then report")`.
 - `blocked` → relay the Failure Handling Report; commit only a *delivered* other side; stop.
 - `delivered` → commit that side: `git add <project>/ <root files its Owner note lists>` then
-  `feat(<project>): <title>` (`fix(web): …` for an entry under `## Fixes`). `git status --porcelain` must
+  `<kind>(<project>): <title>` (`<kind>` from the entry's `*Kind:*` line). `git status --porcelain` must
   be empty afterwards; anything left is a scope leak — report it, do not commit it. **Do not push.**
 
 ## 4. Review in parallel — `impl-reviewer` ×1–2 (opus)

@@ -716,7 +716,7 @@ web/
 - This README is the single source of truth for what the browser does today; deliberate scope cuts go in
   [`NEXT-ITERATIONS.md`](NEXT-ITERATIONS.md). No other Markdown files live here.
 - **Work starts from the backlog.** Every change is a numbered entry in `NEXT-ITERATIONS.md`, committed
-  before it is implemented — a one-line fix included, as a tiny entry under *Fixes*. `npm run start-item -- <n>`
+  before it is implemented — a one-line fix included, as a tiny entry. `npm run start-item -- <n>`
   is the gate: it refuses on the release branch, on a dirty `web/`, when entry `n` is not in **`HEAD`'s**
   backlog (the working copy does not count) or when it has no outstanding plan item, and otherwise prints the
   entry's Goal and Plan. Exit `2` is a usage error, `1` a refusal.

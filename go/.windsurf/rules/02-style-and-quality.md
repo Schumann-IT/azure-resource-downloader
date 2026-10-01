@@ -19,10 +19,13 @@ globs: **/*.go
   if a finding is genuinely wrong, silence it at its site with a `//nolint:gocognit` stating why. It only ever
   shrinks, opportunistically: when you are editing a listed function anyway, split it up and delete its entry in
   the same commit (nothing detects a stale entry — golangci-lint does not report an exclusion that matched
-  nothing). What is left is described by a parked idea in `NEXT-ITERATIONS.md`. Growing the ledger needs the
-  user's agreement and a `CHANGELOG.md` entry. The two path-scoped `gocognit` exclusions above it are a
-  different thing — permanent parity decisions, mirrored in `sonar-project.properties`; the baseline is
-  deliberately not mirrored, because Sonar is where the deferred work stays counted.
+  nothing). What is left is described by a parked idea in `NEXT-ITERATIONS.md`. Work one function at a time, with
+  `make test-race` when it touches the pipeline; a split that needs a test edited is a redesign, not a split —
+  the tests pinning the absence, coverage, prune and one-result-per-request invariants stay unchanged. Re-measure
+  by commenting the block out. Splits are internal (no changelog); deleting the block at the end is not. Growing
+  the ledger needs the user's agreement and a `CHANGELOG.md` entry. The two path-scoped `gocognit` exclusions
+  above it are a different thing — permanent parity decisions, mirrored in `sonar-project.properties`; the
+  baseline is deliberately not mirrored, because Sonar is where the deferred work stays counted.
 - Errors:
     - Wrap with `%w` and `fmt.Errorf` (no `%v`).
     - Sentinel errors via `var ErrX = errors.New("x")` in package scope.
