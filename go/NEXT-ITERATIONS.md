@@ -20,8 +20,7 @@ the run instead of being lost after one debug line.
 > Every listing error lands in the "could not be listed" path (`internal/handlers/requests.go:115-123`) with a hint
 > that blames the permission; `azure.ErrorSummary` extracts no HTTP status from Graph SDK errors
 > (`internal/azure/errors.go:65-105`); and `notListed` keeps type names only (`internal/docs/metadata.go:159-163`),
-> so the real error was never visible. Diagnosis confidence is medium until the debug run below: a 403 (consent
-> for `OrganizationalBranding.Read.All` missing) would produce the same symptom.
+> so the real error was never visible. The debug run recorded in the Plan confirmed the 404.
 >
 > Not regeneration-gated. Independent of the other entries; can ship first.
 >
@@ -29,9 +28,15 @@ the run instead of being lost after one debug line.
 
 **Plan.**
 
-- **User action, first:** run `./azure-rd resource download --type Microsoft.Graph/organizationalBranding --debug`
-  against one reference tenant and record the status and error code of the "Listing failed" line in this entry.
-  A **403** turns the remaining bullets into a consent/README fix; a **404 / `ResourceNotFound`** confirms them.
+- ~~**User action, first:** run `./azure-rd resource download --type Microsoft.Graph/organizationalBranding
+  --log-level debug --dry-run` against one reference tenant and record the "Listing failed" line in this entry.~~
+  **Result (2026-10-01, cb-gmbh.com):** `failed to get organizational branding: Resource '<organization id>' does
+  not exist or one of its queried reference-property objects are not present. (hint: requires
+  'OrganizationalBranding.Read.All' permission in Microsoft Graph)` — Graph's `Request_ResourceNotFound` (404)
+  text: no default branding is configured. Not a permission problem; the bullets below apply as written. The
+  same run ended with `Error: no resources to download`, because the selected type was the only one and listed
+  nothing — check that a type which lists as *empty* under `--type` still ends the run without that error, or
+  say why it should stay.
 - Branding handler: a 404 from `GET /organization/{id}/branding` (list and fetch) means "no default branding
   configured" — no IDs, so the type is recorded as *empty*, not *not listed*. Correct the code comment.
 - `azure.ErrorSummary`: extract the HTTP status and Graph error code from Graph SDK (`odataerrors`) errors; the
