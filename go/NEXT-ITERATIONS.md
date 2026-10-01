@@ -303,9 +303,42 @@ naming flags that no longer exist.
 > **Out of scope, revisit note.** Removing the dedicated-app path would be breaking (two tenant-scoped keys go) and
 > needs the experiment's "yes" on a representative tenant first; record it under `Breaking` if it ever ships.
 >
-> Not regeneration-gated.
+> Not regeneration-gated: no template and no `promptSha256` moves, so nothing needs to ride along.
 >
-> **Implementer.** opus — the token cache touches credential handling.
+> **Token cache, verified at review (2026-10-01).** azidentity `v1.14.1` (in `go.mod`) has everything the session
+> needs: `DeviceCodeCredentialOptions.Cache` (type `azidentity.Cache`), `.AuthenticationRecord`,
+> `.DisableAutomaticAuthentication`, `(*DeviceCodeCredential).Authenticate` → `azidentity.AuthenticationRecord`, and
+> `*azidentity.AuthenticationRequiredError`. The persistent store is the separate module
+> `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (import path the same, package `cache`; latest `v0.4.0`,
+> requires azidentity ≥ v1.13.1, azcore ≥ v1.21.0 — satisfied), constructor `cache.New(&cache.Options{Name:
+> "azure-rd"})`, which round-trips test data once and returns an error when no secure store works. New indirect
+> modules: `github.com/AzureAD/microsoft-authentication-extensions-for-go/cache v0.1.1` and
+> `github.com/keybase/go-keychain v0.0.1`. Storage per platform: macOS — the login Keychain (via go-keychain,
+> **cgo required**: the extensions' darwin accessor is `//go:build darwin && cgo`, so a `CGO_ENABLED=0` darwin build
+> of the package fails to compile); Windows — a DPAPI-encrypted file under `%LOCALAPPDATA%\.IdentityService\`;
+> Linux — **not libsecret**: an AES-encrypted file under `$XDG_CACHE_HOME` (or `~/.cache`)`/.IdentityService/` whose
+> key lives in the kernel persistent/user keyring (`keyctl`, pure Go via `golang.org/x/sys/unix`, no cgo), so on
+> Linux the session survives across runs and logins but **not a reboot** (or keyring expiry); where `keyctl` is
+> unavailable (some containers) `cache.New` errors. The module compiles only for darwin, linux and windows. CI
+> (`ubuntu-latest`, `make -C go ci`, golangci-lint) is unaffected: the Linux path needs no cgo or system library,
+> and tests never call `cache.New`.
+>
+> **Contract.** None with `web/`: nothing under the export tree (`output/<tenant>/{resources,docs,drift}/`), no
+> `metadata.yaml` or `index.yaml` field, file name or exit code changes. The only new on-disk artefact is the
+> authentication record at `os.UserConfigDir()/azure-rd/auth/<tenant-id>-<client-id>.json` (mode 0600, directory
+> 0700; fields per `azidentity.AuthenticationRecord`, no token or secret) plus the SDK-owned token cache named
+> `azure-rd` — both outside the repository, the `--config-dir` and `output/`, and neither read by `web/`.
+>
+> **Owner.** none — no file outside `go/`. Sequencing: no dependency on `web/`. Entry 5 (routine dependency
+> updates) also edits `go/go.mod` / `go/go.sum`; whichever lands second on a shared branch reruns `make deps`.
+>
+> **Who does what.** The implementer delivers the token-claims decoder, the coverage helper, the `--debug`
+> sections, the cached device-code session and the stale-wording fixes, with tests, and strikes those bullets.
+> The cache check and the scoped-login experiment need a live tenant and a human sign-in: they stay unstruck for the
+> operator, who records the results in those bullets. The conditional follow-up stays unstruck and unbuilt until the
+> experiment is recorded; the documentation bullet stays unstruck until *done*.
+>
+> **Implementer.** opus
 
 **Plan.**
 
@@ -316,37 +349,66 @@ naming flags that no longer exist.
 - `--debug` (`runDebugReport`): a "Graph token" section with `appid` / `app_displayname` and the sorted `scp`, and
   for the effective type selection (`runprep.SelectTypesFromConfig` plus `DedicatedAppRequirements`) every declared
   permission marked covered or missing. It runs on the CLI credential when the profile has no `client-id`, otherwise
-  on the dedicated app's token, and writes nothing.
-- Cached device-code session: `newCredential` builds the device-code credential with a persistent cache from the
-  `azidentity/cache` module (new direct dependency). The first run calls `Authenticate` once (the device-code
-  prompt) and stores the returned `AuthenticationRecord` (tenant, client id, account, authority — no secret) at
-  `os.UserConfigDir()/azure-rd/auth/<tenant-id>-<client-id>.json`, mode 0600 — never in the repository, the config
-  directory or `output/`; the tokens stay in the OS store (macOS Keychain, Windows DPAPI, Linux libsecret). Later
-  runs pass the record as `DeviceCodeCredentialOptions.AuthenticationRecord` with `DisableAutomaticAuthentication`
-  kept on, so tokens come silently from the cached refresh token. No secure store (e.g. Linux without a keyring):
-  warn once and keep today's per-run sign-in — never store tokens unencrypted. An expired or revoked refresh token,
-  or a record whose tenant or client differs from the profile: device code once more, and the record is replaced.
-  No new config key — caching is on whenever the profile names a `client-id`; `--debug` reports "token cache:
-  active (record from <date>)" or "unavailable (<reason>)". Tests: record round-trip, path and file mode, tenant /
-  client mismatch, credential construction with the cache option stubbed; no real tokens.
-- Operator check, recorded here: on cb-gmbh.com sign in once, then a second `resource download --dry-run` must not
-  prompt.
-- The experiment, an operator step recorded here: on cb-gmbh.com `az logout && az login --scope
-  https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
+  on the dedicated app's token, and writes nothing. The section is built by a pure function from the decoded claims
+  and the coverage result (tested with fixed inputs, sorted output); `runDebugReport` only fetches the Graph token
+  and logs the result.
+- Dependency: add `github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache` (latest release, `v0.4.0` at review) as
+  a direct requirement, then `make deps`; `go.sum` gains the module and its two new indirects (Keychain accessor,
+  go-keychain). No other module version moves.
+- Platform split, so a build without the store still compiles: the only file importing `azidentity/cache` is
+  `internal/azure/tokencache_supported.go` (`//go:build (darwin && cgo) || linux || windows`), exposing
+  `newPersistentCache() (azidentity.Cache, error)`; `internal/azure/tokencache_other.go` (the negated constraint)
+  returns an error "persistent token cache unavailable on this platform/build" — the "no secure store" path below.
+  The factory is a package variable so tests replace it and never touch a real store.
+- Authentication record store (`internal/azure/authrecord.go`): `authRecordPath(tenantID, clientID)` →
+  `os.UserConfigDir()/azure-rd/auth/<tenant-id>-<client-id>.json` (directory created 0700, file written 0600 via a
+  temp file and rename); `loadAuthRecord` returns the record, or none when the file is missing, unparsable, or its
+  `TenantID` / `ClientID` differ from the profile (case-insensitive) — a mismatched or corrupt file is treated as
+  absent and overwritten on the next sign-in, never trusted. Never under the repository, `--config-dir` or
+  `output/`; it holds no token or secret.
+- Cached device-code session in `newCredential` (only when the profile names a `client-id`; no new config key):
+  build the persistent cache (`Name: "azure-rd"`); on error, warn once ("token cache unavailable: <reason>; signing
+  in on every run") and construct today's credential unchanged — never store tokens unencrypted. With a cache, wrap
+  an `azidentity.DeviceCodeCredential` built with `Cache`, the loaded `AuthenticationRecord` (if any) and
+  `DisableAutomaticAuthentication: true` in a `cachedDeviceCodeCredential` implementing `azcore.TokenCredential`:
+  `GetToken` tries the inner credential silently; on `*azidentity.AuthenticationRequiredError` (no record, refresh
+  token expired or revoked) the interactive variant (`NewCredential`) calls `Authenticate` with the Graph
+  `.default` scope — the device-code prompt — under a mutex so concurrent `GetToken` callers trigger exactly one
+  prompt, saves the returned record (replacing the old one), and retries `GetToken`; the non-interactive variant
+  (`NewNonInteractiveCredential`) returns the error unchanged and never prompts, but now succeeds silently whenever
+  a cached session exists. Construction stays network-free (`NewCredential`'s contract). Any other error passes
+  through unchanged.
+- `--debug` token-cache line: "Token cache" `active (record from <file mtime, date>)`, `no session yet (the next run
+  signs in once)` or `unavailable (<reason>)`; printed only when the profile names a `client-id`.
+- Tests (all with the cache factory and the inner credential stubbed; no real tokens, no real store): record
+  round-trip; path shape, directory 0700 and file 0600 (skipped on Windows); tenant mismatch, client mismatch and
+  corrupt file load as absent; cache-unavailable falls back to the plain credential and warns once; silent success
+  never calls `Authenticate`; `AuthenticationRequiredError` → one `Authenticate`, record saved, retry succeeds;
+  non-interactive variant never calls `Authenticate`; N concurrent `GetToken` calls on a fresh session call
+  `Authenticate` once (run under `make test-race`); other errors pass through.
+- Operator step, not for the implementer — stays unstruck until the result is recorded here: on cb-gmbh.com, with
+  the dedicated app in the profile, sign in once, then a second `resource download --dry-run` must not prompt;
+  record the platform and whether it prompted.
+- The experiment, an operator step not for the implementer — stays unstruck until recorded here: on cb-gmbh.com
+  `az logout && az login --scope https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
   --domain cb-gmbh.com` with no `client-id` in the profile; record `appid`, the `scp` list and the covered/missing
   table. If everything is covered, also run one `resource download --dry-run` per dedicated-app type without
   `client-id` and record the outcome — a service may gate on the calling application, not only on the scopes.
-- Follow-up, built only if the experiment covers every declared permission: `PromptForDedicatedApp`
+- Follow-up, conditional — not built in the first implementation run, stays unstruck until the experiment above is
+  recorded; built only if the experiment covers every declared permission: `PromptForDedicatedApp`
   (`internal/cmdutil/prompt.go`) first prints the exact `az login --scope …` command derived from the selected types
   and offers device code as the fallback. If the experiment says no, this bullet goes back to the parked ideas,
   rewritten with the evidence, and the README states the measured answer.
 - Stale wording: the `client.go:168` error reads "tenant-id is required when client-id is set in the tenant profile";
   the `cmd/root.go:52` help text and the comments in `models/types.go`, `registry.go`, `collection.go`,
-  `cmd/resource/list.go` name the profile keys, not flags.
+  `cmd/resource/list.go` name the profile keys, not flags. A test asserts the new error text and that neither it nor
+  the root help mentions `--client-id`, `--tenant-id` or `AZURE_RD_`.
 - Documentation at *done*: `README.md` — resolve the contradiction (`:540-546` vs `:679-681`) with the measured
   result; `:544` "the profile sets no `client-id`"; the `--debug` section documents the Graph token section and
   replaces the shell token-decoder one-liner (`:518-523`); the cached device-code session (where the record and the
-  tokens live, how to forget a session by deleting the record, the fallback without a keyring). `CHANGELOG.md`:
+  tokens live, how to forget a session by deleting the record, the fallback without a secure store, that on Linux
+  the session lasts until reboot, and that a macOS build needs cgo — the default with Xcode's command-line tools —
+  to get the Keychain cache). `CHANGELOG.md`:
   `### Added` (the cached device-code session; the `--debug` Graph token and coverage section), `### Fixed` (the
   error message and help text naming removed flags).
 
