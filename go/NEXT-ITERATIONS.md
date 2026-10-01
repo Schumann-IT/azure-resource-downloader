@@ -222,7 +222,13 @@ changed exclusion.
 > is recorded in the export metadata and any difference is not comparable (exit 2); a baseline without the field
 > counts as excluding nothing.
 >
-> **Contract.** None with the browser: it does not read the run scope.
+> **Contract.** None with the browser. It reads `run.complete` / `run.incompleteReason` from `resources/metadata.yaml`
+> and the drift observation and never reads `run.scope`; the new `run.scope.excludedTypes` key is additive, omitted
+> when empty, and an export without exclusions stays byte-identical. Unrelated to the `counts.excluded` of
+> `docs/index.yaml` (types the taxonomy leaves out of the documentation), which this entry does not touch — the
+> README must keep the two "excluded" apart.
+>
+> **Owner.** none — every file is under `go/`. No sequencing constraint.
 >
 > Not regeneration-gated: no prompt template and no `promptSha256` is touched.
 >
@@ -231,36 +237,58 @@ changed exclusion.
 **Plan.**
 
 - Config key: `exclude-type` in `keyScopes` as **tenant-scoped** (`internal/config/keys.go`), a list read with
-  `viper.GetStringSlice`. Validated at load against the registered handler types, case-insensitively, each name
-  normalised to its registered spelling; an unknown type is a fatal error naming it; duplicates collapse. Per
-  `/add-config-option`: `config.example.domain.yaml` gets a commented-out example with the three ARM types (the file
-  stays a no-op), `config.example.yaml` a pointer to the profile, `cmd/config_test.go` the partition and no-op
-  coverage.
-- Selection: `runprep.Prepare` computes the effective types as the allow-list (`--type`, else config `type:`, else
-  all registered) minus `exclude-type`, in one pure function. A `--type` / `type:` naming an excluded type refuses
-  before sign-in with an error naming the type and the profile. `--resource-id` / `--resource-group` runs are
-  unaffected (they enumerate no type). The same effective set feeds `BuildFetchRequests`, `SelectedTypeNames` (the
-  dedicated-app scope prompt no longer asks for an excluded type's scopes), `resource list` and `resource types`;
-  the excluded types are logged once at info level.
-- Metadata: `resources/metadata.yaml` records `run.scope.excludedTypes` (sorted, omitted when empty, so existing
-  exports stay byte-identical). Coverage needs no change: excluded types are never requested, so they are neither
-  covered nor skipped and their earlier entries stay untouched. An otherwise full run with exclusions keeps
-  `lastCoveredBy: full`.
-- Drift comparability: `drift.Preflight` compares the current exclusion set with the baseline's
-  `run.scope.excludedTypes` (missing = empty); any difference refuses with `ErrNotComparable` (exit 2), naming the
-  added and removed types and saying to download a new baseline first. The drift observation records the exclusion
-  in its `run.scope`. `resource audit` needs no change — it only filters drift findings, which never contain excluded
-  types.
-- `--type` flag help (`internal/cmdutil/flags.go:54`): "replaces the configured types", not "narrows".
-- Tests: config partition, unknown and case-insensitive names, no-op examples; the effective-type function
-  table-tested (all minus excluded; `type:` minus excluded; a clash refuses; id/group runs unaffected);
-  `SelectedTypeNames` without excluded types; metadata `excludedTypes` round-trip, omitted when empty, and a run with
-  exclusions is `complete` with the excluded types' entries untouched; drift preflight — same set passes, different
-  set refuses, a baseline without the field plus a current exclusion refuses, neither passes.
+  `viper.GetStringSlice`. `internal/config` validates only the shape at load (`validateValues`, next to the
+  `audit-workspace-id` check): a list of non-empty strings, anything else a fatal error naming the profile file —
+  `internal/config` does not import `internal/handlers`. Per `/add-config-option`: `config.example.domain.yaml` gets
+  a commented-out example with the three ARM types (the file stays a no-op), `config.example.yaml` a pointer to the
+  profile, `cmd/config_test.go` the partition and no-op coverage.
+- Selection, one pure function in `internal/runprep` taking the registered type names, the allow-list (`--type`,
+  else config `type:`), the `exclude-type` list, `--resource-id` and `--resource-group`. It resolves each excluded
+  name against the registered types case-insensitively to its registered spelling (unknown = error naming the type
+  and the profile; duplicates collapse) and returns the sorted exclusion and the effective types to list: the
+  allow-list, else all registered types, minus the exclusion. A clash refuses with an error naming the type and the
+  profile: an allow-list entry that is excluded, and likewise a type derived from the selection the way
+  `SelectedTypeNames` derives it — a parseable `--resource-id` of an excluded type, or `--resource-group` while
+  `Microsoft.Resources/resourceGroups` is excluded; unparseable ids (bare Graph GUIDs) carry no type and pass.
+- `runprep.Prepare` calls it first, before session verification and sign-in, with the type names of an offline
+  registry (lazy credential, as the dedicated-app probe already builds one). `Prepared` keeps `SelectedTypes` as
+  the allow-list as asked and gains `ExcludedTypes` plus the effective list; `BuildRequests` passes the effective
+  list to `BuildFetchRequests` and the dedicated-app probe passes it to `SelectedTypeNames`, so the scope prompt
+  never asks for an excluded type's scopes. With exclusions the excluded types are logged once at info level.
+- `resource list` (`cmd/resource/list.go`) calls the same function before signing in and lists only the effective
+  types. `resource types` (`cmd/resource/types.go`) keeps listing every registered type — it is the catalogue an
+  operator picks names from — but marks an excluded type `excluded: exclude-type` and leaves it out of the live
+  `tenantCounts` listing, so it never reports a 403 for it; a clash refuses there too.
+- Metadata: `docs.RunScope` gains `ExcludedTypes` and `ScopeMeta` gains `excludedTypes` (`yaml:
+  "excludedTypes,omitempty"`, sorted by `scopeMeta`), filled from `prep.ExcludedTypes` in `cmd/resource/download.go`
+  and `cmd/resource/drift.go` on every run — including `--type`, `--resource-id` and `--resource-group` runs,
+  because the exclusion belongs to the profile, not to the selection. `RunScope.Types` stays the allow-list as
+  asked, never the effective list, so `coverageLabel` still says `full` for an otherwise full run with exclusions.
+  Coverage needs no change: excluded types are never requested, so they are neither covered nor skipped, and their
+  earlier `types`/`resources` entries and files stay untouched (prune never removes them; deleting them is the
+  operator's call).
+- Drift comparability: `drift.Preflight` gains the current exclusion as a parameter and compares it, as a set, with
+  the baseline's `run.scope.excludedTypes` (missing = empty); any difference returns an error wrapping
+  `ErrNotComparable` — `runDrift` already maps it to exit 2 — naming the added and removed types and saying to run
+  `resource download` first. The drift observation records the exclusion in its `run.scope` (`drift.go`, where
+  `obs.Run.Scope` is built). `resource audit` needs no change — it only filters drift findings, which never contain
+  excluded types.
+- `--type` flag help and the comment above it (`internal/cmdutil/flags.go:36-38, 54`): it *replaces* the configured
+  types for this run, not "narrows"; excluded types are still removed.
+- Tests: config partition, shape errors, no-op examples; the selection function table-tested — all minus
+  excluded; `type:` minus excluded; case-insensitive normalisation and duplicates; an unknown excluded name errors;
+  an allow-list clash, an excluded `--resource-id` type and an excluded `resourceGroups` with `--resource-group`
+  refuse; an unparseable id and an unrelated id/group pass; `SelectedTypeNames` fed the effective list contains no
+  excluded type; `resource types` marks an excluded type and does not count it; metadata `excludedTypes` round-trip,
+  sorted, omitted when empty (an existing fixture stays byte-identical), and a full run with exclusions is
+  `complete` with `lastCoveredBy: full` and the excluded types' entries untouched; drift preflight — same set
+  passes, different set refuses with `ErrNotComparable` naming added and removed, a baseline without the field plus
+  a current exclusion refuses, neither passes; the observation's `run.scope.excludedTypes` is written.
 - Documentation at *done*: `README.md` — profile keys and partition table, a selection subsection (allow-list, then
-  exclusion, then the `--type` clash), the coverage rules and the `run.scope.excludedTypes` metadata example, the
-  drift "must match" list and comparability paragraph; `CHANGELOG.md` `### Added`, with **after adding or changing
-  `exclude-type`, run `resource download` before the next `resource drift`** in bold.
+  exclusion, then the clash with `--type` / `type:` / `--resource-id` / `--resource-group`), `resource types`
+  marking, the coverage rules and the `run.scope.excludedTypes` metadata example, the drift "must match" list and
+  comparability paragraph; `CHANGELOG.md` `### Added`, with **after adding or changing `exclude-type`, run
+  `resource download` before the next `resource drift`** in bold, and `### Fixed` for the `--type` help text.
 
 ## Parked ideas
 
