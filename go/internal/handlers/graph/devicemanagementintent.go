@@ -29,30 +29,30 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 		azureType:      "Microsoft.Graph/deviceManagementIntents",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune security baseline / template intent and its configured setting values.",
+			Purpose: "An Intune security baseline / template intent and its configured setting values.",
 			EmbeddedPayloads: []string{
-	"settings[].valueJson (JSON-encoded value of each setting, keyed by settings[].definitionId)",
-},
+				"settings[].valueJson (JSON-encoded value of each setting, keyed by settings[].definitionId)",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
-	"Old-format endpoint security and security baseline profiles: new ones can no longer be created, and baselines released before May 2023 can't be upgraded to the new format; recreate them as Settings Catalog based policies (deviceManagementConfigurationPolicies).",
-	"Deleting or unassigning stops enforcement, but settings that are no longer managed may stay on the device (CSP-dependent).",
-},
+				"Old-format endpoint security and security baseline profiles: new ones can no longer be created, and baselines released before May 2023 can't be upgraded to the new format; recreate them as Settings Catalog based policies (deviceManagementConfigurationPolicies).",
+				"Deleting or unassigning stops enforcement, but settings that are no longer managed may stay on the device (CSP-dependent).",
+			},
 			RelatedTypes: []string{
-	"Microsoft.Graph/deviceManagementConfigurationPolicies (new-format successor)",
-	"Microsoft.Graph/groups (assignment target groups)",
-	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
-},
+				"Microsoft.Graph/deviceManagementConfigurationPolicies (new-format successor)",
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			KeySettings: []string{"templateId", "isMigratingToConfigurationPolicy", "settings[].definitionId"},
-Links: models.ResourceLinks{
-				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
-				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceintent-devicemanagementintent-list?view=graph-rest-beta",
+			Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceintent-devicemanagementintent-list?view=graph-rest-beta",
 				BestPractices: []string{
-		"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview",
-		"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/configure-baselines",
-	},
-			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
-},
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview",
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/configure-baselines",
+				},
+				AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

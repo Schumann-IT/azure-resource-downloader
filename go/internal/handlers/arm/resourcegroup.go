@@ -41,13 +41,13 @@ func (h *ResourceGroupHandler) Documentation() models.ResourceDocumentation {
 	return models.ResourceDocumentation{
 		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
-		Purpose: "An Azure resource group: a container for related Azure resources that share a lifecycle. Its location only determines where the group's metadata is stored, and its tags are not inherited by the resources in it.",
-		KeySettings: []string{"location", "tags"},
+		Purpose:             "An Azure resource group: a container for related Azure resources that share a lifecycle. Its location only determines where the group's metadata is stored, and its tags are not inherited by the resources in it.",
+		KeySettings:         []string{"location", "tags"},
 		RequiredPermissions: []string{"Reader (Azure RBAC role on the subscription)"},
 		Lifecycle: []string{
-	"Deleting a resource group irreversibly deletes ALL contained resources; a delete lock on any resource in the group blocks deleting the group.",
-	"The location can't be changed after creation; use resource locks and consistent tagging for governance.",
-},
+			"Deleting a resource group irreversibly deletes ALL contained resources; a delete lock on any resource in the group blocks deleting the group.",
+			"The location can't be changed after creation; use resource locks and consistent tagging for governance.",
+		},
 		Links: models.ResourceLinks{
 			EndpointDocs: "https://learn.microsoft.com/en-us/rest/api/resources/resource-groups",
 			Permissions:  "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",

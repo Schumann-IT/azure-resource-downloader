@@ -51,30 +51,30 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/organizationalBranding",
 		documentation: models.ResourceDocumentation{
-			Purpose:             "The Entra ID company branding shown on sign-in pages.",
-			
+			Purpose: "The Entra ID company branding shown on sign-in pages.",
+
 			RequiredPermissions: []string{"OrganizationalBranding.Read.All", "Organization.Read.All"},
 			Lifecycle: []string{
-	"One default branding plus per-locale localizations; a localization for the browser's language overrides the default, and how long changes take to appear varies by region.",
-	"Without a configured default branding Graph returns 404 and nothing is exported.",
-},
+				"One default branding plus per-locale localizations; a localization for the browser's language overrides the default, and how long changes take to appear varies by region.",
+				"Without a configured default branding Graph returns 404 and nothing is exported.",
+			},
 			RelatedTypes: []string{
-	"Microsoft.Graph/organization",
-	"Microsoft.Graph/windowsAutopilotDeploymentProfiles (squareLogo appears in Windows OOBE with Autopilot)",
-},
+				"Microsoft.Graph/organization",
+				"Microsoft.Graph/windowsAutopilotDeploymentProfiles (squareLogo appears in Windows OOBE with Autopilot)",
+			},
 			Template: singletonPromptTemplateText,
-KeySettings: []string{
-	"signInPageText",
-	"usernameHintText",
-	"backgroundColor",
-	"customAccountResetCredentialsUrl",
-	"customPrivacyAndCookiesUrl",
-	"customTermsOfUseUrl",
-	"loginPageLayoutConfiguration",
-	"loginPageTextVisibilitySettings",
-	"localizations",
-},
-Links: models.ResourceLinks{
+			KeySettings: []string{
+				"signInPageText",
+				"usernameHintText",
+				"backgroundColor",
+				"customAccountResetCredentialsUrl",
+				"customPrivacyAndCookiesUrl",
+				"customTermsOfUseUrl",
+				"loginPageLayoutConfiguration",
+				"loginPageTextVisibilitySettings",
+				"localizations",
+			},
+			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organizationalbranding?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/organizationalbranding-get?view=graph-rest-beta",
 			},

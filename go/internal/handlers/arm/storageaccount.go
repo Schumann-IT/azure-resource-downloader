@@ -39,31 +39,31 @@ func (h *StorageAccountHandler) GetDocumentationPrompt() string {
 // from. It satisfies models.Documented.
 func (h *StorageAccountHandler) Documentation() models.ResourceDocumentation {
 	return models.ResourceDocumentation{
-		Template:            armPromptTemplateText,
-		AzureType:           h.GetType(),
-		Purpose:             "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
+		Template:  armPromptTemplateText,
+		AzureType: h.GetType(),
+		Purpose:   "An Azure Storage Account that provides blob, file, queue and table storage, with its security, networking and encryption configuration.",
 		KeySettings: []string{
-	"enableHttpsTrafficOnly (REST: supportsHttpsTrafficOnly)",
-	"minimumTlsVersion",
-	"allowBlobPublicAccess",
-	"allowSharedKeyAccess",
-	"networkRuleSet (REST: networkAcls)",
-	"encryption",
-	"sku.name",
-	"kind",
-},
+			"enableHttpsTrafficOnly (REST: supportsHttpsTrafficOnly)",
+			"minimumTlsVersion",
+			"allowBlobPublicAccess",
+			"allowSharedKeyAccess",
+			"networkRuleSet (REST: networkAcls)",
+			"encryption",
+			"sku.name",
+			"kind",
+		},
 		RequiredPermissions: []string{"Reader (Azure RBAC role on the subscription)"},
 		Lifecycle: []string{
-	"A deleted storage account can sometimes be recovered within 14 days (best effort: only if no account with the same name was created since and the resource group still exists); blob soft delete does not protect against account deletion, use a resource lock.",
-	"Azure Blob Storage stopped accepting TLS 1.0 and 1.1 on 3 February 2026; general-purpose v1 accounts not migrated by October 2026 are migrated to general-purpose v2 automatically (possibly at higher cost).",
-	"Rotating or regenerating an access key breaks clients that use shared-key authentication with it and invalidates SAS tokens signed with it.",
-},
+			"A deleted storage account can sometimes be recovered within 14 days (best effort: only if no account with the same name was created since and the resource group still exists); blob soft delete does not protect against account deletion, use a resource lock.",
+			"Azure Blob Storage stopped accepting TLS 1.0 and 1.1 on 3 February 2026; general-purpose v1 accounts not migrated by October 2026 are migrated to general-purpose v2 automatically (possibly at higher cost).",
+			"Rotating or regenerating an access key breaks clients that use shared-key authentication with it and invalidates SAS tokens signed with it.",
+		},
 		Links: models.ResourceLinks{
 			EndpointDocs:  "https://learn.microsoft.com/en-us/rest/api/storagerp/storage-accounts",
 			Permissions:   "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",
 			BestPractices: []string{"https://learn.microsoft.com/en-us/azure/storage/blobs/security-recommendations"},
-		AdminCenter: "https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts",
-},
+			AdminCenter:   "https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts",
+		},
 	}
 }
 

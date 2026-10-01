@@ -39,16 +39,16 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 		azureType: "Microsoft.Graph/deviceManagement",
 		documentation: models.ResourceDocumentation{
 			Template:            singletonPromptTemplateText,
-			Purpose: "The tenant's Intune deviceManagement root object; the export carries only its identifiers and limits (intuneAccountId, maximumDepTokens), not configurable settings.",
-			KeySettings: []string{"intuneAccountId", "maximumDepTokens"},
+			Purpose:             "The tenant's Intune deviceManagement root object; the export carries only its identifiers and limits (intuneAccountId, maximumDepTokens), not configurable settings.",
+			KeySettings:         []string{"intuneAccountId", "maximumDepTokens"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
-	"Informational singleton: nothing configurable is exported (the handler reads /deviceManagement without $select).",
-},
+				"Informational singleton: nothing configurable is exported (the handler reads /deviceManagement without $select).",
+			},
 			RelatedTypes: []string{"Microsoft.Graph/depOnboardingSettings (maximumDepTokens limits the number of ADE tokens)"},
-Links: models.ResourceLinks{
+			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicemanagementsettings?view=graph-rest-beta",
-				Permissions: "https://learn.microsoft.com/en-us/graph/permissions-reference#devicemanagementserviceconfigreadall",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/permissions-reference#devicemanagementserviceconfigreadall",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

@@ -27,19 +27,19 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/onPremisesSynchronization",
 		documentation: models.ResourceDocumentation{
-			Template:            singletonPromptTemplateText,
-			Purpose: "The tenant's Microsoft Entra on-premises directory synchronization settings (Microsoft Entra Connect): synchronization feature flags and configuration such as accidental-deletion prevention.",
+			Template: singletonPromptTemplateText,
+			Purpose:  "The tenant's Microsoft Entra on-premises directory synchronization settings (Microsoft Entra Connect): synchronization feature flags and configuration such as accidental-deletion prevention.",
 			KeySettings: []string{
-	"features (e.g. blockSoftMatchEnabled, blockCloudObjectTakeoverThroughHardMatchEnabled, passwordSyncEnabled)",
-	"configuration (e.g. accidentalDeletionPrevention)",
-},
+				"features (e.g. blockSoftMatchEnabled, blockCloudObjectTakeoverThroughHardMatchEnabled, passwordSyncEnabled)",
+				"configuration (e.g. accidentalDeletionPrevention)",
+			},
 			RequiredPermissions: []string{"OnPremDirectorySynchronization.Read.All"},
 			Lifecycle: []string{
-	"Features and configuration can also be changed in the cloud through Microsoft Graph (PATCH /directory/onPremisesSynchronization/{id}); synchronizeUpnForManagedUsers can't be disabled once enabled.",
-	"Reading it with delegated permissions requires the Global Administrator role (the only supported role).",
-},
+				"Features and configuration can also be changed in the cloud through Microsoft Graph (PATCH /directory/onPremisesSynchronization/{id}); synchronizeUpnForManagedUsers can't be disabled once enabled.",
+				"Reading it with delegated permissions requires the Global Administrator role (the only supported role).",
+			},
 			RelatedTypes: []string{"Microsoft.Graph/organization (same tenant; onPremisesSyncEnabled)"},
-Links: models.ResourceLinks{
+			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/onpremisesdirectorysynchronization?view=graph-rest-1.0",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/onpremisesdirectorysynchronization-get?view=graph-rest-1.0",
 			},

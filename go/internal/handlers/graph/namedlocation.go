@@ -22,30 +22,30 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/namedLocations",
 		documentation: models.ResourceDocumentation{
-			Template:            referencedPromptTemplateText,
-			Purpose: "An Entra ID named location (IP ranges, countries/regions or a compliant network) used as a condition in Conditional Access.",
+			Template: referencedPromptTemplateText,
+			Purpose:  "An Entra ID named location (IP ranges, countries/regions or a compliant network) used as a condition in Conditional Access.",
 			KeySettings: []string{
-	"ipRanges",
-	"isTrusted",
-	"countriesAndRegions",
-	"countryLookupMethod",
-	"includeUnknownCountriesAndRegions",
-},
+				"ipRanges",
+				"isTrusted",
+				"countriesAndRegions",
+				"countryLookupMethod",
+				"includeUnknownCountriesAndRegions",
+			},
 			RequiredPermissions: []string{"Policy.Read.All"},
 			Lifecycle: []string{
-	"Referenced by Conditional Access location conditions; a location marked trusted can't be deleted until the trusted mark is removed.",
-	"Deleted locations are soft-deleted and can be restored within 30 days.",
-	"Limits: at most 195 IP-based named locations with up to 2,000 ranges each and CIDR masks larger than /8; trusted locations also improve ID Protection risk calculation.",
-},
-			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
-			SubtypeNote: "Polymorphic: ipNamedLocation (ipRanges, isTrusted), countryNamedLocation (countriesAndRegions, countryLookupMethod, includeUnknownCountriesAndRegions; no trusted flag) and compliantNetworkNamedLocation (Global Secure Access compliant network) - identify the concrete type from @odata.type.",
+				"Referenced by Conditional Access location conditions; a location marked trusted can't be deleted until the trusted mark is removed.",
+				"Deleted locations are soft-deleted and can be restored within 30 days.",
+				"Limits: at most 195 IP-based named locations with up to 2,000 ranges each and CIDR masks larger than /8; trusted locations also improve ID Protection risk calculation.",
+			},
+			RelatedTypes: []string{"Microsoft.Graph/conditionalAccessPolicies"},
+			SubtypeNote:  "Polymorphic: ipNamedLocation (ipRanges, isTrusted), countryNamedLocation (countriesAndRegions, countryLookupMethod, includeUnknownCountriesAndRegions; no trusted flag) and compliantNetworkNamedLocation (Global Secure Access compliant network) - identify the concrete type from @odata.type.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-namedlocations?view=graph-rest-beta",
-			BestPractices: []string{
-		"https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-assignment-network",
-	},
-},
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-assignment-network",
+				},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

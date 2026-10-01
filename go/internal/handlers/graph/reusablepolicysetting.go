@@ -27,21 +27,21 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 		documentation: models.ResourceDocumentation{
 			Purpose: "An Intune reusable settings group shared by several endpoint security profiles, for example Device control printer or removable-storage groups, Windows Firewall rule remote IP ranges or FQDNs, or the certificates used by Endpoint Privilege Management rules.",
 			EmbeddedPayloads: []string{
-	"settingInstance (nested setting instance; Endpoint Privilege Management certificate groups embed the certificate as a base64 value)",
-},
+				"settingInstance (nested setting instance; Endpoint Privilege Management certificate groups embed the certificate as a base64 value)",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
-	"Referenced by ID from endpoint security (Settings Catalog based) profiles; edits apply automatically to every profile that includes the group and are redeployed according to that profile's assignments.",
-	"Limits: up to 100 instances per group and 100 groups per profile.",
-},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)"},
-			KeySettings: []string{"settingDefinitionId", "referencingConfigurationPolicyCount", "version"},
-Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementreusablepolicysetting?view=graph-rest-beta",
-				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementreusablepolicysetting-list?view=graph-rest-beta",
-			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
-BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/reusable-settings-groups"},
-},
+				"Referenced by ID from endpoint security (Settings Catalog based) profiles; edits apply automatically to every profile that includes the group and are redeployed according to that profile's assignments.",
+				"Limits: up to 100 instances per group and 100 groups per profile.",
+			},
+			RelatedTypes: []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)"},
+			KeySettings:  []string{"settingDefinitionId", "referencingConfigurationPolicyCount", "version"},
+			Links: models.ResourceLinks{
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementreusablepolicysetting?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementreusablepolicysetting-list?view=graph-rest-beta",
+				AdminCenter:   "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/reusable-settings-groups"},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

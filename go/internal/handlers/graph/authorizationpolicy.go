@@ -37,30 +37,30 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authorizationPolicy",
 		documentation: models.ResourceDocumentation{
-			Template:            singletonPromptTemplateText,
-			Purpose:             "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
+			Template: singletonPromptTemplateText,
+			Purpose:  "The tenant Entra ID authorization policy controlling default user permissions and self-service capabilities.",
 			KeySettings: []string{
-	"defaultUserRolePermissions",
-	"defaultUserRolePermissions.permissionGrantPoliciesAssigned",
-	"allowInvitesFrom",
-	"allowedToUseSSPR",
-	"guestUserRoleId",
-},
+				"defaultUserRolePermissions",
+				"defaultUserRolePermissions.permissionGrantPoliciesAssigned",
+				"allowInvitesFrom",
+				"allowedToUseSSPR",
+				"guestUserRoleId",
+			},
 			RequiredPermissions: []string{"Policy.Read.All"},
 			Lifecycle: []string{
-	"Tenant-wide singleton controlling default user role permissions, guest access and invitation settings, and user consent to apps (defaultUserRolePermissions.permissionGrantPoliciesAssigned); review it regularly.",
-	"blockMsolPowerShell only affects the MSOnline PowerShell module, which was retired on 30 May 2025.",
-},
+				"Tenant-wide singleton controlling default user role permissions, guest access and invitation settings, and user consent to apps (defaultUserRolePermissions.permissionGrantPoliciesAssigned); review it regularly.",
+				"blockMsolPowerShell only affects the MSOnline PowerShell module, which was retired on 30 May 2025.",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0",
-				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authorizationpolicy-get?view=graph-rest-1.0",
-			SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/defaultuserrolepermissions?view=graph-rest-1.0",
-BestPractices: []string{
-		"https://learn.microsoft.com/en-us/entra/fundamentals/users-default-permissions",
-		"https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent",
-		"https://learn.microsoft.com/en-us/entra/external-id/external-collaboration-settings-configure",
-	},
-},
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/authorizationpolicy-get?view=graph-rest-1.0",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/defaultuserrolepermissions?view=graph-rest-1.0",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/entra/fundamentals/users-default-permissions",
+					"https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent",
+					"https://learn.microsoft.com/en-us/entra/external-id/external-collaboration-settings-configure",
+				},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			policy, err := getSingleton(ctx)

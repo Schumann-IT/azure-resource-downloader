@@ -25,25 +25,25 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
 			OmitGroupAxes:       true,
-			Purpose: "An on-premises Certificate Connector for Microsoft Intune registration (Graph: 'OnPrem Ndes connector'), used for SCEP certificate issuance through NDES.",
-			KeySettings: []string{"state", "lastConnectionDateTime", "connectorVersion", "machineName", "enrolledDateTime"},
+			Purpose:             "An on-premises Certificate Connector for Microsoft Intune registration (Graph: 'OnPrem Ndes connector'), used for SCEP certificate issuance through NDES.",
+			KeySettings:         []string{"state", "lastConnectionDateTime", "connectorVersion", "machineName", "enrolledDateTime"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
-	"The Certificate Connector for Microsoft Intune updates itself automatically (autoupdate.msappproxy.net, port 443) unless that is blocked; each release is supported for six months, and out-of-support versions may stop working.",
-	"Since 29 July 2021 it replaces the PFX Certificate Connector and the Microsoft Intune Connector.",
-},
+				"The Certificate Connector for Microsoft Intune updates itself automatically (autoupdate.msappproxy.net, port 443) unless that is blocked; each release is supported for six months, and out-of-support versions may stop working.",
+				"Since 29 July 2021 it replaces the PFX Certificate Connector and the Microsoft Intune Connector.",
+			},
 			RelatedTypes: []string{
-	"Microsoft.Graph/deviceConfigurations (SCEP and PKCS certificate profiles)",
-	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
-},
-Links: models.ResourceLinks{
+				"Microsoft.Graph/deviceConfigurations (SCEP and PKCS certificate profiles)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-ndesconnector?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-ndesconnector-list?view=graph-rest-beta",
-			BestPractices: []string{
-		"https://learn.microsoft.com/en-us/intune/fundamentals/certificates/connector/overview",
-		"https://learn.microsoft.com/en-us/intune/fundamentals/certificates/scep-infrastructure",
-	},
-},
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/fundamentals/certificates/connector/overview",
+					"https://learn.microsoft.com/en-us/intune/fundamentals/certificates/scep-infrastructure",
+				},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

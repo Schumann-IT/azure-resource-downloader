@@ -26,26 +26,26 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 		azureType:      "Microsoft.Graph/deviceComplianceScripts",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
+			Purpose:     "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			KeySettings: []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
 			EmbeddedPayloads: []string{
-	"detectionScriptContent (PowerShell discovery script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into <name>_detection.ps1 in file mode)",
-},
+				"detectionScriptContent (PowerShell discovery script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into <name>_detection.ps1 in file mode)",
+			},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
 			Lifecycle: []string{
-	"A discovery script used by a compliance policy can't be deleted until it is removed from that policy; each policy uses one script and each script one policy.",
-	"The Intune Management Extension checks for new or changed scripts and runs discovery every eight hours; a user's Check compliance runs the cached script without fetching updates.",
-	"Windows only (not Windows Home); assigning custom compliance installs the Intune Management Extension.",
-},
+				"A discovery script used by a compliance policy can't be deleted until it is removed from that policy; each policy uses one script and each script one policy.",
+				"The Intune Management Extension checks for new or changed scripts and runs discovery every eight hours; a user's Check compliance runs the cached script without fetching updates.",
+				"Windows only (not Windows Home); assigning custom compliance installs the Intune Management Extension.",
+			},
 			RelatedTypes: []string{
-	"Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)",
-	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
-},
+				"Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecompliancescript?view=graph-rest-beta",
-				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicecompliancescript-list?view=graph-rest-beta",
-			BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/compliance/custom-settings"},
-},
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecompliancescript?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicecompliancescript-list?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/compliance/custom-settings"},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

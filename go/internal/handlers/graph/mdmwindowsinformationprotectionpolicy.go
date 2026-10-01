@@ -24,34 +24,34 @@ func NewMdmWindowsInformationProtectionPolicyHandler(credential azcore.TokenCred
 		azureType:      "Microsoft.Graph/mdmWindowsInformationProtectionPolicies",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
+			Purpose: "An MDM-enrolled Windows Information Protection (WIP) policy controlling data separation between work and personal data.",
 			KeySettings: []string{
-	"enforcementLevel",
-	"protectedApps",
-	"exemptApps",
-	"enterpriseProtectedDomainNames",
-	"dataRecoveryCertificate",
-	"revokeOnUnenrollDisabled",
-	"enterpriseIPRanges",
-	"enterpriseNetworkDomainNames",
-},
+				"enforcementLevel",
+				"protectedApps",
+				"exemptApps",
+				"enterpriseProtectedDomainNames",
+				"dataRecoveryCertificate",
+				"revokeOnUnenrollDisabled",
+				"enterpriseIPRanges",
+				"enterpriseNetworkDomainNames",
+			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
 			Lifecycle: []string{
-	"Microsoft began deprecating Windows Information Protection in July 2022 and removed it starting with Windows 11, version 24H2; Microsoft recommends Microsoft Purview Information Protection and Microsoft Purview Data Loss Prevention instead.",
-	"Unassigning the policy (Learn's way to turn WIP off) makes devices remove WIP file protection and the WIP configuration.",
-},
+				"Microsoft began deprecating Windows Information Protection in July 2022 and removed it starting with Windows 11, version 24H2; Microsoft recommends Microsoft Purview Information Protection and Microsoft Purview Data Loss Prevention instead.",
+				"Unassigning the policy (Learn's way to turn WIP off) makes devices remove WIP file protection and the WIP configuration.",
+			},
 			EmbeddedPayloads: []string{"dataRecoveryCertificate.certificate (base64 Data Recovery Agent certificate)"},
-RelatedTypes: []string{
-	"Microsoft.Graph/groups (assignment target groups)",
-	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
-},
-Links: models.ResourceLinks{
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-mdmwindowsinformationprotectionpolicy?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-mdmwindowsinformationprotectionpolicy-list?view=graph-rest-beta",
-			BestPractices: []string{
-		"https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/information-protection/windows-information-protection/how-to-disable-wip",
-	},
-},
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/information-protection/windows-information-protection/how-to-disable-wip",
+				},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

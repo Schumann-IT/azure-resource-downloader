@@ -22,8 +22,10 @@ func TestSharedPromptTemplateOverrides(t *testing.T) {
 			description: "organization uses the singleton template",
 		},
 		{
-			name:        "singleton organizationalBranding",
-			newHandler:  func() (*GraphCollectionHandler, error) { return NewOrganizationalBrandingHandler(fakeTokenCredential{}) },
+			name: "singleton organizationalBranding",
+			newHandler: func() (*GraphCollectionHandler, error) {
+				return NewOrganizationalBrandingHandler(fakeTokenCredential{})
+			},
 			marker:      "tenant-wide singleton",
 			description: "organizationalBranding uses the singleton template",
 		},

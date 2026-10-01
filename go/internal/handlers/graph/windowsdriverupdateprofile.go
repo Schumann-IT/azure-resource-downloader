@@ -27,25 +27,25 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 			KeySettings:         []string{"approvalType", "deploymentDeferralInDays"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
-	"Pausing applies to individual driver updates, is best effort and doesn't roll back completed installs; driver policies can't roll back drivers.",
-	"If a device is in several driver policies, an Approved status in any of them wins, so assign each device to one policy only.",
-	"With automatic approval only recommended drivers are approved (after deploymentDeferralInDays); other drivers wait in Needs review, so review approvals in both modes.",
-	"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement, Entra joined or hybrid joined devices and update rings that allow Windows drivers; assignment filters aren't supported.",
-},
+				"Pausing applies to individual driver updates, is best effort and doesn't roll back completed installs; driver policies can't roll back drivers.",
+				"If a device is in several driver policies, an Approved status in any of them wins, so assign each device to one policy only.",
+				"With automatic approval only recommended drivers are approved (after deploymentDeferralInDays); other drivers wait in Needs review, so review approvals in both modes.",
+				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement, Entra joined or hybrid joined devices and update rings that allow Windows drivers; assignment filters aren't supported.",
+			},
 			RelatedTypes: []string{
-	"Microsoft.Graph/groups (assignment target groups)",
-	"Microsoft.Graph/deviceConfigurations (update rings must not exclude drivers)",
-	"Microsoft.Graph/deviceManagementConfigurationPolicies (the Settings Catalog setting 'Exclude WU Drivers in Quality Update' must allow drivers)",
-	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
-},
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/deviceConfigurations (update rings must not exclude drivers)",
+				"Microsoft.Graph/deviceManagementConfigurationPolicies (the Settings Catalog setting 'Exclude WU Drivers in Quality Update' must allow drivers)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsdriverupdateprofile?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsdriverupdateprofile-list?view=graph-rest-beta",
-			BestPractices: []string{
-		"https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-driver-update-policy",
-		"https://learn.microsoft.com/en-us/intune/device-updates/windows/driver-updates-faq",
-	},
-},
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-driver-update-policy",
+					"https://learn.microsoft.com/en-us/intune/device-updates/windows/driver-updates-faq",
+				},
+			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
