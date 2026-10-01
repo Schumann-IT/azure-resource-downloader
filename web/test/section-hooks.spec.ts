@@ -121,6 +121,7 @@ describe('slugifyHeading', () => {
 });
 
 describe('applySectionHeadings', () => {
+  // eslint-disable-next-line sonarjs/parameterized-tests -- each case asserts a distinct heading level or section; a table would hide the intent
   it('tags a declared H2 with both the slug and the styling class', () => {
     const tokens = heading('h2', 'Security');
     applySectionHeadings(tokens as any);

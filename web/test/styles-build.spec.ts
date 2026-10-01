@@ -119,7 +119,9 @@ describe('Tailwind stylesheet build', () => {
   });
 
   it('styles Conditions as a relation section and fixes the density and rail gaps', () => {
-    expect(css).toMatch(/\[data-section=["']conditions["']\]/);
+    expect(css).toMatch(
+      /\[data-section=["']conditions["']\][^{]*\{[^}]*--section-color:\s*var\(--sec-relation\)/,
+    );
     // Nested details in a definition section get the depth rail.
     expect(css).toMatch(
       /\.doc-section\[data-section=["']definition["']\]\s+details\s+details/,
