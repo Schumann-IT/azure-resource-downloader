@@ -92,7 +92,7 @@ it cannot silently decay again.
   Every `learn.microsoft.com/en-us/mem/intune/...` URL → its current `learn.microsoft.com/en-us/intune/
   intune-service/...` page (follow the redirect, use the final URL).~~
 - `deviceManagement` (`devicemanagementsettings.go`): `EndpointDocs` → the beta `deviceManagement` entity resource
-  page; the `deviceManagementSettings` complex-type page moves to `SchemaReference`. Open: Microsoft Learn has no
+  page; the `deviceManagementSettings` complex-type page moves to `SchemaReference`. No other `SchemaReference` is added. Open: Microsoft Learn has no
   `deviceManagement` entity page (the Graph docs hold no `resources/…devicemanagement` and no `GET /deviceManagement`
   page, and the guessed names return 404), so `EndpointDocs` still points at the complex-type page and
   `SchemaReference` stays empty; its `Links.Permissions` is the Graph permissions reference. Revisit when such a page

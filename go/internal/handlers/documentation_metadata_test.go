@@ -141,8 +141,8 @@ func TestGraphHandlerSourcesAgreeWithTheirMetadata(t *testing.T) {
 		}
 		resourceType := matches[0][1]
 
-		beta := strings.Contains(src, "newBetaGraphClient(") || strings.Contains(src, "msgraph-beta-sdk-go")
-		v1 := strings.Contains(src, "newGraphClient(") || strings.Contains(src, "msgraph-sdk-go")
+		beta := strings.Contains(src, "newBetaGraphClient(") || strings.Contains(src, `"github.com/microsoftgraph/msgraph-beta-sdk-go/`) || strings.Contains(src, `"github.com/microsoftgraph/msgraph-beta-sdk-go"`)
+		v1 := strings.Contains(src, "newGraphClient(") || strings.Contains(src, `"github.com/microsoftgraph/msgraph-sdk-go/`) || strings.Contains(src, `"github.com/microsoftgraph/msgraph-sdk-go"`)
 		if beta == v1 {
 			t.Errorf("%s (%s) must use the beta client xor the v1.0 client (beta=%v, v1.0=%v)", file, resourceType, beta, v1)
 			continue
