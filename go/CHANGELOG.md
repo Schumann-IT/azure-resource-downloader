@@ -79,6 +79,18 @@ This project is released independently of the documentation browser in `web/`: i
   below. Neither template is hashed, so no regeneration is required: the next `docs generate-prompt` or `docs
   analyze-drift` run hands the agent the new structure. (#33)
 
+### Fixed
+
+#### Release workflow
+
+- **`make branch-ready-go` no longer refuses a branch that planned an entry and closed it on the same branch.**
+  The gate requires every branch that changes `go/` to touch the backlog; it judged that by the net change to
+  `NEXT-ITERATIONS.md`, so an entry added and archived on one branch left the file as it was on `main` and the
+  gate failed with *NEXT-ITERATIONS.md is unchanged on this branch* although the branch had visibly delivered
+  its backlog. An entry archived under `.claude/archive/go/` on the branch now counts as well, and the ok line
+  says which applied: *changed on this branch* or *delivered on this branch (N archived entry(ies))*. An
+  archive file of the web project never counts, and the failure message is unchanged.
+
 ### Breaking
 
 #### Command-line surface and configuration

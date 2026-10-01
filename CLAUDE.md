@@ -68,11 +68,11 @@ concerns and are edited by hand only when the user asks.
 
 - `make branch-ready-go`, `make branch-ready-web`, `make branch-ready` — each refuses while its own folder has
   uncommitted changes, runs the project pipeline, then checks: no strikeouts left in `NEXT-ITERATIONS.md`
-  (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not
-  failed), `web/` `version` untouched, not on `main`, the backlog changed on the branch, Conventional
-  Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit non-zero on
-  any failed check. **Commit first, then run**; fix, commit, rerun. The `-report` variants
-  (`make branch-ready-report-go` / `-web`) run the same checks without the pipeline.
+  (done entries archived), entries numbered `1..N`, `## [Unreleased]` written (empty is reported, not failed),
+  `web/` `version` untouched, not on `main`, the backlog changed or an entry was archived on the branch,
+  Conventional Commits, every entry archived as done recorded under `[Unreleased]`. Read-only git only; exit
+  non-zero on any failed check. **Commit first, then run**; fix, commit, rerun. The `-report` variants (`make
+  branch-ready-report-go` / `-web`) run the same checks without the pipeline.
 - **CI is the quality authority.** The `branch-ready` workflow runs the pipelines (`ci-go`, `ci-web`) on
   every push and the branch reports (`branch-ready-go`, `branch-ready-web`) on the pull request; branch
   protection requires all four. Locally: implementers run build and tests before anything is committed, no
