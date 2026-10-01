@@ -72,6 +72,7 @@ printf '# Next iterations\n\n## 1. Thing\n' >NEXT-ITERATIONS.md
 commit_all "docs(go): plan thing"
 printf '# Next iterations\n' >NEXT-ITERATIONS.md
 printf -- '---\nstatus: done\n---\n' >../.claude/archive/go/2026-10-01-thing.md
+echo note >../.claude/archive/go/notes.txt
 commit_all "docs(go): close thing"
 base=$(git merge-base HEAD main)
 assert_eq "net-zero backlog: delivered 1" "delivered 1" "$(backlog_state "$base")"
