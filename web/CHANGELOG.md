@@ -130,7 +130,7 @@ section of the [repository README](../README.md) for the procedure.
   `main` and the gate failed with *NEXT-ITERATIONS.md is unchanged on this branch* although the branch had
   visibly delivered its backlog. An entry archived under `.claude/archive/web/` on the branch now counts as
   well, and the ok line says which applied: *changed on this branch* or *delivered on this branch (N archived
-  entry(ies))*. An archive file of the go project never counts, and the failure message is unchanged.
+  entry(ies))*. An archive file of the go project never counts, and the failure message is unchanged. (#36)
 
 #### Drift view
 
