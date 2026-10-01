@@ -11,7 +11,7 @@ used from this folder.
 
 - Node >= 20, TypeScript (CommonJS output, `strictNullChecks` on, `noImplicitAny` off), NestJS 11 + Express,
   Handlebars (`hbs`), Tailwind CSS v4 + `@tailwindcss/typography`, `markdown-it` (+ `markdown-it-anchor`),
-  `shiki`, `gray-matter`, `js-yaml`, `diff`, `yazl`, Jest + supertest.
+  `shiki`, `gray-matter`, `js-yaml`, `diff`, `yazl`, `pdfmake`, Jest + supertest.
 - **No client-side JavaScript.** Everything is server-rendered; the CSP names no `script-src`, so no script
   can run. State lives in the URL. Dropping this rule is a parked idea in `NEXT-ITERATIONS.md`, not a
   decision you may take.
@@ -31,8 +31,9 @@ used from this folder.
   `link-rewrite.ts`, `section-hooks.ts`, `findings-table.ts` (pure); `path-safety.ts` (**the security
   boundary**); `drift-observation.ts`, `drift-audit.ts`, `drift.service.ts`, `drift-view.ts`, `yaml-diff.ts`,
   `file-cache.ts`, `resources-metadata.ts`; `compare-normalise.ts` (provisional cross-tenant identity rule),
-  `compare-view.ts`, `compare.service.ts`; `export/` (Confluence zip: `export.service.ts`, `confluence.ts`,
-  `export-index-mode.ts`, `html-allowlist.ts`, `page-name.ts`).
+  `compare-view.ts`, `compare.service.ts`; `drift-report.service.ts` (drift reports shared by the drift pages and
+  the PDF); `export/` (Confluence zip and drift report PDF: `export.service.ts`, `confluence.ts`,
+  `export-index-mode.ts`, `html-allowlist.ts`, `page-name.ts`, `drift-pdf.ts`, `pdf-content.ts`).
 - `views/` + `views/partials/` Handlebars templates; `public/` (`favicon.svg`; `app.css` is generated and
   gitignored); `test/` `*.spec.ts` only; `scripts/` readiness reports; `eslint.config.mjs` (single lint truth);
   `eslint-suppressions.json` (debt ledger); `.env.example`. `scripts/lib/git.js` is the one place the tooling

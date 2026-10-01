@@ -85,6 +85,17 @@ section of the [repository README](../README.md) for the procedure.
   `azure-rd resource audit`, or set `audit-workspace-id` in the tenant profile so `azure-rd resource drift`
   records it** (see the CLI's README for the workspace and permissions it needs); without it the drift pages
   are unchanged. (#33)
+- **A tenant's current drift report downloads as one PDF.** The tenant drift page's top bar offers **Download
+  drift report (PDF)** while the observation is current: the observation, the analysis summary and every
+  finding — verdict, severity, who changed it, what changed and its analysis — plus *By actor*, with every
+  collapsed block expanded and links between findings working inside the PDF, so the whole report can go to
+  someone without access to the browser or the export tree. Printing the drift pages could not do that:
+  collapsed blocks print collapsed, one page at a time. Tables fit portrait A4, long values wrap, rows never
+  split across pages, and the few symbols the bundled font lacks print as ASCII. YAML payloads and line diffs
+  stay out, as source YAML does in the Confluence export. The same observation always yields the same file;
+  the report is built in memory from the same reads as the drift pages, so the app stays read-only, offline
+  and script-free, and a failed build never sends a partial file. An outdated observation offers no link.
+  Content and limits are in `README.md`; it adds the `pdfmake` dependency.
 
 ### Changed
 
