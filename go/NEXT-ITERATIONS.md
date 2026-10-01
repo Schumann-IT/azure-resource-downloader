@@ -392,16 +392,22 @@ naming flags that no longer exist.
   carries the GUID, so a domain never matches it and every run would prompt.~~
   **Result (2026-10-01, cb-gmbh.com, macOS):** the cache works — after the one device-code sign-in, later runs got
   their tokens silently. The number of prompts on the very first run was not recorded (see the CAE follow-up).
-- The experiment, an operator step not for the implementer — stays unstruck until recorded here: on cb-gmbh.com
+- ~~The experiment, an operator step not for the implementer — stays unstruck until recorded here: on cb-gmbh.com
   `az logout && az login --scope https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
   --domain cb-gmbh.com` with no `client-id` in the profile; record `appid`, the `scp` list and the covered/missing
   table. If everything is covered, also run one `resource download --dry-run` per dedicated-app type without
-  `client-id` and record the outcome — a service may gate on the calling application, not only on the scopes.
-- Follow-up, conditional — not built in the first implementation run, stays unstruck until the experiment above is
-  recorded; built only if the experiment covers every declared permission: `PromptForDedicatedApp`
-  (`internal/cmdutil/prompt.go`) first prints the exact `az login --scope …` command derived from the selected types
-  and offers device code as the fallback. If the experiment says no, this bullet goes back to the parked ideas,
-  rewritten with the evidence, and the README states the measured answer.
+  `client-id` and record the outcome — a service may gate on the calling application, not only on the scopes.~~
+  **Result (2026-10-01, cb-gmbh.com):** after `az logout && az login --tenant <tenant GUID> --scope
+  https://graph.microsoft.com/.default`, `azure-rd --debug` (no `client-id` in the profile) reported the Graph token
+  as `app_id=04b07795-8ddb-461a-bbee-02f9e1bf7b46` ("Microsoft Azure CLI") with the CLI app's fixed scope set —
+  `AppRoleAssignment.ReadWrite.All Application.ReadWrite.All AuditLog.Read.All DelegatedPermissionGrant.ReadWrite.All
+  Directory.AccessAsUser.All Group.ReadWrite.All SubjectNameRegistration.ReadWrite User.Read.All User.ReadWrite.All`
+  plus `email openid profile` — and `Graph permission coverage covered=1 missing=50`: only `Group.Read.All` (groups)
+  is covered; every `DeviceManagement*`, `Policy.Read.All`, `Agreement.Read.All`,
+  `OnPremDirectorySynchronization.Read.All`, `Organization.Read.All` and `OrganizationalBranding.Read.All` is missing.
+  The scoped login added nothing to the CLI app's token. **Answer: no** — a scoped `az login` cannot stand in for
+  the dedicated app on this tenant; the per-type dry runs are not needed. (`Directory.AccessAsUser.All` might let a
+  few Entra reads through in practice; that does not change the answer for the Intune and policy types.)
 - ~~Stale wording: the `client.go:168` error reads "tenant-id is required when client-id is set in the tenant profile";
   the `cmd/root.go:52` help text and the comments in `models/types.go`, `registry.go`, `collection.go`,
   `cmd/resource/list.go` name the profile keys, not flags. A test asserts the new error text and that neither it nor
@@ -478,6 +484,21 @@ refusals and ending as a mostly empty, incomplete run.
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
 ship and are archived. Each records why it is parked and what would make it worth doing.
+
+### Idea: recommend a scoped `az login` in the dedicated-app prompt
+
+Let the dedicated-app prompt (`PromptForDedicatedApp`, `internal/cmdutil/prompt.go`) first print the exact
+`az login --scope …` command derived from the selected types' declared permissions, with device code as the
+fallback — the softening step the sign-in review proposed. **Parked** because the measurement says it cannot work:
+on cb-gmbh.com (2026-10-01) a token from `az login --scope https://graph.microsoft.com/.default` belonged to the
+first-party Azure CLI app (`04b07795-…`) with its fixed scope set and covered 1 of 51 declared permissions
+(`Group.Read.All` only) — every `DeviceManagement*`, `Policy.Read.All`, `Agreement.Read.All`,
+`OnPremDirectorySynchronization.Read.All` and `Organization*` permission was missing. Recommending the command would
+send operators down a path that fails. The `--debug` Graph-token section stays the instrument to re-measure.
+
+**Revisit when** a re-measurement with `azure-rd --debug` on a representative tenant shows the Azure CLI app's token
+covering the declared permissions (Microsoft changes what its first-party app may request), or Microsoft documents
+that it does. Removing the dedicated-app path entirely would additionally be breaking (two tenant-scoped keys).
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
