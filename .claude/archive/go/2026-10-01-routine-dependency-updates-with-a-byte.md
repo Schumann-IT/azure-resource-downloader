@@ -152,3 +152,36 @@ the way, find out whether one of the two Microsoft Graph SDKs could be dropped, 
 - ✅ Documentation at *done*: `CHANGELOG.md` `### Changed` (the updated modules with versions) and *Release workflow*
   (Dependabot, the dependency-only exemption); `README.md` toolchain, the golden test in the testing section and the
   `deps-update` / `golden-update` targets; `go/CLAUDE.md` commands table.
+
+## Appendix: Graph SDK investigation (moved from the dropped parked idea, 2026-10-01)
+
+The investigation bullet above wrote its result into the parked idea *consolidate on one Microsoft Graph SDK*.
+That idea was dropped on 2026-10-01 — dropping beta is not viable, dropping v1.0 trades the stable contract of
+the most-referenced types for beta churn and a one-time hash move, and build time was not a felt cost — so its
+evidence is kept here, verbatim:
+
+**Evidence (2026-10-01, `msgraph-sdk-go v1.103.0`, `msgraph-beta-sdk-go v0.166.0`, read from the module cache —
+request builders only; a Microsoft Learn cross-check is still open).** *Drop beta* is **not viable**: 21 of the beta
+endpoints the handlers call have no v1.0 request builder, among them the Settings Catalog. *Drop v1.0* is
+**technically viable**: all seven v1.0 endpoints (`identity/conditionalAccess/policies`,
+`policies/authenticationStrengthPolicies`, `policies/authenticationMethodsPolicy`, `policies/authorizationPolicy`,
+`directory/onPremisesSynchronization`, `groups`, `organization`) exist on beta, and beta has its own `odataerrors`
+for `GraphErrorCode`; the cost stays the one stated above (beta churn, one YAML/hash move per type). Beta endpoint →
+on v1.0:
+- `deviceManagement`: `applePushNotificationCertificate` yes; `appleUserInitiatedEnrollmentProfiles` no;
+  `assignmentFilters` no; `compliancePolicies` no; `configurationPolicies` no; `depOnboardingSettings` no;
+  `deviceCategories` yes; `deviceCompliancePolicies` yes (+ assignments); `deviceComplianceScripts` no;
+  `deviceConfigurations` yes (+ assignments, `getOmaSettingPlainTextValue`); `deviceCustomAttributeShellScripts` no;
+  `deviceEnrollmentConfigurations` yes (+ assignments); `deviceHealthScripts` no; `deviceManagementScripts` no;
+  `deviceShellScripts` no; `groupPolicyConfigurations` no; `intents` no; `intuneBrandingProfiles` no;
+  `mobileThreatDefenseConnectors` yes; `ndesConnectors` no; `notificationMessageTemplates` yes;
+  `reusablePolicySettings` no; `roleDefinitions` yes; `roleScopeTags` no; `termsAndConditions` yes (+ assignments);
+  `windowsAutopilotDeploymentProfiles` no; `windowsAutopilotDeviceIdentities` yes; `windowsDriverUpdateProfiles` no;
+  `windowsFeatureUpdateProfiles` no; `windowsQualityUpdateProfiles` no; the `deviceManagement` singleton (settings)
+  yes.
+- `deviceAppManagement` (each with its assignments where the handler reads them): `androidManagedAppProtections`,
+  `iosManagedAppProtections`, `mdmWindowsInformationProtectionPolicies`, `mobileAppConfigurations`, `mobileApps`,
+  `targetedManagedAppConfigurations`, `vppTokens`, `windowsInformationProtectionPolicies` yes;
+  `windowsManagedAppProtections` no.
+- `identity/conditionalAccess/namedLocations` yes; `identityGovernance/termsOfUse/agreements` yes;
+  `organization` and `organization/{id}/branding` yes.
