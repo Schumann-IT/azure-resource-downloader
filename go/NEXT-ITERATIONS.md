@@ -189,6 +189,82 @@ per-item context.
 - Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
   (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
 
+## 5. Routine dependency updates with a byte-neutrality guard, and Dependabot
+
+**Goal.** Every direct Go dependency is brought up to date — proven not to change a single exported byte — and
+every later update becomes the same non-event: Dependabot proposes it, CI proves it, the operator merges it. Along
+the way, find out whether one of the two Microsoft Graph SDKs could be dropped, without dropping it yet.
+
+> **Why.** Dependencies were last updated by hand on 2026-09-18 (`73daed9`); nothing automates updates and nothing
+> proves one is safe. A Graph SDK bump can change the exported YAML: `serializeParsableToMap`
+> (`internal/handlers/graph/collection.go:180-198`) writes the SDK model with the Kiota JSON writer, the pipeline
+> cleans, decodes and sorts it, `MarshalResourceYAML` (`internal/pipeline/nameplanner.go:21`) writes it, and
+> `sourceSha256` is the hash of those bytes (`internal/pipeline/writer.go:285-296`) — so a changed model moves the
+> hash of resources that did not change in the tenant, which reads as mass drift and forces a regeneration. There
+> are no golden or fixture tests today (handler tests build models with setters), so neutrality could only be shown
+> by diffing two live exports.
+>
+> **What is true now (2026-10-01).** Go `1.26.0`; `msgraph-sdk-go v1.103.0`, `msgraph-beta-sdk-go v0.166.0`,
+> `kiota-abstractions-go v1.11.0`, `kiota-serialization-json-go v1.1.4`, `azcore v1.23.1`, `azidentity v1.14.1`,
+> `azlogs v1.2.0`, `armcompute/v5 v5.7.0`, `armresources v1.2.0`, `armsubscriptions v1.3.0`, `armstorage v1.8.1`,
+> `cobra v1.10.2`, `pflag v1.0.10`, `viper v1.21.0`, `charmbracelet/log v1.0.0`, `yaml.v3 v3.0.1`. `make deps` only
+> downloads and tidies. The v1.0 SDK serves exactly seven handlers (conditional access, groups, organization,
+> authentication methods and strengths, authorization policy, on-premises sync) plus `GraphErrorCode` in
+> `internal/azure/errors.go`. There is no `dependabot.yml`, and both branch gates refuse a branch that touches the
+> project without a backlog change — so a Dependabot pull request could never pass the required `branch-ready-*`
+> checks. `go/README.md:88` and the root `README.md:58,109` still say Go 1.24.
+>
+> **Decision.** Scope: the routine update plus an investigation only — no SDK consolidation this time.
+>
+> **Decision.** Neutrality proof: an offline golden test, so every future bump is checkable in CI.
+>
+> **Decision.** Dependabot for go, web and GitHub Actions, with a dependency-only exemption in both branch gates.
+>
+> **Not regeneration-gated, by guard.** Not batched with the scheduled regeneration: the golden test is the guard —
+> a module whose bump changes a golden file is held back and left for a regeneration-batched follow-up.
+>
+> **Contract.** The dependency-only rule and its ok-line wording are identical in both gates (web entry *Accept a
+> dependency-only branch in the branch gate*).
+>
+> **Owner.** Outside `go/`: `.github/dependabot.yml`, the root `README.md`, the root `CLAUDE.md`,
+> `.claude/rules/next-iterations.md` and its Windsurf twins `go/.windsurf/rules/06-next-iterations.md`,
+> `web/.windsurf/rules/06-next-iterations.md`. Sequencing: the golden test lands before the bump.
+>
+> **Implementer.** opus
+
+**Plan.**
+
+- Golden test first, on the current versions: synthetic Graph JSON fixtures under
+  `internal/handlers/graph/testdata/golden/` — hand-written or sanitised, no tenant data — for one or two v1.0
+  types (conditional access, groups) and several beta types (a settings-catalog policy with nested settings, a
+  `deviceConfigurations` subtype with a base64 payload, `mobileApps`). The test parses each fixture into the
+  handler's model through the SDK's Kiota JSON parse node (the factory the client uses), runs the handler's
+  `Transform` and the pipeline transforms, marshals with `MarshalResourceYAML` and compares against checked-in
+  `.golden.yaml` files. Regenerating the goldens is a deliberate manual step, never in CI. Runs in `make test`.
+- The update: `go get -u` per module group (Azure SDK, Graph/Kiota, CLI libraries), then `make deps` and
+  `make check`. The golden test must stay byte-identical; a module whose bump changes a golden file is held back at
+  its current version, its diff recorded in this entry for a regeneration-batched follow-up. API breaks are fixed at
+  their call sites.
+- Investigation, no code change: for each Intune endpoint the beta handlers use, record whether a v1.0 equivalent
+  exists today (Microsoft Learn); conclude which consolidation direction is viable — drop v1.0 (seven handlers to
+  beta), drop beta (only if every Intune endpoint exists on v1.0), or neither — and write the result into the parked
+  idea *consolidate on one Microsoft Graph SDK* as its revisit evidence.
+- `.github/dependabot.yml`: `gomod` on `/go`, `npm` on `/web`, `github-actions` on `/`; weekly; one grouped pull
+  request per ecosystem; a commit-message prefix whose subjects pass the gates' Conventional Commits check
+  (`build(go): …` / `build(web): …` / `ci: …` if Dependabot's options allow it — otherwise the exemption below also
+  accepts Dependabot's own subject form). The exact subject is stated in this entry.
+- Dependency-only exemption in the go gate (`scripts/branch-ready.sh`, `scripts/lib/branch.sh`): a branch whose
+  changes under `go/` are only `go.mod` / `go.sum` skips the backlog-changed check and the archive checks; it still
+  needs Conventional Commits and no strikeouts. Ok line: "dependency-only branch: backlog check not required". Script
+  tests in `scripts/lib/branch_test.sh`: deps-only passes; deps plus a code file fails as before.
+- Stale Go version: `go/README.md` and the root `README.md` say Go 1.26+ (from `go.mod`); drop the mismatch note in
+  the root `CLAUDE.md`.
+- Rules wording: the root `CLAUDE.md` gates paragraph, `.claude/rules/next-iterations.md` and both Windsurf twins
+  state the one exception — a dependency-only branch (Dependabot or manual) needs no backlog entry; `ci-*` and the
+  golden test prove it.
+- Documentation at *done*: `CHANGELOG.md` `### Changed` (the updated modules with versions) and *Release workflow*
+  (Dependabot, the dependency-only exemption); `README.md` toolchain and the golden test in the testing section.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
@@ -211,37 +287,20 @@ beside `index.yaml` in both projects' rules as a versioned contract. Related, we
 table uses `high / medium / low / info` while the tenant summary's Findings table uses
 `critical / high / medium` (see the web backlog's *Fixes*).
 
-### Idea: routine dependency updates, and consolidating on one Microsoft Graph SDK
+### Idea: consolidate on one Microsoft Graph SDK
 
-Two related pieces of dependency hygiene. First, a routine update pass (`go get -u`, `make deps`, `make check`)
-over the direct dependencies. Second, investigate whether the module can carry **one** Microsoft Graph SDK
-instead of two. The direction is the opposite of the intuitive one: `msgraph-beta-sdk-go` is imported by 53
-handler files and serves the Intune/device-management endpoints that **do not exist on v1.0**, so it can never
-be the one removed. The candidate for removal is `msgraph-sdk-go` (v1.0), used by one shared client constructor
-and seven handlers (conditional access, groups, organization, authentication methods/strengths, authorization
-policy, on-premises synchronization) — the beta endpoint is a superset, so those seven could move. The prize is
-real: the two generated SDKs dominate compile time and binary size, and one of them is nearly gone already.
-**Not planned — parked deliberately**, for three reasons:
+The module carries two generated Graph SDKs: `msgraph-beta-sdk-go` for the Intune / device-management endpoints that
+do not exist on v1.0 (about 50 handlers), and `msgraph-sdk-go` (v1.0) for seven handlers (conditional access, groups,
+organization, authentication methods and strengths, authorization policy, on-premises sync) plus `GraphErrorCode`.
+The two SDKs dominate compile time and binary size. **Parked** because both directions cost something real: moving
+the seven to beta trades v1.0's stability contract for beta churn on the most-referenced types, and re-fetching them
+through beta changes their YAML once (beta models carry extra properties), which moves their `sourceSha256` and
+regenerates their documents; dropping beta instead is only possible once every Intune endpoint exists on v1.0.
 
-- **A dependency bump is not hash-neutral by construction.** A Graph SDK update can change which properties a
-  model carries and therefore the YAML bytes the export writes — moving `sourceSha256` for resources that did
-  not change in the tenant, which reads as mass drift and forces documentation regeneration. `resource drift`
-  is the verification tool: "update, run drift against a fixture tenant, it must report zero findings" is the
-  standard check, so a bump is provable content-neutral before it lands.
-- **Moving the seven v1.0 types to beta trades a stability contract for uniformity.** v1.0 responses are
-  contractually stable; beta responses may change shape at Microsoft's discretion. Today the most stable,
-  most-referenced types (groups, conditional access) deliberately sit on the stable endpoint. Consolidation
-  buys shorter builds but makes every type's bytes hostage to beta churn.
-- **The switch itself moves hashes once.** Re-fetching those seven types through the beta endpoint will change
-  their YAML (beta models carry extra properties), so their `sourceSha256` values move and their documents
-  regenerate — a one-time cost that should ride a regeneration scheduled for another reason, not force its own.
-
-**Revisit when** a security advisory forces an SDK bump anyway, or build time becomes a felt cost. If
-consolidation is picked up:
-move the seven handlers one at a time, verify each with a fixture-tenant drift run, expect and batch the
-one-time hash movement, and only then drop the v1.0 module. If beta churn is the worry instead, the same
-investigation can conclude the opposite consolidation is wiser once Microsoft ports the Intune endpoints to
-v1.0 — check that first; it would remove the *beta* SDK and the churn with it.
+**Revisit when** the investigation recorded by the routine-dependency-update entry shows a viable direction, build
+time becomes a felt cost, or a security advisory forces an SDK change anyway. **Regeneration-gated** when picked up:
+batch it with a scheduled regeneration; move the handlers one at a time, each proven with the golden test, and drop
+the module only at the end.
 
 ### Idea: per-finding severity in document `Security` sections
 
