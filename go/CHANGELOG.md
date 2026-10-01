@@ -91,6 +91,20 @@ This project is released independently of the documentation browser in `web/`: i
   says which applied: *changed on this branch* or *delivered on this branch (N archived entry(ies))*. An
   archive file of the web project never counts, and the failure message is unchanged. (#36)
 
+#### Downloading and export metadata
+
+- **A tenant without organizational branding no longer makes every export incomplete.** Graph answers 404 when
+  no default branding is configured; the CLI read that as *could not be listed* and blamed a missing permission,
+  so every download and drift run of such a tenant was incomplete — which suppresses absence and removals —
+  although nothing was wrong. A 404 now lists the type as empty; any other error still fails it. Error
+  summaries read `HTTP <status> <code>: <first line>` and add the permission hint only to a 401/403, so a 404,
+  throttling or server error no longer reads as a permission problem; a Graph 401/403 while fetching one
+  resource skips it with a warning. `resources/metadata.yaml` now records why each type could not be listed
+  (`notListed.reasons`), and `docs/generate.md` shows that reason. A download whose types all list empty — for
+  example `--type Microsoft.Graph/organizationalBranding` on such a tenant — records the metadata and exits `0`
+  instead of failing with *no resources to download*; that error is now reserved for a run where nothing could
+  be listed at all. No action needed: the next download records the branding as empty.
+
 ### Breaking
 
 #### Command-line surface and configuration

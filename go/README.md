@@ -182,7 +182,9 @@ file you can review, not typed ad-hoc.
 
 **Exit codes:** `0` when no resource *failed* — resources skipped for missing permissions, filtered out, or
 types that could not be listed do not fail the run; they are reported in the summary. `1` on any failed
-resource, a configuration error (unknown type, unreadable `--config`), or no resources to download.
+resource, a configuration error (unknown type, unreadable `--config`), or nothing listed at all (every type
+in scope failed to list). A run whose types all list empty is not an error: it fetches nothing, records the
+export metadata (marking earlier entries of those types absent) and exits `0`.
 Completeness is reported separately from the exit code: a run is *complete* when every type in scope listed,
 nothing was cancelled and every request produced a result — an incomplete run can still exit `0`, and
 `metadata.yaml` records which.
@@ -545,8 +547,12 @@ asked about otherwise. A profile that names a `client-id` skips the check: the d
 session, because its first token request *is* the sign-in.
 
 Once signed in, the token's scopes decide what is read. A type whose scope the token lacks is **skipped with a
-warning**, never a failure: its listing is recorded as "could not be listed", the run is marked incomplete,
-and nothing is inferred about its resources. The token decoder under [`--debug`](#--debug) shows which scopes
+warning**, never a failure: its listing is recorded as "could not be listed", with the reason, the run is
+marked incomplete, and nothing is inferred about its resources. A Microsoft Graph 401/403 while fetching a
+single resource skips that resource with a warning in the same way, whatever the error text says. Every reason
+reads `HTTP <status> <code>: <first line of the message>` for an Azure or Graph error; the
+`(hint: requires '…' permission …)` naming the scope is added only to a 401/403, so a 404, a throttling or a
+server error never reads as a permission problem. The token decoder under [`--debug`](#--debug) shows which scopes
 a CLI token actually carries.
 
 The tenant's **Entra default domain** (e.g. `contoso.onmicrosoft.com`) is resolved through the ARM Tenants API
@@ -842,8 +848,9 @@ resources:
     groupTypes: [DynamicMembership]       # group-only facts, so a referenced group's kind
     securityEnabled: true                 # can be rendered without reading its YAML
 notListed:
-  types: []                     # could not be listed this run (permissions) — count unknown
+  types: []                     # could not be listed this run — count unknown
   empty: [Microsoft.Graph/vppTokens]     # listed successfully to zero resources
+  reasons: {}                   # why each type in `types` could not be listed (the error summary)
 ```
 
 Rules the tool holds itself to, because pruning is built on them:
@@ -1040,7 +1047,7 @@ no subscription is available.
 | `Microsoft.Graph/authorizationPolicy` | `Policy.Read.All` | v1.0 tenant singleton. |
 | `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` | The ToU PDFs are embedded base64. |
 | `Microsoft.Graph/organization` | `Organization.Read.All` | v1.0 tenant information object. |
-| `Microsoft.Graph/organizationalBranding` | `OrganizationalBranding.Read.All` (+ `Organization.Read.All`) | Singleton under the organization, per-locale `localizations` expanded; no file when branding is unconfigured. |
+| `Microsoft.Graph/organizationalBranding` | `OrganizationalBranding.Read.All` (+ `Organization.Read.All`) | Singleton under the organization, per-locale `localizations` expanded. A tenant without a default branding (Graph answers 404) lists the type as empty — no file, and the run stays complete. |
 | `Microsoft.Graph/onPremisesSynchronization` | `OnPremDirectorySynchronization.Read.All` | v1.0. One file in hybrid tenants, none in cloud-only ones. |
 | `Microsoft.Graph/groups` | `Group.Read.All` | v1.0. The **full** directory group list incl. dynamic membership rules — large in big tenants. Documented only when referenced by an assignment. |
 
