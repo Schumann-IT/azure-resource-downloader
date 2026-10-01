@@ -8,6 +8,37 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/web/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
+## 1. Section styling follows the CLI's harmonised heading sets
+
+*Kind:* refactor
+
+**Goal.** When the CLI's templates are harmonised, every section a regenerated document can carry is styled like
+every other contract section — group documents' new *References* and *Lifecycle and operations*, and record
+documents' new *Security* included — and a test keeps the browser's vocabulary in step with the CLI's heading
+sets.
+
+> **Contract.** The go entry *Consistent prompt templates, run-prompt fixes and the `summary:` frontmatter line*
+> fixes the heading sets: default `References | Lifecycle and operations | Security | Settings`; conditional access
+> `References | Conditions | Lifecycle and operations | Security | Settings`; referenced `References | Usage and
+> references | Lifecycle and operations | Security | Definition`; singleton `References | Lifecycle and operations |
+> Security | Settings`; arm `References | Lifecycle and operations | Security | Properties`; credential `References |
+> Expiry and renewal | Lifecycle and operations | Security | Properties`; record `References | Lifecycle and
+> operations | Security | Properties`; group `References | Membership | Usage as assignment target | Lifecycle and
+> operations | Security | Properties`. H2 names are unchanged; every one is already in `SECTION_VOCABULARY`, so
+> rendering needs no change.
+>
+> **Owner.** none — every file is under `web/`. Ships as a pair with that go entry; harmless before the
+> regeneration.
+
+**Plan.**
+
+- `src/docs/section-hooks.ts`: update the per-template heading-set comment to the sets in the Contract.
+- `test/section-hooks.spec.ts`: for every family's heading set in the Contract, every heading gets
+  `data-section` plus the `doc-section-heading` class (no heading of a family renders unstyled).
+- Documentation at *done*: `CHANGELOG.md` `### Changed` (Views and navigation): group documents' new *References*
+  and *Lifecycle and operations* sections and record documents' *Security* section are styled like every other
+  contract section, once regenerated.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
