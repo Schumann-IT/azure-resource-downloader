@@ -230,7 +230,7 @@ GitHub once the monitor has reported.
 
 **Plan.**
 
-- The monitor, one procedure shared by the three skills (written once, as a "CI monitor" subsection of
+- ~~The monitor, one procedure shared by the three skills (written once, as a "CI monitor" subsection of
   `implement-pair` §6, and referenced by name from `/close-branch` and `/pull-request`): after the push, record
   `SHA=$(git rev-parse HEAD)` and start **one** Bash command with `run_in_background: true` and an explicit
   `timeout` of 3600000 ms that (a) polls `gh run list --branch <branch> --event push --commit $SHA --json
@@ -241,19 +241,19 @@ GitHub once the monitor has reported.
   or `skipped` → report green with the run URL; otherwise report the failing jobs with a `gh run view <id>
   --log-failed` excerpt (tail, at most ~60 lines per job). No run registered or the background timeout hit →
   report "CI still pending/unknown" with the branch's Actions URL; never report green without having read the
-  jobs. Without a background capability, fall back to the blocking wait and say so.
-- `/implement-pair` §6 and §7: push, start the monitor, and finish the final report with "CI pending (monitor
+  jobs. Without a background capability, fall back to the blocking wait and say so.~~
+- ~~`/implement-pair` §6 and §7: push, start the monitor, and finish the final report with "CI pending (monitor
   running)" and the branch's Actions URL instead of the result (the run URL arrives with the monitor's report;
   the "CI run URL and result" field of §7 becomes that report, posted when it arrives). When a red report arrives and the run's `headSha` is still
   `HEAD`, offer the existing fix round (one QA round with the log excerpt, commit, push, new monitor; at most
-  twice) — the user confirms, nothing is fixed unprompted; a red run of an older commit is reported as stale.
-- `/close-branch` §6: push and start the monitor; the branch counts as closed once the local reports are green and
+  twice) — the user confirms, nothing is fixed unprompted; a red run of an older commit is reported as stale.~~
+- ~~`/close-branch` §6: push and start the monitor; the branch counts as closed once the local reports are green and
   the push is done — the report says CI is pending. Remove "Only when both are green is the branch closed". A red
   monitor report for `HEAD` offers the same user-confirmed fix round as `/implement-pair` (at most twice); a red
   run of an older commit is reported as stale. The `description:` frontmatter drops "wait for the CI pipelines
   to be green" for "push and start a CI monitor that reports back". The no-`gh` fallback (full local
-  `make branch-ready-go` / `-web`) stays.
-- `/pull-request`: the preflight accepts a pending push run (it says so in the Verification section instead of
+  `make branch-ready-go` / `-web`) stays.~~
+- ~~`/pull-request`: the preflight accepts a pending push run (it says so in the Verification section instead of
   quoting a green run) but refuses a red one for `HEAD`; after the link-back commit is pushed, start the monitor on
   the pull request — one background command (same `run_in_background` / 3600000 ms timeout) that polls every
   5 s, at most 24 times, until `gh pr view <N> --json headRefOid -q .headRefOid` equals the pushed `HEAD` and
@@ -261,17 +261,17 @@ GitHub once the monitor has reported.
   checks <N> --json name,state,link` and report the merge-gate checks (`branch-ready-*`) and `ci-*`
   (`ci-*` skipped counts as green). The step ends with the URL and "checks pending (monitor running)"; when the
   monitor reports, the session tells the user the pull request is ready for review and merge on GitHub (or what
-  is red). Merging stays the user's action.
-- Wording: root `CLAUDE.md` (the agent-pipeline line "pushes once after QA and waits for CI" and "`/close-branch`
+  is red). Merging stays the user's action.~~
+- ~~Wording: root `CLAUDE.md` (the agent-pipeline line "pushes once after QA and waits for CI" and "`/close-branch`
   … pushes and waits for CI to be green") and the `implement pair` row of `.claude/rules/next-iterations.md`
   ("pushes once, and waits for the `ci-*` jobs") say "pushes and starts a CI monitor that reports back"; the two
   Windsurf twins get the same row; `.claude/agents/qa.md` ("then pushes and waits for CI") says "then pushes and
-  monitors CI".
-- Check: `grep -rn -i "wait for the push run\|waits for CI\|waits for the .ci-\|wait for the CI\|--watch"
+  monitors CI".~~
+- ~~Check: `grep -rn -i "wait for the push run\|waits for CI\|waits for the .ci-\|wait for the CI\|--watch"
   CLAUDE.md .claude go/.windsurf web/.windsurf` finds nothing outside the monitor procedure itself, and the three
   copies of the `implement pair` row agree (the two twins identical to each other, and to the
   `.claude/rules/next-iterations.md` row apart from their trailing "This pipeline exists in Claude Code only…"
-  sentence).
+  sentence).~~
 - Verification (session, after the implementation is committed — agents cannot push): run this branch's own
   `/close-branch` and `/pull-request` with the new procedure — both return immediately with "pending", and each
   monitor reports once its run or checks finish.

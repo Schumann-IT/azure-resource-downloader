@@ -45,7 +45,7 @@ commits `main` takes directly are a changelog close and the release stamp.
 - `implement pair go N web M` → `/implement-pair`: one Opus plan reviewer refines and commits the backlog
   (it asks you only for decisions that change what ships, and reviews again after each answer), then per
   side in parallel: implementer (tier from the entry), Opus reviewer, Sonnet QA. The session commits per
-  project, pushes once after QA and waits for CI. **Agents never push; only the plan reviewer commits, and
+  project, pushes once after QA and starts a CI monitor that reports back. **Agents never push; only the plan reviewer commits, and
   only the backlog files.**
 - `item N is done` / `drop item N` → `/item-done`: **now** write the project's `README.md` and
   `CHANGELOG.md` (from the entry, the diff and the reports), archive the entry to
@@ -76,7 +76,7 @@ concerns and are edited by hand only when the user asks.
 - **CI is the quality authority.** The `branch-ready` workflow runs the pipelines (`ci-go`, `ci-web`) on
   every push and the branch reports (`branch-ready-go`, `branch-ready-web`) on the pull request; branch
   protection requires all four. Locally: implementers run build and tests before anything is committed, no
-  agent runs lint, and `/close-branch` runs the report targets, pushes and waits for CI to be green.
+  agent runs lint, and `/close-branch` runs the report targets, pushes and starts a CI monitor that reports back.
 - `/pull-request` — after `/close-branch`: builds the title (Conventional Commits) and the description
   from the template, shows both for editing, pushes, creates the PR with `gh`, links `#N` back into the
   changelog entries and the archive files. Merging is done on GitHub (squash).

@@ -1,6 +1,6 @@
 ---
 name: close-branch
-description: Close a feature or fix branch — run the done step (README, CHANGELOG, archive) for every entry with struck bullets, confirm nothing is left struck out, commit, run the branch report locally, push and wait for the CI pipelines to be green.
+description: Close a feature or fix branch — run the done step (README, CHANGELOG, archive) for every entry with struck bullets, confirm nothing is left struck out, commit, run the branch report locally, push and start a CI monitor that reports back.
 disable-model-invocation: true
 ---
 
@@ -26,9 +26,9 @@ Run only when the user asks. Branch: `$ARGUMENTS` (or the current one). Follow t
    written, not on `main`, the backlog changed on the branch, Conventional Commits, every entry archived as
    done grew `[Unreleased]`; web: `version` untouched). Exit non-zero on any ❌. Fix, commit, rerun until
    green. Report the final output verbatim.
-6. Push (`git push -u origin <branch>`) and wait for the push run of the `branch-ready` workflow: `ci-go` and
-   `ci-web` must pass or be skipped. A red pipeline → the fix round of `/implement-pair` stage 6 (fixer agent,
-   commit, push, wait), at most twice; then report. Only when both are green is the branch closed. `gh auth
-   status` must succeed for this; without `gh`, run the full local gates `make branch-ready-go` / `-web`
-   instead and say so.
+6. Push (`git push -u origin <branch>`) and start the **CI monitor** of `/implement-pair` §6 on the push run.
+   The branch counts as closed once the local reports are green and the push is done; the report says CI is
+   pending. A red monitor report for `HEAD` offers the same user-confirmed fix round as `/implement-pair`
+   (at most twice); a red run of an older commit is reported as stale. `gh auth status` must succeed for
+   this; without `gh`, run the full local gates `make branch-ready-go` / `-web` instead and say so.
 7. Do **not** merge or open a pull request here; that is `/pull-request`, on the user's request.
