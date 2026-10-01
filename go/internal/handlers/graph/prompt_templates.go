@@ -6,7 +6,10 @@ import _ "embed"
 // assumes a policy-like resource with a settings payload and Intune-style
 // assignments. The shared templates below override it for resource-type
 // families where that framing does not fit; handlers wire them up via the
-// Template field of models.ResourceDocumentation.
+// Template field of models.ResourceDocumentation. Every prompt template is
+// parsed with the shared partials of internal/models/prompt_partials.tmpl
+// (header, reference links, the masked/redaction/URL rules, the closed-set
+// paragraph) and calls them instead of repeating that text.
 
 // singletonPromptTemplateText is the shared prompt template for tenant-wide
 // singleton configurations (e.g. organization, authorizationPolicy): one

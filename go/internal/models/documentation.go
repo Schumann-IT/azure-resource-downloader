@@ -9,10 +9,19 @@ import (
 
 // defaultPromptTemplateText is the default documentation prompt template,
 // embedded from documentation_prompt.tmpl. It uses Go text/template syntax
-// with ResourceDocumentation as its data and a `join` helper (strings.Join).
+// with ResourceDocumentation as its data, a `join` helper (strings.Join) and
+// the shared partials of prompt_partials.tmpl.
 //
 //go:embed documentation_prompt.tmpl
 var defaultPromptTemplateText string
+
+// promptPartialsText holds the shared documentation prompt partials (header,
+// reference links, the rules and the closed-set paragraph the templates
+// repeat), embedded from prompt_partials.tmpl. parsePromptTemplate parses it
+// into every prompt template, so a later change to a shared block is made once.
+//
+//go:embed prompt_partials.tmpl
+var promptPartialsText string
 
 // defaultPromptTemplate is the pre-parsed default documentation prompt template.
 var defaultPromptTemplate = template.Must(parsePromptTemplate(defaultPromptTemplateText))
@@ -20,18 +29,32 @@ var defaultPromptTemplate = template.Must(parsePromptTemplate(defaultPromptTempl
 // DefaultDocumentationPromptTemplate returns the text of the default
 // documentation prompt template. Resource types that want to customize only
 // parts of the prompt can start from this text and set the result as their
-// ResourceDocumentation.Template override.
+// ResourceDocumentation.Template override. The text calls the shared prompt
+// partials ({{ template "prompt-header" . }} and others), so it is only usable
+// through the Template field, which parses it together with those partials.
 func DefaultDocumentationPromptTemplate() string {
 	return defaultPromptTemplateText
 }
 
 // parsePromptTemplate parses a documentation prompt template with the helper
 // functions available to all prompt templates (currently `join`, mapping to
-// strings.Join).
+// strings.Join) and with the shared partials of prompt_partials.tmpl, which
+// every prompt template may call. The partials are parsed after the main text
+// as a separate associated template, so the main body is never replaced and
+// text outside the partials' define blocks is never rendered. Each call starts
+// from a fresh template set: an override cannot change the partials another
+// type renders with.
 func parsePromptTemplate(text string) (*template.Template, error) {
-	return template.New("documentation-prompt").Funcs(template.FuncMap{
+	tmpl, err := template.New("documentation-prompt").Funcs(template.FuncMap{
 		"join": strings.Join,
 	}).Parse(text)
+	if err != nil {
+		return nil, fmt.Errorf("parse prompt template: %w", err)
+	}
+	if _, err := tmpl.New("prompt-partials").Parse(promptPartialsText); err != nil {
+		return nil, fmt.Errorf("parse prompt partials: %w", err)
+	}
+	return tmpl, nil
 }
 
 // ResourceLinks holds curated reference URLs for a resource type. All fields
@@ -96,9 +119,11 @@ type ResourceDocumentation struct {
 	Links ResourceLinks
 	// Template optionally overrides the default documentation prompt template
 	// for this resource type. It uses Go text/template syntax, is executed with
-	// this ResourceDocumentation as data and has a `join` helper (strings.Join)
-	// available. When empty, the embedded default template is used; see
-	// DefaultDocumentationPromptTemplate for its text.
+	// this ResourceDocumentation as data, has a `join` helper (strings.Join)
+	// available and is parsed with the shared prompt partials
+	// (prompt_partials.tmpl: prompt-header, prompt-links, prompt-closed-set and
+	// the others), which it may call. When empty, the embedded default template
+	// is used; see DefaultDocumentationPromptTemplate for its text.
 	Template string
 	// OmitGroupAxes suppresses the doc-groups vocabulary marker (and therefore
 	// the platformGroup/functionGroup frontmatter contract) for this resource

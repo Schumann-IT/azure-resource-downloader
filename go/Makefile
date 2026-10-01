@@ -56,14 +56,16 @@ test-race:
 	@echo "🏁 Running tests with race detector..."
 	@$(GOTEST) -race ./...
 
-# Rewrite the golden files of the exported-YAML golden test
-# (internal/pipeline/testdata/golden/*.golden.yaml) from the current code and
-# dependencies instead of comparing against them. A deliberate step: review the
-# diff before committing it. `make test` and CI never set UPDATE_GOLDEN.
+# Rewrite both golden sets in internal/pipeline/testdata/golden/ from the
+# current code and dependencies instead of comparing against them: the
+# exported-YAML golden files (*.golden.yaml) and the documentation-prompt golden
+# files (prompts/<resource type>/doc-prompt.md, one per registered type). A
+# deliberate step: review the diff before committing it. `make test` and CI
+# never set UPDATE_GOLDEN.
 golden-update:
-	@echo "✨ Rewriting golden files..."
+	@echo "✨ Rewriting golden files (exported YAML and documentation prompts)..."
 	@UPDATE_GOLDEN=1 $(GOTEST) ./internal/pipeline/
-	@echo "✅ Golden files rewritten — review the diff before committing"
+	@echo "✅ Golden files rewritten (exported YAML and documentation prompts) — review the diff before committing"
 
 # Run tests with coverage
 test-coverage:
@@ -222,7 +224,7 @@ help:
 	@echo "  make test-scripts   - Test the readers behind the readiness reports and the start gate"
 	@echo "  make deps           - Download and tidy dependencies"
 	@echo "  make deps-update MODULES=\"<paths>\" - Update the named modules (go get -u), then tidy"
-	@echo "  make golden-update  - Rewrite the exported-YAML golden files (review the diff before committing)"
+	@echo "  make golden-update  - Rewrite the exported-YAML and documentation-prompt golden files (review the diff before committing)"
 	@echo "  make run            - Run the application"
 	@echo "  make fmt            - Format code (rewrites files)"
 	@echo "  make fmt-check      - Report unformatted files without rewriting them"

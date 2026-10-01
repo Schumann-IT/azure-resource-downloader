@@ -172,6 +172,105 @@ func TestBuildDocumentationPromptTemplateOverride(t *testing.T) {
 	}
 }
 
+// promptPartialNames lists every shared partial of prompt_partials.tmpl.
+var promptPartialNames = []string{
+	"prompt-type", "prompt-subtype", "prompt-permissions", "prompt-lifecycle", "prompt-links",
+	"prompt-related", "prompt-header", "prompt-key-settings", "prompt-url-rule",
+	"prompt-masked-rule", "prompt-redaction-rule", "prompt-closed-set",
+}
+
+func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
+	var calls strings.Builder
+	for _, name := range promptPartialNames {
+		calls.WriteString(`{{ template "` + name + `" . }}` + "\n")
+	}
+
+	tests := []struct {
+		name    string
+		doc     ResourceDocumentation
+		present []string
+	}{
+		{
+			name: "every field populated",
+			doc:  fullDoc(),
+			present: []string{
+				"Azure resource type: Microsoft.Graph/deviceConfigurations",
+				"About this resource type: A legacy Intune device configuration profile.",
+				"Subtype guidance: Identify the concrete profile type from @odata.type first.",
+				"Permissions required to read this resource type:\n- DeviceManagementConfiguration.Read.All",
+				"Lifecycle notes for this resource type:\n- Superseded by the Settings Catalog; plan migration.",
+				"Reference material for this resource type",
+				"- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
+				"- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/schema",
+				"- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference",
+				"- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
+				"Related resource types exported alongside this one",
+				"- give particular attention to: omaSettings, encrypted values.",
+				"- Use real, verifiable URLs;",
+				"- Where a value is masked or redacted by the service",
+				"**credential-shaped**",
+				"These H2 headings are a closed set and a machine contract",
+			},
+		},
+		{
+			name:    "only the resource type",
+			doc:     ResourceDocumentation{AzureType: "Microsoft.Test/things"},
+			present: []string{"Azure resource type: Microsoft.Test/things", "These H2 headings are a closed set"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.doc.Template = calls.String()
+			runPromptAssertions(t, BuildDocumentationPrompt(tt.doc), tt.present, nil)
+		})
+	}
+}
+
+func TestBuildDocumentationPromptOverrideWithoutPartials(t *testing.T) {
+	doc := fullDoc()
+	doc.Template = "Plain prompt for {{ .AzureType }}\n\n  indented line, no partials\n"
+
+	got := BuildDocumentationPrompt(doc)
+	// The partials add nothing to a template that does not call them.
+	want := "Plain prompt for Microsoft.Graph/deviceConfigurations\n\n  indented line, no partials" +
+		"\n\n" + DocumentationGroupsMarker()
+	if got != want {
+		t.Errorf("prompt = %q, want %q", got, want)
+	}
+}
+
+func TestBuildDocumentationPromptDefaultTextAsOverride(t *testing.T) {
+	doc := fullDoc()
+	want := BuildDocumentationPrompt(doc)
+
+	// The default text calls the partials; through the Template field it is
+	// parsed with them and renders exactly like the built-in default.
+	doc.Template = DefaultDocumentationPromptTemplate()
+	if got := BuildDocumentationPrompt(doc); got != want {
+		t.Errorf("default text as override renders differently:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBuildDocumentationPromptOverrideCannotChangePartialsOfNextType(t *testing.T) {
+	const hijack = "HIJACKED closed-set paragraph"
+
+	before := BuildDocumentationPrompt(fullDoc())
+
+	first := fullDoc()
+	first.Template = `{{ define "prompt-closed-set" }}` + hijack + `{{ end }}{{ template "prompt-closed-set" . }}`
+	BuildDocumentationPrompt(first)
+
+	// The next type rendered with the default template and the next override
+	// both see the shared partials, not the first override's definition.
+	if after := BuildDocumentationPrompt(fullDoc()); after != before {
+		t.Errorf("default prompt changed after an override redefined a partial:\n got %q\nwant %q", after, before)
+	}
+	next := fullDoc()
+	next.Template = `{{ template "prompt-closed-set" . }}`
+	runPromptAssertions(t, BuildDocumentationPrompt(next),
+		[]string{"These H2 headings are a closed set and a machine contract"}, []string{hijack})
+}
+
 func TestBuildDocumentationPromptOmitGroupAxes(t *testing.T) {
 	doc := fullDoc()
 	doc.Template = "Custom prompt for {{ .AzureType }}"

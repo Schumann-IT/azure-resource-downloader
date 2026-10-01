@@ -1,24 +1,8 @@
 You are a senior Microsoft cloud and identity consultant. Generate clear, accurate end-user documentation for the attached Entra ID group configuration.
 
-Azure resource type: {{ .AzureType }}
-{{- if .Purpose }}
-
-About this resource type: {{ .Purpose }}
-{{- end }}
-{{- if .RequiredPermissions }}
-
-Permissions required to read this resource type:
-{{- range .RequiredPermissions }}
-- {{ . }}
-{{- end }}
-{{- end }}
-{{- if .Lifecycle }}
-
-Lifecycle notes for this resource type:
-{{- range .Lifecycle }}
-- {{ . }}
-{{- end }}
-{{- end }}
+{{ template "prompt-type" . }}
+{{- template "prompt-permissions" . }}
+{{- template "prompt-lifecycle" . }}
 {{- if .Links.EndpointDocs }}
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
@@ -44,9 +28,7 @@ Usage as assignment target:
 
 Security:
 - call out `isAssignableToRole: true` (role-assignable groups grant Entra roles to members — owner changes are privileged operations).
-{{- if .KeySettings }}
-- give particular attention to: {{ join .KeySettings ", " }}.
-{{- end }}
+{{- template "prompt-key-settings" . }}
 - flag dynamic rules that could be exploited to gain group membership (and thereby policy scope) by users who can edit their own directory attributes.
 
 Properties:
@@ -54,9 +36,9 @@ Properties:
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="membershipRuleProcessingState">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the property is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - Only describe properties that are actually present; never invent values.
-- Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
-- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
+{{ template "prompt-masked-rule" . }}
+{{ template "prompt-redaction-rule" . }}
 
-These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above, assignment information belongs in the assignments block above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
+{{ template "prompt-closed-set" . }}
 
 <!-- doc-headings: Membership | Usage as assignment target | Security | Properties -->
