@@ -12,15 +12,19 @@ Permissions required to read this resource type:
 - DeviceManagementRBAC.Read.All
 
 Lifecycle notes for this resource type:
-- Scope tags partition RBAC visibility; deleting a tag removes it from all tagged objects and role assignments.
-- The default tag cannot be deleted.
+- The built-in Default tag is added automatically to every untagged object that supports scope tags; an object or role can carry at most 100 tags.
+- A tag's assignments apply it automatically to devices in the targeted groups (overwriting manually assigned tags); admins whose role assignment includes a tag can't update or delete that tag.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolescopetag?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-rbac-rolescopetag-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/fundamentals/role-based-access-control/scope-tags
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/roleDefinitions
+- Microsoft.Graph/groups (tag assignments)
+- Microsoft.Graph/vppTokens (VPP apps and books inherit the token's tags)
+- Microsoft.Graph/deviceConfigurations, Microsoft.Graph/deviceCompliancePolicies, Microsoft.Graph/mobileApps and every other Intune type that carries roleScopeTagIds (tagged objects)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): it has no assignments of its own — instead, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
 
@@ -43,6 +47,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive content and any deviations from recommended baselines, including the impact on every policy that references this object.
+- give particular attention to: assignments[].target (groups whose devices get the tag), isBuiltIn.
 
 Definition:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

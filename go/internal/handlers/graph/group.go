@@ -34,15 +34,32 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/groups",
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.",
-			KeySettings:         []string{"groupTypes", "membershipRule (for dynamic groups)", "securityEnabled", "mailEnabled"},
+			Purpose: "An Entra ID group (Microsoft 365, security, mail-enabled security or distribution), often used as an assignment target for policies and apps.",
+			KeySettings: []string{
+	"groupTypes",
+	"membershipRule (for dynamic groups)",
+	"membershipRuleProcessingState",
+	"securityEnabled",
+	"mailEnabled",
+	"isAssignableToRole",
+},
 			RequiredPermissions: []string{"Group.Read.All"},
-			Lifecycle:           []string{"Deleted groups are soft-deleted and restorable for 30 days; dynamic membership rules re-evaluate automatically as attributes change.", "Groups referenced by policy assignments should not be deleted while in use."},
-			RelatedTypes:        []string{"all assignable types (groups are the assignment targets referenced by ID)"},
+			Lifecycle: []string{
+	"Deleted Microsoft 365 groups are soft-deleted and can be restored within 30 days with the same object ID; soft delete for cloud security groups is in preview, and distribution groups can't be restored.",
+	"Dynamic membership rules re-evaluate automatically as attributes change (processing can be paused via membershipRuleProcessingState); dynamic groups need Entra ID P1.",
+	"isAssignableToRole can only be set at creation; groups referenced by policy assignments should not be deleted while in use.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/conditionalAccessPolicies (include and exclude groups)",
+	"Microsoft.Graph/authenticationMethodsPolicy (method targets)",
+	"Microsoft.Graph/roleScopeTags (scope tag assignments)",
+	"Microsoft.Graph/deviceConfigurations, Microsoft.Graph/deviceManagementConfigurationPolicies, Microsoft.Graph/deviceCompliancePolicies, Microsoft.Graph/mobileApps and every other Intune type with assignments (assignments[].target.groupId)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/group-list?view=graph-rest-1.0",
-			},
+			AdminCenter: "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupsManagementMenuBlade/~/AllGroups/menuId/AllGroups",
+},
 			Template: groupPromptTemplateText,
 		},
 		probe: func(ctx context.Context) error {

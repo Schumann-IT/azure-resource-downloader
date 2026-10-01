@@ -51,13 +51,24 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 		documentation: models.ResourceDocumentation{
 			Template:            credentialPromptTemplateText,
 			Purpose:             "The Apple Push Notification service (APNs) certificate used by Intune to manage Apple devices.",
-			KeySettings:         []string{"expirationDateTime", "appleIdentifier"},
+			KeySettings: []string{"expirationDateTime", "appleIdentifier", "topicIdentifier"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"The Apple MDM push certificate expires yearly and must be renewed with the SAME Apple ID; letting it expire or renewing with a different Apple ID forces re-enrollment of all Apple devices."},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"The Apple MDM push certificate is valid for 365 days and must be renewed annually with the same Apple account that created it; after it expires there is a 30-day grace period to renew.",
+	"Apple device enrollment fails while it is expired; renew the certificate, never replace it - a replaced certificate forces all iOS/iPadOS devices to re-enroll.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/depOnboardingSettings (Apple automated device enrollment requires the push certificate)",
+	"Microsoft.Graph/appleUserInitiatedEnrollmentProfiles (user-initiated Apple enrollment requires it)",
+},
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-applepushnotificationcertificate?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-applepushnotificationcertificate-get?view=graph-rest-beta",
-			},
+			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesIosMenu/~/iosEnrollment",
+BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/create-mdm-push-certificate",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			cert, err := getSingleton(ctx)

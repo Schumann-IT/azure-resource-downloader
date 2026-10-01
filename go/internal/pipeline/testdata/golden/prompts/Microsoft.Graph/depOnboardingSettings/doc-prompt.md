@@ -8,15 +8,28 @@ Azure resource type: Microsoft.Graph/depOnboardingSettings
 
 About this resource type: Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.
 
+Subtype guidance: enrollmentProfiles (attached child collection) is polymorphic: depIOSEnrollmentProfile, depMacOSEnrollmentProfile and the tvOS/visionOS variants inherit depEnrollmentBaseProfile - identify each profile's type from @odata.type.
+
 Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Apple ADE (DEP) tokens expire yearly and must be renewed in Apple Business Manager; an expired token stops device syncs and automated enrollment.
+- Renew the token yearly: download a new server token in Apple Business Manager or Apple School Manager and use Renew token in Intune with the Apple ID that created the original token; also renew when that account's password changes or its owner leaves.
+- Downloading a new token in Apple Business Manager invalidates the one Intune uses; an expired or invalid token causes sync and automated-enrollment errors.
+- A token can be deleted only after its devices and enrollment profiles are removed; deleting devices from a token removes them from Intune management.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-deponboardingsetting?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-depenrollmentbaseprofile?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-deponboardingsetting-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-apple-token
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/apple/manage-devices-tokens-apple
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+- Microsoft.Graph/applePushNotificationCertificate (prerequisite for automated device enrollment)
+- Microsoft.Graph/groups (enrollment profiles' enrollmentTimeAzureAdGroupIds)
+- Microsoft.Graph/vppTokens (iOS enrollment profiles' companyPortalVppTokenId)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a service credential or token record (e.g. a certificate or a service token): its documentation must focus on validity, renewal and the operational impact of expiry — not on configurable settings, and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -42,7 +55,7 @@ Expiry and renewal:
 
 Security:
 - call out the sensitivity of this credential and who should have access to the account that can renew or revoke it.
-- give particular attention to: tokenExpirationDateTime, appleIdentifier, syncedDeviceCount.
+- give particular attention to: tokenExpirationDateTime, appleIdentifier, tokenType, tokenName, syncedDeviceCount, lastSuccessfulSyncDateTime, lastSyncErrorCode, enrollmentProfiles.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property means and any operational relevance.

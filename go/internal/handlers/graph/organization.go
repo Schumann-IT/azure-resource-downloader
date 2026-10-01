@@ -24,10 +24,23 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 		documentation: models.ResourceDocumentation{
 			Template:            singletonPromptTemplateText,
 			Purpose:             "The Entra ID tenant (organization) profile and tenant-wide settings.",
-			KeySettings:         []string{"verifiedDomains", "securityComplianceNotificationMails", "privacyProfile"},
+			KeySettings: []string{
+	"verifiedDomains",
+	"technicalNotificationMails",
+	"securityComplianceNotificationMails",
+	"onPremisesSyncEnabled",
+	"tenantType",
+	"privacyProfile",
+},
 			RequiredPermissions: []string{"Organization.Read.All"},
-			Lifecycle:           []string{"Tenant information object; some properties are Microsoft-managed.", "Verified domains and technical notification contacts should be reviewed periodically."},
-			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding"},
+			Lifecycle: []string{
+	"Read and update only (no create or delete); Graph can update only the notification contacts (technicalNotificationMails, securityComplianceNotificationMails and Phones, marketingNotificationEmails) and privacyProfile.",
+	"Verified domains and technical notification contacts should be reviewed periodically.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/organizationalBranding",
+	"Microsoft.Graph/onPremisesSynchronization (same tenant)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organization?view=graph-rest-1.0",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/organization-list?view=graph-rest-1.0",

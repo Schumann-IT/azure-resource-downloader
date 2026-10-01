@@ -25,14 +25,32 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 		documentation: models.ResourceDocumentation{
 			Template:            credentialPromptTemplateText,
 			Purpose:             "An Apple Volume Purchase Program (VPP / Apps and Books) token used by Intune to sync purchased apps.",
-			KeySettings:         []string{"expirationDateTime", "appleId", "state", "automaticallyUpdateApps"},
+			KeySettings: []string{
+	"expirationDateTime",
+	"appleId",
+	"state",
+	"automaticallyUpdateApps",
+	"lastSyncStatus",
+	"lastSyncDateTime",
+	"locationName",
+	"vppTokenAccountType",
+},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           []string{"Apple VPP tokens expire yearly and must be renewed in Apple Business Manager; an expired token blocks app license assignment and installs.", "The token secret is masked by the service."},
-			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (VPP-licensed apps)"},
+			Lifecycle: []string{
+	"Each token is valid for one year; renew it by downloading it again from Apple Business Manager or Apple School Manager and updating the existing token in Intune. It shows 'invalid' when it has expired or the Managed Apple ID changed.",
+	"Deleting a token also deletes its apps and assignments and revokes their licenses without uninstalling the apps; a location token works with only one MDM tenant at a time.",
+	"Treat the token value as a secret and redact it if present.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/mobileApps (VPP-licensed apps)",
+	"Microsoft.Graph/depOnboardingSettings (ADE iOS profiles' companyPortalVppTokenId)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-vpptoken?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-onboarding-vpptoken-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{"https://learn.microsoft.com/en-us/intune/app-management/deployment/manage-vpp-apple"},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

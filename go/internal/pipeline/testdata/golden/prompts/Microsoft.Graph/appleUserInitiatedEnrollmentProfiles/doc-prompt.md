@@ -6,20 +6,26 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/appleUserInitiatedEnrollmentProfiles
 
-About this resource type: An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.
+About this resource type: An Intune enrollment type profile that decides how assigned users enroll iOS/iPadOS devices: device enrollment, account-driven user enrollment, web-based device enrollment or user choice.
 
 Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Profile changes affect only future user-initiated enrollments; already-enrolled devices keep their enrollment type.
+- Profiles target user groups only (device groups aren't supported); when several apply, the higher-priority profile wins (0 is highest).
+- User enrollment with Company Portal is no longer supported for newly enrolled devices; account-driven user enrollment needs iOS/iPadOS 15 or later.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleuserinitiatedenrollmentprofile?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleownertypeenrollmenttype?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-appleuserinitiatedenrollmentprofile-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesIosMenu/~/iosEnrollment
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-account-driven-user
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-web-based-ios
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
-- Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/groups (assignment target user groups)
+- Microsoft.Graph/applePushNotificationCertificate (prerequisite)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -46,7 +52,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: platform, enrollmentType, priority.
+- give particular attention to: defaultEnrollmentType, availableEnrollmentTypeOptions, platform, priority.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

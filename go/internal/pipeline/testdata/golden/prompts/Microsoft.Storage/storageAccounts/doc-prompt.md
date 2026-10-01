@@ -12,11 +12,14 @@ Permissions required to read this resource type:
 - Reader (Azure RBAC role on the subscription)
 
 Lifecycle notes for this resource type:
-- Deleting a storage account is irreversible once retention lapses; enable soft delete/versioning, and rotate access keys regularly (rotation breaks clients using shared-key auth).
+- A deleted storage account can sometimes be recovered within 14 days (best effort: only if no account with the same name was created since and the resource group still exists); blob soft delete does not protect against account deletion, use a resource lock.
+- Azure Blob Storage stopped accepting TLS 1.0 and 1.1 on 3 February 2026; general-purpose v1 accounts not migrated by October 2026 are migrated to general-purpose v2 automatically (possibly at higher cost).
+- Rotating or regenerating an access key breaks clients that use shared-key authentication with it and invalidates SAS tokens signed with it.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/rest/api/storagerp/storage-accounts
 - Required permissions: https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader
+- Admin center: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts
 - Best-practice baseline: https://learn.microsoft.com/en-us/azure/storage/blobs/security-recommendations
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This is an Azure Resource Manager (ARM) resource: it is governed by Azure RBAC, resource locks and tags — it has no Intune/Entra assignments or targeting, and RBAC role assignments are NOT part of this export, so never invent access information. Produce well-structured Markdown documentation with this layout:
@@ -37,7 +40,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.) and any deviations from recommended baselines, including the security impact.
-- give particular attention to: enableHttpsTrafficOnly, minimumTlsVersion, allowBlobPublicAccess, allowSharedKeyAccess, networkRuleSet, encryption.
+- give particular attention to: enableHttpsTrafficOnly (REST: supportsHttpsTrafficOnly), minimumTlsVersion, allowBlobPublicAccess, allowSharedKeyAccess, networkRuleSet (REST: networkAcls), encryption, sku.name, kind.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does, the recommended/best-practice value and a reference link.

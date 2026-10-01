@@ -23,15 +23,36 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 		documentation: models.ResourceDocumentation{
 			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune assignment filter (device/app filter) used to refine policy and app assignments.",
-			KeySettings:         []string{"platform", "rule"},
-			EmbeddedPayloads:    []string{"rule (filter rule expression)"},
+			KeySettings: []string{"platform", "rule", "assignmentFilterManagementType", "payloads (where the filter is used)"},
+			
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Filters are referenced by assignments across many policy and app types; deleting a filter breaks the assignments that reference it.", "Rule changes re-evaluate at the next device/app check-in."},
-			RelatedTypes:        []string{"all assignable Intune types (policies, profiles and apps reference filters by ID in their assignments)"},
+			Lifecycle: []string{
+	"A filter that is still used in any assignment can't be deleted; remove it from all assignments first.",
+	"Rule changes re-evaluate at the next device or app check-in.",
+	"At most 200 filters per tenant and 3,072 characters per filter; app filters (assignmentFilterManagementType apps) apply only to app protection and app configuration policies.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/groups (filters refine group assignments)",
+	"Microsoft.Graph/deviceConfigurations",
+	"Microsoft.Graph/deviceManagementConfigurationPolicies",
+	"Microsoft.Graph/deviceCompliancePolicies",
+	"Microsoft.Graph/groupPolicyConfigurations",
+	"Microsoft.Graph/mobileApps",
+	"Microsoft.Graph/mobileAppConfigurations",
+	"Microsoft.Graph/targetedManagedAppConfigurations",
+	"Microsoft.Graph/iosManagedAppProtections",
+	"Microsoft.Graph/androidManagedAppProtections",
+	"Microsoft.Graph/windowsManagedAppProtections",
+	"Microsoft.Graph/deviceHealthScripts",
+	"Microsoft.Graph/deviceEnrollmentConfigurations (platform restrictions)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTags)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-policyset-deviceandappmanagementassignmentfilter?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-policyset-deviceandappmanagementassignmentfilter-list?view=graph-rest-beta",
-			},
+			SchemaReference: "https://learn.microsoft.com/en-us/intune/fundamentals/filters/ref-device-properties",
+BestPractices: []string{"https://learn.microsoft.com/en-us/intune/fundamentals/filters/performance-recommendations"},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

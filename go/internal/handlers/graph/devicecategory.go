@@ -26,11 +26,21 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 			OmitGroupAxes:       true,
 			Purpose:             "An Intune device category used to group and target devices at enrollment.",
 			RequiredPermissions: []string{"DeviceManagementManagedDevices.Read.All"},
-			Lifecycle:           []string{"Categories are chosen by users during enrollment or set by admins; deleting a category leaves devices without a category but does not affect their management."},
-			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicecategory?view=graph-rest-beta",
-				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-devicecategory-list?view=graph-rest-beta",
-			},
+			Lifecycle: []string{
+	"Users pick a category in Company Portal (Windows users on the Company Portal website) unless the prompt is hidden in Company Portal customization; admins can also set it.",
+	"Deleting a category shows its devices as Unassigned; dynamic device groups built on deviceCategory pick up changes automatically, so update group rules that reference a renamed or deleted category.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/groups (dynamic device groups on device.deviceCategory)",
+	"Microsoft.Graph/intuneBrandingProfiles (disableDeviceCategorySelection hides the prompt)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
+Links: models.ResourceLinks{
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-devicecategory?view=graph-rest-beta",
+				Permissions: "https://learn.microsoft.com/en-us/graph/api/intune-onboarding-devicecategory-list?view=graph-rest-beta",
+			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/deviceCategories",
+BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-management/create-device-categories"},
+},
 		},
 		probe: func(ctx context.Context) error {
 			_, err := client.DeviceManagement().DeviceCategories().Get(ctx, &betadevicemanagement.DeviceCategoriesRequestBuilderGetRequestConfiguration{

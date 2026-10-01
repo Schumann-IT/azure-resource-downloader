@@ -27,14 +27,27 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows PowerShell platform script run on managed devices.",
 			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
-			EmbeddedPayloads:    []string{"scriptContent (base64 PowerShell)"},
-			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           []string{"Platform scripts run ONCE per device/user and re-run only when the script changes; deleting a script does not undo changes it made.", "For recurring logic use Remediations (deviceHealthScripts)."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceHealthScripts (Remediations, for recurring scripts)", "Microsoft.Graph/groups (assignment target groups)"},
+			EmbeddedPayloads: []string{
+	"scriptContent (PowerShell script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .ps1 sidecar named after fileName in file mode)",
+},
+			RequiredPermissions: []string{"DeviceManagementScripts.Read.All", "DeviceManagementConfiguration.Read.All"},
+			Lifecycle: []string{
+	"Platform scripts run once per device or user and run again only when the script or its policy changes; a failed run is retried at the next three Intune Management Extension check-ins, and a run times out after 30 minutes.",
+	"Device-assigned scripts also run for each new user who signs in (not on multi-session SKUs); devices must be Microsoft Entra joined or hybrid joined, and scripts don't run in S mode or on Surface Hub.",
+	"Deleting a script does not undo changes it made; for recurring logic use Remediations (deviceHealthScripts).",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/deviceHealthScripts (Remediations, for recurring scripts)",
+	"Microsoft.Graph/groups (assignment target groups)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicemanagementscript?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-shared-devicemanagementscript-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-management/tools/run-powershell-scripts-windows",
+	},
+},
 		},
 		probe: func(ctx context.Context) error {
 			_, err := client.DeviceManagement().DeviceManagementScripts().Get(ctx, &betadevicemanagement.DeviceManagementScriptsRequestBuilderGetRequestConfiguration{

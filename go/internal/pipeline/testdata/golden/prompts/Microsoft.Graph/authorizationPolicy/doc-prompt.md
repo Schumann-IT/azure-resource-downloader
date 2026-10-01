@@ -12,11 +12,16 @@ Permissions required to read this resource type:
 - Policy.Read.All
 
 Lifecycle notes for this resource type:
-- Tenant-wide singleton controlling default user role permissions, guest access levels and consent defaults; changes apply tenant-wide immediately and should be reviewed regularly.
+- Tenant-wide singleton controlling default user role permissions, guest access and invitation settings, and user consent to apps (defaultUserRolePermissions.permissionGrantPoliciesAssigned); review it regularly.
+- blockMsolPowerShell only affects the MSOnline PowerShell module, which was retired on 30 May 2025.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/authorizationpolicy?view=graph-rest-1.0
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/defaultuserrolepermissions?view=graph-rest-1.0
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/authorizationpolicy-get?view=graph-rest-1.0
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/fundamentals/users-default-permissions
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/external-id/external-collaboration-settings-configure
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -37,7 +42,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive settings and any deviations from recommended baselines, including the tenant-wide security impact.
-- give particular attention to: defaultUserRolePermissions, allowedToUseSSPR, guestUserRoleId.
+- give particular attention to: defaultUserRolePermissions, defaultUserRolePermissions.permissionGrantPoliciesAssigned, allowInvitesFrom, allowedToUseSSPR, guestUserRoleId.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

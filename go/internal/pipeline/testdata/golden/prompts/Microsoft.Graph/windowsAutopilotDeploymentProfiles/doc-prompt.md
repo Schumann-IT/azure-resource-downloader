@@ -8,20 +8,29 @@ Azure resource type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
 
 About this resource type: A Windows Autopilot deployment profile that defines the out-of-box experience (OOBE) for provisioning Windows devices.
 
+Subtype guidance: azureADWindowsAutopilotDeploymentProfile (Entra join) adds no properties; activeDirectoryWindowsAutopilotDeploymentProfile is hybrid join and adds hybridAzureADJoinSkipConnectivityCheck and a Domain Join profile relationship - identify the join type from @odata.type.
+
 Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Profile changes apply at the device next Autopilot deployment (not retroactively); deleting a profile unassigns it from registered devices.
+- A profile assigned to groups can't be deleted; unassign all groups first.
+- Profile changes reach a device already enrolled in Intune only after it is reset and re-enrolled; if several profiles target a device, the oldest one wins.
+- Windows Autopilot device preparation is a separate solution (Settings Catalog based, Entra join only) that needs no device registration.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeploymentprofile?view=graph-rest-beta
-- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeploymentprofile-get?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-outofboxexperiencesetting?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-azureadwindowsautopilotdeploymentprofile-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/profiles
+- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/windows-autopilot-hybrid
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/windowsAutopilotDeviceIdentities (registered devices)
 - Microsoft.Graph/deviceEnrollmentConfigurations (Enrollment Status Page)
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/deviceConfigurations (hybrid join needs a Domain Join profile assigned to the same group)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -48,7 +57,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: outOfBoxExperienceSettings, deviceType, enrollmentStatusScreenSettings.
+- give particular attention to: outOfBoxExperienceSetting, deviceType, deviceNameTemplate, preprovisioningAllowed, hardwareHashExtractionEnabled, locale, hybridAzureADJoinSkipConnectivityCheck.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

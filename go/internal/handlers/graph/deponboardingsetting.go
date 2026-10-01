@@ -29,13 +29,39 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 		documentation: models.ResourceDocumentation{
 			Template:            credentialPromptTemplateText,
 			Purpose:             "Apple Automated Device Enrollment (DEP/ABM) onboarding tokens used by Intune to sync Apple-enrolled devices.",
-			KeySettings:         []string{"tokenExpirationDateTime", "appleIdentifier", "syncedDeviceCount"},
+			KeySettings: []string{
+	"tokenExpirationDateTime",
+	"appleIdentifier",
+	"tokenType",
+	"tokenName",
+	"syncedDeviceCount",
+	"lastSuccessfulSyncDateTime",
+	"lastSyncErrorCode",
+	"enrollmentProfiles",
+},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Apple ADE (DEP) tokens expire yearly and must be renewed in Apple Business Manager; an expired token stops device syncs and automated enrollment."},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"Renew the token yearly: download a new server token in Apple Business Manager or Apple School Manager and use Renew token in Intune with the Apple ID that created the original token; also renew when that account's password changes or its owner leaves.",
+	"Downloading a new token in Apple Business Manager invalidates the one Intune uses; an expired or invalid token causes sync and automated-enrollment errors.",
+	"A token can be deleted only after its devices and enrollment profiles are removed; deleting devices from a token removes them from Intune management.",
+},
+			EmbeddedPayloads: []string{"enrollmentProfiles[].managementCertificates[].certificate (base64 management certificate)"},
+RelatedTypes: []string{
+	"Microsoft.Graph/applePushNotificationCertificate (prerequisite for automated device enrollment)",
+	"Microsoft.Graph/groups (enrollment profiles' enrollmentTimeAzureAdGroupIds)",
+	"Microsoft.Graph/vppTokens (iOS enrollment profiles' companyPortalVppTokenId)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
+SubtypeNote: "enrollmentProfiles (attached child collection) is polymorphic: depIOSEnrollmentProfile, depMacOSEnrollmentProfile and the tvOS/visionOS variants inherit depEnrollmentBaseProfile - identify each profile's type from @odata.type.",
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-deponboardingsetting?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-enrollment-deponboardingsetting-list?view=graph-rest-beta",
-			},
+			SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-depenrollmentbaseprofile?view=graph-rest-beta",
+BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-apple-token",
+		"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/manage-devices-tokens-apple",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

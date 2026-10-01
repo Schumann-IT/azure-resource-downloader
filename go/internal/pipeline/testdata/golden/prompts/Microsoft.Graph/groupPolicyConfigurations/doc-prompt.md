@@ -12,17 +12,20 @@ Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- ADMX-backed (Administrative Templates) settings; Microsoft recommends the Settings Catalog where parity exists.
-- Removing a definition value reverts the setting to not-configured at next check-in.
+- Since the 2412 release the built-in Administrative Templates profile type is deprecated and read-only; ADMX settings are configured in the Settings Catalog. Profiles based on imported custom ADMX (policyConfigurationIngestionType custom or mixed) can still be created.
+- Imported ADMX files (not exported) must stay uploaded while profiles use them; replacing an ADMX file requires deleting the profiles that use it first.
+- On unassign or delete, whether a setting reverts on Windows depends on its CSP.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-grouppolicy-grouppolicyconfiguration?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-grouppolicy-grouppolicyconfiguration-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)
 - Microsoft.Graph/groups (assignment target groups)
 - Microsoft.Graph/assignmentFilters (assignment filters)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -49,12 +52,13 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
+- give particular attention to: policyConfigurationIngestionType, definitionValues[].enabled, definitionValues[].definition (displayName, categoryPath, classType).
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
-- This resource carries embedded or encoded payloads: definitionValues (the configured ADMX settings), presentationValues (the values supplied to each setting's presentations) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+- This resource carries embedded or encoded payloads: definitionValues (each configured ADMX setting with its expanded definition) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

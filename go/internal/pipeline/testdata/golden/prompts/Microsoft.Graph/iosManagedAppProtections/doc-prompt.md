@@ -12,15 +12,21 @@ Permissions required to read this resource type:
 - DeviceManagementApps.Read.All
 
 Lifecycle notes for this resource type:
-- Policy changes apply at the protected app's next check-in; deleting a policy removes app protection from targeted apps (protected data remains until a selective wipe is issued).
+- Apps pick up policy changes at check-in, typically every 30 minutes (every 12 hours while the user isn't licensed or targeted); apps that haven't checked in for 90 days may be deregistered.
+- The policy applies only to Intune-licensed users in targeted groups who sign in to the app; org data is removed only by an app selective wipe, applied the next time the app runs.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-iosmanagedappprotection?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-mam-iosmanagedappprotection-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/protection
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/protection/data-protection-framework
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/protection/create-policy
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)
 - Microsoft.Graph/assignmentFilters (assignment filters)
+- Microsoft.Graph/mobileThreatDefenseConnectors (maximum allowed device threat level)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -47,7 +53,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: dataBackupBlocked, managedBrowserToOpenLinksRequired, pinRequired, allowedOutboundDataTransferDestinations.
+- give particular attention to: dataBackupBlocked, managedBrowserToOpenLinksRequired, pinRequired, allowedOutboundDataTransferDestinations, allowedOutboundClipboardSharingLevel, appDataEncryptionType, maximumAllowedDeviceThreatLevel.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

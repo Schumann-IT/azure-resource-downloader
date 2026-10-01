@@ -12,15 +12,22 @@ Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- Driver approvals are per profile; pausing or deleting a profile stops offering its drivers.
-- Review pending driver approvals regularly when using manual approval mode.
+- Pausing applies to individual driver updates, is best effort and doesn't roll back completed installs; driver policies can't roll back drivers.
+- If a device is in several driver policies, an Approved status in any of them wins, so assign each device to one policy only.
+- With automatic approval only recommended drivers are approved (after deploymentDeferralInDays); other drivers wait in Needs review, so review approvals in both modes.
+- Requires Intune Plan 1 and a Windows license with the Autopatch entitlement, Entra joined or hybrid joined devices and update rings that allow Windows drivers; assignment filters aren't supported.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsdriverupdateprofile?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsdriverupdateprofile-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-driver-update-policy
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-updates/windows/driver-updates-faq
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/deviceConfigurations (update rings must not exclude drivers)
+- Microsoft.Graph/deviceManagementConfigurationPolicies (the Settings Catalog setting 'Exclude WU Drivers in Quality Update' must allow drivers)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 

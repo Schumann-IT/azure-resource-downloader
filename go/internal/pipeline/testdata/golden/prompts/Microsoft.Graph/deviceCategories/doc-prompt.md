@@ -12,11 +12,19 @@ Permissions required to read this resource type:
 - DeviceManagementManagedDevices.Read.All
 
 Lifecycle notes for this resource type:
-- Categories are chosen by users during enrollment or set by admins; deleting a category leaves devices without a category but does not affect their management.
+- Users pick a category in Company Portal (Windows users on the Company Portal website) unless the prompt is hidden in Company Portal customization; admins can also set it.
+- Deleting a category shows its devices as Unassigned; dynamic device groups built on deviceCategory pick up changes automatically, so update group rules that reference a renamed or deleted category.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
-- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicecategory?view=graph-rest-beta
-- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-shared-devicecategory-list?view=graph-rest-beta
+- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-devicecategory?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-onboarding-devicecategory-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/deviceCategories
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-management/create-device-categories
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+- Microsoft.Graph/groups (dynamic device groups on device.deviceCategory)
+- Microsoft.Graph/intuneBrandingProfiles (disableDeviceCategorySelection hides the prompt)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 

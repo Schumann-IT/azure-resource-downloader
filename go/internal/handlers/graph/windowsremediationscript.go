@@ -26,15 +26,33 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Windows remediation script package (detection + remediation).",
-			KeySettings:         []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
-			EmbeddedPayloads:    []string{"detectionScriptContent (base64 PowerShell)", "remediationScriptContent (base64 PowerShell)"},
+			KeySettings: []string{
+	"runAsAccount",
+	"enforceSignatureCheck",
+	"runAs32Bit",
+	"isGlobalScript",
+	"assignments[].runSchedule",
+	"assignments[].runRemediationScript",
+},
+			EmbeddedPayloads: []string{
+	"detectionScriptContent (PowerShell detection script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into <name>_detection.ps1 in file mode)",
+	"remediationScriptContent (PowerShell remediation script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into <name>_remediation.ps1 in file mode)",
+},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           []string{"Remediations run detection on a schedule and remediate on failure; deleting a script stops the schedule but does not revert previous remediations."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+	"Detection runs on the schedule set per assignment (runSchedule: once, hourly or daily); the remediation script runs only when detection exits with code 1 and runRemediationScript is enabled for that assignment.",
+	"Requires Windows Enterprise E3/E5, Education A3/A5 or Windows VDA per user (licensing is confirmed once per tenant), Entra joined or hybrid joined devices and the Intune Management Extension; isGlobalScript marks read-only Microsoft-provided packages.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/groups (assignment target groups)",
+	"Microsoft.Graph/assignmentFilters (remediations support filters)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicehealthscript?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicehealthscript-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-management/tools/deploy-remediations"},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

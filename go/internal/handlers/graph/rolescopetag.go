@@ -26,12 +26,22 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune RBAC scope tag used to scope which admins can see and manage which objects.",
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
-			Lifecycle:           []string{"Scope tags partition RBAC visibility; deleting a tag removes it from all tagged objects and role assignments.", "The default tag cannot be deleted."},
-			RelatedTypes:        []string{"Microsoft.Graph/roleDefinitions"},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"The built-in Default tag is added automatically to every untagged object that supports scope tags; an object or role can carry at most 100 tags.",
+	"A tag's assignments apply it automatically to devices in the targeted groups (overwriting manually assigned tags); admins whose role assignment includes a tag can't update or delete that tag.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/roleDefinitions",
+	"Microsoft.Graph/groups (tag assignments)",
+	"Microsoft.Graph/vppTokens (VPP apps and books inherit the token's tags)",
+	"Microsoft.Graph/deviceConfigurations, Microsoft.Graph/deviceCompliancePolicies, Microsoft.Graph/mobileApps and every other Intune type that carries roleScopeTagIds (tagged objects)",
+},
+			KeySettings: []string{"assignments[].target (groups whose devices get the tag)", "isBuiltIn"},
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolescopetag?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-rbac-rolescopetag-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{"https://learn.microsoft.com/en-us/intune/fundamentals/role-based-access-control/scope-tags"},
+},
 		},
 		probe: func(ctx context.Context) error {
 			_, err := client.DeviceManagement().RoleScopeTags().Get(ctx, &betadevicemanagement.RoleScopeTagsRequestBuilderGetRequestConfiguration{

@@ -25,15 +25,35 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
 			OmitGroupAxes:       true,
-			Purpose:             "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
-			KeySettings:         []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
+			Purpose: "An Intune Mobile Threat Defense connector to an MTD partner (a third-party vendor, Microsoft Defender for Endpoint or Windows Security Center) whose device threat data feeds compliance and app protection evaluation.",
+			KeySettings: []string{
+	"androidEnabled",
+	"iosEnabled",
+	"macEnabled",
+	"windowsEnabled",
+	"partnerState",
+	"partnerUnresponsivenessThresholdInDays",
+	"androidDeviceBlockedOnMissingPartnerData, iosDeviceBlockedOnMissingPartnerData, macDeviceBlockedOnMissingPartnerData, windowsDeviceBlockedOnMissingPartnerData",
+	"androidMobileApplicationManagementEnabled, iosMobileApplicationManagementEnabled",
+	"lastHeartbeatDateTime",
+},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)"},
+			Lifecycle: []string{
+	"If the partner sends no heartbeat for partnerUnresponsivenessThresholdInDays the connector becomes unresponsive and Intune ignores the partner's compliance state; the *DeviceBlockedOnMissingPartnerData settings decide whether devices can be compliant before partner data arrives.",
+	"Only one partner per platform can feed app protection (MAM) evaluation.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)",
+	"Microsoft.Graph/iosManagedAppProtections (maximum allowed threat level)",
+	"Microsoft.Graph/androidManagedAppProtections (maximum allowed threat level)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-onboarding-mobilethreatdefenseconnector-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-security/mobile-threat-defense/enable-connector",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

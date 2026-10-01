@@ -12,15 +12,19 @@ Permissions required to read this resource type:
 - DeviceManagementApps.Read.All
 
 Lifecycle notes for this resource type:
-- Apple VPP tokens expire yearly and must be renewed in Apple Business Manager; an expired token blocks app license assignment and installs.
-- The token secret is masked by the service.
+- Each token is valid for one year; renew it by downloading it again from Apple Business Manager or Apple School Manager and updating the existing token in Intune. It shows 'invalid' when it has expired or the Managed Apple ID changed.
+- Deleting a token also deletes its apps and assignments and revokes their licenses without uninstalling the apps; a location token works with only one MDM tenant at a time.
+- Treat the token value as a secret and redact it if present.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-vpptoken?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-onboarding-vpptoken-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/deployment/manage-vpp-apple
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/mobileApps (VPP-licensed apps)
+- Microsoft.Graph/depOnboardingSettings (ADE iOS profiles' companyPortalVppTokenId)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a service credential or token record (e.g. a certificate or a service token): its documentation must focus on validity, renewal and the operational impact of expiry — not on configurable settings, and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -46,7 +50,7 @@ Expiry and renewal:
 
 Security:
 - call out the sensitivity of this credential and who should have access to the account that can renew or revoke it.
-- give particular attention to: expirationDateTime, appleId, state, automaticallyUpdateApps.
+- give particular attention to: expirationDateTime, appleId, state, automaticallyUpdateApps, lastSyncStatus, lastSyncDateTime, locationName, vppTokenAccountType.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property means and any operational relevance.

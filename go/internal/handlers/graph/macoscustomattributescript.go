@@ -28,14 +28,25 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune macOS custom attribute shell script that collects a custom attribute from managed Macs.",
 			KeySettings:         []string{"customAttributeType", "runAsAccount"},
-			EmbeddedPayloads:    []string{"scriptContent (base64 shell script)"},
+			EmbeddedPayloads: []string{
+	"scriptContent (shell script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .sh sidecar named after fileName in file mode)",
+},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           []string{"Custom attribute scripts run per schedule and report a per-device value; deleting the script stops collection but previously reported values remain until overwritten."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+	"Custom attribute scripts run on managed Macs about every 8 hours (there is no admin-set schedule) and report the echoed value; the value must match customAttributeType (integer, string, or ISO-8601 dateTime) and be 20 KB or less.",
+	"Deploying one installs the Intune management agent for macOS.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/groups (assignment target groups)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-devicecustomattributeshellscript?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-devices-devicecustomattributeshellscript-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-management/tools/run-shell-scripts-macos#custom-attributes-for-macos",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

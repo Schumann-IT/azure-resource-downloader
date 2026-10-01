@@ -6,20 +6,22 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/namedLocations
 
-About this resource type: An Entra ID named location (IP ranges or countries) used as a condition in Conditional Access.
+About this resource type: An Entra ID named location (IP ranges, countries/regions or a compliant network) used as a condition in Conditional Access.
 
-Subtype guidance: Polymorphic: ipNamedLocation (CIDR ranges, trusted flag) vs countryNamedLocation (country list, unknown-area handling) - identify the concrete type from @odata.type.
+Subtype guidance: Polymorphic: ipNamedLocation (ipRanges, isTrusted), countryNamedLocation (countriesAndRegions, countryLookupMethod, includeUnknownCountriesAndRegions; no trusted flag) and compliantNetworkNamedLocation (Global Secure Access compliant network) - identify the concrete type from @odata.type.
 
 Permissions required to read this resource type:
 - Policy.Read.All
 
 Lifecycle notes for this resource type:
-- Referenced by Conditional Access conditions; deletion fails while a Conditional Access policy references the location.
-- Keep trusted-IP ranges current.
+- Referenced by Conditional Access location conditions; a location marked trusted can't be deleted until the trusted mark is removed.
+- Deleted locations are soft-deleted and can be restored within 30 days.
+- Limits: at most 195 IP-based named locations with up to 2,000 ranges each and CIDR masks larger than /8; trusted locations also improve ID Protection risk calculation.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/namedlocation?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-namedlocations?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-assignment-network
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies
@@ -45,7 +47,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive content and any deviations from recommended baselines, including the impact on every policy that references this object.
-- give particular attention to: ipRanges, countriesAndRegions, isTrusted.
+- give particular attention to: ipRanges, isTrusted, countriesAndRegions, countryLookupMethod, includeUnknownCountriesAndRegions.
 
 Definition:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

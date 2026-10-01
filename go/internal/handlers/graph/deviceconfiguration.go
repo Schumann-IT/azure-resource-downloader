@@ -53,17 +53,40 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 		azureType:      "Microsoft.Graph/deviceConfigurations",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "A legacy Intune device configuration profile (templates), including Custom OMA-URI profiles for Windows, iOS, Android and macOS.",
-			KeySettings:         []string{"omaSettings", "encrypted/secret values"},
-			EmbeddedPayloads:    []string{"omaSettings (custom OMA-URI values, decode encrypted/secret values)", "payload (base64 .mobileconfig for Apple custom profiles)", "configurationXml"},
+			Purpose: "A legacy Intune device configuration profile (template-based): custom profiles use OMA-URI settings on Windows and Android and an imported configuration profile (.mobileconfig) on iOS/iPadOS and macOS; the collection also holds Windows update rings (windowsUpdateForBusinessConfiguration).",
+			KeySettings: []string{
+	"omaSettings (isEncrypted and secretReferenceValueId mark secret values)",
+	"payloadFileName",
+	"deploymentChannel",
+},
+			EmbeddedPayloads: []string{
+	"omaSettings (custom OMA-URI values; omaSettingStringXml values are base64 XML that the export decodes the same way; encrypted values are resolved only when secret resolution is enabled)",
+	"payload (Apple .mobileconfig / XML plist; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .mobileconfig sidecar named after payloadFileName in file mode)",
+	"configurationXml (macOS custom app configuration XML; base64 in Graph, decoded by the export like payload)",
+	"trustedRootCertificate (base64 certificate of trusted root certificate profiles; not decoded by the export)",
+},
 			RequiredPermissions: []string{requiredPermission},
-			Lifecycle:           []string{"Legacy template profiles are progressively superseded by the Settings Catalog (deviceManagementConfigurationPolicies); prefer Settings Catalog for new configurations.", "Unassigning or deleting removes settings at next check-in, though some CSP-backed settings persist by design."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Lifecycle: []string{
+	"Legacy templates are being replaced by the Settings Catalog: since 2408 no new macOS Endpoint protection or Extensions profiles can be created (existing ones keep working), and Intune announced the end of the legacy iOS/iPadOS and macOS software update profiles in favour of declarative (DDM) updates.",
+	"On unassign or delete, Wi-Fi, VPN, certificate and email profiles are removed; for other settings it depends on the platform (Android keeps them, iOS/iPadOS removes them, Windows depends on the CSP), and deleting an update ring leaves its settings on the device.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)",
+	"Microsoft.Graph/groups (assignment target groups)",
+	"Microsoft.Graph/assignmentFilters (assignment filters)",
+	"Microsoft.Graph/windowsFeatureUpdateProfiles (works alongside update rings; set the ring's feature update deferral to 0)",
+	"Microsoft.Graph/windowsQualityUpdateProfiles (expedite bypasses ring deferrals)",
+	"Microsoft.Graph/windowsDriverUpdateProfiles (rings must allow Windows drivers)",
+	"Microsoft.Graph/windowsAutopilotDeploymentProfiles (hybrid join uses a Domain Join profile)",
+	"Microsoft.Graph/ndesConnectors (SCEP and PKCS certificate profiles)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
 			SubtypeNote:         "Legacy profiles are heavily polymorphic (windows10CustomConfiguration, macOSCustomConfiguration, windows10EndpointProtectionConfiguration, ...) - identify the concrete profile type from @odata.type first.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-deviceconfiguration-list?view=graph-rest-beta",
-			},
+			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration",
+},
 		},
 		probe: func(ctx context.Context) error {
 			_, err := client.DeviceManagement().DeviceConfigurations().Get(ctx, &betadevicemanagement.DeviceConfigurationsRequestBuilderGetRequestConfiguration{

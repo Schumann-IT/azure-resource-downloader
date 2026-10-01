@@ -30,15 +30,29 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune security baseline / template intent and its configured setting values.",
-			EmbeddedPayloads:    []string{"settings (settingsDelta / setting instance values)"},
+			EmbeddedPayloads: []string{
+	"settings[].valueJson (JSON-encoded value of each setting, keyed by settings[].definitionId)",
+},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Legacy Endpoint Security templates (intents) are being replaced by Settings Catalog based policies; plan migration.", "Deleting an intent removes its settings enforcement at next check-in."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)"},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"Old-format endpoint security and security baseline profiles: new ones can no longer be created, and baselines released before May 2023 can't be upgraded to the new format; recreate them as Settings Catalog based policies (deviceManagementConfigurationPolicies).",
+	"Deleting or unassigning stops enforcement, but settings that are no longer managed may stay on the device (CSP-dependent).",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/deviceManagementConfigurationPolicies (new-format successor)",
+	"Microsoft.Graph/groups (assignment target groups)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
+			KeySettings: []string{"templateId", "isMigratingToConfigurationPolicy", "settings[].definitionId"},
+Links: models.ResourceLinks{
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta",
 				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceintent-devicemanagementintent-list?view=graph-rest-beta",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview"},
-			},
+				BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview",
+		"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/configure-baselines",
+	},
+			AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

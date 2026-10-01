@@ -6,17 +6,24 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/ndesConnectors
 
-About this resource type: An Intune NDES (SCEP) connector used to issue certificates via a Network Device Enrollment Service.
+About this resource type: An on-premises Certificate Connector for Microsoft Intune registration (Graph: 'OnPrem Ndes connector'), used for SCEP certificate issuance through NDES.
 
 Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- Reflects the state of the on-premises Certificate Connector; keep the connector software current and renew its certificates before expiry to avoid SCEP issuance outages.
+- The Certificate Connector for Microsoft Intune updates itself automatically (autoupdate.msappproxy.net, port 443) unless that is blocked; each release is supported for six months, and out-of-support versions may stop working.
+- Since 29 July 2021 it replaces the PFX Certificate Connector and the Microsoft Intune Connector.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-ndesconnector?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-ndesconnector-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/fundamentals/certificates/connector/overview
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/fundamentals/certificates/scep-infrastructure
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+- Microsoft.Graph/deviceConfigurations (SCEP and PKCS certificate profiles)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -33,7 +40,7 @@ References:
 Lifecycle and operations:
 - explain how records of this type appear and disappear (registration/sync/deletion), what a stale or error state means, and what happens downstream when the record is removed.
 - recommend a review cadence.
-- give particular attention to: state, lastConnectionDateTime.
+- give particular attention to: state, lastConnectionDateTime, connectorVersion, machineName, enrolledDateTime.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance.

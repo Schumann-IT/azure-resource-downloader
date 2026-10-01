@@ -23,15 +23,40 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 		azureType:      "Microsoft.Graph/intuneBrandingProfiles",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Company Portal branding profile controlling the end-user portal appearance.",
-			EmbeddedPayloads:    []string{"themeColorLogo / lightBackgroundLogo / landingPageCustomizedImage (base64 images)"},
+			Purpose: "An Intune Company Portal customization profile: branding, support contacts, privacy text, enrollment prompts, app sources and self-service device actions.",
+			
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Company Portal branding; changes appear when the portal refreshes.", "Distinct from Entra sign-in branding (organizationalBranding)."},
-			RelatedTypes:        []string{"Microsoft.Graph/organizationalBranding (Entra sign-in branding)"},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"One default profile plus up to 25 profiles targeted at user groups (device groups aren't supported).",
+	"Hiding Remove and Reset (isRemoveDeviceDisabled, isFactoryResetDisabled) exists only in the default profile and only hides Company Portal actions; it doesn't restrict device settings.",
+	"Distinct from Entra sign-in branding (organizationalBranding).",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/groups (assignment target user groups)",
+	"Microsoft.Graph/deviceCategories (disableDeviceCategorySelection hides the category prompt)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
+			KeySettings: []string{
+	"isDefaultProfile",
+	"enrollmentAvailability",
+	"companyPortalBlockedActions",
+	"isRemoveDeviceDisabled",
+	"isFactoryResetDisabled",
+	"disableDeviceCategorySelection",
+	"privacyUrl",
+	"customPrivacyMessage",
+	"contactITName",
+	"contactITEmailAddress",
+	"contactITPhoneNumber",
+},
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-wip-intunebrandingprofile?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-wip-intunebrandingprofile-list?view=graph-rest-beta",
-			},
+			SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-companyportalblockedaction?view=graph-rest-beta",
+BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/app-management/configuration/configure-company-portal",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

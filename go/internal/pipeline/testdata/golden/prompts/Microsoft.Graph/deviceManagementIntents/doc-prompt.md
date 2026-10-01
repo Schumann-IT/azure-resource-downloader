@@ -12,17 +12,20 @@ Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- Legacy Endpoint Security templates (intents) are being replaced by Settings Catalog based policies; plan migration.
-- Deleting an intent removes its settings enforcement at next check-in.
+- Old-format endpoint security and security baseline profiles: new ones can no longer be created, and baselines released before May 2023 can't be upgraded to the new format; recreate them as Settings Catalog based policies (deviceManagementConfigurationPolicies).
+- Deleting or unassigning stops enforcement, but settings that are no longer managed may stay on the device (CSP-dependent).
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceintent-devicemanagementintent?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-deviceintent-devicemanagementintent-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview
 - Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/security-baselines/configure-baselines
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
-- Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)
+- Microsoft.Graph/deviceManagementConfigurationPolicies (new-format successor)
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -49,12 +52,13 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
+- give particular attention to: templateId, isMigratingToConfigurationPolicy, settings[].definitionId.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
-- This resource carries embedded or encoded payloads: settings (settingsDelta / setting instance values) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+- This resource carries embedded or encoded payloads: settings[].valueJson (JSON-encoded value of each setting, keyed by settings[].definitionId) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

@@ -27,14 +27,31 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 		documentation: models.ResourceDocumentation{
 			Template:            referencedPromptTemplateText,
 			Purpose:             "An Intune notification message template used for compliance and other notifications.",
-			EmbeddedPayloads:    []string{"localizedNotificationMessages (per-locale subject and message body)"},
+			
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Referenced by compliance policies noncompliance actions; deleting a template breaks those actions.", "Localized messages fall back to the default locale."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)"},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"Referenced by noncompliance actions of compliance policies and by enrollment notifications.",
+	"Users whose locale has no localized message receive the default-locale message.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)",
+	"Microsoft.Graph/compliancePolicies (noncompliance actions)",
+	"Microsoft.Graph/deviceEnrollmentConfigurations (enrollment notifications)",
+	"Microsoft.Graph/intuneBrandingProfiles (brandingOptions pull logo, company name and contact details from Company Portal branding)",
+	"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+},
+			KeySettings: []string{
+	"brandingOptions",
+	"defaultLocale",
+	"localizedNotificationMessages (locale, subject, messageTemplate, isDefault)",
+},
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-notification-notificationmessagetemplate-list?view=graph-rest-beta",
-			},
+			BestPractices: []string{
+		"https://learn.microsoft.com/en-us/intune/device-security/compliance/configure-noncompliance-actions",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

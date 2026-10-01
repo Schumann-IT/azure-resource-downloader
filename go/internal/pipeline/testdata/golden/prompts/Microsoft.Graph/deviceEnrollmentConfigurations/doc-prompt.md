@@ -8,22 +8,31 @@ Azure resource type: Microsoft.Graph/deviceEnrollmentConfigurations
 
 About this resource type: An Intune device enrollment configuration, such as the Enrollment Status Page or enrollment restrictions.
 
-Subtype guidance: Polymorphic (@odata.type): enrollment limits, platform restrictions, Windows Hello for Business, ESP (windows10EnrollmentCompletionPageConfiguration), enrollment notifications - identify the concrete type first.
+Subtype guidance: Polymorphic (@odata.type): deviceEnrollmentLimitConfiguration, deviceEnrollmentPlatformRestrictionsConfiguration (default, all platforms), deviceEnrollmentPlatformRestrictionConfiguration (one platform), deviceEnrollmentWindowsHelloForBusinessConfiguration, windows10EnrollmentCompletionPageConfiguration (Enrollment Status Page), deviceEnrollmentNotificationConfiguration, deviceComanagementAuthorityConfiguration and windowsRestoreDeviceEnrollmentConfiguration (tenant-wide, not targetable); deviceEnrollmentConfigurationType values starting with 'default' mark the built-in defaults.
 
 Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Changes affect only future enrollments; existing devices keep their applied configuration.
-- Priority order matters when multiple configurations target a user.
+- Edits apply to new enrollments only; devices already enrolled are not affected.
+- Restrictions: priority 1 is highest and only the highest-priority assigned policy applies; the default applies to everyone not covered and always to enrollments that aren't user-driven.
+- Enrollment Status Page: a device-targeted profile wins over a user-targeted one, then the default.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
-- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-deviceenrollmentconfiguration?view=graph-rest-beta
-- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-shared-deviceenrollmentconfiguration-list?view=graph-rest-beta
+- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-deviceenrollmentconfiguration?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-deviceenrollmentplatformrestriction?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-onboarding-deviceenrollmentconfiguration-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/restrictions
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/windows/setup-status-page
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/identity-protection/configure-tenant-wide-policy
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)
 - Microsoft.Graph/windowsAutopilotDeploymentProfiles (ESP applies during Autopilot)
+- Microsoft.Graph/mobileApps (ESP blocking apps in selectedMobileAppIds)
+- Microsoft.Graph/notificationMessageTemplates (enrollment notifications)
+- Microsoft.Graph/assignmentFilters (platform restrictions support filters)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -50,7 +59,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: priority, platformRestrictions, blockUntilComplete.
+- give particular attention to: priority, deviceEnrollmentConfigurationType, limit, windowsRestriction, iosRestriction, androidForWorkRestriction, platformRestriction, showInstallationProgress, selectedMobileAppIds, installProgressTimeoutInMinutes, allowDeviceUseOnInstallFailure.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

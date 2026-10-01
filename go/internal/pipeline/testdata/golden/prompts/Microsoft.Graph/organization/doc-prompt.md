@@ -12,7 +12,7 @@ Permissions required to read this resource type:
 - Organization.Read.All
 
 Lifecycle notes for this resource type:
-- Tenant information object; some properties are Microsoft-managed.
+- Read and update only (no create or delete); Graph can update only the notification contacts (technicalNotificationMails, securityComplianceNotificationMails and Phones, marketingNotificationEmails) and privacyProfile.
 - Verified domains and technical notification contacts should be reviewed periodically.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
@@ -21,6 +21,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/organizationalBranding
+- Microsoft.Graph/onPremisesSynchronization (same tenant)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -41,7 +42,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive settings and any deviations from recommended baselines, including the tenant-wide security impact.
-- give particular attention to: verifiedDomains, securityComplianceNotificationMails, privacyProfile.
+- give particular attention to: verifiedDomains, technicalNotificationMails, securityComplianceNotificationMails, onPremisesSyncEnabled, tenantType, privacyProfile.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

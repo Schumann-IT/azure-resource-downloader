@@ -23,15 +23,28 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 		azureType: "Microsoft.Graph/authenticationStrengthPolicies",
 		documentation: models.ResourceDocumentation{
 			Template:            referencedPromptTemplateText,
-			Purpose:             "An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.",
-			KeySettings:         []string{"allowedCombinations"},
+			Purpose: "An Entra ID authentication strength (built-in or custom): a Conditional Access grant control listing the authentication-method combinations allowed to access a resource; requirementsSatisfied states whether it satisfies MFA.",
+			KeySettings: []string{"allowedCombinations", "policyType", "requirementsSatisfied", "combinationConfigurations"},
 			RequiredPermissions: []string{"Policy.Read.All"},
-			Lifecycle:           []string{"Referenced by Conditional Access grant controls; built-in strengths are immutable, custom ones are editable.", "Deleting a custom strength fails while any Conditional Access policy references it."},
-			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies"},
-			Links: models.ResourceLinks{
+			Lifecycle: []string{
+	"Referenced by Conditional Access grant controls; built-in strengths can't be modified, custom ones are editable.",
+	"A custom strength can't be deleted while a Conditional Access policy references it.",
+	"Microsoft updates the built-in strengths when new methods become available, so built-in entries can change without an admin edit; up to 15 custom strengths, Entra ID P1 required.",
+},
+			RelatedTypes: []string{
+	"Microsoft.Graph/conditionalAccessPolicies",
+	"Microsoft.Graph/authenticationMethodsPolicy (methods must be enabled there)",
+},
+			SubtypeNote: "combinationConfigurations is polymorphic: fido2CombinationConfiguration (allowed AAGUIDs) and x509CertificateCombinationConfiguration (allowed issuer SKIs and policy OIDs) - identify the type from @odata.type.",
+Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationstrengthpolicy?view=graph-rest-1.0",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authenticationstrengthroot-list-policies?view=graph-rest-1.0",
-			},
+			SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodmodes?view=graph-rest-1.0",
+BestPractices: []string{
+		"https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strengths",
+		"https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strength-advanced-options",
+	},
+},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string
