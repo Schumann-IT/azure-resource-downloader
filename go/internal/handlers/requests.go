@@ -126,9 +126,10 @@ func (r *Registry) BuildFetchRequests(ctx context.Context, resourceIDs []string,
 			log.Info("Found resources", "type", resourceType, "count", len(resourceList))
 
 			if len(resourceList) == 0 {
-				log.Warn("No resources found",
-					"type", resourceType,
-					"note", "This could be due to: (1) No resources of this type exist, (2) Insufficient permissions, or (3) Resources exist in a different scope (e.g., tenant vs subscription)")
+				// The access check before listing refuses a run without
+				// access, so an empty listing is a real empty; the summary's
+				// "Empty type" line reports it again.
+				log.Info("No resources found", "type", resourceType)
 				outcomes[i].empty = true
 				return
 			}

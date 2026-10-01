@@ -1,8 +1,8 @@
 // Package runprep prepares a resource-facing run: it reads the configuration,
 // builds the worker/transformer/filter constructions, verifies the session,
 // runs the dedicated-app probe and prompt, authenticates, resolves the tenant
-// and the export directory, and builds the handler registry and the fetch
-// requests. It exists so the commands that do the same list, fetch and
+// and the export directory, builds the handler registry, checks access before
+// listing, and builds the fetch requests. It exists so the commands that do the same list, fetch and
 // transform work (resource download and resource drift) share one preparation
 // and are incapable of diverging in authentication or selection semantics.
 // Flag groups and interactive prompts stay in internal/cmdutil.
@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"azure-resource-downloader/internal/azure"
 	"azure-resource-downloader/internal/cmdutil"
@@ -90,7 +91,9 @@ type Prepared struct {
 // resources. It reads the effective configuration, verifies the Azure CLI
 // session (unless the profile names a dedicated app), prompts for a dedicated
 // app registration when a selected type needs one, authenticates, decides the
-// per-tenant output directory, and builds the real handler registry.
+// per-tenant output directory, builds the real handler registry and, for a run
+// that lists by type, checks access before anything is listed: a refused
+// permission group returns an error wrapping ErrAccessRefused.
 func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 	log := logger.Default
 
@@ -141,13 +144,15 @@ func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 	// by default, or device-code sign-in against the dedicated app the profile
 	// names.
 	log.Info("Authenticating with Azure...")
-	azureClient, err := azure.NewClient(ctx, p.Subscription, clientID, tenantID)
+	azureClient, err := NewSignInLoggingClient(ctx, p.Subscription, clientID, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Azure client: %w", err)
+		return nil, err
 	}
 	p.Client = azureClient
 	p.Subscription = azureClient.GetSubscriptionID()
-	log.Info("Authentication successful", "subscription", p.Subscription)
+	// The credential is lazy: a device-code sign-in happens at its first
+	// token request, which the credential itself reports as "Signed in".
+	log.Info("Credential ready", "subscription", p.Subscription)
 
 	if err := p.resolveTenantDir(ctx, opts.Domain); err != nil {
 		return nil, err
@@ -156,8 +161,52 @@ func Prepare(ctx context.Context, opts Options) (*Prepared, error) {
 	// Create the handler registry pre-populated with all supported types.
 	p.Registry = handlers.NewRegistry(azureClient.GetCredential(), p.Subscription, p.ResolveSecrets)
 	log.Info("Registered resource type handlers", "count", len(p.Registry.GetAllTypes()))
+	LogSecretResolution(p.ResolveSecrets)
+
+	// Find out whether the account may read what was selected before listing
+	// anything: a refused permission group refuses the run, instead of a
+	// listing that collects a refusal per type and writes an incomplete export.
+	if err := p.CheckAccess(ctx); err != nil {
+		return nil, err
+	}
 
 	return p, nil
+}
+
+// NewSignInLoggingClient builds the run's credential, decorates it so the
+// actual sign-in (the first successful token request) is logged as "Signed
+// in", and creates the Azure client around it. The client resolves the
+// default subscription when subscription is empty.
+func NewSignInLoggingClient(ctx context.Context, subscription, clientID, tenantID string) (*azure.Client, error) {
+	cred, err := azure.NewCredential(clientID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Azure client: %w", err)
+	}
+	azureClient, err := azure.NewClientWithCredential(ctx, azure.WithSignInLog(cred), subscription, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Azure client: %w", err)
+	}
+	return azureClient, nil
+}
+
+// CheckAccess runs the access check for this run's selection: nothing for a
+// --resource-id or --resource-group run, else one probe per permission group
+// of the effective types, bounded like the listing and by the run's timeout.
+func (p *Prepared) CheckAccess(ctx context.Context) error {
+	probes := PlanRunProbes(p.Registry, p.EffectiveTypes, p.Subscription, p.ResourceIDs, p.ResourceGroup)
+	listConcurrency := ListingConcurrency(p.WorkerConfig, p.WorkersFlag, p.WorkersExplicit)
+	return CheckAccess(ctx, p.Registry, probes, p.Subscription, time.Duration(p.Timeout)*time.Second, listConcurrency)
+}
+
+// LogSecretResolution reports, once per run, that resolve-secrets is on: the
+// run writes decrypted Intune OMA-URI values to disk in plaintext.
+func LogSecretResolution(resolveSecrets bool) {
+	if !resolveSecrets {
+		return
+	}
+	log := logger.Default
+	log.Info("Secret resolution enabled", "key", "resolve-secrets")
+	log.Debug("Secret resolution writes encrypted Intune OMA-URI values to output in plaintext; the signed-in user must hold delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights")
 }
 
 // resolveSelection applies the tenant profile's exclude-type to the

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	betadeviceappmanagement "github.com/microsoftgraph/msgraph-beta-sdk-go/deviceappmanagement"
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
 )
 
@@ -34,6 +35,15 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-mobileapp?view=graph-rest-beta",
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.DeviceAppManagement().MobileApps().Get(ctx, &betadeviceappmanagement.MobileAppsRequestBuilderGetRequestConfiguration{
+				QueryParameters: &betadeviceappmanagement.MobileAppsRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list mobile apps: %w (hint: requires 'DeviceManagementApps.Read.All' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

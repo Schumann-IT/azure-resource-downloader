@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/microsoft/kiota-abstractions-go/serialization"
+	graphidentity "github.com/microsoftgraph/msgraph-sdk-go/identity"
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 )
 
@@ -31,6 +32,15 @@ func NewConditionalAccessPolicyHandler(credential azcore.TokenCredential) (*Grap
 				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/conditionalaccesspolicy?view=graph-rest-1.0",
 				BestPractices: []string{"https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access"},
 			},
+		},
+		probe: func(ctx context.Context) error {
+			_, err := client.Identity().ConditionalAccess().Policies().Get(ctx, &graphidentity.ConditionalAccessPoliciesRequestBuilderGetRequestConfiguration{
+				QueryParameters: &graphidentity.ConditionalAccessPoliciesRequestBuilderGetQueryParameters{Top: probeTop(), Select: probeSelect()},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list conditional access policies: %w (hint: requires 'Policy.Read.All' or 'Policy.ReadWrite.ConditionalAccess' permission in Microsoft Graph)", err)
+			}
+			return nil
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

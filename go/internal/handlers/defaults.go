@@ -3,7 +3,6 @@ package handlers
 import (
 	"azure-resource-downloader/internal/handlers/arm"
 	"azure-resource-downloader/internal/handlers/graph"
-	"azure-resource-downloader/internal/logger"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 )
@@ -22,11 +21,8 @@ func registerDefaults(r *Registry, cred azcore.TokenCredential, subscriptionID s
 	r.Register("Microsoft.Compute/virtualMachines", arm.NewVirtualMachineHandler(cred, subscriptionID))
 
 	// Register the Intune device configuration handler separately because of
-	// its extra resolve-secrets option.
-	if resolveSecrets {
-		logger.Default.Info("Secret resolution enabled", "flag", "--resolve-secrets")
-		logger.Default.Debug("Secret resolution writes encrypted Intune OMA-URI values to output in plaintext; the signed-in user must hold delegated DeviceManagementConfiguration.ReadWrite.All and Intune read rights")
-	}
+	// its extra resolve-secrets option. Enabling it is logged once per run by
+	// the run preparation, not here: a run builds more than one registry.
 	if dcHandler, err := graph.NewDeviceConfigurationHandler(cred, resolveSecrets); err == nil {
 		r.Register(dcHandler.GetType(), dcHandler)
 	}

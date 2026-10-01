@@ -46,6 +46,11 @@ type GraphCollectionHandler struct {
 	// record it per type, and defaults false for types with no assignments.
 	hasAssignments bool
 	listIDs        func(ctx context.Context) ([]string, error)
+	// probe, when set, is the type's access probe: one GET of the
+	// collection's first page with a single item. It lets the access check
+	// that runs before a listing test a permission group without listing a
+	// whole collection. Unset, the access check falls back to listIDs.
+	probe          func(ctx context.Context) error
 	fetchItem      func(ctx context.Context, itemID string) (serialization.Parsable, error)
 	displayName    func(item serialization.Parsable) string
 	// normalize, when set, is applied to a resource's serialized property map
@@ -79,6 +84,19 @@ func newGraphClient(credential azcore.TokenCredential) (*msgraphsdk.GraphService
 		return nil, fmt.Errorf("failed to create Graph client: %w", err)
 	}
 	return client, nil
+}
+
+// probeTop returns the $top value of an access probe: one item is enough to
+// learn whether the collection may be read at all.
+func probeTop() *int32 {
+	one := int32(1)
+	return &one
+}
+
+// probeSelect returns the $select value of an access probe: only the id, so the
+// probe transfers as little of the tenant's configuration as possible.
+func probeSelect() []string {
+	return []string{"id"}
 }
 
 // GetType returns the Azure resource type
@@ -118,6 +136,23 @@ func (h *GraphCollectionHandler) HasAssignments() bool {
 // List returns the IDs of all items in the collection.
 func (h *GraphCollectionHandler) List(ctx context.Context) ([]string, error) {
 	return h.listIDs(ctx)
+}
+
+// HasAccessProbe reports whether the constructor configured a dedicated access
+// probe for this type. It satisfies models.AccessProber.
+func (h *GraphCollectionHandler) HasAccessProbe() bool {
+	return h.probe != nil
+}
+
+// ProbeAccess tests whether the signed-in account may read this type: the
+// dedicated probe when one is configured, else a full listing whose result is
+// discarded. It satisfies models.AccessProber.
+func (h *GraphCollectionHandler) ProbeAccess(ctx context.Context) error {
+	if h.probe != nil {
+		return h.probe(ctx)
+	}
+	_, err := h.listIDs(ctx)
+	return err
 }
 
 // Fetch retrieves a single item from the collection by resource ID.

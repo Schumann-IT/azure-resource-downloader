@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -182,6 +183,103 @@ func TestErrorSummaryTyped(t *testing.T) {
 			}
 			if again := ErrorSummary(tt.err); again != got {
 				t.Errorf("ErrorSummary() not deterministic: %q then %q", got, again)
+			}
+		})
+	}
+}
+
+// intuneBody is the nested error object Intune puts into a Microsoft Graph
+// error message: its Message is itself a JSON string carrying the service
+// version, the Activity ID and the URL — none of which may reach a summary.
+const intuneBody = `{"ErrorCode":"Forbidden","Message":"{\r\n  \"_version\": 3,\r\n  \"Message\": \"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 4031429a-0000-0000-0000-000000000000 - Url: https://fef.msua06.manage.microsoft.com/DeviceConfiguration/deviceConfigurations\",\r\n  \"CustomApiErrorPhrase\": \"\",\r\n  \"RetryAfter\": null,\r\n  \"ErrorSourceService\": \"\",\r\n  \"HttpHeaders\": \"{}\"\r\n}","Target":null,"Details":null,"InnerError":null,"InstanceAnnotations":[],"TypeAnnotation":null}`
+
+const deviceConfigHint = "(hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)"
+
+func TestErrorSummaryNestedIntuneBody(t *testing.T) {
+	want := "HTTP 401 Forbidden: failed to list device configurations " + deviceConfigHint
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "typed, outer code UnknownError",
+			err:  fmt.Errorf("failed to list device configurations: %w %s", newBetaODataError(http.StatusUnauthorized, "UnknownError", intuneBody), deviceConfigHint),
+			want: want,
+		},
+		{
+			name: "typed, outer code empty",
+			err:  fmt.Errorf("failed to list device configurations: %w %s", newBetaODataError(http.StatusUnauthorized, "", intuneBody), deviceConfigHint),
+			want: want,
+		},
+		{
+			name: "typed 404 keeps no hint",
+			err:  fmt.Errorf("failed to list device configurations: %w %s", newBetaODataError(http.StatusNotFound, "UnknownError", intuneBody), deviceConfigHint),
+			want: "HTTP 404 Forbidden: failed to list device configurations",
+		},
+		{
+			name: "untyped",
+			err:  fmt.Errorf("failed to list device configurations: %s %s", intuneBody, deviceConfigHint),
+			want: "Forbidden: failed to list device configurations " + deviceConfigHint,
+		},
+		{
+			name: "ARM summary unchanged",
+			err:  fmt.Errorf("failed to list resources: %w (hint: requires 'Reader' role)", newARMError(http.StatusForbidden, "AuthorizationFailed")),
+			want: "HTTP 403 AuthorizationFailed: failed to list resources: GET https://management.azure.com/subscriptions/x/resources (hint: requires 'Reader' role)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ErrorSummary(tt.err)
+			if got != tt.want {
+				t.Errorf("ErrorSummary() = %q, want %q", got, tt.want)
+			}
+			for _, leak := range []string{"Activity ID", "https://fef", "_version"} {
+				if strings.Contains(got, leak) {
+					t.Errorf("summary %q leaks %q", got, leak)
+				}
+			}
+		})
+	}
+}
+
+func TestServiceErrorCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil", err: nil, want: ""},
+		{name: "untyped", err: errors.New("boom"), want: ""},
+		{name: "nested Intune body wins over the outer code", err: fmt.Errorf("x: %w", newBetaODataError(http.StatusUnauthorized, "UnknownError", intuneBody)), want: "Forbidden"},
+		{name: "Graph code", err: newV1ODataError(http.StatusForbidden, "Authorization_RequestDenied", "denied"), want: "Authorization_RequestDenied"},
+		{name: "ARM code", err: newARMError(http.StatusForbidden, "AuthorizationFailed"), want: "AuthorizationFailed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ServiceErrorCode(tt.err); got != tt.want {
+				t.Errorf("ServiceErrorCode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGraphErrorMessage(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "untyped", err: errors.New("boom"), want: ""},
+		{name: "ARM", err: newARMError(http.StatusForbidden, "AuthorizationFailed"), want: ""},
+		{name: "v1.0 first line", err: fmt.Errorf("x: %w", newV1ODataError(http.StatusForbidden, "accessDenied", "Requires one of the roles: Global Reader.\r\nmore")), want: "Requires one of the roles: Global Reader."},
+		{name: "beta", err: newBetaODataError(http.StatusForbidden, "UnauthorizedUserRole", "The user role is not authorized."), want: "The user role is not authorized."},
+		{name: "OData error without main error", err: odataerrors.NewODataError(), want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GraphErrorMessage(tt.err); got != tt.want {
+				t.Errorf("GraphErrorMessage() = %q, want %q", got, tt.want)
 			}
 		})
 	}

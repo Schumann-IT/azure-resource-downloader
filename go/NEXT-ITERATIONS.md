@@ -505,7 +505,7 @@ refusals and ending as a mostly empty, incomplete run.
 
 **Plan.**
 
-- Permission groups and the probe plan (pure, `internal/runprep/access.go`): `PermissionGroup(perm string)` strips
+- ~~Permission groups and the probe plan (pure, `internal/runprep/access.go`): `PermissionGroup(perm string)` strips
   a trailing `.Read.All` / `.ReadWrite.All` (`DeviceManagementConfiguration.ReadWrite.All` →
   `DeviceManagementConfiguration`, so `resolve-secrets` does not split a group). A type's group is the group of its
   first declared permission (`models.PermissionScoped.RequiredPermissions()`); an ARM type (`models.DetectAPIType`)
@@ -514,8 +514,8 @@ refusals and ending as a mostly empty, incomplete run.
   probe per group, sorted by group; the probed type is the first type in sorted order with `HasAccessProbe`, else
   the first in sorted order; `Blocks` lists every selected type of the group, sorted. Input is the effective
   selection (`Prepared.EffectiveTypes`, `TypeSelection.Effective` in `list`), minus ARM types when the subscription
-  is empty; a `--resource-id` or `--resource-group` run plans nothing.
-- Probe surface (`internal/models`): a new optional interface `AccessProber { HasAccessProbe() bool;
+  is empty; a `--resource-id` or `--resource-group` run plans nothing.~~
+- ~~Probe surface (`internal/models`): a new optional interface `AccessProber { HasAccessProbe() bool;
   ProbeAccess(ctx context.Context) error }`. `GraphCollectionHandler` gains an optional `probe func(ctx) error`
   closure and implements it: `HasAccessProbe` reports `probe != nil`, `ProbeAccess` calls `probe`, else `listIDs`
   (result discarded). A handler without the interface (ARM) is probed by its `List`. Give a `probe` closure — one
@@ -525,13 +525,13 @@ refusals and ending as a mostly empty, incomplete run.
   `DeviceManagementServiceConfig`, `DeviceManagementScripts`, `DeviceManagementRBAC`,
   `DeviceManagementManagedDevices` (device categories), `Policy`, `Agreement` (terms of use) and `Group`; the
   singleton groups (`Organization`, `OrganizationalBranding`, `OnPremDirectorySynchronization`) are probed by their
-  normal listing (one or two requests).
-- Classifier (pure, `internal/runprep/access.go`): `ClassifyProbe(err error) ProbeOutcome` → `Allowed` (nil),
+  normal listing (one or two requests).~~
+- ~~Classifier (pure, `internal/runprep/access.go`): `ClassifyProbe(err error) ProbeOutcome` → `Allowed` (nil),
   `Refused` (typed 401/403, or an azidentity `AuthenticationFailedError` / `AuthenticationRequiredError` /
   `CredentialUnavailableError` anywhere in the chain, marked as a sign-in failure), `Inconclusive` (everything
   else), and `context.Canceled` passed through. No substring matching, no `IsPermissionError`, no
-  `retry.IsRetryable`.
-- Prober (`runprep.CheckAccess(ctx, registry, probes, timeout, concurrency) error`): runs the planned probes
+  `retry.IsRetryable`.~~
+- ~~Prober (`runprep.CheckAccess(ctx, registry, probes, timeout, concurrency) error`): runs the planned probes
   concurrently, bounded by `ListingConcurrency`, each under `context.WithTimeout` of the run's `timeout`; results
   land in per-probe slots (no shared mutable state, deterministic order). Inconclusive probes log one debug line
   with the summary and full error and do not refuse. With one or more refused groups it logs, per refused group
@@ -542,15 +542,15 @@ refusals and ending as a mostly empty, incomplete run.
   Reader role on subscription <id>"; sign-in failure: "sign-in failed: <ErrorSummary>" — plus the full error at
   debug (Activity ID and URL live there), then returns an error wrapping a new sentinel `runprep.ErrAccessRefused`:
   "access check refused <n> of <m> permission groups; narrow the run with --type, the type: list or exclude-type in
-  the tenant profile".
-- Wiring: `Prepare` calls `CheckAccess` last (after the real registry is built), only when the run lists by type;
+  the tenant profile".~~
+- ~~Wiring: `Prepare` calls `CheckAccess` last (after the real registry is built), only when the run lists by type;
   `runDrift` maps `errors.Is(err, runprep.ErrAccessRefused)` to `cmdutil.WithExitCode(driftExitCannotAnswer, …)`
   beside the tenant-dir refusals; `runDownload` returns it unchanged (exit 1); `runList` plans and calls
   `CheckAccess` after building its registry and before `BuildFetchRequests` (exit 1), and its `Long` help no longer
   says an unlistable type never fails the command — a refused access check does; a type whose listing still fails
   afterwards is reported as unknown as today. `resource types`, `resource audit` and `runDebugReport` do not call
-  it.
-- Error summaries (`azure.ErrorSummary`): when the message (hint stripped) contains a JSON object that decodes
+  it.~~
+- ~~Error summaries (`azure.ErrorSummary`): when the message (hint stripped) contains a JSON object that decodes
   with `encoding/json` to an object with a string `ErrorCode` (Intune's nested body; its `Message` is itself a
   JSON string carrying `_version`, the Activity ID and the URL), the summary keeps only the text before the object
   (trimmed of ` :{`) as the operation and uses the inner `ErrorCode` as the code, replacing the outer OData code —
@@ -558,8 +558,8 @@ refusals and ending as a mostly empty, incomplete run.
   'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)` (hint per the existing 401/403 rule);
   untyped: the same without the `HTTP` prefix. Nothing of the nested message (Activity ID, URL) reaches the
   summary; callers already log the full error at debug. Every other summary is byte-for-byte unchanged — in
-  particular the ARM one with its `GET https://…` request line, which `notListed.reasons` keeps.
-- Tests (no network, `make test` and `make test-race` — the prober is concurrent): `PermissionGroup`
+  particular the ARM one with its `GET https://…` request line, which `notListed.reasons` keeps.~~
+- ~~Tests (no network, `make test` and `make test-race` — the prober is concurrent): `PermissionGroup`
   (`Read.All`, `ReadWrite.All`, no suffix); `PlanProbes` (groups from a mixed selection, one probe per group,
   preference for a type with an access probe, fallback to the first type, `Blocks` sorted, ARM dropped without a
   subscription, nothing for `--resource-id` / `--resource-group`); `ClassifyProbe` table — typed beta `ODataError`
@@ -570,8 +570,8 @@ refusals and ending as a mostly empty, incomplete run.
   nested Intune body typed (outer code empty and `UnknownError`) and untyped, plus the existing ARM case
   unchanged; runprep / command integration with a stub prober — refused → no `BuildFetchRequests` call, nothing
   written under a temp output (dry-run and real), download/list exit 1, drift exit 2; all clear → unchanged run;
-  `--resource-id` run → prober never called.
-- Follow-up, seen in the cached-session runs (2026-10-01): "Authentication successful" is logged before the lazy
+  `--resource-id` run → prober never called.~~
+- ~~Follow-up, seen in the cached-session runs (2026-10-01): "Authentication successful" is logged before the lazy
   device-code sign-in actually happens; log that the credential is ready instead, and "Signed in" (with the
   account) once the first token has been obtained. Concretely: `Prepare` and `runList` build the credential with
   `azure.NewCredential`, wrap it in a new `azure.WithSignInLog(cred)` decorator — on the first successful
@@ -580,17 +580,17 @@ refusals and ending as a mostly empty, incomplete run.
   — and pass it to `NewClientWithCredential`; `Prepare`'s "Authentication successful" becomes `Credential ready`
   (with the subscription). No extra token request, no extra prompt; `--debug` keeps its own "Signed in" line and
   does not use the decorator. Tests: logs once for N concurrent callers, not on error, then once on a later
-  success.
-- Follow-up: an empty type is reported twice — a per-type `No resources found` warning whose note still offers
+  success.~~
+- ~~Follow-up: an empty type is reported twice — a per-type `No resources found` warning whose note still offers
   "(2) Insufficient permissions", and the summary's `Empty type` line. With the access check refusing a run without
   access, an empty listing is a real empty: log it once at info level, without the permissions note; the summary
-  line stays. (`internal/handlers/requests.go`: `log.Info("No resources found", "type", …)` with no `note`.)
-- Follow-up: "Secret resolution enabled" (and its debug explanation) is logged twice per run — once during
+  line stays. (`internal/handlers/requests.go`: `log.Info("No resources found", "type", …)` with no `note`.)~~
+- ~~Follow-up: "Secret resolution enabled" (and its debug explanation) is logged twice per run — once during
   configuration loading and once during run preparation; log it once. Cause: `registerDefaults` logs it, and
   `Prepare` builds the registry twice (offline for the selection, then with the real credential). Move both lines
   out of `registerDefaults` into `Prepare`, after the real registry, when `ResolveSecrets` is set; name the key
   correctly (`"key", "resolve-secrets"` — it is config-only, there is no `--resolve-secrets` flag). A test asserts
-  one occurrence per `Prepare`.
+  one occurrence per `Prepare`.~~
 - Documentation at *done*: `README.md` — the access check before listing (what it probes, what refuses, how to
   narrow a run) in the sign-in / permissions section and the exit codes; `CHANGELOG.md` `### Added` (the access
   check) and `### Changed` (the readable Intune error summary).
