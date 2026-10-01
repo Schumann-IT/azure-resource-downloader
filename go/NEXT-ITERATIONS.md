@@ -189,6 +189,41 @@ per-item context.
 - Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
   (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
 
+## 5. Group only minor and patch updates in Dependabot
+
+**Goal.** Dependabot's weekly grouped pull requests carry only minor and patch updates, so they stay green and
+mergeable; a major version arrives as its own single-dependency pull request that can be judged — and, when it
+needs work, planned — on its own, instead of one breaking major blocking every routine update.
+
+> **Why.** `.github/dependabot.yml` groups every update (`patterns: ["*"]`). The first grouped npm pull request
+> (#42, 2026-10-01) bundled 26 updates including about 16 majors — NestJS 11 → 12, TypeScript 5 → 7, Jest 29 → 30,
+> `markdown-it` 14 → 15, `markdown-it-anchor` 9 → 10, `shiki` 3 → 4, `htmlparser2` 10 → 12, `js-yaml` 4 → 5,
+> `diff` 8 → 9, `@types/node` 20 → 26 — and `ci-web` failed before any test ran: `npm ci` hit `ERESOLVE`
+> (`ts-jest@29.4.14` needs `typescript <7`). The pull request was closed; the majors are parked as web ideas
+> (toolchain, NestJS 12, the rendering stack).
+>
+> **Behaviour that stays.** A major-version pull request still changes only the dependency files, so it remains
+> dependency-only for the branch gates and needs no backlog entry to *pass* them; whether it is *merged* is the
+> operator's call — a red one is closed and, when the upgrade is wanted, planned as an entry.
+>
+> Not regeneration-gated.
+>
+> **Owner.** `.github/dependabot.yml` (root); `README.md` (root) and `go/README.md` at done. No web change.
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- `.github/dependabot.yml`: in the `gomod` and `npm` groups add `update-types: ["minor", "patch"]`, so majors fall
+  out of the group and Dependabot opens them as individual pull requests with the same commit-message prefix; keep
+  the `github-actions` group as it is (action majors are tag moves and have been green). Keep the header comment
+  accurate: grouping covers minor and patch, majors come one per dependency, and `include: scope` stays out.
+- Check with `make -C go test-scripts` and the web gate spec that nothing in the gates depends on the grouping (it
+  should not: the dependency-only rule looks at changed files, not at the pull request).
+- Documentation at *done*: the root `README.md` and `go/README.md` passages on Dependabot say that weekly groups
+  carry minor and patch updates and that majors arrive one per dependency and are merged only when green or planned
+  as an entry; `go/CHANGELOG.md` *Release workflow*, `### Changed`.
+
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them

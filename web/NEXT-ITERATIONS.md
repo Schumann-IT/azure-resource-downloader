@@ -505,3 +505,40 @@ highlighter on the compare pages and a way to say *this side only* in the URL, l
 `resolveResource` and escaped like the YAML view. **Parked** because the YAML view already answers the question
 and one-sided rows are read far less often than differing pairs. **Revisit** if reviewers work through the
 one-sided rows of a comparison as routinely as the differing ones.
+
+### Idea: Upgrade the web toolchain — TypeScript 7, Jest 30 and a matching ts-jest
+
+Move the test and build toolchain to TypeScript 7 and Jest 30 (with `@types/jest` 30 and a `ts-jest` release that
+supports both), and bring `@types/node` back in line with the Node version the project actually targets
+(`engines`: Node ≥ 20; Dependabot proposed `@types/node` 26). **Parked** because the first grouped Dependabot pull
+request (#42, 2026-10-01) showed it is not a bump: `npm ci` failed with `ERESOLVE` — `ts-jest@29.4.14` declares
+`typescript <7` — and Jest 30 changes the ESM handling the suite relies on (`--experimental-vm-modules` for the
+ESM-only `markdown-it-anchor` and `shiki`). It needs a ts-jest release with TypeScript 7 support, a check of the
+`dynamicImport` escape hatch under the new compiler, and the lint toolchain (`typescript-eslint`) to follow.
+**Revisit when** a `ts-jest` release supports TypeScript 7 (or the suite moves to another transformer), or when a
+security advisory forces the compiler or Jest forward. Toolchain only — no rendered output may change.
+
+### Idea: Upgrade to NestJS 12
+
+Move `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/testing`, `@nestjs/cli` and
+`@nestjs/schematics` from 11 to 12 together. **Parked** because it was bundled into the failed grouped pull request
+(#42) and is a framework major: it touches bootstrap and `configureViews` (security headers, static assets, the
+`hbs` view engine), the controller routing order the representation prefixes depend on (`_resource`, `_drift`,
+`_export` before the `:tenant/*path` catch-all), Express integration and the e2e wiring through `AppModule`.
+**Revisit when** NestJS 11 leaves support or a security advisory requires 12; do it as its own entry, after the
+toolchain upgrade, with the e2e suite (routes, 404 kinds, headers, the read-only invariants) as the proof.
+
+### Idea: Upgrade the rendering stack behind a rendered-output golden test
+
+Move the libraries that decide what a reader sees — `markdown-it` 14 → 15, `markdown-it-anchor` 9 → 10, `shiki`
+3 → 4, `htmlparser2` 10 → 12, plus `js-yaml` 4 → 5 and `diff` 8 → 9 — but only behind a guard like the CLI's
+exported-YAML golden test: fixture Markdown and YAML rendered through the real `MarkdownRendererService`, section
+hooks, link rewriting, the Shiki highlighter, the YAML diff, the Confluence allowlist and the PDF content walker,
+compared byte for byte with checked-in output. **Parked** because these sit on the non-negotiables (one
+`markdown-it` instance with `html: true`, ESM loading through `dynamicImport`, heading slugs and anchors the drift
+and compare links target, the allowlist serialiser behind the Confluence export and the drift PDF) and a quiet
+change in rendered HTML would surface only where a test happens to look. Bundled into the failed grouped pull
+request (#42) with no such guard. **Revisit when** a security advisory touches one of them, or the toolchain
+upgrade has landed; build the golden test first (on today's versions, like the CLI did), then move the libraries
+one at a time, each proven by it.
+
