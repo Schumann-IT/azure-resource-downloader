@@ -103,7 +103,7 @@ This project is released independently of the documentation browser in `web/`: i
   (`notListed.reasons`), and `docs/generate.md` shows that reason. A download whose types all list empty — for
   example `--type Microsoft.Graph/organizationalBranding` on such a tenant — records the metadata and exits `0`
   instead of failing with *no resources to download*; that error is now reserved for a run where nothing could
-  be listed at all. No action needed: the next download records the branding as empty.
+  be listed at all. No action needed: the next download records the branding as empty. (#37)
 
 ### Breaking
 

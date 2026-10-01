@@ -5,6 +5,7 @@ status: done
 started: 2026-10-01
 finished: 2026-10-01
 branch: docs/pre-regeneration-review
+pr: 37
 changelog: Unreleased
 ---
 ## Treat unconfigured organizational branding as empty, and keep why a type could not be listed
