@@ -80,6 +80,29 @@ This project is released independently of the documentation browser in `web/`: i
   `exclude-type`, run `resource download` before the next `resource drift`** — drift refuses until the baseline
   carries the same exclusion. See `README.md` (*Excluding types per tenant*). (#38)
 
+#### Sign-in and access
+
+- **The dedicated-app sign-in happens once.** The device-code sign-in used to prompt on every run. Its tokens now
+  go to an OS-protected cache (the macOS Keychain, Windows DPAPI, or on Linux an encrypted file keyed in the
+  kernel keyring, lost at reboot) and the account is recorded — no token, no secret — under the user's config
+  directory, so later runs get their tokens silently until the refresh token expires or is revoked. Without a
+  usable store the run warns and keeps signing in every run; tokens are never written unencrypted. Deleting the
+  record forgets the session. **The profile's `tenant-id` must be the tenant GUID** — a domain never matches the
+  record and every run would prompt. See `README.md` (*Cached sign-in*).
+- **`--debug` shows what the session's Graph token can actually read.** It decodes the token's app and scopes and
+  marks every declared permission of the selected types as covered or missing, and reports whether a cached
+  session is active. It settled the open question whether a scoped `az login` could replace the dedicated app:
+  measured on a production tenant, such a token belongs to the Azure CLI app and covers 1 of 51 declared
+  permissions — it cannot; the README now says so instead of contradicting itself.
+- **A run checks access before it lists anything.** `resource download`, `resource drift` and `resource list` send
+  one cheap read per permission group the selection needs and, when the account is refused (401/403, or a failed
+  sign-in) — typically an expired PIM role — stop before listing or writing anything, with one readable line per
+  refused group naming the types it blocks and how to narrow the run. Until now such a run listed every type,
+  collected dozens of refusals and ended as a mostly empty, incomplete export. Exit `1` (drift: `2`); `--dry-run`
+  refuses the same way. **A full run by an account without Reader on the configured subscription is now refused
+  instead of skipping the ARM types: exclude them in the tenant profile (`exclude-type`) or select types with
+  `--type`.** See `README.md` (*Access check before listing*).
+
 ### Changed
 
 #### Release workflow
@@ -104,6 +127,15 @@ This project is released independently of the documentation browser in `web/`: i
   *Everything else*. A reader who reads only the summary now learns what to do; the evidence stays in the parts
   below. Neither template is hashed, so no regeneration is required: the next `docs generate-prompt` or `docs
   analyze-drift` run hands the agent the new structure. (#33)
+
+#### Sign-in and access
+
+- **Run output says what happened, once.** The log reads `Credential ready` up front and `Signed in user=…
+  tenant_id=…` once the first token is obtained, instead of an "Authentication successful" printed before a
+  device-code sign-in had even started. Intune's nested error bodies collapse to one line (`HTTP 401 Forbidden:
+  failed to list …`, without activity id and URL) in warnings and in `notListed.reasons`; Azure and other Graph
+  summaries are unchanged. An empty type is logged once at info level, without the misleading "insufficient
+  permissions" note, and the secret-resolution notice appears once per run.
 
 ### Fixed
 
@@ -136,6 +168,12 @@ This project is released independently of the documentation browser in `web/`: i
 - **`--type` help no longer claims to narrow the configured types.** It replaces the base file's `type` list for
   that run, as the README always said; the help text now says so, and that the tenant profile's `exclude-type`
   still applies. (#38)
+
+#### Sign-in and access
+
+- **No message names the removed sign-in flags any more.** The error for a profile with `client-id` but no
+  `tenant-id`, and the root help, still pointed at `--client-id` / `--tenant-id` and `AZURE_RD_TENANT_ID`,
+  which no longer exist; both name the tenant profile's keys now.
 
 ### Breaking
 

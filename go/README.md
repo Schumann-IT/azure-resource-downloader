@@ -32,6 +32,8 @@ reads. Every run after the first regenerates only what actually changed in the t
   - [`docs analyze-drift`](#docs-analyze-drift)
   - [`--debug`](#--debug)
 - [Authentication](#authentication)
+  - [Access check before listing](#access-check-before-listing)
+  - [Cached sign-in](#cached-sign-in)
   - [Create the app registration](#create-the-app-registration)
 - [Configuration & precedence](#configuration--precedence)
 - [Output layout](#output-layout)
@@ -183,9 +185,10 @@ file you can review, not typed ad-hoc.
 
 **Exit codes:** `0` when no resource *failed* — resources skipped for missing permissions, filtered out, or
 types that could not be listed do not fail the run; they are reported in the summary. `1` on any failed
-resource, a configuration error (unknown type, unreadable `--config`), or nothing listed at all (every type
-in scope failed to list). A run whose types all list empty is not an error: it fetches nothing, records the
-export metadata (marking earlier entries of those types absent) and exits `0`.
+resource, a configuration error (unknown type, unreadable `--config`), a refused
+[access check](#access-check-before-listing), or nothing listed at all (every type in scope failed to list). A
+run whose types all list empty is not an error: it fetches nothing, records the export metadata (marking
+earlier entries of those types absent) and exits `0`.
 Completeness is reported separately from the exit code: a run is *complete* when every type in scope listed,
 nothing was cancelled and every request produced a result — an incomplete run can still exit `0`, and
 `metadata.yaml` records which.
@@ -257,8 +260,8 @@ Under `--dry-run` the queries run and report, but no `audit.yaml` is written. Pr
 file's shape: [`resource audit`](#resource-audit), which also refreshes the file later.
 
 **Exit codes:** `0` on success whether or not drift was found; `2` when the question cannot be answered (no
-baseline, wrong tenant, incomparable configuration); `1` only when resources failed to fetch; `3` with
-`--exit-code` when drift was found.
+baseline, wrong tenant, incomparable configuration, a refused [access check](#access-check-before-listing));
+`1` only when resources failed to fetch; `3` with `--exit-code` when drift was found.
 
 ### `resource audit`
 
@@ -379,8 +382,9 @@ differs (“what is there” versus “what would be written”).
 
 Listing yields resource ids. When an export for the tenant already exists under `--output`, the display names
 recorded in its `resources/metadata.yaml` are joined in, and resources the export does not know yet are marked
-`new=true` — nothing is ever fetched merely to prettify the listing. A type that could not be listed is
-reported as **unknown**, never as empty, and does not fail the command. The command writes nothing, so
+`new=true` — nothing is ever fetched merely to prettify the listing. Like a download, the command first runs
+the [access check](#access-check-before-listing) and refuses (exit `1`) when the account lacks access; a type
+that still cannot be listed afterwards is reported as **unknown**, never as empty, and does not fail the command. The command writes nothing, so
 `--dry-run` changes nothing.
 
 This command's question is online-only, so unlike `resource types` it requires a session and fails up front
@@ -515,12 +519,19 @@ configuration this invocation resolved — config directory, base file, profile,
 be confirmed without running anything that writes; pass `--config-dir` and `--domain` to inspect that tenant's
 profile and the session it names.
 
-To see which app and scopes a CLI token actually carries:
+It also decodes the Microsoft Graph token the session actually mints — the CLI session's when the profile
+sets no `client-id`, the dedicated app's otherwise — and, for the selected types, marks every declared
+permission as covered or missing. The token itself is never printed:
 
-```bash
-az account get-access-token --resource https://graph.microsoft.com -o tsv --query accessToken \
-  | python3 -c "import sys,base64,json; t=sys.stdin.read().strip().split('.')[1]; t+='='*(-len(t)%4); c=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:c.get(k) for k in ['appid','app_displayname','scp']}, indent=2))"
 ```
+INFO Token cache status="active (record from 2026-10-01)"        # only with a client-id
+INFO Graph token app_id=04b07795-… app_display_name="Microsoft Azure CLI" scp="AuditLog.Read.All Directory.AccessAsUser.All Group.ReadWrite.All …"
+INFO Declared permission type=Microsoft.Graph/deviceConfigurations permission=DeviceManagementConfiguration.Read.All status=missing
+INFO Graph permission coverage covered=1 missing=50
+```
+
+A `ReadWrite` scope covers its `Read` counterpart; matching ignores case. The token cache line reads `active
+(record from <date>)`, `no session yet (the next run signs in once)` or `unavailable (<reason>)`.
 
 ## Authentication
 
@@ -535,13 +546,15 @@ Two credential paths exist; both yield delegated tokens for ARM and Microsoft Gr
 | Path | When | How |
 |---|---|---|
 | **Azure CLI session** (default) | Only ARM types selected (resource groups, storage accounts, VMs) | Reuses the `az login` token via `azidentity.AzureCLICredential`. No app registration involved. |
-| **Device-code sign-in to your app registration** | Any `Microsoft.Graph/*` type selected | `client-id` + `tenant-id` in the tenant's configuration profile. The tool prints a device code and URL; sign in in a browser as the same user. When a selected type needs an app and the profile has none, the run asks interactively and prints the snippet to save. |
+| **Device-code sign-in to your app registration** | Any `Microsoft.Graph/*` type selected | `client-id` + `tenant-id` in the tenant's configuration profile. The tool prints a device code and URL; sign in in a browser as the same user — **once**: later runs reuse the [cached session](#cached-sign-in) silently. When a selected type needs an app and the profile has none, the run asks interactively and prints the snippet to save. |
 
-Why the second path is unavoidable for Graph: the delegated Intune and policy scopes
-(`DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `Policy.Read.All`, …) are not
-consentable for Microsoft's first-party Azure CLI app, so a CLI token can never carry them. Every Graph handler
-in this tool therefore declares that it needs a dedicated app. When you run `download` (or a full export) and
-the flags are unset, the tool lists the affected types with the scopes each needs and **prompts for the client
+Why the second path is unavoidable for Graph: a token from the `az login` session always belongs to Microsoft's
+first-party Azure CLI app (`04b07795-…`) and carries that app's fixed scope set, which lacks the delegated Intune
+and policy scopes (`DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `Policy.Read.All`,
+…). Signing in with `az login --scope https://graph.microsoft.com/.default` does not change that — measured on a
+production tenant (2026-10-01), such a token covered 1 of the 51 declared permissions (`Group.Read.All`). Every
+Graph handler in this tool therefore declares that it needs a dedicated app; [`--debug`](#--debug) re-measures
+the coverage for any session. When you run `download` (or a full export) and the profile sets no `client-id`, the tool lists the affected types with the scopes each needs and **prompts for the client
 id and tenant id** (the tenant defaults to the CLI session's tenant; press Enter to accept). Refusing the prompt
 aborts the run — a partial export that silently skipped every Graph type would be worse than stopping.
 
@@ -559,8 +572,60 @@ marked incomplete, and nothing is inferred about its resources. A Microsoft Grap
 single resource skips that resource with a warning in the same way, whatever the error text says. Every reason
 reads `HTTP <status> <code>: <first line of the message>` for an Azure or Graph error; the
 `(hint: requires '…' permission …)` naming the scope is added only to a 401/403, so a 404, a throttling or a
-server error never reads as a permission problem. The token decoder under [`--debug`](#--debug) shows which scopes
-a CLI token actually carries.
+server error never reads as a permission problem — and Intune's nested error bodies collapse to the same one line
+(`HTTP 401 Forbidden: failed to list …`), without their activity id and URL. [`--debug`](#--debug) shows which
+scopes a token actually carries.
+
+The log says `Credential ready` when the credential is built and `Signed in user=… tenant_id=…` once the first
+token has actually been obtained — with a device-code sign-in, that is when the prompt was answered.
+
+### Access check before listing
+
+`resource download`, `resource drift` and `resource list` check access **before listing anything**: one cheap
+read (`$top=1`, `$select=id` where the endpoint allows it) per permission group the selected types need — the
+Intune groups (`DeviceManagementConfiguration`, `…Apps`, `…ServiceConfig`, `…Scripts`, `…RBAC`,
+`…ManagedDevices`), `Policy`, `Agreement`, `Group`, `Organization`, `OnPremDirectorySynchronization`, and the ARM
+types as one group when the run has a subscription. A token can carry every scope and still be refused: the
+signed-in account also needs its directory and Intune roles, and a PIM-activated role expires.
+
+- **Refused** is a typed `401` or `403`, or a failed sign-in. The run then stops before any listing or write —
+  `--dry-run` included, the `drift/` tree untouched — with one `ERROR Access refused` line per refused group (the
+  group, the probed type, the status and service code, the types it blocks and a hint: *no Intune role for this
+  account (a PIM-activated role may have expired)*, *no Azure RBAC Reader role on subscription …*, or the
+  service's own message) and a closing line on narrowing the run with `--type`, the base file's `type` or the
+  profile's [`exclude-type`](#excluding-types-per-tenant). Exit `1` (drift: `2`). Ctrl+C during the check ends
+  the run the same way (`access check interrupted`).
+- **Not a refusal**: a 404 (an unconfigured singleton), 400, throttling, a server error, a timeout or an untyped
+  error — logged at debug level, and the listing decides as before.
+- **Not checked**: `--resource-id` / `--resource-group` runs (they list nothing), `resource types`, `resource
+  audit` and `--debug`.
+
+A full run by an account **without Reader on the configured subscription** is therefore refused instead of
+silently skipping the ARM types — exclude them in the tenant profile, or select types with `--type`.
+
+### Cached sign-in
+
+The device-code sign-in happens **once**. Its tokens go to an OS-protected cache named `azure-rd`, and the
+account is recorded — no token, no secret — in
+`<user config dir>/azure-rd/auth/<tenant-id>-<client-id>.json` (macOS: `~/Library/Application Support/…`; mode
+`0600` in a `0700` directory, never in the repository, the config directory or `output/`). Later runs get their
+tokens silently until the refresh token expires or is revoked; then the prompt appears once more.
+
+| Platform | Token store |
+|---|---|
+| macOS | the login Keychain (items `azure-rd` and `azure-rd.cae`, account `MSALCache`) — builds with cgo, the native default |
+| Windows | a DPAPI-encrypted file under `%LOCALAPPDATA%\.IdentityService\` |
+| Linux | an AES-encrypted file under `~/.cache/.IdentityService/`, its key in the kernel keyring — **lost at reboot** |
+
+Without a usable store (another platform, a build without cgo on macOS, a container without a keyring) the run
+warns `Token cache unavailable: <reason>; signing in on every run` and keeps prompting on every run — tokens are
+never stored unencrypted. The profile's `tenant-id` must be the tenant **GUID**: a domain never matches the
+record, so every run would prompt again.
+
+To **forget a session**, delete the record file; to remove the tokens too, delete the store items (macOS:
+`security delete-generic-password -s azure-rd -a MSALCache` and the same for `azure-rd.cae`). To invalidate the
+refresh tokens everywhere, revoke the user's sign-in sessions in Entra. A failed sign-in ends the run with
+`device-code sign-in failed: <cause>`; the other workers of that run do not prompt again.
 
 The tenant's **Entra default domain** (e.g. `contoso.onmicrosoft.com`) is resolved through the ARM Tenants API
 for the signed-in identity (preferring the configured tenant, then the subscription's tenant) and becomes the
@@ -677,8 +742,8 @@ permissions**, then **Grant admin consent**. The permission only lets the app ac
 workspace still needs the Log Analytics Reader role on it.
 
 These are **delegated** permissions: the token acts as the signed-in user, who still needs the matching
-directory / Intune / Azure RBAC roles. If a Graph call fails with "required scopes are missing" on the CLI
-path (ARM-only runs), refresh the session with `az logout && az login --scope https://graph.microsoft.com/.default`.
+directory / Intune / Azure RBAC roles — which the [access check](#access-check-before-listing) verifies before
+a run lists anything. A scoped `az login` cannot supply the Graph scopes instead of the app (see above).
 
 ## Configuration & precedence
 
