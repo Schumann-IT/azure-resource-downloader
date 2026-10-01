@@ -2,10 +2,11 @@
 // builds the worker/transformer/filter constructions, verifies the session,
 // runs the dedicated-app probe and prompt, authenticates, resolves the tenant
 // and the export directory, builds the handler registry, checks access before
-// listing, and builds the fetch requests. It exists so the commands that do the same list, fetch and
-// transform work (resource download and resource drift) share one preparation
-// and are incapable of diverging in authentication or selection semantics.
-// Flag groups and interactive prompts stay in internal/cmdutil.
+// listing, and builds the fetch requests. It exists so the commands that do
+// the same list, fetch and transform work (resource download and resource
+// drift) share one preparation and are incapable of diverging in
+// authentication or selection semantics. Flag groups and interactive prompts
+// stay in internal/cmdutil.
 package runprep
 
 import (

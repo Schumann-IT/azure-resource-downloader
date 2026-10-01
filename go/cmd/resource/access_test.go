@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -133,6 +136,19 @@ func TestAccessRefusedRunWritesNothing(t *testing.T) {
 		for _, dryRun := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s dry-run=%v", c.name, dryRun), func(t *testing.T) {
 				output := t.TempDir()
+				seeded := map[string]string{
+					filepath.Join("example.onmicrosoft.com", "drift", "metadata.yaml"):     "drift: observation\n",
+					filepath.Join("example.onmicrosoft.com", "resources", "metadata.yaml"): "resources: export\n",
+				}
+				for rel, content := range seeded {
+					path := filepath.Join(output, rel)
+					if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
 				viper.Reset()
 				t.Cleanup(viper.Reset)
 				viper.Set("output", output)
@@ -147,12 +163,27 @@ func TestAccessRefusedRunWritesNothing(t *testing.T) {
 				if code := cmdutil.ExitCode(err); code != c.wantCode {
 					t.Errorf("exit code %d, want %d", code, c.wantCode)
 				}
-				entries, readErr := os.ReadDir(output)
-				if readErr != nil {
-					t.Fatal(readErr)
+				found := map[string]string{}
+				walkErr := filepath.WalkDir(output, func(path string, d fs.DirEntry, err error) error {
+					if err != nil || d.IsDir() {
+						return err
+					}
+					b, readErr := os.ReadFile(path)
+					if readErr != nil {
+						return readErr
+					}
+					rel, relErr := filepath.Rel(output, path)
+					if relErr != nil {
+						return relErr
+					}
+					found[rel] = string(b)
+					return nil
+				})
+				if walkErr != nil {
+					t.Fatal(walkErr)
 				}
-				if len(entries) != 0 {
-					t.Errorf("a refused run wrote %d entries under the output directory", len(entries))
+				if !maps.Equal(found, seeded) {
+					t.Errorf("a refused run changed the output tree: got %v, want %v", found, seeded)
 				}
 			})
 		}

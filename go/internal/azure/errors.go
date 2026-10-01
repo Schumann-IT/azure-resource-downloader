@@ -176,22 +176,31 @@ func ErrorSummary(err error) string {
 	}
 
 	if status, ok := HTTPStatus(err); ok {
-		summary := fmt.Sprintf("HTTP %d", status)
-		if code := errorCode(err); code != "" {
-			summary += " " + code
-		}
-		if line := stripHint(firstLine(full)); line != "" {
-			summary += ": " + line
-		}
-		if hint != "" && isAuthStatus(status) {
-			summary += " " + hint
-		}
-		return summary
+		return typedSummary(err, status, full, hint)
 	}
+	return untypedSummary(err, full, hint)
+}
 
-	// Fall back to the first line of the error message. If the dropped
-	// remainder is a JSON error body with a "Message" field (Intune-style
-	// Graph errors), surface that message so the actual cause is not lost.
+// typedSummary renders "HTTP <status>[ <code>][: <first line>]" and appends the
+// permission hint only for a 401 or 403.
+func typedSummary(err error, status int, full, hint string) string {
+	summary := fmt.Sprintf("HTTP %d", status)
+	if code := errorCode(err); code != "" {
+		summary += " " + code
+	}
+	if line := stripHint(firstLine(full)); line != "" {
+		summary += ": " + line
+	}
+	if hint != "" && isAuthStatus(status) {
+		summary += " " + hint
+	}
+	return summary
+}
+
+// untypedSummary falls back to the first line of the error message. If the
+// dropped remainder is a JSON error body with a "Message" field (Intune-style
+// Graph errors), that message is surfaced so the actual cause is not lost.
+func untypedSummary(err error, full, hint string) string {
 	line := firstLine(full)
 	if line != full {
 		if m := jsonMessagePattern.FindStringSubmatch(full); m != nil {

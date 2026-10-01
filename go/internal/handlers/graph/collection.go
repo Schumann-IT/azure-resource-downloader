@@ -50,9 +50,9 @@ type GraphCollectionHandler struct {
 	// collection's first page with a single item. It lets the access check
 	// that runs before a listing test a permission group without listing a
 	// whole collection. Unset, the access check falls back to listIDs.
-	probe          func(ctx context.Context) error
-	fetchItem      func(ctx context.Context, itemID string) (serialization.Parsable, error)
-	displayName    func(item serialization.Parsable) string
+	probe       func(ctx context.Context) error
+	fetchItem   func(ctx context.Context, itemID string) (serialization.Parsable, error)
+	displayName func(item serialization.Parsable) string
 	// normalize, when set, is applied to a resource's serialized property map
 	// before it becomes the written YAML. It lets a specific type strip volatile,
 	// server-generated fields that change between reads (e.g. a singleton whose

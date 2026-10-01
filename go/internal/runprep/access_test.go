@@ -89,10 +89,10 @@ func (h *stubHandler) Fetch(context.Context, string) (interface{}, error) { retu
 func (h *stubHandler) Transform(interface{}) (*models.TransformedResource, error) {
 	return nil, errors.New("not used")
 }
-func (h *stubHandler) GetDocumentationPrompt() string  { return "" }
-func (h *stubHandler) RequiresDedicatedApp() bool      { return true }
-func (h *stubHandler) RequiredPermissions() []string   { return h.perms }
-func (h *stubHandler) HasAccessProbe() bool            { return h.hasProbe }
+func (h *stubHandler) GetDocumentationPrompt() string { return "" }
+func (h *stubHandler) RequiresDedicatedApp() bool     { return true }
+func (h *stubHandler) RequiredPermissions() []string  { return h.perms }
+func (h *stubHandler) HasAccessProbe() bool           { return h.hasProbe }
 func (h *stubHandler) ProbeAccess(ctx context.Context) error {
 	h.probes.Add(1)
 	if h.block {
