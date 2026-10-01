@@ -20,8 +20,8 @@ and lights up the sidebar's per-item context.
 
 > Promoted from the parked idea *emit `summary:` in the generated document frontmatter*: the plumbing is complete
 > on both sides (`docFrontmatter.Summary`, `GenerateIndex`, the browser's per-item context), the field is absent
-> from every document only because the template never asks for it, and the web idea *a name filter and per-item
-> context in the sidebar* waits on it. `platformGroup` / `functionGroup`, already required but empty in the
+> from every document only because the template never asks for it, and the web idea *per-item context in the sidebar*
+> waits on it. `platformGroup` / `functionGroup`, already required but empty in the
 > reference exports that predate them, fill in on the same regeneration.
 >
 > **Review findings (2026-10-01).** `generate_prompt_template.md:151-154` puts the source filename under the title
