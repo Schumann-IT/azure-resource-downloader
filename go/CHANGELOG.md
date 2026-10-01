@@ -152,6 +152,15 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Documentation and drift analysis
 
+- **Per-type documentation metadata corrected and completed.** Every resource type's documentation prompt now
+  carries metadata checked field by field against Microsoft Learn: what the type is and what the export actually
+  contains, the settings that matter, lifecycle facts with a source, the types it really references (role scope
+  tags on every scope-tagged Intune type), type-specific guidance instead of generic or retired links, a link to the
+  permissions page of the operation it calls, and — for 17 types — the admin-center blade where it is managed.
+  Reference links now match the Graph API version the handler calls, and `organizationalBranding` is documented as
+  the tenant-wide singleton it is. A registry-wide test keeps the metadata from decaying again. Every type's prompt
+  changes, so **regenerate the documentation**. (#52)
+
 - **Both management summaries now lead with the verdict.** The tenant summary the documentation agent writes
   opens with short bold-led paragraphs on what is managed, whether the settings are consistent and whether the
   configuration is actually in force, and closes with a **bottom line**: does anything demand action before the
@@ -184,6 +193,13 @@ This project is released independently of the documentation browser in `web/`: i
   archive file of the web project never counts, and the failure message is unchanged. (#36)
 
 #### Downloading and export metadata
+
+- **Four types declared a read scope Microsoft does not list for them.** `mobileThreatDefenseConnectors` and
+  `intuneBrandingProfiles` now require `DeviceManagementServiceConfig.Read.All`, `deviceComplianceScripts`
+  `DeviceManagementScripts.Read.All` and `notificationMessageTemplates` `DeviceManagementConfiguration.Read.All` —
+  in the permission errors, the dedicated-app consent message and the access check's grouping alike. Windows
+  platform scripts also declare `DeviceManagementConfiguration.Read.All`, which reading their assignments needs.
+  All of these scopes are already in the documented dedicated-app scope list, so no new consent is needed. (#52)
 
 - **A tenant without organizational branding no longer makes every export incomplete.** Graph answers 404 when
   no default branding is configured; the CLI read that as *could not be listed* and blamed a missing permission,

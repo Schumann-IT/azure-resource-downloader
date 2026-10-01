@@ -6,16 +6,20 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/deviceManagement
 
-About this resource type: Tenant-wide Intune device management settings and configuration.
+About this resource type: The tenant's Intune deviceManagement root object; the export carries only its identifiers and limits (intuneAccountId, maximumDepTokens), not configurable settings.
 
 Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Tenant-wide Intune settings singleton; changes apply to the whole tenant immediately.
+- Informational singleton: nothing configurable is exported (the handler reads /deviceManagement without $select).
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicemanagementsettings?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference#devicemanagementserviceconfigreadall
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+- Microsoft.Graph/depOnboardingSettings (maximumDepTokens limits the number of ADE tokens)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -36,7 +40,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive settings and any deviations from recommended baselines, including the tenant-wide security impact.
-- give particular attention to: settings, intuneAccountId.
+- give particular attention to: intuneAccountId, maximumDepTokens.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

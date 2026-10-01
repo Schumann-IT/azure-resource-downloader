@@ -26,13 +26,27 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 		azureType:      "Microsoft.Graph/targetedManagedAppConfigurations",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.",
-			KeySettings:         []string{"customSettings", "appGroupType"},
+			Purpose:             "An Intune app configuration policy for managed apps, delivered through the app protection (MAM) channel to Intune SDK-integrated apps regardless of the device's enrollment state.",
+			KeySettings:         []string{"customSettings", "appGroupType", "targetedAppManagementLevels"},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           []string{"App configuration applies at the managed app next check-in; deleting the policy stops delivering the settings (apps keep the last received values until reinstalled)."},
-			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (targeted apps)", "Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Managed apps check for app configuration every 30 minutes when an app protection policy also targets the user, otherwise every 720 minutes.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/assignmentFilters (managed-app filters)",
+				"Microsoft.Graph/iosManagedAppProtections (an app protection policy for the user shortens the check-in interval)",
+				"Microsoft.Graph/androidManagedAppProtections (same)",
+				"Microsoft.Graph/windowsManagedAppProtections (same)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-targetedmanagedappconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-targetedmanagedappconfiguration-list?view=graph-rest-beta",
+				AdminCenter:  "https://intune.microsoft.com/#view/Microsoft_Intune_Apps/ConfigPoliciesMenu/~/appConfigurationPolicies",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/app-management/configuration/configure-managed-apps",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

@@ -32,18 +32,39 @@ func (h *VirtualMachineHandler) GetType() string {
 
 // GetDocumentationPrompt returns the dedicated LLM documentation prompt for this resource type.
 func (h *VirtualMachineHandler) GetDocumentationPrompt() string {
-	return models.BuildDocumentationPrompt(models.ResourceDocumentation{
-		Template:            armPromptTemplateText,
-		AzureType:           h.GetType(),
-		Purpose:             "An Azure Virtual Machine, including its compute size, OS profile, storage, networking and security configuration.",
-		KeySettings:         []string{"hardwareProfile.vmSize", "storageProfile.osDisk", "osProfile", "networkProfile", "securityProfile"},
-		RequiredPermissions: []string{"Reader (Azure RBAC role on the subscription)"},
-		Lifecycle:           []string{"Deallocating stops compute billing but keeps disks; deleting the VM can orphan NICs and disks unless delete-with-VM is configured.", "Keep OS patching and backup policies in place."},
-		Links: models.ResourceLinks{
-			EndpointDocs:  "https://learn.microsoft.com/en-us/rest/api/compute/virtual-machines",
-			BestPractices: []string{"https://learn.microsoft.com/en-us/azure/virtual-machines/security-policy"},
+	return models.BuildDocumentationPrompt(h.Documentation())
+}
+
+// Documentation returns the per-type documentation metadata the prompt is built
+// from. It satisfies models.Documented.
+func (h *VirtualMachineHandler) Documentation() models.ResourceDocumentation {
+	return models.ResourceDocumentation{
+		Template:  armPromptTemplateText,
+		AzureType: h.GetType(),
+		Purpose:   "An Azure Virtual Machine with its size, OS profile, storage profile (image and OS disk) and network interfaces.",
+		KeySettings: []string{
+			"vmSize",
+			"osProfile",
+			"storageProfile.osDisk",
+			"storageProfile.imageReference",
+			"networkInterfaces",
 		},
-	})
+		RequiredPermissions: []string{"Reader (Azure RBAC role on the subscription)"},
+		Lifecycle: []string{
+			"Deallocating stops compute billing but disks are still billed; a VM stopped from inside the guest OS stays allocated and keeps being billed.",
+			"Deleting the VM can orphan NICs and disks unless their delete option (for example storageProfile.osDisk.deleteOption Delete) is set.",
+			"Unmanaged disks were retired on 31 March 2026: a VM whose OS disk is not a managed disk can no longer be started.",
+			"Keep OS patching and backup policies in place.",
+		},
+		Links: models.ResourceLinks{
+			EndpointDocs: "https://learn.microsoft.com/en-us/rest/api/compute/virtual-machines",
+			Permissions:  "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader",
+			BestPractices: []string{
+				"https://learn.microsoft.com/en-us/azure/virtual-machines/security-policy",
+				"https://learn.microsoft.com/en-us/azure/security/fundamentals/iaas",
+			},
+		},
+	}
 }
 
 // List returns the IDs of all virtual machines in the subscription.

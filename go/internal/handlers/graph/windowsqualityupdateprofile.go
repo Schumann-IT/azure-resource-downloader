@@ -23,13 +23,28 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 		azureType:      "Microsoft.Graph/windowsQualityUpdateProfiles",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
-			KeySettings:         []string{"expeditedUpdateSettings", "releaseDateDisplayName"},
+			Purpose: "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
+			KeySettings: []string{
+				"expeditedUpdateSettings (qualityUpdateRelease, daysUntilForcedReboot)",
+				"releaseDateDisplayName",
+				"deployableContentDisplayName",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Expedites or pauses quality updates for targeted devices; deleting the profile returns devices to their default update cadence."},
-			RelatedTypes:        []string{"Microsoft.Graph/windowsFeatureUpdateProfiles", "Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Expedites one quality update per policy: it bypasses ring deferrals without pausing or changing the monthly update policies, and skips devices that already have that update or a newer one.",
+				"Deleting the policy doesn't uninstall a completed update; in-progress installs are cancelled on a best-effort basis.",
+				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement (Pro, Enterprise or Education, not LTSC) and Entra joined or hybrid joined devices; the separate Windows quality update policies (monthly updates, hotpatch) are a different resource that is not exported.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/deviceConfigurations (update rings whose deferral the expedite bypasses)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsqualityupdateprofile?view=graph-rest-beta",
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsqualityupdateprofile?view=graph-rest-beta",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsqualityupdateprofile-list?view=graph-rest-beta",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-expeditedwindowsqualityupdatesettings?view=graph-rest-beta",
+				BestPractices:   []string{"https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-expedite-policy"},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

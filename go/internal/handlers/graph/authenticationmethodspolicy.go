@@ -38,12 +38,25 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 		documentation: models.ResourceDocumentation{
 			Template:            singletonPromptTemplateText,
 			Purpose:             "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
-			KeySettings:         []string{"authenticationMethodConfigurations", "registrationEnforcement"},
+			KeySettings:         []string{"authenticationMethodConfigurations", "registrationEnforcement", "policyMigrationState"},
 			RequiredPermissions: []string{"Policy.Read.All"},
-			Lifecycle:           []string{"Tenant-wide singleton controlling which authentication methods are enabled for MFA/SSPR/passwordless; changes take effect tenant-wide within minutes.", "Microsoft is migrating the legacy MFA and SSPR policies into this policy."},
-			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies", "Microsoft.Graph/authenticationStrengthPolicies"},
+			Lifecycle: []string{
+				"Tenant-wide singleton controlling which authentication methods users can register and use for MFA, SSPR and passwordless sign-in.",
+				"Since 30 September 2025 authentication methods can no longer be managed in the legacy MFA and SSPR policies; policyMigrationState shows whether legacy settings are still respected (premigration, migrationInProgress) or ignored (migrationComplete).",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/conditionalAccessPolicies",
+				"Microsoft.Graph/authenticationStrengthPolicies (strengths can only use methods enabled here)",
+				"Microsoft.Graph/groups (method include and exclude targets)",
+			},
+			SubtypeNote: "authenticationMethodConfigurations is polymorphic by @odata.type (email, fido2, microsoftAuthenticator, sms, softwareOath, temporaryAccessPass, voice, x509Certificate and others, each an ...AuthenticationMethodConfiguration): each carries state and excludeTargets, most add includeTargets and method-specific settings - document each method against its own schema.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodspolicy?view=graph-rest-1.0",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/authenticationmethodspolicy-get?view=graph-rest-1.0",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-methods-manage",
+					"https://learn.microsoft.com/en-us/entra/identity/authentication/how-to-authentication-methods-manage",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

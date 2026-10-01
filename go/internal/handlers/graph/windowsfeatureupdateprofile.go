@@ -23,13 +23,33 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 		azureType:      "Microsoft.Graph/windowsFeatureUpdateProfiles",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
-			KeySettings:         []string{"featureUpdateVersion", "rolloutSettings", "installLatestWindows10OrHigher"},
+			Purpose: "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
+			KeySettings: []string{
+				"featureUpdateVersion",
+				"rolloutSettings",
+				"installLatestWindows10OnWindows11IneligibleDevice",
+				"installFeatureUpdatesOptional",
+				"endOfSupportDate",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Holds devices on the specified Windows feature version; deleting or unassigning releases devices to other update policies.", "Track end-of-service dates of the pinned version."},
-			RelatedTypes:        []string{"Microsoft.Graph/windowsQualityUpdateProfiles", "Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Holds devices on the specified feature version and never downgrades; track endOfSupportDate, versions shown as not supported no longer deploy.",
+				"When no feature update policy applies any more, the device stays enrolled in Windows Autopatch and gets no feature update until it is assigned a new profile or is unenrolled.",
+				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement (Pro, Enterprise or Education, not LTSC), Entra joined or hybrid joined devices sending at least Required diagnostic data, and update rings with feature update deferral 0.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/deviceConfigurations (update rings: featureUpdatesDeferralPeriodInDays, featureUpdatesPaused)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsfeatureupdateprofile?view=graph-rest-beta",
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsfeatureupdateprofile?view=graph-rest-beta",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsfeatureupdateprofile-list?view=graph-rest-beta",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsupdaterolloutsettings?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-updates/windows/manage-feature-updates",
+					"https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-feature-update-policy",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

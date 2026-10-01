@@ -24,13 +24,26 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 		azureType:      "Microsoft.Graph/appleUserInitiatedEnrollmentProfiles",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Apple user-initiated enrollment profile that controls account-driven vs. device enrollment for iOS/macOS.",
-			KeySettings:         []string{"platform", "enrollmentType", "priority"},
+			Purpose:             "An Intune enrollment type profile that decides how assigned users enroll iOS/iPadOS devices: device enrollment, account-driven user enrollment, web-based device enrollment or user choice.",
+			KeySettings:         []string{"defaultEnrollmentType", "availableEnrollmentTypeOptions", "platform", "priority"},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Profile changes affect only future user-initiated enrollments; already-enrolled devices keep their enrollment type."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Profiles target user groups only (device groups aren't supported); when several apply, the higher-priority profile wins (0 is highest).",
+				"User enrollment with Company Portal is no longer supported for newly enrolled devices; account-driven user enrollment needs iOS/iPadOS 15 or later.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target user groups)",
+				"Microsoft.Graph/applePushNotificationCertificate (prerequisite)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleuserinitiatedenrollmentprofile?view=graph-rest-beta",
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleuserinitiatedenrollmentprofile?view=graph-rest-beta",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-enrollment-appleuserinitiatedenrollmentprofile-list?view=graph-rest-beta",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-appleownertypeenrollmenttype?view=graph-rest-beta",
+				AdminCenter:     "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesIosMenu/~/iosEnrollment",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-account-driven-user",
+					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-web-based-ios",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

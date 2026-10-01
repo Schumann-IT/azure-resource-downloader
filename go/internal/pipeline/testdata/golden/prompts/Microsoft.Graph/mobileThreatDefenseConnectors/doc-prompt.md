@@ -6,19 +6,24 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/mobileThreatDefenseConnectors
 
-About this resource type: An Intune Mobile Threat Defense connector integrating a third-party MTD partner.
+About this resource type: An Intune Mobile Threat Defense connector to an MTD partner (a third-party vendor, Microsoft Defender for Endpoint or Windows Security Center) whose device threat data feeds compliance and app protection evaluation.
 
 Permissions required to read this resource type:
-- DeviceManagementConfiguration.Read.All
+- DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels.
+- If the partner sends no heartbeat for partnerUnresponsivenessThresholdInDays the connector becomes unresponsive and Intune ignores the partner's compliance state; the *DeviceBlockedOnMissingPartnerData settings decide whether devices can be compliant before partner data arrives.
+- Only one partner per platform can feed app protection (MAM) evaluation.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-onboarding-mobilethreatdefenseconnector-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/mobile-threat-defense/enable-connector
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)
+- Microsoft.Graph/iosManagedAppProtections (maximum allowed threat level)
+- Microsoft.Graph/androidManagedAppProtections (maximum allowed threat level)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -35,7 +40,7 @@ References:
 Lifecycle and operations:
 - explain how records of this type appear and disappear (registration/sync/deletion), what a stale or error state means, and what happens downstream when the record is removed.
 - recommend a review cadence.
-- give particular attention to: androidEnabled, iosEnabled, windowsEnabled, partnerState.
+- give particular attention to: androidEnabled, iosEnabled, macEnabled, windowsEnabled, partnerState, partnerUnresponsivenessThresholdInDays, androidDeviceBlockedOnMissingPartnerData, iosDeviceBlockedOnMissingPartnerData, macDeviceBlockedOnMissingPartnerData, windowsDeviceBlockedOnMissingPartnerData, androidMobileApplicationManagementEnabled, iosMobileApplicationManagementEnabled, lastHeartbeatDateTime.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance.

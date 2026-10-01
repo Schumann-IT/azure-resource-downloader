@@ -963,8 +963,12 @@ recorded as the type's `promptSha256`, so editing a template invalidates exactly
 types on the next `generate-prompt`.
 
 Each prompt is built from a shared body plus per-type metadata declared by the handler (purpose, subtype
-guidance, required permissions, lifecycle notes, Microsoft Learn links, related types, key settings, embedded
-payloads to decode). Seven template families cover the type shapes:
+guidance, required permissions, lifecycle notes, related types, key settings, embedded payloads to decode, and
+reference links: the Microsoft Learn API reference, schema and permissions pages and type-specific guidance, plus
+an admin-center deep link where a Learn page cites the blade). A registry-wide test keeps that metadata honest:
+Learn-only reference links, admin-center links only on `intune.microsoft.com`, `entra.microsoft.com` or
+`portal.azure.com`, API-reference versions that match the Graph client the handler calls, and every scope named
+in an error hint declared. Seven template families cover the type shapes:
 
 | Family | Types | What differs |
 |---|---|---|
@@ -972,7 +976,7 @@ payloads to decode). Seven template families cover the type shapes:
 | `referenced` | `assignmentFilters`, `roleScopeTags`, `roleDefinitions`, `notificationMessageTemplates`, `namedLocations`, `authenticationStrengthPolicies`, `termsOfUseAgreements` | objects other policies reference *by id*: explains what referencing them means; templates carry the `Used by` block |
 | `group` | `groups` | dynamic membership rule explained clause by clause; `Targeted by` block |
 | `record` | `windowsAutopilotDeviceIdentities`, `deviceCategories`, `mobileThreatDefenseConnectors`, `ndesConnectors` | short registry-record layout, no settings payload, no grouping axes |
-| `singleton` | `deviceManagement`, `organization`, `onPremisesSynchronization`, `authenticationMethodsPolicy`, `authorizationPolicy` | tenant-wide single objects |
+| `singleton` | `deviceManagement`, `organization`, `organizationalBranding`, `onPremisesSynchronization`, `authenticationMethodsPolicy`, `authorizationPolicy` | tenant-wide single objects |
 | `credential` | `applePushNotificationCertificate`, `depOnboardingSettings`, `vppTokens` | expiry and renewal obligations; masked token values |
 | `arm` (`internal/handlers/arm/arm_prompt.tmpl`) | the three ARM types | ARM-specific metadata and references |
 
@@ -1122,7 +1126,7 @@ no subscription is available.
 | `Microsoft.Graph/termsOfUseAgreements` | `Agreement.Read.All` | The ToU PDFs are embedded base64. |
 | `Microsoft.Graph/organization` | `Organization.Read.All` | v1.0 tenant information object. |
 | `Microsoft.Graph/organizationalBranding` | `OrganizationalBranding.Read.All` (+ `Organization.Read.All`) | Singleton under the organization, per-locale `localizations` expanded. A tenant without a default branding (Graph answers 404) lists the type as empty — no file, and the run stays complete. |
-| `Microsoft.Graph/onPremisesSynchronization` | `OnPremDirectorySynchronization.Read.All` | v1.0. One file in hybrid tenants, none in cloud-only ones. |
+| `Microsoft.Graph/onPremisesSynchronization` | `OnPremDirectorySynchronization.Read.All` | v1.0. One file per tenant, cloud-only tenants included. |
 | `Microsoft.Graph/groups` | `Group.Read.All` | v1.0. The **full** directory group list incl. dynamic membership rules — large in big tenants. Documented only when referenced by an assignment. |
 
 **Intune — device configuration and compliance** — `DeviceManagementConfiguration.Read.All`
@@ -1138,14 +1142,15 @@ no subscription is available.
 | `Microsoft.Graph/reusablePolicySettings` | Reusable settings referenced by id from Endpoint Security / Settings Catalog policies. |
 | `Microsoft.Graph/assignmentFilters` | Referenced by assignments; resolved in the documentation. |
 | `Microsoft.Graph/windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles` | Windows Update profiles. |
-| `Microsoft.Graph/deviceComplianceScripts` | Windows custom-compliance detection scripts (base64 `detectionScriptContent`). Distinct from Remediations. |
-| `Microsoft.Graph/mobileThreatDefenseConnectors` | MTD partner connectors; no display name, named by partner id. |
+| `Microsoft.Graph/notificationMessageTemplates` | `$expand=localizedNotificationMessages` (best-effort) so per-locale subject and body are inlined. Referenced by compliance policies. |
 | `Microsoft.Graph/ndesConnectors` | NDES/SCEP connector state; named by friendly name, falling back to id. |
 
 **Intune — scripts** — `DeviceManagementScripts.Read.All`. Script bodies are base64 (`scriptContent`, or
 `detectionScriptContent`/`remediationScriptContent` for Remediations); the `base64-decode` transformer decodes
 them inline by default or, in `file` mode, into `.ps1`/`.sh` sidecars named after the resource's `fileName`
-(`<name>_detection.ps1` / `<name>_remediation.ps1` for Remediations).
+(`<name>_detection.ps1` / `<name>_remediation.ps1` for Remediations). Reading the platform scripts' assignments
+(`…/deviceManagementScripts/{id}/assignments`) also needs `DeviceManagementConfiguration.Read.All`, already part of
+the dedicated-app scope list.
 
 | Type | Notes |
 |---|---|
@@ -1153,6 +1158,7 @@ them inline by default or, in `file` mode, into `.ps1`/`.sh` sidecars named afte
 | `Microsoft.Graph/deviceShellScripts` | macOS shell scripts. Assignments read via `$expand=assignments` (no `/assignments` route in beta). |
 | `Microsoft.Graph/deviceCustomAttributeShellScripts` | macOS custom attribute scripts; same assignment caveat. |
 | `Microsoft.Graph/deviceHealthScripts` | Remediations (detection + remediation script pair). |
+| `Microsoft.Graph/deviceComplianceScripts` | Windows custom-compliance detection scripts (base64 `detectionScriptContent`). Distinct from Remediations. |
 
 **Intune — apps and app protection** — `DeviceManagementApps.Read.All`
 
@@ -1164,7 +1170,6 @@ them inline by default or, in `file` mode, into `.ps1`/`.sh` sidecars named afte
 | `Microsoft.Graph/mobileAppConfigurations` | Managed-device app configuration, platform-polymorphic. |
 | `Microsoft.Graph/targetedManagedAppConfigurations` | Managed-app configuration, `$expand=apps`. |
 | `Microsoft.Graph/vppTokens` | Apple VPP tokens; the token secret is masked by the service. |
-| `Microsoft.Graph/intuneBrandingProfiles` | Company Portal branding. |
 
 **Intune — enrollment, Autopilot and tenant** — `DeviceManagementServiceConfig.Read.All` unless noted
 
@@ -1177,8 +1182,9 @@ them inline by default or, in `file` mode, into `.ps1`/`.sh` sidecars named afte
 | `Microsoft.Graph/depOnboardingSettings` | Apple ADE/DEP tokens; `enrollmentProfiles` child collection attached. |
 | `Microsoft.Graph/appleUserInitiatedEnrollmentProfiles` | |
 | `Microsoft.Graph/termsAndConditions` | Intune terms and conditions. |
-| `Microsoft.Graph/notificationMessageTemplates` | `$expand=localizedNotificationMessages` (best-effort) so per-locale subject and body are inlined. Referenced by compliance policies. |
-| `Microsoft.Graph/deviceManagement` | Intune tenant settings singleton. |
+| `Microsoft.Graph/deviceManagement` | Intune `deviceManagement` root singleton; the export carries only its identifiers and limits (`intuneAccountId`, `maximumDepTokens`), not configurable settings. |
+| `Microsoft.Graph/mobileThreatDefenseConnectors` | MTD partner connectors; no display name, named by partner id. |
+| `Microsoft.Graph/intuneBrandingProfiles` | Company Portal branding. |
 | `Microsoft.Graph/deviceCategories` | `DeviceManagementManagedDevices.Read.All`. |
 | `Microsoft.Graph/roleScopeTags` | `DeviceManagementRBAC.Read.All`. Referenced from every scoped object. |
 | `Microsoft.Graph/roleDefinitions` | `DeviceManagementRBAC.Read.All`. **Custom** roles only; built-ins are skipped at listing. |

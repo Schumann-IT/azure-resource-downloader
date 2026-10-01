@@ -21,6 +21,7 @@ func fullDoc() ResourceDocumentation {
 			BestPractices:   []string{"https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines"},
 			SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/schema",
 			Permissions:     "https://learn.microsoft.com/en-us/graph/permissions-reference",
+			AdminCenter:     "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration",
 		},
 	}
 }
@@ -312,8 +313,7 @@ func runPromptAssertions(t *testing.T, prompt string, present, absent []string) 
 }
 
 // TestPromptLinksPartialBytePinned pins every branch of the prompt-links partial
-// byte for byte; no registered handler sets SchemaReference or Links.Permissions,
-// so the golden files do not cover those lines.
+// byte for byte, including the Admin center line after the permissions line.
 func TestPromptLinksPartialBytePinned(t *testing.T) {
 	doc := fullDoc()
 	doc.Template = `{{ template "prompt-links" . }}`
@@ -323,8 +323,27 @@ func TestPromptLinksPartialBytePinned(t *testing.T) {
 		"\n- API reference: " + doc.Links.EndpointDocs +
 		"\n- Schema reference: " + doc.Links.SchemaReference +
 		"\n- Required permissions: " + doc.Links.Permissions +
+		"\n- Admin center: " + doc.Links.AdminCenter +
 		"\n- Best-practice baseline: " + doc.Links.BestPractices[0]
 	want += "\n\n" + DocumentationGroupsMarker()
+	if got != want {
+		t.Errorf("prompt-links = %q, want %q", got, want)
+	}
+}
+
+// TestPromptLinksAdminCenterOnly renders a documentation with only AdminCenter
+// set: the block must appear on that link alone.
+func TestPromptLinksAdminCenterOnly(t *testing.T) {
+	doc := ResourceDocumentation{
+		AzureType: "Microsoft.Graph/example",
+		Template:  `{{ template "prompt-links" . }}`,
+		Links:     ResourceLinks{AdminCenter: "https://entra.microsoft.com/#view/example"},
+	}
+
+	got := BuildDocumentationPrompt(doc)
+	want := "\n\nReference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):" +
+		"\n- Admin center: https://entra.microsoft.com/#view/example" +
+		"\n\n" + DocumentationGroupsMarker()
 	if got != want {
 		t.Errorf("prompt-links = %q, want %q", got, want)
 	}

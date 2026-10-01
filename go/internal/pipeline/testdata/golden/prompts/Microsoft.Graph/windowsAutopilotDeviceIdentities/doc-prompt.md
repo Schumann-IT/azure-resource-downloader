@@ -12,13 +12,19 @@ Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- Registered device data rather than configuration; remove identities when hardware is retired or resold - deleting de-registers the device from Autopilot.
+- Deregister a device when it permanently leaves the organization (for example repair or end of life): delete its Intune device record first, because only devices not enrolled in Intune can be deleted from Autopilot.
+- Don't delete the Entra device object manually; for hybrid-joined devices delete the on-premises AD computer object instead.
+- deviceAccountPassword (Surface Hub) is a secret: redact it if present.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeviceidentity?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeviceidentity-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/registration-overview
+- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/windowsAutopilotDeploymentProfiles
+- Microsoft.Graph/groups (dynamic device groups on ZTDId, OrderID (the group tag) or PurchaseOrderId)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -35,6 +41,7 @@ References:
 Lifecycle and operations:
 - explain how records of this type appear and disappear (registration/sync/deletion), what a stale or error state means, and what happens downstream when the record is removed.
 - recommend a review cadence.
+- give particular attention to: groupTag, purchaseOrderIdentifier, serialNumber, deploymentProfileAssignmentStatus, enrollmentState, azureAdDeviceId, managedDeviceId.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance.

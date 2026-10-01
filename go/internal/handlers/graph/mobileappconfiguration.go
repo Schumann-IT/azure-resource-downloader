@@ -26,14 +26,37 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 		azureType:      "Microsoft.Graph/mobileAppConfigurations",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
-			EmbeddedPayloads:    []string{"encodedSettingXml (base64)", "settings"},
+			Purpose: "An Intune managed device app configuration policy (app configuration for managed iOS/Android devices).",
+			EmbeddedPayloads: []string{
+				"encodedSettingXml (iosMobileAppConfiguration: base64 XML from the 'Enter XML data' format)",
+				"payloadJson (androidManagedStoreAppConfiguration and androidForWorkMobileAppConfiguration: JSON app configuration payload)",
+			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           []string{"Configuration applies at app install or next check-in; deleting the configuration leaves already-delivered settings in place until the app is reinstalled."},
-			RelatedTypes:        []string{"Microsoft.Graph/mobileApps (targeted apps)", "Microsoft.Graph/groups (assignment target groups)"},
-			SubtypeNote:         "Platform-polymorphic managed-device app configuration (iosMobileAppConfiguration, androidManagedStoreAppConfiguration) - identify the platform from @odata.type.",
+			Lifecycle: []string{
+				"Settings are delivered when the targeted app is installed and read by the app when it checks for them (typically at first run); on iOS/iPadOS this works only for MDM-managed apps, not DDM-managed apps.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/mobileApps (targetedMobileApps)",
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/assignmentFilters (assignment filters)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			SubtypeNote: "Platform-polymorphic managed-device app configuration (iosMobileAppConfiguration, androidManagedStoreAppConfiguration, androidForWorkMobileAppConfiguration) - identify the platform from @odata.type.",
+			KeySettings: []string{
+				"targetedMobileApps",
+				"settings (appConfigKey, appConfigKeyType, appConfigKeyValue)",
+				"permissionActions",
+				"profileApplicability",
+				"connectedAppsEnabled",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-apps-manageddevicemobileappconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-apps-manageddevicemobileappconfiguration-list?view=graph-rest-beta",
+				AdminCenter:  "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/configuration",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/app-management/configuration/configure-managed-ios",
+					"https://learn.microsoft.com/en-us/intune/app-management/configuration/configure-managed-android",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

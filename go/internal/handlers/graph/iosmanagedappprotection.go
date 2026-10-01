@@ -27,13 +27,35 @@ func NewIosManagedAppProtectionHandler(credential azcore.TokenCredential) (*Grap
 		azureType:      "Microsoft.Graph/iosManagedAppProtections",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
-			KeySettings:         []string{"dataBackupBlocked", "managedBrowserToOpenLinksRequired", "pinRequired", "allowedOutboundDataTransferDestinations"},
+			Purpose: "An Intune iOS App Protection (MAM) policy controlling data protection for managed apps.",
+			KeySettings: []string{
+				"dataBackupBlocked",
+				"managedBrowserToOpenLinksRequired",
+				"pinRequired",
+				"allowedOutboundDataTransferDestinations",
+				"allowedOutboundClipboardSharingLevel",
+				"appDataEncryptionType",
+				"maximumAllowedDeviceThreatLevel",
+			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           []string{"Policy changes apply at the protected app's next check-in; deleting a policy removes app protection from targeted apps (protected data remains until a selective wipe is issued)."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Lifecycle: []string{
+				"Apps pick up policy changes at check-in, typically every 30 minutes (every 12 hours while the user isn't licensed or targeted); apps that haven't checked in for 90 days may be deregistered.",
+				"The policy applies only to Intune-licensed users in targeted groups who sign in to the app; org data is removed only by an app selective wipe, applied the next time the app runs.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/assignmentFilters (assignment filters)",
+				"Microsoft.Graph/mobileThreatDefenseConnectors (maximum allowed device threat level)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-iosmanagedappprotection?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-iosmanagedappprotection-list?view=graph-rest-beta",
+				AdminCenter:  "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/protection",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/app-management/protection/data-protection-framework",
+					"https://learn.microsoft.com/en-us/intune/app-management/protection/create-policy",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

@@ -6,20 +6,28 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/authenticationStrengthPolicies
 
-About this resource type: An Entra ID authentication strength policy defining which authentication method combinations satisfy MFA.
+About this resource type: An Entra ID authentication strength (built-in or custom): a Conditional Access grant control listing the authentication-method combinations allowed to access a resource; requirementsSatisfied states whether it satisfies MFA.
+
+Subtype guidance: combinationConfigurations is polymorphic: fido2CombinationConfiguration (allowed AAGUIDs) and x509CertificateCombinationConfiguration (allowed issuer SKIs and policy OIDs) - identify the type from @odata.type.
 
 Permissions required to read this resource type:
 - Policy.Read.All
 
 Lifecycle notes for this resource type:
-- Referenced by Conditional Access grant controls; built-in strengths are immutable, custom ones are editable.
-- Deleting a custom strength fails while any Conditional Access policy references it.
+- Referenced by Conditional Access grant controls; built-in strengths can't be modified, custom ones are editable.
+- A custom strength can't be deleted while a Conditional Access policy references it.
+- Microsoft updates the built-in strengths when new methods become available, so built-in entries can change without an admin edit; up to 15 custom strengths, Entra ID P1 required.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/authenticationstrengthpolicy?view=graph-rest-1.0
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodmodes?view=graph-rest-1.0
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/authenticationstrengthroot-list-policies?view=graph-rest-1.0
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strengths
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strength-advanced-options
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies
+- Microsoft.Graph/authenticationMethodsPolicy (methods must be enabled there)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): it has no assignments of its own — instead, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
 
@@ -42,7 +50,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive content and any deviations from recommended baselines, including the impact on every policy that references this object.
-- give particular attention to: allowedCombinations.
+- give particular attention to: allowedCombinations, policyType, requirementsSatisfied, combinationConfigurations.
 
 Definition:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

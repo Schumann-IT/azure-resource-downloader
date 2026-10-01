@@ -25,14 +25,24 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 		azureType:      "Microsoft.Graph/deviceShellScripts",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune macOS shell script run on managed Macs.",
-			KeySettings:         []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
-			EmbeddedPayloads:    []string{"scriptContent (base64 shell script)"},
+			Purpose:     "An Intune macOS shell script run on managed Macs.",
+			KeySettings: []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
+			EmbeddedPayloads: []string{
+				"scriptContent (shell script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .sh sidecar named after fileName in file mode)",
+			},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All"},
-			Lifecycle:           []string{"Shell scripts run per their schedule/frequency; deleting a script does not undo changes it already made on devices."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Without executionFrequency the script runs once; with a frequency it also runs after restarts and may run more often. Failures are retried only when retryCount is set, and runs longer than 60 minutes are stopped and reported as failed.",
+				"Requires the Intune management agent for macOS, which checks in about every 8 hours separately from MDM; deleting a script does not undo changes it already made on devices.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-deviceshellscript?view=graph-rest-beta",
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-deviceshellscript?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-devices-deviceshellscript-list?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-management/tools/run-shell-scripts-macos"},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

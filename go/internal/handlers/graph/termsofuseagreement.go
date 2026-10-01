@@ -22,15 +22,28 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/termsOfUseAgreements",
 		documentation: models.ResourceDocumentation{
-			Template:            referencedPromptTemplateText,
-			Purpose:             "An Entra ID Terms of Use agreement presented via Conditional Access.",
-			KeySettings:         []string{"isViewingBeforeAcceptanceRequired", "userReacceptRequiredFrequency"},
-			EmbeddedPayloads:    []string{"files (the uploaded ToU PDF documents, base64)"},
+			Template: referencedPromptTemplateText,
+			Purpose:  "An Entra ID Terms of Use agreement presented via Conditional Access.",
+			KeySettings: []string{
+				"isViewingBeforeAcceptanceRequired",
+				"isPerDeviceAcceptanceRequired",
+				"userReacceptRequiredFrequency",
+				"termsExpiration",
+			},
+
 			RequiredPermissions: []string{"Agreement.Read.All"},
-			Lifecycle:           []string{"Enforced via Conditional Access grant controls; re-acceptance can be required on a schedule or when the PDF changes.", "Acceptance records are retained for compliance."},
-			RelatedTypes:        []string{"Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)"},
+			Lifecycle: []string{
+				"Enforced through Conditional Access grant controls; a new document version forces re-acceptance only when 'Require reaccept' is set, and re-acceptance can also be scheduled (userReacceptRequiredFrequency).",
+				"Acceptances are kept for the life of the terms of use; deleting it, or the tenant losing Entra ID P1/P2, deletes all of its acceptance records.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)",
+				"Microsoft.Graph/termsAndConditions (Intune terms and conditions; both must be accepted when both apply)",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-1.0",
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/termsofusecontainer-list-agreements?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/entra/identity/conditional-access/terms-of-use"},
 			},
 		},
 		probe: func(ctx context.Context) error {

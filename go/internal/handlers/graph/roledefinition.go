@@ -23,14 +23,30 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/roleDefinitions",
 		documentation: models.ResourceDocumentation{
-			Template:            referencedPromptTemplateText,
-			Purpose:             "An Intune RBAC role definition listing the permissions granted by the role.",
-			KeySettings:         []string{"rolePermissions (allowedResourceActions)", "isBuiltIn"},
+			Template: referencedPromptTemplateText,
+			Purpose:  "An Intune RBAC role definition listing the permissions granted by the role.",
+			KeySettings: []string{
+				"rolePermissions[].resourceActions[].allowedResourceActions",
+				"rolePermissions[].resourceActions[].notAllowedResourceActions",
+				"roleScopeTagIds",
+			},
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
-			Lifecycle:           []string{"Only custom Intune roles are exported; deleting a role definition removes the delegated permissions of its role assignments.", "Review custom roles against least privilege regularly."},
-			RelatedTypes:        []string{"Microsoft.Graph/roleScopeTags"},
+			Lifecycle: []string{
+				"Only custom Intune roles are exported (built-in roles can't be edited); their assignments (admin groups, scope groups and scope tags) live in roleAssignments, which is not exported, and permissions from several assignments add up.",
+				"Review custom roles against least privilege regularly.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/roleScopeTags",
+				"Microsoft.Graph/groups (through role assignments, not exported)",
+			},
+			SubtypeNote: "Items may carry @odata.type deviceAndAppManagementRoleDefinition, which inherits roleDefinition and adds no properties.",
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-roledefinition?view=graph-rest-beta",
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-roledefinition?view=graph-rest-beta",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-rbac-roledefinition-list?view=graph-rest-beta",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-rbac-rolepermission?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/fundamentals/role-based-access-control/create-custom-role",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

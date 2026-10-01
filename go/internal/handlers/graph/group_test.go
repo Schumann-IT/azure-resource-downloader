@@ -31,7 +31,7 @@ func TestGroupHandler_GetDocumentationPromptUsesOverrideTemplate(t *testing.T) {
 		"Permissions required to read this resource type:\n- Group.Read.All",
 		"Membership:",
 		"Usage as assignment target:",
-		"give particular attention to: groupTypes, membershipRule (for dynamic groups), securityEnabled, mailEnabled.",
+		"give particular attention to: groupTypes, membershipRule (for dynamic groups), membershipRuleProcessingState, securityEnabled, mailEnabled, isAssignableToRole.",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)

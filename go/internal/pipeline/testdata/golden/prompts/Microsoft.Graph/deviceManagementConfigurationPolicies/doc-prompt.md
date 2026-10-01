@@ -6,22 +6,28 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/deviceManagementConfigurationPolicies
 
-About this resource type: An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.
+About this resource type: An Intune configuration policy of the unified settings platform: Settings Catalog policies plus template-based policies such as endpoint security policies and security baselines, told apart by templateReference.templateFamily (none = plain Settings Catalog).
 
 Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- The Settings Catalog is the strategic replacement for legacy templates; settings re-apply at each check-in and are removed (where supported) when the policy is unassigned or deleted.
+- Deprecated templates move here: the macOS Endpoint protection and Extensions templates (2408) and the Windows Administrative Templates (2412) are configured in the Settings Catalog.
+- Setting a value back to Not configured leaves the device value in place but stops enforcing it; when a new security baseline version ships, profiles on an older version become read-only until updated.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationpolicy?view=graph-rest-beta
-- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationsettingdefinition?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementconfigurationpolicy-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/reusablePolicySettings (referenced by ID)
 - Microsoft.Graph/groups (assignment target groups)
-- Microsoft.Graph/assignmentFilters (assignment filters)
+- Microsoft.Graph/assignmentFilters (assignment filters; not supported for security baselines)
+- Microsoft.Graph/deviceManagementIntents (old-format endpoint security and baseline predecessor)
+- Microsoft.Graph/groupPolicyConfigurations (ADMX settings moved to the Settings Catalog)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -48,12 +54,13 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
+- give particular attention to: platforms, technologies, templateReference (templateFamily, templateDisplayName, templateDisplayVersion), settingCount.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
-- This resource carries embedded or encoded payloads: settings (settingInstance / settingDefinition values, including secret settings) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+- This resource carries embedded or encoded payloads: settings[].settingInstance (nested setting instances keyed by settingDefinitionId; secret values carry valueState notEncrypted or encryptedValueToken) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

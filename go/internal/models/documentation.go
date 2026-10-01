@@ -75,6 +75,10 @@ type ResourceLinks struct {
 	// Permissions is the Microsoft Learn page that lists the API permissions
 	// and RBAC roles required to read/write this resource type.
 	Permissions string
+	// AdminCenter is the deep link to the admin center blade (Intune, Entra or
+	// Azure portal) where this resource type is managed. Empty when no verified
+	// deep link exists.
+	AdminCenter string
 }
 
 // ResourceDocumentation holds the per-resource-type metadata used to build a

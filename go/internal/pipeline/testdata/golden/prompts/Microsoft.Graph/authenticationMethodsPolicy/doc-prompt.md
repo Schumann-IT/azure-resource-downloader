@@ -8,19 +8,25 @@ Azure resource type: Microsoft.Graph/authenticationMethodsPolicy
 
 About this resource type: The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.
 
+Subtype guidance: authenticationMethodConfigurations is polymorphic by @odata.type (email, fido2, microsoftAuthenticator, sms, softwareOath, temporaryAccessPass, voice, x509Certificate and others, each an ...AuthenticationMethodConfiguration): each carries state and excludeTargets, most add includeTargets and method-specific settings - document each method against its own schema.
+
 Permissions required to read this resource type:
 - Policy.Read.All
 
 Lifecycle notes for this resource type:
-- Tenant-wide singleton controlling which authentication methods are enabled for MFA/SSPR/passwordless; changes take effect tenant-wide within minutes.
-- Microsoft is migrating the legacy MFA and SSPR policies into this policy.
+- Tenant-wide singleton controlling which authentication methods users can register and use for MFA, SSPR and passwordless sign-in.
+- Since 30 September 2025 authentication methods can no longer be managed in the legacy MFA and SSPR policies; policyMigrationState shows whether legacy settings are still respected (premigration, migrationInProgress) or ignored (migrationComplete).
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethodspolicy?view=graph-rest-1.0
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/authenticationmethodspolicy-get?view=graph-rest-1.0
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-methods-manage
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/authentication/how-to-authentication-methods-manage
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies
-- Microsoft.Graph/authenticationStrengthPolicies
+- Microsoft.Graph/authenticationStrengthPolicies (strengths can only use methods enabled here)
+- Microsoft.Graph/groups (method include and exclude targets)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -41,7 +47,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive settings and any deviations from recommended baselines, including the tenant-wide security impact.
-- give particular attention to: authenticationMethodConfigurations, registrationEnforcement.
+- give particular attention to: authenticationMethodConfigurations, registrationEnforcement, policyMigrationState.
 
 Settings:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

@@ -28,14 +28,34 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 		azureType:      "Microsoft.Graph/deviceManagementConfigurationPolicies",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Settings Catalog configuration policy that applies settings via the unified settings catalog.",
-			EmbeddedPayloads:    []string{"settings (settingInstance / settingDefinition values, including secret settings)"},
+			Purpose: "An Intune configuration policy of the unified settings platform: Settings Catalog policies plus template-based policies such as endpoint security policies and security baselines, told apart by templateReference.templateFamily (none = plain Settings Catalog).",
+			EmbeddedPayloads: []string{
+				"settings[].settingInstance (nested setting instances keyed by settingDefinitionId; secret values carry valueState notEncrypted or encryptedValueToken)",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"The Settings Catalog is the strategic replacement for legacy templates; settings re-apply at each check-in and are removed (where supported) when the policy is unassigned or deleted."},
-			RelatedTypes:        []string{"Microsoft.Graph/reusablePolicySettings (referenced by ID)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Lifecycle: []string{
+				"Deprecated templates move here: the macOS Endpoint protection and Extensions templates (2408) and the Windows Administrative Templates (2412) are configured in the Settings Catalog.",
+				"Setting a value back to Not configured leaves the device value in place but stops enforcing it; when a new security baseline version ships, profiles on an older version become read-only until updated.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/reusablePolicySettings (referenced by ID)",
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/assignmentFilters (assignment filters; not supported for security baselines)",
+				"Microsoft.Graph/deviceManagementIntents (old-format endpoint security and baseline predecessor)",
+				"Microsoft.Graph/groupPolicyConfigurations (ADMX settings moved to the Settings Catalog)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			KeySettings: []string{
+				"platforms",
+				"technologies",
+				"templateReference (templateFamily, templateDisplayName, templateDisplayVersion)",
+				"settingCount",
+			},
 			Links: models.ResourceLinks{
-				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationpolicy?view=graph-rest-beta",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines"},
+				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationpolicy?view=graph-rest-beta",
+				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementconfigurationpolicy-list?view=graph-rest-beta",
+				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationsettingdefinition?view=graph-rest-beta",
+				AdminCenter:     "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

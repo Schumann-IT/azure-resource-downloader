@@ -12,14 +12,17 @@ Permissions required to read this resource type:
 - Agreement.Read.All
 
 Lifecycle notes for this resource type:
-- Enforced via Conditional Access grant controls; re-acceptance can be required on a schedule or when the PDF changes.
-- Acceptance records are retained for compliance.
+- Enforced through Conditional Access grant controls; a new document version forces re-acceptance only when 'Require reaccept' is set, and re-acceptance can also be scheduled (userReacceptRequiredFrequency).
+- Acceptances are kept for the life of the terms of use; deleting it, or the tenant losing Entra ID P1/P2, deletes all of its acceptance records.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
-- API reference: https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-1.0
+- API reference: https://learn.microsoft.com/en-us/graph/api/resources/agreement?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/termsofusecontainer-list-agreements?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/conditional-access/terms-of-use
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)
+- Microsoft.Graph/termsAndConditions (Intune terms and conditions; both must be accepted when both apply)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): it has no assignments of its own — instead, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
 
@@ -42,7 +45,7 @@ Lifecycle and operations:
 
 Security:
 - call out security-sensitive content and any deviations from recommended baselines, including the impact on every policy that references this object.
-- give particular attention to: isViewingBeforeAcceptanceRequired, userReacceptRequiredFrequency.
+- give particular attention to: isViewingBeforeAcceptanceRequired, isPerDeviceAcceptanceRequired, userReacceptRequiredFrequency, termsExpiration.
 
 Definition:
 - document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.

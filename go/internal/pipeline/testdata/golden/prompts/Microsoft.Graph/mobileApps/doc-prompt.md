@@ -14,15 +14,23 @@ Permissions required to read this resource type:
 - DeviceManagementApps.Read.All
 
 Lifecycle notes for this resource type:
-- Deleting an app from Intune does not uninstall it from devices (assign an uninstall intent first); Win32 apps follow supersedence rules when updated.
+- To remove an app from devices assign it as Uninstall (and remove the install assignment for those groups); delete the app from Intune only after removing its assignments and revoking any VPP licenses.
+- Win32 apps aren't uninstalled when a device unenrolls, and Win32 apps in a dependency relationship can't be deleted; supersedence is configured per app and the superseding app needs its own assignment.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-mobileapp?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-apps-win32lobapp?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-shared-mobileapp-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/allApps
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/deployment/add-win32
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/deployment/configure-win32-supersedence
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)
 - Microsoft.Graph/assignmentFilters (assignment filters)
 - Microsoft.Graph/mobileAppConfigurations (app configuration policies)
+- Microsoft.Graph/vppTokens (iosVppApp.vppTokenId)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -49,13 +57,13 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: installCommandLine, uninstallCommandLine, minimumSupportedOperatingSystem.
+- give particular attention to: installCommandLine, uninstallCommandLine, minimumSupportedOperatingSystem, installExperience (runAsAccount, deviceRestartBehavior), returnCodes, rules, allowedArchitectures, minimumSupportedWindowsRelease, packageIdentifier.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
-- This resource carries embedded or encoded payloads: detectionRules, requirementRules, installExperience, returnCodes, largeIcon (base64 image) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+- This resource carries embedded or encoded payloads: largeIcon.value (base64 image), detectionRules[].scriptContent, requirementRules[].scriptContent, rules[].scriptContent (base64 PowerShell detection/requirement scripts), officeConfigurationXml (officeSuiteApp Office configuration XML), preInstallScript.scriptContent, postInstallScript.scriptContent (macOSPkgApp base64 shell scripts) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

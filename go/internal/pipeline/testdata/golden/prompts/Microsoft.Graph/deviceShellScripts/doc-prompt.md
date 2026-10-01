@@ -12,13 +12,17 @@ Permissions required to read this resource type:
 - DeviceManagementScripts.Read.All
 
 Lifecycle notes for this resource type:
-- Shell scripts run per their schedule/frequency; deleting a script does not undo changes it already made on devices.
+- Without executionFrequency the script runs once; with a frequency it also runs after restarts and may run more often. Failures are retried only when retryCount is set, and runs longer than 60 minutes are stopped and reported as failed.
+- Requires the Intune management agent for macOS, which checks in about every 8 hours separately from MDM; deleting a script does not undo changes it already made on devices.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-deviceshellscript?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-devices-deviceshellscript-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-management/tools/run-shell-scripts-macos
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -51,7 +55,7 @@ Settings:
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
-- This resource carries embedded or encoded payloads: scriptContent (base64 shell script) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
+- This resource carries embedded or encoded payloads: scriptContent (shell script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .sh sidecar named after fileName in file mode) — decode and pretty-print it inside that setting's expanded body and document each contained key/value the same way, using nested `<details>` blocks for the payload's keys where that aids readability.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 - Only describe settings that are actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.

@@ -24,12 +24,33 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 		azureType:      "Microsoft.Graph/windowsInformationProtectionPolicies",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
-			KeySettings:         []string{"enforcementLevel", "protectedApps", "exemptApps"},
+			Purpose: "A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
+			KeySettings: []string{
+				"enforcementLevel",
+				"protectedApps",
+				"exemptApps",
+				"revokeOnMdmHandoffDisabled",
+				"mdmEnrollmentUrl",
+				"daysWithoutContactBeforeUnenroll",
+				"dataRecoveryCertificate",
+			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
-			Lifecycle:           []string{"Windows Information Protection is DEPRECATED by Microsoft (sunset began July 2022) and unsupported on Windows 11; keep for historical reference and plan migration to Microsoft Purview DLP."},
+			Lifecycle: []string{
+				"Microsoft began deprecating Windows Information Protection in July 2022 and removed it starting with Windows 11, version 24H2; Microsoft recommends Microsoft Purview Information Protection and Microsoft Purview Data Loss Prevention instead.",
+				"Unassigning the policy (Learn's way to turn WIP off) makes devices remove WIP file protection and the WIP configuration.",
+				"WIP without enrollment requires Microsoft Entra ID P1 or P2 and supports only one user per device.",
+			},
+			EmbeddedPayloads: []string{"dataRecoveryCertificate.certificate (base64 Data Recovery Agent certificate)"},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-windowsinformationprotectionpolicy?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-windowsinformationprotectionpolicy-list?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/information-protection/windows-information-protection/how-to-disable-wip",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

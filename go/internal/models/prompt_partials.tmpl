@@ -43,7 +43,7 @@ Lifecycle notes for this resource type:
 {{- end }}
 
 {{- define "prompt-links" }}
-{{- if or .Links.EndpointDocs .Links.SchemaReference .Links.Permissions .Links.BestPractices }}
+{{- if or .Links.EndpointDocs .Links.SchemaReference .Links.Permissions .Links.AdminCenter .Links.BestPractices }}
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 {{- if .Links.EndpointDocs }}
@@ -54,6 +54,9 @@ Reference material for this resource type (treat these as authoritative; prefer 
 {{- end }}
 {{- if .Links.Permissions }}
 - Required permissions: {{ .Links.Permissions }}
+{{- end }}
+{{- if .Links.AdminCenter }}
+- Admin center: {{ .Links.AdminCenter }}
 {{- end }}
 {{- range .Links.BestPractices }}
 - Best-practice baseline: {{ . }}

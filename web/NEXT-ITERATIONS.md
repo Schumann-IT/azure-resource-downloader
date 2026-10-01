@@ -69,7 +69,7 @@ branch), L (several branches or a design change).
    name filter), *an actionable findings block*, *explicit dark-mode toggle*, *clickable breadcrumb segments* and
    an export dropdown all wait on it.
 4. **Navigation**: *a resource landing page* → *browsable excluded bulk types*; *a two-group navigation tree*
-   only as its fallback; *sidebar by a taxonomy axis* after go *per-handler metadata* ships the group fields.
+   only as its fallback; *sidebar by a taxonomy axis* after the go regeneration batch fills the group fields.
 5. **Exports**: *further export formats* → *one export button and an export page*; *media attachments* with
    Confluence work; *REST synchronisation* is a read-only design change. All under `.claude/rules/web-export.md`.
 6. **Dependencies**: *toolchain* → *NestJS 12* and *rendering stack* (golden test first) → *syntax highlighting*.
@@ -202,8 +202,8 @@ switcher proves hard to find, or as the carrier for browsable excluded bulk type
 
 ### Idea: Structure the sidebar by a taxonomy axis instead of by resource type
 
-*Area:* navigation · *Impact:* medium · *Effort:* L · *Ships with:* function-shaped spine needs go *per-handler
-metadata* (`functionGroup`) or a CLI axis; Confluence export must group the same way
+*Area:* navigation · *Impact:* medium · *Effort:* L · *Ships with:* function-shaped spine needs `functionGroup`
+(filled by the go regeneration batch) or a CLI axis; Confluence export must group the same way
 
 Let a reader reach a document by what it *is* — a Windows policy, a device-scoped configuration — rather than
 by the Azure/Graph type that happens to implement it, so "how are Macs hardened" does not require knowing the

@@ -31,12 +31,28 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
 			Purpose:             "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
-			EmbeddedPayloads:    []string{"definitionValues (the configured ADMX settings)", "presentationValues (the values supplied to each setting's presentations)"},
+			EmbeddedPayloads:    []string{"definitionValues (each configured ADMX setting with its expanded definition)"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"ADMX-backed (Administrative Templates) settings; Microsoft recommends the Settings Catalog where parity exists.", "Removing a definition value reverts the setting to not-configured at next check-in."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)", "Microsoft.Graph/groups (assignment target groups)", "Microsoft.Graph/assignmentFilters (assignment filters)"},
+			Lifecycle: []string{
+				"Since the 2412 release the built-in Administrative Templates profile type is deprecated and read-only; ADMX settings are configured in the Settings Catalog. Profiles based on imported custom ADMX (policyConfigurationIngestionType custom or mixed) can still be created.",
+				"Imported ADMX files (not exported) must stay uploaded while profiles use them; replacing an ADMX file requires deleting the profiles that use it first.",
+				"On unassign or delete, whether a setting reverts on Windows depends on its CSP.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)",
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/assignmentFilters (assignment filters)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			KeySettings: []string{
+				"policyConfigurationIngestionType",
+				"definitionValues[].enabled",
+				"definitionValues[].definition (displayName, categoryPath, classType)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-grouppolicy-grouppolicyconfiguration?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-grouppolicy-grouppolicyconfiguration-list?view=graph-rest-beta",
+				AdminCenter:  "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration",
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

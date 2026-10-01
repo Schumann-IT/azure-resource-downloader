@@ -30,10 +30,31 @@ func NewWindowsAutopilotDeviceIdentityHandler(credential azcore.TokenCredential)
 			OmitGroupAxes:       true,
 			Purpose:             "A Windows Autopilot device identity (hardware hash registration) for zero-touch provisioning.",
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Registered device data rather than configuration; remove identities when hardware is retired or resold - deleting de-registers the device from Autopilot."},
-			RelatedTypes:        []string{"Microsoft.Graph/windowsAutopilotDeploymentProfiles"},
+			Lifecycle: []string{
+				"Deregister a device when it permanently leaves the organization (for example repair or end of life): delete its Intune device record first, because only devices not enrolled in Intune can be deleted from Autopilot.",
+				"Don't delete the Entra device object manually; for hybrid-joined devices delete the on-premises AD computer object instead.",
+				"deviceAccountPassword (Surface Hub) is a secret: redact it if present.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/windowsAutopilotDeploymentProfiles",
+				"Microsoft.Graph/groups (dynamic device groups on ZTDId, OrderID (the group tag) or PurchaseOrderId)",
+			},
+			KeySettings: []string{
+				"groupTag",
+				"purchaseOrderIdentifier",
+				"serialNumber",
+				"deploymentProfileAssignmentStatus",
+				"enrollmentState",
+				"azureAdDeviceId",
+				"managedDeviceId",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeviceidentity?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeviceidentity-list?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/autopilot/registration-overview",
+					"https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

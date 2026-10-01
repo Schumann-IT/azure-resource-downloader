@@ -6,20 +6,27 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 Azure resource type: Microsoft.Graph/targetedManagedAppConfigurations
 
-About this resource type: An Intune App Configuration policy targeting managed apps (MAM) without device enrollment.
+About this resource type: An Intune app configuration policy for managed apps, delivered through the app protection (MAM) channel to Intune SDK-integrated apps regardless of the device's enrollment state.
 
 Permissions required to read this resource type:
 - DeviceManagementApps.Read.All
 
 Lifecycle notes for this resource type:
-- App configuration applies at the managed app next check-in; deleting the policy stops delivering the settings (apps keep the last received values until reinstalled).
+- Managed apps check for app configuration every 30 minutes when an app protection policy also targets the user, otherwise every 720 minutes.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-targetedmanagedappconfiguration?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-mam-targetedmanagedappconfiguration-list?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_Apps/ConfigPoliciesMenu/~/appConfigurationPolicies
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/app-management/configuration/configure-managed-apps
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
-- Microsoft.Graph/mobileApps (targeted apps)
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/assignmentFilters (managed-app filters)
+- Microsoft.Graph/iosManagedAppProtections (an app protection policy for the user shortens the check-in interval)
+- Microsoft.Graph/androidManagedAppProtections (same)
+- Microsoft.Graph/windowsManagedAppProtections (same)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -46,7 +53,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: customSettings, appGroupType.
+- give particular attention to: customSettings, appGroupType, targetedAppManagementLevels.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

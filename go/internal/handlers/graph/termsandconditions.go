@@ -23,13 +23,23 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 		azureType:      "Microsoft.Graph/termsAndConditions",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Terms and Conditions policy presented to users at enrollment.",
-			EmbeddedPayloads:    []string{"bodyText", "acceptanceStatement"},
+			Purpose: "An Intune Terms and Conditions policy presented to users at enrollment.",
+
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Incrementing the version forces users to re-accept at next Company Portal sign-in; acceptance statuses are recorded per user."},
-			RelatedTypes:        []string{"Microsoft.Graph/groups (assignment target groups)"},
+			Lifecycle: []string{
+				"Users must accept in Company Portal before they can enroll devices or access protected resources; editing with 'Require users to re-accept' increments version and assigned users must accept again.",
+				"Acceptance reports show the user, accepted version and time (up to 36 hours latency); Microsoft Entra terms of use offers stricter options, and users must accept both when both are configured.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/termsOfUseAgreements (Entra terms of use; both must be accepted when both apply)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			KeySettings: []string{"title", "bodyText", "acceptanceStatement", "version"},
 			Links: models.ResourceLinks{
-				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-companyterms-termsandconditions?view=graph-rest-beta",
+				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-companyterms-termsandconditions?view=graph-rest-beta",
+				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-companyterms-termsandconditions-list?view=graph-rest-beta",
+				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-enrollment/create-terms-and-conditions"},
 			},
 		},
 		probe: func(ctx context.Context) error {

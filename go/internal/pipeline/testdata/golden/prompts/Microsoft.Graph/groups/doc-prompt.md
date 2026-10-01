@@ -6,14 +6,15 @@ You are a senior Microsoft cloud and identity consultant. Generate clear, accura
 
 Azure resource type: Microsoft.Graph/groups
 
-About this resource type: An Entra ID group (security or Microsoft 365), often used as an assignment target for policies and apps.
+About this resource type: An Entra ID group (Microsoft 365, security, mail-enabled security or distribution), often used as an assignment target for policies and apps.
 
 Permissions required to read this resource type:
 - Group.Read.All
 
 Lifecycle notes for this resource type:
-- Deleted groups are soft-deleted and restorable for 30 days; dynamic membership rules re-evaluate automatically as attributes change.
-- Groups referenced by policy assignments should not be deleted while in use.
+- Deleted Microsoft 365 groups are soft-deleted and can be restored within 30 days with the same object ID; soft delete for cloud security groups is in preview, and distribution groups can't be restored.
+- Dynamic membership rules re-evaluate automatically as attributes change (processing can be paused via membershipRuleProcessingState); dynamic groups need Entra ID P1.
+- isAssignableToRole can only be set at creation; groups referenced by policy assignments should not be deleted while in use.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0
@@ -37,7 +38,7 @@ Usage as assignment target:
 
 Security:
 - call out `isAssignableToRole: true` (role-assignable groups grant Entra roles to members — owner changes are privileged operations).
-- give particular attention to: groupTypes, membershipRule (for dynamic groups), securityEnabled, mailEnabled.
+- give particular attention to: groupTypes, membershipRule (for dynamic groups), membershipRuleProcessingState, securityEnabled, mailEnabled, isAssignableToRole.
 - flag dynamic rules that could be exploited to gain group membership (and thereby policy scope) by users who can edit their own directory attributes.
 
 Properties:

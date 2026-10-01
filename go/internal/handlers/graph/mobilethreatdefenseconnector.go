@@ -23,15 +23,36 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
 		documentation: models.ResourceDocumentation{
-			Template:            recordPromptTemplateText,
-			OmitGroupAxes:       true,
-			Purpose:             "An Intune Mobile Threat Defense connector integrating a third-party MTD partner.",
-			KeySettings:         []string{"androidEnabled", "iosEnabled", "windowsEnabled", "partnerState"},
-			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
-			Lifecycle:           []string{"Connector health depends on the MTD partner subscription; deactivating it or letting the partner contract lapse changes compliance evaluation for devices reporting threat levels."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)"},
+			Template:      recordPromptTemplateText,
+			OmitGroupAxes: true,
+			Purpose:       "An Intune Mobile Threat Defense connector to an MTD partner (a third-party vendor, Microsoft Defender for Endpoint or Windows Security Center) whose device threat data feeds compliance and app protection evaluation.",
+			KeySettings: []string{
+				"androidEnabled",
+				"iosEnabled",
+				"macEnabled",
+				"windowsEnabled",
+				"partnerState",
+				"partnerUnresponsivenessThresholdInDays",
+				"androidDeviceBlockedOnMissingPartnerData, iosDeviceBlockedOnMissingPartnerData, macDeviceBlockedOnMissingPartnerData, windowsDeviceBlockedOnMissingPartnerData",
+				"androidMobileApplicationManagementEnabled, iosMobileApplicationManagementEnabled",
+				"lastHeartbeatDateTime",
+			},
+			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
+			Lifecycle: []string{
+				"If the partner sends no heartbeat for partnerUnresponsivenessThresholdInDays the connector becomes unresponsive and Intune ignores the partner's compliance state; the *DeviceBlockedOnMissingPartnerData settings decide whether devices can be compliant before partner data arrives.",
+				"Only one partner per platform can feed app protection (MAM) evaluation.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)",
+				"Microsoft.Graph/iosManagedAppProtections (maximum allowed threat level)",
+				"Microsoft.Graph/androidManagedAppProtections (maximum allowed threat level)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-onboarding-mobilethreatdefenseconnector?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-onboarding-mobilethreatdefenseconnector-list?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-security/mobile-threat-defense/enable-connector",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -40,7 +61,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list mobile threat defense connectors: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list mobile threat defense connectors: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -61,7 +82,7 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().MobileThreatDefenseConnectors().ByMobileThreatDefenseConnectorId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get mobile threat defense connector: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get mobile threat defense connector: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
 			}
 			return item, nil
 		},

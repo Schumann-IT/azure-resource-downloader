@@ -12,10 +12,18 @@ Permissions required to read this resource type:
 - DeviceManagementServiceConfig.Read.All
 
 Lifecycle notes for this resource type:
-- The Apple MDM push certificate expires yearly and must be renewed with the SAME Apple ID; letting it expire or renewing with a different Apple ID forces re-enrollment of all Apple devices.
+- The Apple MDM push certificate is valid for 365 days and must be renewed annually with the same Apple account that created it; after it expires there is a 30-day grace period to renew.
+- Apple device enrollment fails while it is expired; renew the certificate, never replace it - a replaced certificate forces all iOS/iPadOS devices to re-enroll.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-applepushnotificationcertificate?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-devices-applepushnotificationcertificate-get?view=graph-rest-beta
+- Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesIosMenu/~/iosEnrollment
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-enrollment/apple/create-mdm-push-certificate
+
+Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+- Microsoft.Graph/depOnboardingSettings (Apple automated device enrollment requires the push certificate)
+- Microsoft.Graph/appleUserInitiatedEnrollmentProfiles (user-initiated Apple enrollment requires it)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a service credential or token record (e.g. a certificate or a service token): its documentation must focus on validity, renewal and the operational impact of expiry — not on configurable settings, and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
@@ -41,7 +49,7 @@ Expiry and renewal:
 
 Security:
 - call out the sensitivity of this credential and who should have access to the account that can renew or revoke it.
-- give particular attention to: expirationDateTime, appleIdentifier.
+- give particular attention to: expirationDateTime, appleIdentifier, topicIdentifier.
 
 Properties:
 - document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property means and any operational relevance.

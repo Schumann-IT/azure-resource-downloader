@@ -12,14 +12,20 @@ Permissions required to read this resource type:
 - DeviceManagementConfiguration.Read.All
 
 Lifecycle notes for this resource type:
-- Expedites or pauses quality updates for targeted devices; deleting the profile returns devices to their default update cadence.
+- Expedites one quality update per policy: it bypasses ring deferrals without pausing or changing the monthly update policies, and skips devices that already have that update or a newer one.
+- Deleting the policy doesn't uninstall a completed update; in-progress installs are cancelled on a best-effort basis.
+- Requires Intune Plan 1 and a Windows license with the Autopatch entitlement (Pro, Enterprise or Education, not LTSC) and Entra joined or hybrid joined devices; the separate Windows quality update policies (monthly updates, hotpatch) are a different resource that is not exported.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-windowsqualityupdateprofile?view=graph-rest-beta
+- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-softwareupdate-expeditedwindowsqualityupdatesettings?view=graph-rest-beta
+- Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsqualityupdateprofile-list?view=graph-rest-beta
+- Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-expedite-policy
 
 Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
-- Microsoft.Graph/windowsFeatureUpdateProfiles
 - Microsoft.Graph/groups (assignment target groups)
+- Microsoft.Graph/deviceConfigurations (update rings whose deferral the expedite bypasses)
+- Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. Produce well-structured Markdown documentation with this layout:
 
@@ -46,7 +52,7 @@ Security:
 
 Settings:
 - document EVERY setting/property present in the YAML.
-- give particular attention to: expeditedUpdateSettings, releaseDateDisplayName.
+- give particular attention to: expeditedUpdateSettings (qualityUpdateRelease, daysUntilForcedReboot), releaseDateDisplayName, deployableContentDisplayName.
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does, the recommended/best-practice value and a reference link.
 - Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
 - Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.

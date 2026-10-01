@@ -25,14 +25,32 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/notificationMessageTemplates",
 		documentation: models.ResourceDocumentation{
-			Template:            referencedPromptTemplateText,
-			Purpose:             "An Intune notification message template used for compliance and other notifications.",
-			EmbeddedPayloads:    []string{"localizedNotificationMessages (per-locale subject and message body)"},
-			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
-			Lifecycle:           []string{"Referenced by compliance policies noncompliance actions; deleting a template breaks those actions.", "Localized messages fall back to the default locale."},
-			RelatedTypes:        []string{"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)"},
+			Template: referencedPromptTemplateText,
+			Purpose:  "An Intune notification message template used for compliance and other notifications.",
+
+			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
+			Lifecycle: []string{
+				"Referenced by noncompliance actions of compliance policies and by enrollment notifications.",
+				"Users whose locale has no localized message receive the default-locale message.",
+			},
+			RelatedTypes: []string{
+				"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)",
+				"Microsoft.Graph/compliancePolicies (noncompliance actions)",
+				"Microsoft.Graph/deviceEnrollmentConfigurations (enrollment notifications)",
+				"Microsoft.Graph/intuneBrandingProfiles (brandingOptions pull logo, company name and contact details from Company Portal branding)",
+				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
+			},
+			KeySettings: []string{
+				"brandingOptions",
+				"defaultLocale",
+				"localizedNotificationMessages (locale, subject, messageTemplate, isDefault)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-notification-notificationmessagetemplate-list?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-security/compliance/configure-noncompliance-actions",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
@@ -41,7 +59,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			for {
 				resp, err := builder.Get(ctx, nil)
 				if err != nil {
-					return nil, fmt.Errorf("failed to list notification message templates: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
+					return nil, fmt.Errorf("failed to list notification message templates: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 				}
 				if resp == nil {
 					break
@@ -62,7 +80,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 		fetchItem: func(ctx context.Context, itemID string) (serialization.Parsable, error) {
 			item, err := client.DeviceManagement().NotificationMessageTemplates().ByNotificationMessageTemplateId(itemID).Get(ctx, nil)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get notification message template: %w (hint: requires 'DeviceManagementServiceConfig.Read.All' permission in Microsoft Graph)", err)
+				return nil, fmt.Errorf("failed to get notification message template: %w (hint: requires 'DeviceManagementConfiguration.Read.All' permission in Microsoft Graph)", err)
 			}
 			// localizedNotificationMessages (the per-locale subject and message
 			// body) is a navigation property Graph omits from a plain item GET,
