@@ -388,7 +388,8 @@ naming flags that no longer exist.
   `Authenticate` once (run under `make test-race`); other errors pass through.~~
 - Operator step, not for the implementer — stays unstruck until the result is recorded here: on cb-gmbh.com, with
   the dedicated app in the profile, sign in once, then a second `resource download --dry-run` must not prompt;
-  record the platform and whether it prompted.
+  record the platform and whether it prompted. The profile's `tenant-id` must be the tenant GUID: the stored record
+  carries the GUID, so a domain never matches it and every run would prompt.
 - The experiment, an operator step not for the implementer — stays unstruck until recorded here: on cb-gmbh.com
   `az logout && az login --scope https://graph.microsoft.com/.default` (explicit scopes if that is refused), then `azure-rd --debug --config-dir …
   --domain cb-gmbh.com` with no `client-id` in the profile; record `appid`, the `scp` list and the covered/missing

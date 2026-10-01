@@ -84,6 +84,10 @@ type cachedDeviceCodeCredential struct {
 	// mu serialises sign-ins, so concurrent token requests on a fresh session
 	// lead to exactly one device-code prompt.
 	mu sync.Mutex
+	// signInErr is the failure of the sign-in a waiting worker would otherwise
+	// repeat; set under mu, so a declined or failed prompt is not shown once per
+	// worker.
+	signInErr error
 }
 
 var _ azcore.TokenCredential = (*cachedDeviceCodeCredential)(nil)
@@ -104,13 +108,18 @@ func (c *cachedDeviceCodeCredential) GetToken(ctx context.Context, opts policy.T
 	if tk, err = c.inner.GetToken(ctx, opts); !needsSignIn(err) {
 		return tk, err
 	}
+	if c.signInErr != nil {
+		return azcore.AccessToken{}, fmt.Errorf("device-code sign-in failed: %w", c.signInErr)
+	}
 
 	record, err := c.inner.Authenticate(ctx, &policy.TokenRequestOptions{
 		Scopes:    []string{graphScope},
+		Claims:    opts.Claims,
 		EnableCAE: opts.EnableCAE,
 		TenantID:  opts.TenantID,
 	})
 	if err != nil {
+		c.signInErr = err
 		return azcore.AccessToken{}, fmt.Errorf("device-code sign-in failed: %w", err)
 	}
 	if err := saveAuthRecord(c.tenantID, c.clientID, record); err != nil {

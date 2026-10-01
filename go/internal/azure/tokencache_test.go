@@ -60,8 +60,10 @@ type fakeDeviceCode struct {
 	signedIn  bool
 	silentErr error
 	authErr   error
-	authCalls int
-	record    azidentity.AuthenticationRecord
+	// wantClaims is the claims challenge Authenticate must be handed.
+	wantClaims string
+	authCalls  int
+	record     azidentity.AuthenticationRecord
 
 	// waitForFailures, when set, makes Authenticate wait until this many
 	// GetToken calls have failed, so a concurrency test is sure every caller
@@ -101,6 +103,9 @@ func (f *fakeDeviceCode) Authenticate(ctx context.Context, opts *policy.TokenReq
 	f.authCalls++
 	if opts == nil || len(opts.Scopes) != 1 || opts.Scopes[0] != graphScope {
 		return azidentity.AuthenticationRecord{}, errors.New("sign-in requested without the Graph .default scope")
+	}
+	if opts.Claims != f.wantClaims {
+		return azidentity.AuthenticationRecord{}, errors.New("sign-in requested without the claims of the token request")
 	}
 	if f.authErr != nil {
 		return azidentity.AuthenticationRecord{}, f.authErr
@@ -176,6 +181,46 @@ func TestCachedDeviceCodeCredential(t *testing.T) {
 		}
 	})
 
+	t.Run("claims challenge is carried into the sign-in", func(t *testing.T) {
+		useConfigDir(t)
+		inner := &fakeDeviceCode{record: testRecord("tenant-1", "client-1"), wantClaims: "claims-challenge"}
+		cred := &cachedDeviceCodeCredential{inner: inner, interactive: true, tenantID: "tenant-1", clientID: "client-1"}
+		req := policy.TokenRequestOptions{Scopes: []string{graphScope}, Claims: "claims-challenge"}
+		if _, err := cred.GetToken(context.Background(), req); err != nil {
+			t.Fatalf("GetToken() error = %v", err)
+		}
+	})
+
+	t.Run("failed sign-in is shared by concurrent callers", func(t *testing.T) {
+		useConfigDir(t)
+		const callers = 3
+		cause := errors.New("user declined")
+		inner := &fakeDeviceCode{authErr: cause, waitForFailures: callers + 1, allFailed: make(chan struct{})}
+		cred := &cachedDeviceCodeCredential{inner: inner, interactive: true, tenantID: "tenant-1", clientID: "client-1"}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		var wg sync.WaitGroup
+		errs := make(chan error, callers)
+		for range callers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := cred.GetToken(ctx, graphRequest)
+				errs <- err
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if !errors.Is(err, cause) {
+				t.Errorf("GetToken() error = %v, want it to wrap %v", err, cause)
+			}
+		}
+		if got := inner.calls(); got != 1 {
+			t.Errorf("Authenticate called %d times for %d callers after a failed sign-in, want 1", got, callers)
+		}
+	})
+
 	t.Run("failed sign-in is returned", func(t *testing.T) {
 		useConfigDir(t)
 		cause := errors.New("user declined")
@@ -197,7 +242,7 @@ func TestCachedDeviceCodeCredentialConcurrentSignIn(t *testing.T) {
 	useConfigDir(t)
 	const callers = 8
 	inner := &fakeDeviceCode{
-		record:          testRecord("tenant-1", "client-1"),
+		record: testRecord("tenant-1", "client-1"),
 		// Every caller's silent attempt, plus the first lock holder's re-check.
 		waitForFailures: callers + 1,
 		allFailed:       make(chan struct{}),

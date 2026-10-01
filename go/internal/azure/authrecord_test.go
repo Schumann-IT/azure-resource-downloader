@@ -36,13 +36,28 @@ func testRecord(tenantID, clientID string) azidentity.AuthenticationRecord {
 
 func TestAuthRecordPath(t *testing.T) {
 	dir := useConfigDir(t)
-	got, err := authRecordPath("tenant-1", "client-1")
-	if err != nil {
-		t.Fatalf("authRecordPath() error = %v", err)
+	tests := []struct {
+		name, tenant, client string
+		want                 string
+		wantErr              bool
+	}{
+		{name: "plain ids", tenant: "tenant-1", client: "client-1", want: filepath.Join(dir, "azure-rd", "auth", "tenant-1-client-1.json")},
+		{name: "traversal in client id", tenant: "tenant-1", client: "../x", wantErr: true},
+		{name: "separator in tenant id", tenant: "a/b", client: "client-1", wantErr: true},
+		{name: "empty tenant id", tenant: "", client: "client-1", wantErr: true},
+		{name: "empty client id", tenant: "tenant-1", client: "", wantErr: true},
+		{name: "space in id", tenant: "tenant 1", client: "client-1", wantErr: true},
 	}
-	want := filepath.Join(dir, "azure-rd", "auth", "tenant-1-client-1.json")
-	if got != want {
-		t.Errorf("authRecordPath() = %q, want %q", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := authRecordPath(tt.tenant, tt.client)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("authRecordPath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("authRecordPath() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

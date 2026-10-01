@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"azure-resource-downloader/internal/logger"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
 
@@ -26,7 +28,28 @@ func authRecordPath(tenantID, clientID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot locate the user configuration directory: %w", err)
 	}
-	return filepath.Join(dir, "azure-rd", "auth", tenantID+"-"+clientID+".json"), nil
+	if !validRecordID(tenantID) || !validRecordID(clientID) {
+		return "", fmt.Errorf("tenant-id and client-id must be non-empty and contain only letters, digits, dots and hyphens to name an authentication record")
+	}
+	name := tenantID + "-" + clientID + ".json"
+	if filepath.Base(name) != name {
+		return "", fmt.Errorf("tenant-id and client-id do not form a plain authentication record file name")
+	}
+	return filepath.Join(dir, "azure-rd", "auth", name), nil
+}
+
+// validRecordID reports whether id is safe inside a record file name: non-empty
+// and only [A-Za-z0-9.-], so it can never carry a path separator or "..".
+func validRecordID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, r := range id {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // loadAuthRecord returns the stored authentication record for this tenant and
@@ -39,7 +62,7 @@ func loadAuthRecord(tenantID, clientID string) (azidentity.AuthenticationRecord,
 	if err != nil {
 		return azidentity.AuthenticationRecord{}, false
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // path is built from the profile's ids under the user config dir
+	data, err := os.ReadFile(path) //nolint:gosec // path is built by authRecordPath, which admits only [A-Za-z0-9.-] ids as a plain file name under the user config dir
 	if err != nil {
 		return azidentity.AuthenticationRecord{}, false
 	}
@@ -48,6 +71,7 @@ func loadAuthRecord(tenantID, clientID string) (azidentity.AuthenticationRecord,
 		return azidentity.AuthenticationRecord{}, false
 	}
 	if !strings.EqualFold(record.TenantID, tenantID) || !strings.EqualFold(record.ClientID, clientID) {
+		logger.Default.Debug("authentication record ignored: tenant/client mismatch")
 		return azidentity.AuthenticationRecord{}, false
 	}
 	return record, true
