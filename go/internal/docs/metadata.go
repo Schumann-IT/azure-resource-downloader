@@ -37,9 +37,16 @@ const (
 // RunScope records what a run was asked to download. An empty scope is a full
 // export.
 type RunScope struct {
+	// Types is the allow-list as asked (--type, else the configured type:
+	// list), never the effective list, so a run that only leaves out excluded
+	// types is still labelled a full run.
 	Types         []string
 	ResourceIDs   []string
 	ResourceGroup string
+	// ExcludedTypes is the tenant profile's exclude-type, recorded on every
+	// run because it belongs to the profile, not to the selection. Excluded
+	// types are never requested, so they are neither covered nor skipped.
+	ExcludedTypes []string
 }
 
 // ExportRun bundles everything WriteExportMetadata needs from a single download
@@ -105,6 +112,9 @@ type ScopeMeta struct {
 	Types         []string `yaml:"types"`
 	ResourceIds   []string `yaml:"resourceIds"`
 	ResourceGroup string   `yaml:"resourceGroup"`
+	// ExcludedTypes is omitted when empty, so an export without exclusions
+	// stays byte-identical and an older export reads as excluding nothing.
+	ExcludedTypes []string `yaml:"excludedTypes,omitempty"`
 }
 
 // TypeMeta records per-type facts.
@@ -320,6 +330,7 @@ func scopeMeta(s RunScope) ScopeMeta {
 		Types:         sortedCopy(s.Types),
 		ResourceIds:   sortedCopy(s.ResourceIDs),
 		ResourceGroup: s.ResourceGroup,
+		ExcludedTypes: sortedCopy(s.ExcludedTypes),
 	}
 }
 

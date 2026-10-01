@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"azure-resource-downloader/internal/models"
@@ -47,5 +48,46 @@ func TestTenantCountsNoTypes(t *testing.T) {
 	}
 	if reason == "" {
 		t.Error("tenantCounts() returned no omission reason for an empty selection")
+	}
+}
+
+// TestTypesMarksAnExcludedTypeAndDoesNotCountIt: the map keeps an excluded
+// type — it is the catalogue an operator picks names from — but marks it and
+// never hands it to the live listing, so it can never report a refused 403.
+func TestTypesMarksAnExcludedTypeAndDoesNotCountIt(t *testing.T) {
+	const vm = "Microsoft.Compute/virtualMachines"
+	types := []string{vm, "Microsoft.Graph/groups", "Microsoft.Graph/namedLocations"}
+	excluded := map[string]bool{vm: true}
+
+	if got, want := countableTypes(types, excluded), []string{"Microsoft.Graph/groups", "Microsoft.Graph/namedLocations"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("countableTypes() = %v, want %v", got, want)
+	}
+
+	counts := map[string]int{"Microsoft.Graph/groups": 3}
+	unknown := map[string]string{"Microsoft.Graph/namedLocations": "403"}
+	tests := []struct {
+		name     string
+		typ      string
+		excluded bool
+		counts   map[string]int
+		want     []interface{}
+	}{
+		{name: "excluded, with counts", typ: vm, excluded: true, counts: counts,
+			want: []interface{}{"handler", "resource.fakeHandler", "excluded", "exclude-type"}},
+		{name: "excluded, offline", typ: vm, excluded: true,
+			want: []interface{}{"handler", "resource.fakeHandler", "excluded", "exclude-type"}},
+		{name: "counted", typ: "Microsoft.Graph/groups", counts: counts,
+			want: []interface{}{"handler", "resource.fakeHandler", "count", 3}},
+		{name: "unknown", typ: "Microsoft.Graph/namedLocations", counts: counts,
+			want: []interface{}{"handler", "resource.fakeHandler", "count", "unknown", "reason", "403"}},
+		{name: "offline", typ: "Microsoft.Graph/groups",
+			want: []interface{}{"handler", "resource.fakeHandler"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := typeRow(tt.typ, fakeHandler{}, tt.excluded, tt.counts, unknown); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("typeRow() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

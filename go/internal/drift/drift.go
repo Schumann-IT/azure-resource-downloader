@@ -53,7 +53,9 @@ const (
 // for conditions that degrade the answer without invalidating it (an
 // unattested baseline predating the recorded hashes) and an error wrapping
 // docs.ErrTenantMismatch or ErrNotComparable when the comparison must not run.
-func Preflight(meta docs.Metadata, expectDomain, currentTransformSha, currentFiltersSha string) ([]string, error) {
+// currentExcluded is this run's exclude-type, compared as a set with the
+// baseline's run.scope.excludedTypes.
+func Preflight(meta docs.Metadata, expectDomain, currentTransformSha, currentFiltersSha string, currentExcluded []string) ([]string, error) {
 	var warnings []string
 
 	if expectDomain != "" && meta.Tenant != "" && !strings.EqualFold(meta.Tenant, expectDomain) {
@@ -85,7 +87,49 @@ func Preflight(meta docs.Metadata, expectDomain, currentTransformSha, currentFil
 		return nil, fmt.Errorf("%w: the baseline's resource-filter configuration differs from this run's", ErrNotComparable)
 	}
 
+	if err := compareExclusions(meta.Run.Scope.ExcludedTypes, currentExcluded); err != nil {
+		return nil, err
+	}
+
 	return warnings, nil
+}
+
+// compareExclusions refuses when this run excludes a different set of types
+// than the baseline's download did. A type excluded since the baseline was
+// never listed now, so its baseline entries would read as removed; a type no
+// longer excluded would read as entirely added. A baseline without the field
+// excluded nothing.
+func compareExclusions(baseline, current []string) error {
+	inBaseline := make(map[string]bool, len(baseline))
+	for _, t := range baseline {
+		inBaseline[strings.ToLower(t)] = true
+	}
+	inCurrent := make(map[string]bool, len(current))
+	var added []string
+	for _, t := range current {
+		inCurrent[strings.ToLower(t)] = true
+		if !inBaseline[strings.ToLower(t)] {
+			added = append(added, t)
+		}
+	}
+	var removed []string
+	for _, t := range baseline {
+		if !inCurrent[strings.ToLower(t)] {
+			removed = append(removed, t)
+		}
+	}
+	if len(added) == 0 && len(removed) == 0 {
+		return nil
+	}
+	var parts []string
+	if len(added) > 0 {
+		parts = append(parts, "newly excluded: "+strings.Join(sortedCopy(added), ", "))
+	}
+	if len(removed) > 0 {
+		parts = append(parts, "no longer excluded: "+strings.Join(sortedCopy(removed), ", "))
+	}
+	return fmt.Errorf("%w: the tenant profile's exclude-type differs from the baseline's (%s); run 'azure-rd resource download' first",
+		ErrNotComparable, strings.Join(parts, "; "))
 }
 
 // Base64FileModeWarning returns a warning when the effective transform
@@ -267,6 +311,7 @@ func Compare(opts Options) *Report {
 		Types:         sortedCopy(opts.Scope.Types),
 		ResourceIds:   sortedCopy(opts.Scope.ResourceIDs),
 		ResourceGroup: opts.Scope.ResourceGroup,
+		ExcludedTypes: sortedCopy(opts.Scope.ExcludedTypes),
 	}
 
 	// Index baseline entries by resource id. Entries already known absent are

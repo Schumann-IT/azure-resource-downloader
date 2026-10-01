@@ -81,6 +81,33 @@ tenant-id: ""     # Entra tenant ID (required together with client-id)
 #     name: "^prod"
 
 # ---------------------------------------------------------------------------
+# Excluded types — WHICH resource types this tenant never lists (config-only)
+# ---------------------------------------------------------------------------
+# Resource types that are never listed for this tenant, typically the ARM types
+# of an Intune/Entra-only tenant whose account holds no subscription role and
+# whose listing would otherwise fail with "403 AuthorizationFailed" on every run.
+# An excluded type is never requested, so a run that leaves it out stays
+# COMPLETE: absence, prune and drift removals keep working for every other type.
+# Earlier entries and files of an excluded type are left untouched.
+#
+# Names are registered types ('azure-rd resource types'), matched
+# case-insensitively; an unknown name is an error. The exclusion is removed from
+# the configured 'type:' list and from --type alike, and naming an excluded type
+# with --type, 'type:', --resource-id or --resource-group is refused — this
+# profile is the tenant's record, a one-off flag does not override it.
+#
+# The exclusion is recorded in resources/metadata.yaml (run.scope.excludedTypes)
+# and 'resource drift' refuses to compare across a different exclusion: after
+# adding or changing this key, run 'resource download' before the next drift.
+#
+# The default is no exclusion. Leave this key commented out unless you need it.
+#
+# exclude-type:
+#   - Microsoft.Compute/virtualMachines
+#   - Microsoft.Storage/storageAccounts
+#   - Microsoft.Resources/resourceGroups
+
+# ---------------------------------------------------------------------------
 # Audit attribution — WHO changed a drifted resource (config-only)
 # ---------------------------------------------------------------------------
 # The Log Analytics workspace ID (a GUID — not the workspace name, not its ARM

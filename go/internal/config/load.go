@@ -146,13 +146,51 @@ var guidPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]
 // subscription and Reader rights to resolve, and a wrong workspace does not
 // fail loudly — it returns no rows. The key is tenant-scoped, so a value can
 // only have come from the profile.
+//
+// exclude-type must be a list of non-empty strings. Only the shape is checked
+// here: whether each name is a registered type is decided where the registry
+// is known (internal/runprep), which this package deliberately does not import.
 func validateValues(v *viper.Viper, profileFile string) error {
 	id := strings.TrimSpace(v.GetString(AuditWorkspaceKey))
 	if id != "" && !guidPattern.MatchString(id) {
 		return fmt.Errorf("invalid configuration in %s: %q must be a Log Analytics workspace id (a GUID), not a name or resource id: %q",
 			profileFile, AuditWorkspaceKey, id)
 	}
+	if err := validateExcludeType(v.Get(ExcludeTypeKey)); err != nil {
+		return fmt.Errorf("invalid configuration in %s: %q %w", profileFile, ExcludeTypeKey, err)
+	}
 	return nil
+}
+
+// validateExcludeType checks the shape of the exclude-type value: absent, or a
+// list whose every item is a non-empty string. A scalar is refused rather than
+// read as a one-item list, so a value that YAML parsed differently than meant
+// is never silently accepted.
+func validateExcludeType(raw any) error {
+	switch list := raw.(type) {
+	case nil:
+		return nil
+	case []string:
+		for i, item := range list {
+			if strings.TrimSpace(item) == "" {
+				return fmt.Errorf("item %d is empty", i+1)
+			}
+		}
+		return nil
+	case []any:
+		for i, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return fmt.Errorf("item %d must be a resource type name (a string), got %T", i+1, item)
+			}
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("item %d is empty", i+1)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("must be a list of resource type names, got %T", raw)
+	}
 }
 
 // SetDefaults registers the built-in defaults for settings that used to get one

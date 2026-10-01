@@ -90,6 +90,12 @@ timeout: 300
 # --resource-group are command-line only and have no key here: they are ad-hoc
 # ("re-download this one resource"), and a forgotten entry in a file would
 # silently scope every later run.
+#
+# To leave types out for ONE tenant — typically the ARM types of an
+# Intune/Entra-only tenant whose account holds no subscription role — use the
+# tenant-scoped exclude-type key in that tenant's profile instead (see
+# config.example.domain.yaml). Excluded types are removed from this list and
+# from --type alike; naming an excluded type here or in --type is refused.
 # Example:
 #   type:
 #     - Microsoft.Resources/resourceGroups

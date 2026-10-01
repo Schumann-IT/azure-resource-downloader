@@ -77,17 +77,27 @@ func runList(cmd *cobra.Command, args []string) error {
 		log.Info("--dry-run has no effect here: this command writes nothing either way")
 	}
 
+	// Resolve the selection against the tenant profile's exclude-type before
+	// signing in, on an offline registry (lazy credential, no network): an
+	// excluded type is never listed, and a selection naming one refuses here
+	// exactly as it would for a download.
+	lazyCred, err := azure.NewCredential("", "")
+	if err != nil {
+		return fmt.Errorf("failed to prepare Azure credentials: %w", err)
+	}
+	sel, err := runprep.SelectTypesFromConfig(handlers.NewRegistry(lazyCred, sub, false).GetAllTypes(),
+		selectedTypes, resourceIDs, resourceGroup)
+	if err != nil {
+		return err
+	}
+
 	// Unlike `resource types`, nothing about this command's question is
 	// answerable offline, so a missing session is a real error and is surfaced
 	// up front — the same fail-fast the download performs. The device-code path
 	// (--client-id/--tenant-id) is exempt: its sign-in happens at the first
 	// token request.
 	if clientID == "" {
-		probeCred, err := azure.NewCredential("", "")
-		if err != nil {
-			return fmt.Errorf("failed to prepare Azure credentials: %w", err)
-		}
-		if err := azure.VerifySession(ctx, probeCred); err != nil {
+		if err := azure.VerifySession(ctx, lazyCred); err != nil {
 			log.Debug("Session verification failed", "error", err)
 			return fmt.Errorf("not signed in to Azure; run 'az login' first, or set client-id and tenant-id in the tenant's configuration profile for device-code sign-in (%s)",
 				azure.ErrorSummary(err))
@@ -108,7 +118,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// fetch requests: scope, filters and the treatment of unlistable types are
 	// shared code, not a parallel implementation.
 	workerConfig := runprep.BuildWorkerConfig()
-	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, selectedTypes, sub,
+	requests, skippedTypes, emptyTypes, err := registry.BuildFetchRequests(ctx, resourceIDs, resourceGroup, sel.Effective, sub,
 		runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 	if err != nil {
 		return fmt.Errorf("failed to list resources: %w", err)

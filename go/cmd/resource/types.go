@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"azure-resource-downloader/internal/azure"
+	"azure-resource-downloader/internal/config"
 	"azure-resource-downloader/internal/handlers"
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/models"
@@ -93,12 +94,25 @@ func runTypes(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(types)
 
+	// The map keeps every registered type — it is the catalogue an operator
+	// picks names from — but a type the tenant profile excludes is marked and
+	// never counted, so it cannot report a refused listing. A selection naming
+	// an excluded type refuses, as it would for a download.
+	sel, err := runprep.SelectTypesFromConfig(registry.GetAllTypes(), selectedTypes, resourceIDs, resourceGroup)
+	if err != nil {
+		return err
+	}
+	excluded := make(map[string]bool, len(sel.Excluded))
+	for _, t := range sel.Excluded {
+		excluded[t] = true
+	}
+
 	// Enrich with tenant counts when — and only when — a session is available
 	// without interaction. Failing to obtain one is not an error: the offline
 	// map is complete and correct on its own terms.
 	workerConfig := runprep.BuildWorkerConfig()
 	counts, unknown, omitReason := tenantCounts(ctx, sub, viper.GetString("client-id"), viper.GetString("tenant-id"),
-		types, runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
+		countableTypes(types, excluded), runprep.ListingConcurrency(workerConfig, workersFlag, workersExplicit))
 
 	// State which of the two outputs this is: the same invocation prints
 	// different things on different machines, and an operator must never infer
@@ -131,22 +145,45 @@ func runTypes(cmd *cobra.Command, args []string) error {
 				// Cannot happen: types was filtered to registered handlers above.
 				return fmt.Errorf("no handler registered for resource type %s: %w", t, err)
 			}
-			kv := []interface{}{"handler", handlerIdentity(handler)}
-			if counts != nil {
-				if reason, isUnknown := unknown[t]; isUnknown {
-					// An unlistable type has no count, and zero is not it.
-					kv = append(kv, "count", "unknown", "reason", reason)
-				} else {
-					kv = append(kv, "count", counts[t])
-				}
-			}
-			log.Info(t, kv...)
+			log.Info(t, typeRow(t, handler, excluded[t], counts, unknown)...)
 		}
 	}
 
 	// Unknown counts and omitted counts are notes, never failures: a missing
 	// session or privilege warns, it does not fail the run.
 	return nil
+}
+
+// countableTypes returns the types a live listing may count: every type of the
+// map except the excluded ones, which are never listed.
+func countableTypes(types []string, excluded map[string]bool) []string {
+	countable := make([]string, 0, len(types))
+	for _, t := range types {
+		if !excluded[t] {
+			countable = append(countable, t)
+		}
+	}
+	return countable
+}
+
+// typeRow renders one line of the type map as key/value pairs: the handler,
+// then either the exclusion marker or — when counts were obtained — the count
+// or "unknown" with the reason. An excluded type is never counted.
+func typeRow(t string, handler models.ResourceHandler, excluded bool, counts map[string]int, unknown map[string]string) []interface{} {
+	kv := []interface{}{"handler", handlerIdentity(handler)}
+	switch {
+	case excluded:
+		kv = append(kv, "excluded", config.ExcludeTypeKey)
+	case counts == nil:
+	default:
+		if reason, isUnknown := unknown[t]; isUnknown {
+			// An unlistable type has no count, and zero is not it.
+			kv = append(kv, "count", "unknown", "reason", reason)
+		} else {
+			kv = append(kv, "count", counts[t])
+		}
+	}
+	return kv
 }
 
 // tenantCounts rolls the tenant's resources up per type — the same listing

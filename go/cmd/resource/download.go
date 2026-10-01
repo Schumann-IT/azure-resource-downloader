@@ -171,7 +171,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		Tenant:                 prep.Tenant,
 		ToolVersion:            version.Tool(),
 		GeneratedAt:            time.Now(),
-		Scope:                  docs.RunScope{Types: prep.SelectedTypes, ResourceIDs: prep.ResourceIDs, ResourceGroup: prep.ResourceGroup},
+		Scope:                  docs.RunScope{Types: prep.SelectedTypes, ResourceIDs: prep.ResourceIDs, ResourceGroup: prep.ResourceGroup, ExcludedTypes: prep.ExcludedTypes},
 		TransformConfigSha256:  docs.HashTransformConfig(prep.TransformerConfigs, prep.ResolveSecrets),
 		FiltersSha256:          docs.HashResourceFilters(prep.ResourceFilters),
 		ResolveSecrets:         prep.ResolveSecrets,
