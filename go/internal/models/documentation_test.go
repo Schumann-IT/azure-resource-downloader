@@ -310,3 +310,22 @@ func runPromptAssertions(t *testing.T, prompt string, present, absent []string) 
 		}
 	}
 }
+
+// TestPromptLinksPartialBytePinned pins every branch of the prompt-links partial
+// byte for byte; no registered handler sets SchemaReference or Links.Permissions,
+// so the golden files do not cover those lines.
+func TestPromptLinksPartialBytePinned(t *testing.T) {
+	doc := fullDoc()
+	doc.Template = `{{ template "prompt-links" . }}`
+
+	got := BuildDocumentationPrompt(doc)
+	want := "\n\nReference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):" +
+		"\n- API reference: " + doc.Links.EndpointDocs +
+		"\n- Schema reference: " + doc.Links.SchemaReference +
+		"\n- Required permissions: " + doc.Links.Permissions +
+		"\n- Best-practice baseline: " + doc.Links.BestPractices[0]
+	want += "\n\n" + DocumentationGroupsMarker()
+	if got != want {
+		t.Errorf("prompt-links = %q, want %q", got, want)
+	}
+}
