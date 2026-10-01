@@ -21,37 +21,6 @@ A **struck-through** title or plan item has shipped and its `CHANGELOG.md` entry
 struck, until the entry is done — then it is archived to `../.claude/archive/web/` with its full plan, never
 deleted, and the remaining entries are renumbered.
 
-### 1. Count an archived entry as a backlog change in the branch gate
-
-**Goal.** `npm run branch-ready` (and `make branch-ready-web`) must accept a branch that planned an entry and
-archived it again: today it fails with "NEXT-ITERATIONS.md is unchanged on this branch" whenever every entry
-the branch touched was both added and archived on it, because the backlog file then ends up identical to
-`main`. A branch that archived an entry has visibly delivered its backlog, so that must count.
-
-> **Why.** `scripts/lib/branch.js` sets `backlogChanged` from `git diff --quiet <base> HEAD --
-> NEXT-ITERATIONS.md`, so only the net difference counts. The rule it guards — every branch that changes
-> `web/` delivers, refines or adds an entry — is still met when the entry is added and archived on the same
-> branch; `facts.archived`, computed a few lines further down from the files added under
-> `.claude/archive/web/`, is the evidence. First seen on `feat/drift-attribution`, where the drift
-> attribution entry and the page-width fix were both planned and closed on the branch.
->
-> **Owner.** none — the root `CLAUDE.md` and `.claude/rules/next-iterations.md` wording is updated by the go
-> entry of the same name; no sequencing between them.
->
-> **Implementer.** sonnet
-
-**Plan.**
-
-- `scripts/lib/branch.js` exposes the fact the gate needs: the backlog counts as touched when
-  `NEXT-ITERATIONS.md` differs from the merge-base **or** `facts.archived` is non-empty. `scripts/branch-ready.js`
-  check 6 uses it; its ok line says which ("NEXT-ITERATIONS.md changed on this branch" or "NEXT-ITERATIONS.md
-  delivered on this branch (<n> archived entry(ies))"). The failure message is unchanged.
-- `test/readiness-git.spec.ts` (temp `git init` repositories, never this checkout) gains the cases: backlog
-  unchanged and nothing archived → not touched; an entry added and archived on the branch → touched; backlog
-  edited → touched.
-- `CHANGELOG.md`: none — internal tooling (say so when the entry is closed).
-
-
 ## Standing decisions
 
 Decisions that are not work items but constrain the ideas below, recorded so the next iteration does not

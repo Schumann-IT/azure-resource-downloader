@@ -131,9 +131,13 @@ if (!facts.available) {
     info('no changes in web/ on this branch — skipping the backlog and archive checks');
   } else {
     // 6. Every branch that changes web/ touches its backlog: it delivers, refines
-    //    or adds an entry. A small fix still gets a small entry.
+    //    or adds an entry. A small fix still gets a small entry. An entry added and
+    //    archived on the same branch leaves the file identical to the base, so an
+    //    archive file added on the branch counts as well.
     if (facts.backlogChanged) {
       ok('NEXT-ITERATIONS.md changed on this branch');
+    } else if (facts.backlogTouched) {
+      ok(`NEXT-ITERATIONS.md delivered on this branch (${facts.archived.length} archived entry(ies))`);
     } else {
       fail(
         'NEXT-ITERATIONS.md is unchanged on this branch — every branch that changes web/ delivers, refines or adds an entry (a small fix still gets a small entry)',

@@ -136,23 +136,23 @@ Rules for entries:
   (variable enumerations, defaults, syntax) — **configuration and routes are documented in `README.md`**,
   the single source of truth for them. Say that an option exists and what it is for, and point there.
 - **Released sections are SemVer versions with a date** (`## [0.1.0] - 2026-09-06`), newest first, each one
-  matching a `web/vX.Y.Z` git tag. This project's version line is its own and is unrelated to `go/`'s.
-  Cutting a release means renaming `[Unreleased]` to a bare, **undated** `## [X.Y.Z]`, starting a fresh
-  empty `[Unreleased]`, and bumping `version` in `package.json` to match — by hand, and only when asked; the
-  date is stamped by the root release script when it publishes, never by hand. `npm run release-ready`
-  never edits these files: it only reports whether a release can be cut (empty `[Unreleased]`,
-  `package.json` matching, no struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no
-  git command. `npm run branch-ready` is its counterpart for a feature/fix branch and asks the opposite
-  questions (`[Unreleased]` **written**, done entries archived and the rest renumbered, the backlog touched on
-  the branch, not on the release branch, `version` **untouched**); it also changes nothing, but it reports
-  every check and exits non-zero if **any** of them failed, so it can gate a merge. Its git is read-only and
-  goes through `scripts/lib/git.js`: a `git status --porcelain` scoped to `web/` as a **preflight** that
-  refuses to report on uncommitted changes (so the verdict describes the commit that will be merged), then
-  `rev-parse`, `merge-base`, `diff` and `show` for the branch checks; all of it degrades to a skip outside a
-  clone. `npm run start-item -- <n>` is the gate before implementing entry n (see `06-next-iterations.md`). The
+  matching a `web/vX.Y.Z` git tag. This project's version line is its own and is unrelated to `go/`'s. Cutting
+  a release means renaming `[Unreleased]` to a bare, **undated** `## [X.Y.Z]`, starting a fresh empty
+  `[Unreleased]`, and bumping `version` in `package.json` to match — by hand, and only when asked; the date is
+  stamped by the root release script when it publishes, never by hand. `npm run release-ready` never edits
+  these files: it only reports whether a release can be cut (empty `[Unreleased]`, `package.json` matching, no
+  struck-out `NEXT-ITERATIONS.md` entries, newest heading undated) and runs no git command. `npm run
+  branch-ready` is its counterpart for a feature/fix branch and asks the opposite questions (`[Unreleased]`
+  **written**, done entries archived and the rest renumbered, the backlog changed or an entry archived on the
+  branch, not on the release branch, `version` **untouched**); it also changes nothing, but it reports every
+  check and exits non-zero if **any** of them failed, so it can gate a merge. Its git is read-only and goes
+  through `scripts/lib/git.js`: a `git status --porcelain` scoped to `web/` as a **preflight** that refuses to
+  report on uncommitted changes (so the verdict describes the commit that will be merged), then `rev-parse`,
+  `merge-base`, `diff` and `show` for the branch checks; all of it degrades to a skip outside a clone. `npm
+  run start-item -- <n>` is the gate before implementing entry n (see `06-next-iterations.md`). The
   repository-wide branch and working-tree checks, date stamping, tagging and the GitHub release happen from
-  the repository root; the procedure lives in the **Development workflow** section of `../README.md`. The earlier
-  `RC1`/`RC2` naming is retired, so do not reintroduce it.
+  the repository root; the procedure lives in the **Development workflow** section of `../README.md`. The
+  earlier `RC1`/`RC2` naming is retired, so do not reintroduce it.
 - **Explain *why* and which invariant now holds**, not just what moved. If a change touches a
   non-negotiable (path safety, read-only, one `markdown-it` instance, no client-side JS, no-restart
   freshness), say explicitly how it is preserved.

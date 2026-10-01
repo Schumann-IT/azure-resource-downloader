@@ -2,6 +2,10 @@
 // The git facts behind the branch checks of `npm run branch-ready`, gathered in
 // one place so the report only turns them into lines and the spec can assert
 // them against a fixture repository. Read-only git only.
+//
+// `backlogChanged` is the net diff of NEXT-ITERATIONS.md against the merge-base;
+// `backlogTouched` also counts an entry added and archived on the same branch
+// (net-zero backlog diff, but a new archive file), which delivers the backlog too.
 
 const { git, isRepo, currentBranch, mergeBase, showFile } = require('./git');
 const { parseChangelog, parseFrontmatter } = require('./changelog');
@@ -16,6 +20,7 @@ function readBranchFacts({ root, releaseBranch = 'main', project }) {
     base: mergeBase(root, releaseBranch),
     folderChanged: null,
     backlogChanged: null,
+    backlogTouched: null,
     archived: [],
     baseUnreleasedCount: null,
     subjects: [],
@@ -36,6 +41,7 @@ function readBranchFacts({ root, releaseBranch = 'main', project }) {
       path: file,
       status: parseFrontmatter(git(['show', `HEAD:${file}`], { cwd: root }).stdout).status ?? '',
     }));
+  facts.backlogTouched = facts.backlogChanged || facts.archived.length > 0;
   facts.subjects = git(['log', '--no-merges', '--format=%s', `${facts.base}..HEAD`], { cwd: root })
     .stdout.split('\n')
     .filter((line) => line !== '');

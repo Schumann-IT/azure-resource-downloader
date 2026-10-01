@@ -112,6 +112,7 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
     expect(facts.folderChanged).toBe(true);
     expect(facts.backlogChanged).toBe(true);
+    expect(facts.backlogTouched).toBe(true);
     expect(facts.archived).toEqual([{ path: '.claude/archive/web/2026-09-29-done-entry.md', status: 'done' }]);
     expect(facts.baseUnreleasedCount).toBe(0);
     expect(facts.subjects).toEqual(['docs(web): close done entry']);
@@ -121,5 +122,49 @@ describeWithGit('start gate and branch facts against a fixture repository', () =
     const facts = readBranchFacts({ root, releaseBranch: 'nope', project: 'web' });
     expect(facts.available).toBe(true);
     expect(facts.base).toBeNull();
+    expect(facts.backlogChanged).toBeNull();
+    expect(facts.backlogTouched).toBeNull();
+  });
+
+  it('counts only a net backlog change or a web archive file as touching the backlog', async () => {
+    run(['switch', '-q', 'main']);
+
+    run(['switch', '-q', '-c', 'fix/other-file']);
+    await fsp.writeFile(path.join(root, 'other.txt'), 'x\n');
+    run(['add', '.']);
+    run(['commit', '-q', '-m', 'fix(web): other file']);
+    let facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
+    expect(facts.folderChanged).toBe(true);
+    expect(facts.backlogChanged).toBe(false);
+    expect(facts.backlogTouched).toBe(false);
+
+    run(['switch', '-q', 'main']);
+    run(['switch', '-q', '-c', 'fix/added-and-archived']);
+    const backlogPath = path.join(root, 'NEXT-ITERATIONS.md');
+    await fsp.appendFile(backlogPath, '\n## 3. Added\n\n**Goal.** A.\n\n**Plan.**\n\n- ~~x~~\n');
+    run(['add', '.']);
+    run(['commit', '-q', '-m', 'docs(web): plan added']);
+    await fsp.writeFile(backlogPath, BACKLOG);
+    await fsp.mkdir(path.join(repo, '.claude', 'archive', 'web'), { recursive: true });
+    await fsp.writeFile(path.join(repo, '.claude', 'archive', 'web', 'added.md'), '---\ntitle: Added\nstatus: done\n---\n');
+    await fsp.writeFile(path.join(root, 'other.txt'), 'y\n');
+    run(['add', '.']);
+    run(['commit', '-q', '-m', 'docs(web): close added']);
+    facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
+    expect(facts.backlogChanged).toBe(false);
+    expect(facts.archived).toEqual([{ path: '.claude/archive/web/added.md', status: 'done' }]);
+    expect(facts.backlogTouched).toBe(true);
+
+    run(['switch', '-q', 'main']);
+    run(['switch', '-q', '-c', 'fix/go-archive']);
+    await fsp.mkdir(path.join(repo, '.claude', 'archive', 'go'), { recursive: true });
+    await fsp.writeFile(path.join(repo, '.claude', 'archive', 'go', 'g.md'), '---\ntitle: G\nstatus: done\n---\n');
+    await fsp.writeFile(path.join(root, 'other.txt'), 'z\n');
+    run(['add', '.']);
+    run(['commit', '-q', '-m', 'fix(web): go archive only']);
+    facts = readBranchFacts({ root, releaseBranch: 'main', project: 'web' });
+    expect(facts.backlogChanged).toBe(false);
+    expect(facts.archived).toEqual([]);
+    expect(facts.backlogTouched).toBe(false);
   });
 });

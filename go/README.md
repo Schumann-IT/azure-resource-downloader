@@ -1423,15 +1423,15 @@ Conventions that CI and review expect:
 - `make branch-ready` (or `make branch-ready-go` from the repository root) reports whether a feature or fix
   branch is ready to ship: `make ci` passes, nothing is left struck out in `NEXT-ITERATIONS.md` (done entries
   archived) and the rest is numbered contiguously, `## [Unreleased]` records the work, the branch is not the
-  release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
-  grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
-  non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed: a
-  branch with no user-visible effect legitimately has none. There is no version check — this project's version
-  is the `go/vX.Y.Z` tag, not a file. On GitHub the pipeline (`make ci`) runs as the status check `ci-go` on
-  every push and the report half (`make branch-ready-report`: preflight and branch report, no pipeline) as
-  the status check `branch-ready-go` on the pull request (the `branch-ready` workflow in
-  `.github/workflows/`); branch protection requires both — see the
-  [monorepo README](../README.md#development-workflow).
+  release branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch, and every entry
+  archived as done on the branch grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it
+  reports every check and **exits non-zero if any of them failed**, so it can gate a merge. An empty
+  `[Unreleased]` is reported, not failed: a branch with no user-visible effect legitimately has none. There is
+  no version check — this project's version is the `go/vX.Y.Z` tag, not a file. On GitHub the pipeline (`make
+  ci`) runs as the status check `ci-go` on every push and the report half (`make branch-ready-report`:
+  preflight and branch report, no pipeline) as the status check `branch-ready-go` on the pull request (the
+  `branch-ready` workflow in `.github/workflows/`); branch protection requires both — see the [monorepo
+  README](../README.md#development-workflow).
 - It **refuses to run while `go/` has uncommitted changes**, before `make ci`, so the verdict describes the
   commit that will be merged rather than the editor's current state. That preflight is a read-only
   `git status --porcelain` scoped to `go/`, so an unrelated edit in `../web` cannot block it. The branch

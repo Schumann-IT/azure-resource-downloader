@@ -127,9 +127,11 @@ loc:
 	@echo "✅ LOC analysis complete"
 
 # Tests for the readers behind the readiness reports and the start gate
-# (scripts/lib/changelog.sh). Plain bash over heredoc fixtures; no files, no git.
+# (scripts/lib/changelog.sh, scripts/lib/branch.sh): the changelog readers over
+# heredocs, the branch facts against throw-away git repositories in a temp directory.
 test-scripts:
 	@scripts/lib/changelog_test.sh
+	@scripts/lib/branch_test.sh
 
 # Start gate: may implementation of NEXT-ITERATIONS.md entry N begin? Refuses on
 # the release branch, on a dirty go/ tree, when entry N is not in HEAD's backlog

@@ -731,16 +731,16 @@ web/
   read unless asked for. An abandoned entry is archived as `dropped` with a one-line reason.
 - `npm run branch-ready` (or `make branch-ready-web` from the repository root) reports whether a feature or
   fix branch is ready to ship: tests, lint and build pass, nothing is left struck out in `NEXT-ITERATIONS.md`
-  (done entries archived) and the rest is numbered contiguously, `## [Unreleased]` records the work,
-  `version` is untouched — bumping it and closing the changelog belong to the release — the branch is not the
-  release branch, `NEXT-ITERATIONS.md` changed on the branch, and every entry archived as done on the branch
-  grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every check and **exits
-  non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is reported, not failed:
-  a branch with no user- or operator-visible effect legitimately has none. On GitHub the pipeline (tests, lint,
-  build) runs as the status check `ci-web` on every push and the report half (`npm run branch-ready:report`:
-  preflight and branch report, no pipeline) as the status check `branch-ready-web` on the pull request (the
-  `branch-ready` workflow in `.github/workflows/`); branch protection requires both — see the
-  [monorepo README](../README.md#development-workflow).
+  (done entries archived) and the rest is numbered contiguously, `## [Unreleased]` records the work, `version`
+  is untouched — bumping it and closing the changelog belong to the release — the branch is not the release
+  branch, `NEXT-ITERATIONS.md` changed or an entry was archived on the branch, and every entry archived as
+  done on the branch grew `## [Unreleased]`. It edits nothing, and unlike `release-ready` it reports every
+  check and **exits non-zero if any of them failed**, so it can gate a merge. An empty `[Unreleased]` is
+  reported, not failed: a branch with no user- or operator-visible effect legitimately has none. On GitHub the
+  pipeline (tests, lint, build) runs as the status check `ci-web` on every push and the report half (`npm run
+  branch-ready:report`: preflight and branch report, no pipeline) as the status check `branch-ready-web` on
+  the pull request (the `branch-ready` workflow in `.github/workflows/`); branch protection requires both —
+  see the [monorepo README](../README.md#development-workflow).
 - It **refuses to run while `web/` has uncommitted changes**, before the tests and the build, so the verdict
   describes the commit that will be merged rather than the editor's current state. That preflight is a
   read-only `git status --porcelain`, scoped to `web/` so an unrelated edit in `../go` cannot block it. The

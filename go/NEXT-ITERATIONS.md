@@ -7,43 +7,6 @@ review while `CHANGELOG.md` records the what and why. Ideas that are deliberatel
 *Parked ideas* at the end, so they persist as the entries around them ship. `README.md` stays the single source
 of truth for what the tool *does today*.
 
-## 1. Count an archived entry as a backlog change in the branch gate
-
-**Goal.** `make branch-ready-go` must accept a branch that planned an entry and archived it again: today it
-fails with "NEXT-ITERATIONS.md is unchanged on this branch" whenever every entry the branch touched was both
-added and archived on it, because the backlog file then ends up identical to `main`. A branch that archived
-an entry has visibly delivered its backlog, so that must count.
-
-> **Why.** Check 5 of `scripts/branch-ready.sh` compares `NEXT-ITERATIONS.md` between the merge-base and
-> `HEAD` (`git diff --quiet "$base" HEAD -- "$next"`), so only the net difference counts. The rule it guards —
-> every branch that changes `go/` delivers, refines or adds an entry — is still met when the entry is added
-> and archived on the same branch; the archive file under `.claude/archive/go/` is the evidence. First seen on
-> `feat/drift-attribution` on the web side, where every entry was planned and closed on the branch; the go
-> gate has the same logic and passed there only because its entry already existed on `main`.
->
-> **Owner.** the gate's wording in the root `CLAUDE.md` ("the backlog changed on the branch") and in
-> `.claude/rules/next-iterations.md` ("when the backlog did not change on a branch that changed the project")
-> — updated at *done*. The web gate gets the same fix in its own entry; no sequencing between them.
->
-> **Implementer.** sonnet
-
-**Plan.**
-
-- Check 5 in `scripts/branch-ready.sh` passes when `NEXT-ITERATIONS.md` differs from the merge-base **or** at
-  least one file was added under `.claude/archive/go/` on the branch (`git diff --name-only --diff-filter=A
-  "$base" HEAD -- ':(top).claude/archive/go'`, the same pathspec the archive check uses). The ok line says
-  which: "NEXT-ITERATIONS.md changed on this branch" or "NEXT-ITERATIONS.md delivered on this branch (<n>
-  archived entry(ies))". The failure message is unchanged.
-- A script test, in the style of `scripts/lib/changelog_test.sh` and run by `make test-scripts`, builds a
-  throw-away repository in a temp directory (never this checkout) and asserts: backlog unchanged and nothing
-  archived → fail; entry added and archived on the branch → pass; backlog edited → pass. If the check is
-  easier to test as a function, move it into `scripts/lib/` first.
-- Documentation at *done*: `CHANGELOG.md` gets none (internal tooling, no operator-visible effect beyond the
-  gate no longer refusing a delivered branch — record it under the release-workflow area only if the
-  changelog policy counts gate behaviour as operator-visible); root `CLAUDE.md` and
-  `.claude/rules/next-iterations.md` describe the check as "the backlog changed or an entry was archived on
-  the branch".
-
 ## Parked ideas
 
 Deliberately not scheduled — kept here rather than in a work entry so they survive as the entries around them
