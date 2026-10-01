@@ -40,17 +40,17 @@ an entry has visibly delivered its backlog, so that must count.
 
 **Plan.**
 
-- New `scripts/lib/branch.sh` (sourced by `scripts/branch-ready.sh` next to `lib/changelog.sh`, read-only
+- ~~New `scripts/lib/branch.sh` (sourced by `scripts/branch-ready.sh` next to `lib/changelog.sh`, read-only
   git only, run with the working directory at `go/`): `archived_files <base>` prints the `.md` files added
   under `:(top).claude/archive/go` between `<base>` and `HEAD` (the query check 7 runs today, moved
   verbatim), and `backlog_state <base>` prints `changed` when `NEXT-ITERATIONS.md` differs from `<base>`,
-  else `delivered <n>` when `archived_files` lists `n > 0` files, else nothing.
-- Check 5 in `scripts/branch-ready.sh` uses `backlog_state`: `changed` → ok "NEXT-ITERATIONS.md changed on
+  else `delivered <n>` when `archived_files` lists `n > 0` files, else nothing.~~
+- ~~Check 5 in `scripts/branch-ready.sh` uses `backlog_state`: `changed` → ok "NEXT-ITERATIONS.md changed on
   this branch"; `delivered <n>` → ok "NEXT-ITERATIONS.md delivered on this branch (<n> archived
   entry(ies))"; empty → the existing failure message, unchanged. Check 7 takes its file list from
   `archived_files`; its behaviour does not change. Update the check-5 comment to say an archived entry
-  counts.
-- New `scripts/lib/branch_test.sh` (same `assert_eq` style as `scripts/lib/changelog_test.sh`): builds
+  counts.~~
+- ~~New `scripts/lib/branch_test.sh` (same `assert_eq` style as `scripts/lib/changelog_test.sh`): builds
   throw-away repositories under `mktemp -d` (removed by a `trap`, never this checkout) laid out as
   `go/NEXT-ITERATIONS.md`, `go/CHANGELOG.md`, `.claude/archive/go/` and `.claude/archive/web/`, with git run
   as `git -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false` and `init -b main`,
@@ -58,10 +58,10 @@ an entry has visibly delivered its backlog, so that must count.
   empty; an entry added and then removed from the backlog together with a new `.claude/archive/go/*.md`
   (net-zero backlog diff) → `delivered 1`; the backlog edited → `changed`; edited and archived → `changed`;
   a file added only under `.claude/archive/web/` → empty; `archived_files` lists exactly the added go file.
-  Skips with a note and exits 0 when `git` is not available.
-- `make test-scripts` runs both `scripts/lib/changelog_test.sh` and `scripts/lib/branch_test.sh`; its
+  Skips with a note and exits 0 when `git` is not available.~~
+- ~~`make test-scripts` runs both `scripts/lib/changelog_test.sh` and `scripts/lib/branch_test.sh`; its
   Makefile comment replaces "Plain bash over heredoc fixtures; no files, no git" with "the changelog
-  readers over heredocs, the branch facts against throw-away git repositories in a temp directory".
+  readers over heredocs, the branch facts against throw-away git repositories in a temp directory".~~
 - Documentation at *done*: `CHANGELOG.md` gets a `### Fixed` entry (the gate is an operator-facing script,
   and the gate itself refuses an entry archived as done without `[Unreleased]` growing); `README.md`'s
   `make branch-ready` paragraph, root `README.md`, root `CLAUDE.md`, `.claude/rules/next-iterations.md` and

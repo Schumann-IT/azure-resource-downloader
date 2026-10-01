@@ -25,6 +25,8 @@ changelog="CHANGELOG.md"
 next="NEXT-ITERATIONS.md"
 # shellcheck source=lib/changelog.sh
 source scripts/lib/changelog.sh
+# shellcheck source=lib/branch.sh
+source scripts/lib/branch.sh
 passed=0
 failed=0
 
@@ -115,12 +117,15 @@ else
     info "no changes in go/ on this branch — skipping the backlog and archive checks"
   else
     # 5. Every branch that changes go/ touches its backlog: it delivers, refines
-    #    or adds an entry. A small fix still gets a small entry.
-    if git diff --quiet "$base" HEAD -- "$next"; then
-      fail "$next is unchanged on this branch — every branch that changes go/ delivers, refines or adds an entry (a small fix still gets a small entry)"
-    else
-      ok "$next changed on this branch"
-    fi
+    #    or adds an entry. A small fix still gets a small entry. An entry planned
+    #    and archived on the same branch leaves the backlog identical to the
+    #    base, so an archived entry (the archive file is the evidence) counts too.
+    state=$(backlog_state "$base")
+    case "$state" in
+      changed) ok "$next changed on this branch" ;;
+      delivered\ *) ok "$next delivered on this branch (${state#delivered } archived entry(ies))" ;;
+      *) fail "$next is unchanged on this branch — every branch that changes go/ delivers, refines or adds an entry (a small fix still gets a small entry)" ;;
+    esac
 
     # 6. Every commit on the branch follows Conventional Commits (the squash
     #    merge takes the pull request title, but the branch history is what a
@@ -137,7 +142,7 @@ else
     #    files ADDED on the branch count: a later touch of an archive file is not
     #    a "done" event. Archive file names are <date>-<slug>.md, never with
     #    spaces, so the unquoted loop is safe.
-    archived=$(git diff --name-only --diff-filter=A "$base" HEAD -- ':(top).claude/archive/go' | grep '\.md$' || true)
+    archived=$(archived_files "$base")
     done_count=0
     bad=""
     for f in $archived; do
