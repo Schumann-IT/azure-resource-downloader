@@ -1193,17 +1193,17 @@ func referenceFixture(t *testing.T) (string, map[string]WorkItem) {
 	bodies := map[string]string{
 		"docs/" + compType + "/policy.md": "# Policy\n\n## Assignments\n\n<!-- assignments:start -->\n\n" +
 			"| Direction | Target | Filter |\n|---|---|---|\n" +
-			"| Include | [Group](../groups/group.md) · assigned security group · `" + refGroupID + "` | include [Filter](../assignmentFilters/filter.md) |\n\n" +
+			"| Include | [[PROD] Group](../groups/group.md) · assigned security group · `" + refGroupID + "` | include [Filter](../assignmentFilters/filter.md) |\n\n" +
 			"<!-- assignments:end -->\n\n## Settings\n\n<!-- notifications:start -->\n" +
 			"Noncompliance actions notify through [Template](../notificationMessageTemplates/template.md).\n" +
 			"<!-- notifications:end -->\n",
 		"docs/" + groupsType + "/group.md": "# Group\n\n## Usage as assignment target\n\n<!-- targeted-by:start -->\n## Targeted by\n\n" +
 			"1 resource assigns this group.\n\n| Resource | Type | Direction | Filter |\n|---|---|---|---|\n" +
-			"| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n" +
+			"| [\\[PROD\\] Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n" +
 			"<!-- targeted-by:end -->\n",
 		"docs/" + notificationMessageTemplatesType + "/template.md": "# Template\n\n## Usage and references\n\n<!-- used-by:start -->\n## Used by\n\n" +
 			"1 resource references this template in a noncompliance action.\n\n| Resource | Type |\n|---|---|\n" +
-			"| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n<!-- used-by:end -->\n",
+			"| [[PROD] Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n<!-- used-by:end -->\n",
 		"docs/" + assignmentFiltersType + "/filter.md": "# Filter\n",
 	}
 	for doc, body := range bodies {
@@ -1289,14 +1289,14 @@ func TestSectionSixReferenceScript(t *testing.T) {
 		{
 			name: "policy row removed from the group's Targeted by",
 			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
-				editFixtureDoc(t, dir, groupDoc, "| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n", "")
+				editFixtureDoc(t, dir, groupDoc, "| [\\[PROD\\] Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n", "")
 			},
 			message: "assigns a group whose Targeted by does not list this document",
 		},
 		{
 			name: "bare group GUID in an assignments block",
 			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
-				editFixtureDoc(t, dir, policyDoc, "[Group](../groups/group.md) · assigned security group · ", "")
+				editFixtureDoc(t, dir, policyDoc, "[[PROD] Group](../groups/group.md) · assigned security group · ", "")
 			},
 			message: "bare GUID in a marked block",
 		},
@@ -1320,7 +1320,7 @@ func TestSectionSixReferenceScript(t *testing.T) {
 		{
 			name: "notifications link with no Used by answer",
 			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
-				editFixtureDoc(t, dir, templateDoc, "| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n", "")
+				editFixtureDoc(t, dir, templateDoc, "| [[PROD] Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n", "")
 			},
 			message: "notifies through a template whose Used by does not list this document",
 		},

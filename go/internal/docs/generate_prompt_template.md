@@ -879,7 +879,7 @@ BLOCKS = ("assignments", "targeted-by", "used-by", "notifications")
 HASHES = ("assignmentsSha256", "notificationsSha256", "usedBySha256", "targetedBySha256")
 GUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 SENTINEL = "00000000-0000-0000-0000-000000000000"
-LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)[^)]*\)")
+LINK = re.compile(r"\[(?:[^\[\]\\]|\\.|\[[^\[\]]*\])*\]\(([^)\s]+)[^)]*\)")
 DANGLING = "⚠️ not in export"
 
 def block(text, name):
