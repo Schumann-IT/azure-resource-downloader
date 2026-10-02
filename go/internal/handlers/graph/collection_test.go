@@ -1,11 +1,15 @@
 package graph
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"azure-resource-downloader/internal/logger"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -230,5 +234,34 @@ func TestAccessProbesPerGroup(t *testing.T) {
 		if perms := h.RequiredPermissions(); len(perms) == 0 || !strings.HasPrefix(perms[0], group+".") {
 			t.Errorf("%s: %s declares %v, not a permission of the group", group, h.GetType(), perms)
 		}
+	}
+}
+
+// TestWarnUnexpectedAssignments verifies the warning for assignments returned
+// by a type without an assignments concept: logged with type, id and count when
+// entries came back, silent for none. Not parallel: it swaps the default logger's
+// output.
+func TestWarnUnexpectedAssignments(t *testing.T) {
+	var buf bytes.Buffer
+	logger.Default.SetOutput(&buf)
+	t.Cleanup(func() { logger.Default.SetOutput(os.Stderr) })
+
+	warnUnexpectedAssignments("Microsoft.Graph/deviceComplianceScripts", "script-1", 2)
+	out := buf.String()
+	for _, want := range []string{
+		"assignments returned for a type without an assignments concept; exported but not documented",
+		"Microsoft.Graph/deviceComplianceScripts",
+		"script-1",
+		"count=2",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("warning %q missing %q", out, want)
+		}
+	}
+
+	buf.Reset()
+	warnUnexpectedAssignments("Microsoft.Graph/deviceComplianceScripts", "script-1", 0)
+	if buf.Len() != 0 {
+		t.Errorf("unexpected output for no assignments: %q", buf.String())
 	}
 }

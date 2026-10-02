@@ -35,7 +35,7 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"- An H1 title set to the resource's display name.",
 		"a short summary paragraph",
 		"a metadata table stating the resource type",
-		"a table of any assignments/targeting present",
+		"Then the assignments table, alone between a `<!-- assignments:start -->` line",
 		"Then the following H2 sections, unnumbered, in this order:",
 		"References:\n",
 		"Lifecycle and operations:\n",
@@ -46,7 +46,11 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"- document EVERY setting/property present in the YAML.",
 		"collapsible HTML `<details>` block, collapsed by default",
 		"externally decoded sidecar file",
-		"group names are NOT resolved",
+		"Never write a group name yourself",
+		"Never reprint a secret.",
+		"`omaSettings` entry with `isEncrypted: true`",
+		"never mention this prompt, the documentation run, splicing or markers",
+		"the owning setting's path, a `#` and the key's path inside the payload",
 		"never invent values",
 		"masked or redacted",
 		"credential-shaped",
@@ -76,7 +80,7 @@ func TestBuildDocumentationPromptOptionalFields(t *testing.T) {
 				"- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				"- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/schema",
 				"- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference",
-				"- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
+				"- Microsoft guidance: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
 				"Related resource types exported alongside this one",
 				"- Microsoft.Graph/groups (assignment target groups)",
 				"This resource carries embedded or encoded payloads: omaSettings (custom OMA-URI values)",
@@ -207,7 +211,7 @@ func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
 				"- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				"- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/schema",
 				"- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference",
-				"- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
+				"- Microsoft guidance: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
 				"Related resource types exported alongside this one",
 				"- give particular attention to: omaSettings, encrypted values.",
 				"- Use real, verifiable URLs;",
@@ -332,7 +336,7 @@ func TestPromptLinksPartialBytePinned(t *testing.T) {
 		"\n- Schema reference: " + doc.Links.SchemaReference +
 		"\n- Required permissions: " + doc.Links.Permissions +
 		"\n- Admin center: " + doc.Links.AdminCenter +
-		"\n- Best-practice baseline: " + doc.Links.BestPractices[0]
+		"\n- Microsoft guidance: " + doc.Links.BestPractices[0]
 	want += "\n\n" + DocumentationGroupsMarker()
 	if got != want {
 		t.Errorf("prompt-links = %q, want %q", got, want)
@@ -378,12 +382,16 @@ func TestPromptClosedSetAssignmentsPointer(t *testing.T) {
 }
 
 // TestPromptLifecycleRule verifies the lifecycle rule builds on the curated
-// lifecycle notes when the type has them, and otherwise confines the section to
-// what the YAML shows and states that deprecation status is not documented.
+// lifecycle notes when the type has them (stating only the ones that apply),
+// and otherwise confines the section to what the YAML shows and states that
+// deprecation status is not documented; either way, points that don't apply are
+// skipped and a point the notes and the YAML don't support is reported as not
+// documented rather than filled in.
 func TestPromptLifecycleRule(t *testing.T) {
 	const (
-		withNotes    = "- Build on the lifecycle notes listed above and add only what the YAML itself shows."
-		withoutNotes = "- State only what the YAML itself shows, and say that deprecation or migration status is not documented here."
+		coverRule    = "- Of the points below, skip those that don't apply to this resource and cover the others only as far as the lifecycle notes or the YAML support them; say once which of them are not documented here — never fill one in from general knowledge."
+		withNotes    = "- Build on the lifecycle notes listed above and add only what the YAML itself shows.\n- Of those notes, state the ones that apply to this resource (given its subtype, platform and settings) and leave out the ones that don't.\n" + coverRule
+		withoutNotes = "- State only what the YAML itself shows, and say that deprecation or migration status is not documented here.\n" + coverRule
 	)
 	tests := []struct {
 		name      string
@@ -422,20 +430,20 @@ func TestPromptEvidenceRules(t *testing.T) {
 		{
 			name:    "URL rule gives no link rather than a guessed one",
 			mutate:  func(*ResourceDocumentation) {},
-			present: []string{"otherwise give it no link — never a guessed or merely nearby URL"},
+			present: []string{"otherwise give it no link — never a recalled, guessed or merely nearby URL"},
 			absent:  []string{"approximate"},
 		},
 		{
 			name:    "baseline listed",
 			mutate:  func(*ResourceDocumentation) {},
-			present: []string{"only where a best-practice baseline listed above covers the setting"},
-			absent:  []string{"No best-practice baseline is listed for this type"},
+			present: []string{"only where a Microsoft guidance page listed above states one for the setting"},
+			absent:  []string{"No Microsoft guidance is listed for this type"},
 		},
 		{
 			name:    "no baseline listed",
 			mutate:  func(d *ResourceDocumentation) { d.Links.BestPractices = nil },
-			present: []string{"No best-practice baseline is listed for this type"},
-			absent:  []string{"only where a best-practice baseline listed above covers the setting"},
+			present: []string{"No Microsoft guidance is listed for this type"},
+			absent:  []string{"only where a Microsoft guidance page listed above states one for the setting"},
 		},
 		{
 			name:   "embedded payloads decoded only when text",

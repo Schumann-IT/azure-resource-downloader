@@ -17,23 +17,23 @@ References:
 Membership:
 - state whether membership is assigned or dynamic (dynamic when `groupTypes` contains `DynamicMembership`).
 - for dynamic groups, explain the `membershipRule` expression clause by clause in plain language, and note the `membershipRuleProcessingState`.
-- flag rules that reference mutable or user-controllable attributes (e.g. `department`, `jobTitle`), since they silently change who receives the policies assigned to this group.
+- flag rules that key on attributes maintained outside the group (e.g. `department` or `jobTitle`, set by admins, HR processes or directory synchronization), since a change there silently changes who receives the policies assigned to this group.
 
 Usage as assignment target:
-- the documentation run splices a `Targeted by` block into this document that lists every exported resource assigning this group; do not write your own list of referencing resources.
+- the documentation run adds a `Targeted by` block at the end of this section that lists every exported resource assigning this group; do not write your own list of referencing resources.
 - state only what renaming or deleting this group means for the resources that target it.
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- explain what deleting or restoring the group, and converting it between assigned and dynamic membership, means in operation.
+- cover what deleting or restoring the group, and converting it between assigned and dynamic membership, means in operation.
 
 Security:
 {{ template "prompt-change-role" . }}
 - call out `isAssignableToRole: true` (role-assignable groups grant Entra roles to members — owner changes are privileged operations).
-- flag dynamic rules that could be exploited to gain group membership (and thereby policy scope) by users who can edit their own directory attributes.
+- flag dynamic rules that someone could satisfy by editing attributes they control: by default member users can change only their own profile photo and mobile phone number and can manage all properties of devices they own, but attributes synchronized from on-premises Active Directory may be writable by the users themselves (SELF write). A rule is only as safe as the write controls on its attributes, which the export doesn't show — never call an attribute user-editable or safe from the rule alone.
 
 Properties:
-- document EVERY remaining property present in the YAML.
+- document EVERY property present in the YAML, including those summarised in the metadata table and the Membership section.
 {{- template "prompt-key-settings" . }}
 - Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link — e.g. `<details data-setting="membershipRuleProcessingState">`.
 {{ template "prompt-details-attrs" . }}

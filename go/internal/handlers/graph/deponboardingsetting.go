@@ -37,13 +37,17 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 				"syncedDeviceCount",
 				"lastSuccessfulSyncDateTime",
 				"lastSyncErrorCode",
-				"enrollmentProfiles",
+				"enrollmentProfiles (the token's ADE enrollment policies: the one with isDefault true, where set, is applied to devices that enroll with the token; a synced device that gets no policy, neither assigned nor default, fails enrollment)",
 			},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
 				"Renew the token yearly: download a new server token in Apple Business Manager or Apple School Manager and use Renew token in Intune with the Apple ID that created the original token; also renew when that account's password changes or its owner leaves.",
 				"Downloading a new token in Apple Business Manager invalidates the one Intune uses; an expired or invalid token causes sync and automated-enrollment errors.",
+				"Changing the Apple ID used to create the token doesn't affect enrolled devices until they re-enroll (unlike replacing the Apple MDM push certificate, which forces all devices to re-enroll); devices removed from a token leave Intune management and must be wiped and re-enrolled with a new token to stay managed.",
 				"A token can be deleted only after its devices and enrollment profiles are removed; deleting devices from a token removes them from Intune management.",
+				"Manual syncs run at most every 15 minutes and full syncs at most every seven days; a device deleted in Intune but still assigned to the token in Apple Business reappears on the next full sync.",
+				"In enrollment policies, legacy Setup Assistant authentication is deprecated on iOS/iPadOS and no longer recommended on macOS (use Setup Assistant with modern authentication), and the iOS/iPadOS option Run Company Portal in Single App Mode until authentication is no longer supported and must be No.",
+				"Devices enrolled with user affinity need an Intune-licensed user; devices without user affinity need an Intune device license unless an Intune-licensed user is associated with them.",
 			},
 			EmbeddedPayloads: []string{"enrollmentProfiles[].managementCertificates[].certificate (base64 management certificate)"},
 			RelatedTypes: []string{
@@ -60,6 +64,8 @@ func NewDepOnboardingSettingHandler(credential azcore.TokenCredential) (*GraphCo
 				BestPractices: []string{
 					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-apple-token",
 					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/manage-devices-tokens-apple",
+					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-automated-ios",
+					"https://learn.microsoft.com/en-us/intune/device-enrollment/apple/setup-automated-macos",
 				},
 			},
 		},

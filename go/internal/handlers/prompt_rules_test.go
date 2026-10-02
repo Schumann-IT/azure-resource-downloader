@@ -11,7 +11,7 @@ import (
 const (
 	// assignmentsInstruction is the default/referenced templates' assignments
 	// bullet (the prompt-assignments partial).
-	assignmentsInstruction = "a table of any assignments/targeting present"
+	assignmentsInstruction = "Then the assignments table, alone between a `<!-- assignments:start -->` line"
 	// assignmentsPointer is the closed-set paragraph's pointer to that block.
 	assignmentsPointer = "assignment information belongs in the assignments block above"
 	// expirySection marks the credential template, the only one with an
@@ -60,6 +60,9 @@ func TestDocumentationPromptEvidenceRules(t *testing.T) {
 				want := "This resource carries embedded or encoded payloads: " + strings.Join(doc.EmbeddedPayloads, ", ")
 				if !strings.Contains(prompt, want) {
 					t.Errorf("prompt does not render the declared embedded payloads %q", want)
+				}
+				if !strings.Contains(prompt, "Reproduce every decoded script in full and verbatim") {
+					t.Error("prompt does not require decoded scripts verbatim")
 				}
 			}
 
@@ -120,8 +123,8 @@ func docHeadings(t *testing.T, prompt string) []string {
 // last — and against the shared settings-section rules every family carries.
 func TestDocumentationPromptSectionShape(t *testing.T) {
 	const (
-		baselineListed   = "- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting"
-		baselineUnlisted = "- No best-practice baseline is listed for this type"
+		baselineListed   = "- State a recommended value only where a Microsoft guidance page listed above states one for the setting"
+		baselineUnlisted = "- No Microsoft guidance is listed for this type"
 		lifecycleNotes   = "- Build on the lifecycle notes listed above and add only what the YAML itself shows."
 		lifecycleNone    = "- State only what the YAML itself shows, and say that deprecation or migration status is not documented here."
 	)
@@ -130,6 +133,7 @@ func TestDocumentationPromptSectionShape(t *testing.T) {
 		"`data-note=\"security\"` when the property is one called out in the Security section",
 		"- Do not omit a property this section covers;",
 		"- Only describe what is actually present; never invent values.",
+		"link a setting only to a page listed under References",
 		"- Where a value is masked or redacted by the service",
 		"call it out in the **Security** section as an exposed credential to rotate",
 	}
@@ -196,6 +200,9 @@ func TestDocumentationPromptSectionShape(t *testing.T) {
 				if strings.Contains(prompt, unwanted) {
 					t.Errorf("prompt unexpectedly contains %q", unwanted)
 				}
+			}
+			if strings.Contains(strings.ToLower(prompt), "best-practice") {
+				t.Error("prompt still names the old \"best-practice\" label; curated pages are Microsoft guidance")
 			}
 		})
 	}

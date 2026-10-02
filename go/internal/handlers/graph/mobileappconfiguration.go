@@ -34,20 +34,23 @@ func NewMobileAppConfigurationHandler(credential azcore.TokenCredential) (*Graph
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
 			Lifecycle: []string{
 				"Settings are delivered when the targeted app is installed and read by the app when it checks for them (typically at first run); on iOS/iPadOS this works only for MDM-managed apps, not DDM-managed apps.",
+				"Several managed-device app configuration policies giving one key different values for the same app and user have no conflict resolution, so target one policy per app and user; on Android, a conflict over connected apps leaves connected apps disallowed.",
+				"Delivery state shows per device in Devices > All devices > (device) > App configuration, and the policy's Overview shows its status by device and by user.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/mobileApps (targetedMobileApps)",
 				"Microsoft.Graph/groups (assignment target groups)",
 				"Microsoft.Graph/assignmentFilters (assignment filters)",
+				"Microsoft.Graph/iosManagedAppProtections (IntuneMAMUPN and IntuneMAMOID keys let iOS app protection target Intune managed devices)",
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
 			SubtypeNote: "Platform-polymorphic managed-device app configuration (iosMobileAppConfiguration, androidManagedStoreAppConfiguration, androidForWorkMobileAppConfiguration) - identify the platform from @odata.type.",
 			KeySettings: []string{
 				"targetedMobileApps",
-				"settings (appConfigKey, appConfigKeyType, appConfigKeyValue)",
-				"permissionActions",
+				"settings (appConfigKey, appConfigKeyType, appConfigKeyValue; keys and values are defined by the app's vendor, and values in {{ }} are tokens Intune fills per user or device)",
+				"permissionActions (granted permissions override the device's default app permission policy for that app)",
 				"profileApplicability",
-				"connectedAppsEnabled",
+				"connectedAppsEnabled (works only on personally owned and corporate-owned work profile devices; work data in the personal apps it connects isn't protected by app protection policy)",
 			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-apps-manageddevicemobileappconfiguration?view=graph-rest-beta",

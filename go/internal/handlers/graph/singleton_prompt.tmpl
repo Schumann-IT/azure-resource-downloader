@@ -4,8 +4,8 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a tenant-wide singleton: exactly one instance exists per tenant, it applies to the whole tenant and it has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
 
-- An H1 title naming the configuration area (derived from the resource type), since singletons have no meaningful display name.
-- Directly below the title, without a heading: a short summary paragraph describing what this tenant-wide configuration controls and its current overall posture. {{ template "prompt-purpose-rule" . }}
+- An H1 title set to the object's `displayName` where it has one (for `organization`, the tenant's name), otherwise a title naming the configuration area derived from the resource type.
+- Directly below the title, without a heading: a short summary paragraph describing what this tenant-wide configuration controls and how it is set. {{ template "prompt-purpose-rule" . }}
 - Directly after the summary paragraph, a metadata table stating the resource type and the resource ID.
 
 Then the following H2 sections, unnumbered, in this order:
@@ -16,18 +16,18 @@ References:
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- document operational guidance: deprecation or migration status, side effects of changing tenant-wide values on existing users and devices
-- who in the organization typically owns this configuration.
+- cover deprecation or migration status and the side effects of changing tenant-wide values on existing users and devices.
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive settings{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above, including the tenant-wide security impact{{ end }}.
+- call out security-sensitive settings{{ if .Links.BestPractices }} and any deviations from a value that a Microsoft guidance page listed above recommends, including the tenant-wide security impact{{ end }}.
 
 Settings:
 - document EVERY setting/property present in the YAML.
 {{- template "prompt-key-settings" . }}
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link — e.g. `<details data-setting="installExperience.runAsAccount">`.
 {{ template "prompt-details-attrs" . }}
+- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 {{ template "prompt-complete-rule" . }}
 {{ template "prompt-baseline-rule" . }}
 {{ template "prompt-settings-grouping" . }}

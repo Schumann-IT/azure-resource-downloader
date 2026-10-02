@@ -37,6 +37,9 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 			Lifecycle: []string{
 				"Old-format endpoint security and security baseline profiles: new ones can no longer be created, and baselines released before May 2023 can't be upgraded to the new format; recreate them as Settings Catalog based policies (deviceManagementConfigurationPolicies).",
 				"Deleting or unassigning stops enforcement, but settings that are no longer managed may stay on the device (CSP-dependent).",
+				"Its settings conflict with any baseline, endpoint security policy or profile that sets the same setting differently on the same device (status Conflict, resolved manually); a new-format replacement doesn't inherit this profile's assignments, and this profile keeps applying until it is unassigned or deleted.",
+				"Old-format baseline profiles report a posture per device (Matches default baseline, Matches custom settings, Misconfigured for Error, Pending or Conflict, Not applicable); data appears up to 24 hours after the first assignment and up to six hours after later changes.",
+				"The least-privileged built-in role that can manage security baseline profiles is the Intune Policy and Profile Manager.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceManagementConfigurationPolicies (new-format successor)",
@@ -50,6 +53,10 @@ func NewDeviceManagementIntentHandler(credential azcore.TokenCredential) (*Graph
 				BestPractices: []string{
 					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/overview",
 					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/configure-baselines",
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/ref-windows-mdm-settings",
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/ref-defender-settings",
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/ref-edge-settings",
+					"https://learn.microsoft.com/en-us/intune/device-security/security-baselines/ref-windows-365-settings",
 				},
 				AdminCenter: "https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview",
 			},

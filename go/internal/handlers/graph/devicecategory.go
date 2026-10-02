@@ -23,15 +23,17 @@ func NewDeviceCategoryHandler(credential azcore.TokenCredential) (*GraphCollecti
 		azureType: "Microsoft.Graph/deviceCategories",
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
-			OmitGroupAxes:       true,
 			Purpose:             "An Intune device category used to group and target devices at enrollment.",
 			RequiredPermissions: []string{"DeviceManagementManagedDevices.Read.All"},
 			Lifecycle: []string{
 				"Users pick a category in Company Portal (Windows users on the Company Portal website) unless the prompt is hidden in Company Portal customization; admins can also set it.",
 				"Deleting a category shows its devices as Unassigned; dynamic device groups built on deviceCategory pick up changes automatically, so update group rules that reference a renamed or deleted category.",
+				"When the user picks the category only after enrollment, an assignment filter on deviceCategory evaluated at the enrollment check-in sees no category, and an app installed on that result isn't removed automatically once the category is set.",
+				"Each device's category shows in the Device category column of Devices > All devices; configuring categories requires the Intune Administrator role, and Multi Admin Approval can require a second admin to approve changes.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (dynamic device groups on device.deviceCategory)",
+				"Microsoft.Graph/assignmentFilters (filter rules on the deviceCategory property)",
 				"Microsoft.Graph/intuneBrandingProfiles (disableDeviceCategorySelection hides the prompt)",
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},

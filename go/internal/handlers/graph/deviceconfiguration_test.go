@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"slices"
 	"testing"
 
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
@@ -44,6 +45,32 @@ func TestDeviceConfigurationHandler_RequiredPermissions(t *testing.T) {
 				t.Error("RequiresDedicatedApp() = false, want true for deviceConfigurations")
 			}
 		})
+	}
+}
+
+// TestDeviceConfigurationHandler_DocumentedPermissionsStatic verifies the
+// documented permission line and the prompt do not depend on resolve-secrets:
+// both scopes are named statically, Read.All first, while the run's own scope
+// (RequiredPermissions) still follows the setting.
+func TestDeviceConfigurationHandler_DocumentedPermissionsStatic(t *testing.T) {
+	off, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, false)
+	if err != nil {
+		t.Fatalf("NewDeviceConfigurationHandler(false) unexpected error: %v", err)
+	}
+	on, err := NewDeviceConfigurationHandler(fakeTokenCredential{}, true)
+	if err != nil {
+		t.Fatalf("NewDeviceConfigurationHandler(true) unexpected error: %v", err)
+	}
+
+	offPerms, onPerms := off.Documentation().RequiredPermissions, on.Documentation().RequiredPermissions
+	if !slices.Equal(offPerms, onPerms) {
+		t.Errorf("Documentation().RequiredPermissions differs: resolveSecrets false %v, true %v", offPerms, onPerms)
+	}
+	if len(offPerms) != 2 || offPerms[0] != "DeviceManagementConfiguration.Read.All" {
+		t.Errorf("Documentation().RequiredPermissions = %v, want Read.All first and the ReadWrite.All line second", offPerms)
+	}
+	if off.GetDocumentationPrompt() != on.GetDocumentationPrompt() {
+		t.Error("GetDocumentationPrompt() differs between resolveSecrets false and true")
 	}
 }
 

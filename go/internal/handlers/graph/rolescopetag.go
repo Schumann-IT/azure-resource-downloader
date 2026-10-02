@@ -28,7 +28,12 @@ func NewRoleScopeTagHandler(credential azcore.TokenCredential) (*GraphCollection
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
 			Lifecycle: []string{
 				"The built-in Default tag is added automatically to every untagged object that supports scope tags; an object or role can carry at most 100 tags.",
+				"New objects automatically get the scope tags of the admin who creates them; Corp device identifiers, Windows Autopilot devices, device compliance locations and Jamf devices don't support scope tags.",
 				"A tag's assignments apply it automatically to devices in the targeted groups (overwriting manually assigned tags); admins whose role assignment includes a tag can't update or delete that tag.",
+				"Creating, updating or deleting scope tags requires the Intune Administrator Microsoft Entra role.",
+				"Tags limit visibility only for admins whose role assignment carries scope tags: an assignment without tags sees all objects its permissions cover, and Microsoft Entra roles such as Intune Administrator aren't limited by tags at all.",
+				"By default Intune merges a permission category across an admin's role assignments with different scope tags, so tags may not separate what the admin can do; the one-way Scoped permissions tenant setting (opt-in preview, not exported) confines each assignment's permissions to its own tags.",
+				"Endpoint analytics custom device scopes filter reports by scope tag; a device scope whose tag is deleted stops working until it is edited.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/roleDefinitions",

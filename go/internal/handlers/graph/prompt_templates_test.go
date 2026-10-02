@@ -3,6 +3,8 @@ package graph
 import (
 	"strings"
 	"testing"
+
+	"azure-resource-downloader/internal/models"
 )
 
 // TestSharedPromptTemplateOverrides verifies that one representative handler
@@ -64,7 +66,7 @@ func TestSharedPromptTemplateOverrides(t *testing.T) {
 			if !strings.Contains(prompt, "Azure resource type: "+handler.GetType()) {
 				t.Errorf("%s: prompt missing resource type line", tt.description)
 			}
-			if strings.Contains(prompt, "a table of any assignments/targeting present") {
+			if strings.Contains(prompt, "Then the assignments table, alone between a `<!-- assignments:start -->` line") {
 				t.Errorf("%s: prompt unexpectedly contains default-template assignments text", tt.description)
 			}
 		})
@@ -129,7 +131,7 @@ func TestConditionalAccessPromptTemplate(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{
-		"a table of any assignments/targeting present",
+		"Then the assignments table, alone between a `<!-- assignments:start -->` line",
 		"assignment information belongs in the assignments block above",
 		"<!-- assignments:",
 		"Targeting — the users",
@@ -160,6 +162,13 @@ func TestReferencedPromptTemplateAssignments(t *testing.T) {
 			newHandler:     func() (*GraphCollectionHandler, error) { return NewRoleScopeTagHandler(fakeTokenCredential{}) },
 			hasAssignments: true,
 		},
+		{
+			name: "deviceComplianceScripts",
+			newHandler: func() (*GraphCollectionHandler, error) {
+				return NewDeviceComplianceScriptHandler(fakeTokenCredential{})
+			},
+			hasAssignments: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,16 +182,17 @@ func TestReferencedPromptTemplateAssignments(t *testing.T) {
 				t.Error("prompt missing \"Usage and references:\"")
 			}
 			for _, marker := range []string{
-				"a table of any assignments/targeting present",
+				"Then the assignments table, alone between a `<!-- assignments:start -->` line",
 				"assignment information belongs in the assignments block above",
 			} {
 				if got := strings.Contains(prompt, marker); got != tt.hasAssignments {
 					t.Errorf("prompt contains %q = %v, want %v", marker, got, tt.hasAssignments)
 				}
 			}
+			ownAssignments := strings.Contains(prompt, "and it also has assignments of its own")
 			noOwnAssignments := strings.Contains(prompt, "it has no assignments of its own")
-			if noOwnAssignments == tt.hasAssignments {
-				t.Errorf("intro claims \"no assignments of its own\" = %v, want %v", noOwnAssignments, !tt.hasAssignments)
+			if ownAssignments != tt.hasAssignments || noOwnAssignments == tt.hasAssignments {
+				t.Errorf("intro claims own assignments = %v and no assignments = %v, want own assignments = %v", ownAssignments, noOwnAssignments, tt.hasAssignments)
 			}
 		})
 	}
@@ -267,5 +277,66 @@ func TestCredentialPromptTemplateHeadings(t *testing.T) {
 	expiry, lifecycle := strings.Index(prompt, "\nExpiry and renewal:\n"), strings.Index(prompt, "\nLifecycle and operations:\n")
 	if expiry < 0 || lifecycle < 0 || expiry > lifecycle {
 		t.Errorf("Expiry and renewal (at %d) must precede Lifecycle and operations (at %d)", expiry, lifecycle)
+	}
+}
+
+// TestRecordPromptTemplateGroupAxes verifies the record types documentation
+// runs cover carry the doc-groups vocabulary marker (and so the
+// platformGroup/functionGroup contract), while Autopilot device identities —
+// kept out of documentation runs — still omit it.
+func TestRecordPromptTemplateGroupAxes(t *testing.T) {
+	tests := []struct {
+		name       string
+		newHandler func() (*GraphCollectionHandler, error)
+		wantMarker bool
+	}{
+		{"deviceCategories", func() (*GraphCollectionHandler, error) { return NewDeviceCategoryHandler(fakeTokenCredential{}) }, true},
+		{"mobileThreatDefenseConnectors", func() (*GraphCollectionHandler, error) {
+			return NewMobileThreatDefenseConnectorHandler(fakeTokenCredential{})
+		}, true},
+		{"ndesConnectors", func() (*GraphCollectionHandler, error) { return NewNdesConnectorHandler(fakeTokenCredential{}) }, true},
+		{"windowsAutopilotDeviceIdentities", func() (*GraphCollectionHandler, error) {
+			return NewWindowsAutopilotDeviceIdentityHandler(fakeTokenCredential{})
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := tt.newHandler()
+			if err != nil {
+				t.Fatalf("constructor unexpected error: %v", err)
+			}
+			got := strings.Contains(handler.GetDocumentationPrompt(), models.DocumentationGroupsMarker())
+			if got != tt.wantMarker {
+				t.Errorf("prompt contains the doc-groups marker = %v, want %v", got, tt.wantMarker)
+			}
+		})
+	}
+}
+
+// TestSubtypeRuleInEveryFamily verifies the credential, referenced and singleton
+// families carry the @odata.type subtype rule the default template already had,
+// so a polymorphic object is documented against its concrete schema.
+func TestSubtypeRuleInEveryFamily(t *testing.T) {
+	const rule = "- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema."
+	tests := []struct {
+		name       string
+		newHandler func() (*GraphCollectionHandler, error)
+	}{
+		{"credential", func() (*GraphCollectionHandler, error) {
+			return NewApplePushNotificationCertificateHandler(fakeTokenCredential{})
+		}},
+		{"referenced", func() (*GraphCollectionHandler, error) { return NewAssignmentFilterHandler(fakeTokenCredential{}) }},
+		{"singleton", func() (*GraphCollectionHandler, error) { return NewOrganizationHandler(fakeTokenCredential{}) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := tt.newHandler()
+			if err != nil {
+				t.Fatalf("constructor unexpected error: %v", err)
+			}
+			if !strings.Contains(handler.GetDocumentationPrompt(), rule) {
+				t.Errorf("prompt missing the subtype rule %q", rule)
+			}
+		})
 	}
 }

@@ -25,7 +25,7 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 		documentation: models.ResourceDocumentation{
 			Purpose: "An Intune Windows quality (expedited) update profile that accelerates a specific quality update.",
 			KeySettings: []string{
-				"expeditedUpdateSettings (qualityUpdateRelease, daysUntilForcedReboot)",
+				"expeditedUpdateSettings (qualityUpdateRelease: Windows Update may install a newer applicable update instead; daysUntilForcedReboot: 0 to 2 days, enforced only when the update needs a restart)",
 				"releaseDateDisplayName",
 				"deployableContentDisplayName",
 			},
@@ -34,6 +34,10 @@ func NewWindowsQualityUpdateProfileHandler(credential azcore.TokenCredential) (*
 				"Expedites one quality update per policy: it bypasses ring deferrals without pausing or changing the monthly update policies, and skips devices that already have that update or a newer one.",
 				"Deleting the policy doesn't uninstall a completed update; in-progress installs are cancelled on a best-effort basis.",
 				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement (Pro, Enterprise or Education, not LTSC) and Entra joined or hybrid joined devices; the separate Windows quality update policies (monthly updates, hotpatch) are a different resource that is not exported.",
+				"Devices also need at least Required diagnostic data and the Microsoft Account Sign-In Assistant service (wlidsvc) running; Windows versions earlier than 24H2 also need the Update Health Tools, which must not be installed on Windows 11 24H2 and later.",
+				"Group Policy settings CorpWuURL (intranet update service), AutoUpdateCfg, DeferFeatureUpdates and Disable Dual Scan can interfere with expedited installs, and preview (Beta and Dev channel) builds aren't supported.",
+				"Status shows in Reports > Windows Updates (Windows Expedited Update Report) and alerts in Devices > Monitor > Expedited quality update policies with alerts; both need the tenant setting Enable features that require Windows diagnostic data in processor configuration.",
+				"Managing these policies needs at least the Policy and Profile Manager role or a custom role with Device configurations permissions plus read access to managed devices (e.g. Organization/Read, Managed devices/Read); viewing their reports needs a role such as Read Only Operator or Help Desk Operator.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

@@ -142,8 +142,9 @@ carries the same value. Read it once per type and reuse it — never copy it onc
 
 For each resource type in the work list, read its `doc-prompt.md` **in full** before writing anything for
 that type. It defines the required layout for that type: title, summary paragraph, metadata table, the exact
-H2 sections in order, and a `Settings`, `Properties` or `Definition` section requiring every remaining property
-as a collapsed HTML `<details>` block whose `<summary>` carries the property path and configured value.
+H2 sections in order, and a `Settings`, `Properties` or `Definition` section requiring every property the spec
+says it covers as a collapsed HTML `<details>` block whose `<summary>` carries the property path and configured
+value.
 
 Follow it exactly. Specs differ meaningfully between types — an `assignmentFilters` document is a short rule
 explanation with no settings payload; a `deviceManagementConfigurationPolicies` document may carry hundreds
@@ -151,9 +152,9 @@ of settings. Never substitute a generic template.
 
 ### Headings
 
-`#` is the resource display name, `##` its sections. The summary paragraph sits directly under the title, as
-every spec says. The source YAML filename goes into the metadata table as a `Source` row, in backticks, so any
-statement can be traced to its source.
+`#` is the title the spec names (for most types the resource's display name), `##` its sections. The summary
+paragraph sits directly under the title, as every spec says. The source YAML's bare file name (not its path)
+goes into the metadata table as a `Source` row, in backticks, so any statement can be traced to its source.
 
 ### Links
 
@@ -212,19 +213,20 @@ line as a `<!-- doc-groups: platform=… | function=… -->` marker (the axis-vo
 
 - Pick exactly one value per axis, spelled **verbatim** from the marker — same wording and casing. Never
   invent a value, never combine two, never leave either blank.
-- Use `n/a` — which is in both sets — when an axis genuinely does not apply to the type (a tenant-level
-  singleton has no platform, an inventory record has no function). `n/a` means "does not apply"; it is **not**
+- Use `n/a` — which is in both sets — when an axis genuinely does not apply to the type (for example, a
+  tenant-level singleton has no platform). `n/a` means "does not apply"; it is **not**
   the same as leaving the field out, which means "not yet classified" and is treated as a gap.
-- Base the choice on the resource's own facts (its `@odata.type`, `platforms`, the scope token in its name,
-  what the settings do), not on guesswork. When two function values could fit, choose the resource's primary
+- Base the choice on the resource's own facts (its `@odata.type`, `platforms`, what the settings do, and the
+  scope token in its name only where those don't decide it), not on guesswork. When two function values could fit, choose the resource's primary
   purpose.
 - A type whose `doc-prompt.md` carries **no** `doc-groups` marker (an older record type, or a type not
   refreshed this run) takes neither field — omit both.
 
 ### Assignment markers (required)
 
-Wherever the spec calls for an assignments or targeting table, wrap the whole block in HTML comment markers
-on their own lines:
+Wherever the spec asks for an assignments block, wrap the table — and only the table — in HTML comment
+markers on their own lines; the spec's explanatory sentences stay above the start marker. The Conditional
+Access `Conditions` table is not an assignments block: never put markers around it.
 
 ```markdown
 <!-- assignments:start -->
@@ -237,8 +239,8 @@ on their own lines:
 ```
 
 Bare GUIDs here are correct and expected — section 5 resolves them. Emit the markers even when a resource has
-no assignments; put the sentence saying so between them. Omit them only for types with no concept of
-assignments. Never nest markers, never emit a start without its end, never put anything that is not about
+no assignments; put the sentence saying so between them. Omit them wherever the spec has no assignments
+block. Never nest markers, never emit a start without its end, never put anything that is not about
 assignments between them. Section 5 depends on this being a deterministic splice.
 
 The `<!-- notifications:start -->` / `<!-- notifications:end -->` block follows the same contract, wherever the
@@ -282,8 +284,9 @@ approximates that.
 ### 3.2 Write the shared rules once
 
 Write `chunks/_common.md` a single time. It contains: the ground rules from section 0, the heading,
-frontmatter and marker rules from section 2, the output-path mapping, and the self-check and receipt format
-in 3.4. **Do not copy it into each chunk file** — every agent reads it directly.
+frontmatter and marker rules from section 2, the export timestamp from the `export` block above (agents copy it
+into `generatedAt` and measure credential expiry against it), the output-path mapping, and the self-check and
+receipt format in 3.4. **Do not copy it into each chunk file** — every agent reads it directly.
 
 ### 3.3 Write one minimal chunk file per chunk
 
@@ -315,6 +318,8 @@ These rules belong in `_common.md` verbatim, because they are what each agent mu
 
 - Read every assigned YAML **in full** before writing anything.
 - Write exactly one document per source file, at the derived path, and nothing else.
+- Reproduce every decoded script verbatim and complete — only a value the redaction rule replaces may
+  differ; never shorten, summarise or paraphrase it.
 - Close each `<details>` immediately after its content. Never leave one open across a heading boundary.
 - Before finishing, count `<details>` against `</details>` in what you wrote and repair any imbalance
   yourself.
@@ -347,7 +352,9 @@ _Replaced by the tool: every source path the work list names, one per line._
 | Heading vocabulary | Every `##` **outside fenced code blocks and outside `<!-- …:start -->`/`<!-- …:end -->` marker pairs** is in the closed set declared for that document's type — the `doc-headings` list in its `doc-prompt.md` — spelled exactly, in order, without duplicates. The marker-pair exemption is what lets the tool-spliced `## Targeted by` block (section 5) live in group documents without being part of the authored contract. Same fenced-code caveat as *Heading structure*. |
 | Grouping vocabulary | For every type whose `doc-prompt.md` carries a `<!-- doc-groups: … -->` marker, each of its documents has both a `platformGroup` and a `functionGroup` in frontmatter, each a single value from that marker's respective closed set (`n/a` included) — missing or out-of-set fails. A type with no marker takes neither field; its documents are counted as axis *uncategorised* and reported, never failed. |
 | `<details>` balance | `<details>` count equals `</details>` count per file. Nesting is normal. |
-| Assignment markers | Every document that should have them has exactly one matched `<!-- assignments:start -->` / `<!-- assignments:end -->` pair — never unbalanced, never nested, never repeated. |
+| `<details>` attributes | Every `<details>` opens with a non-empty `data-setting`, and its `data-note`, where present, is `security` or `inert` — the browser styles blocks by `data-note`, and `data-setting` is the documented path contract. |
+| Assignment markers | Every document whose spec asks for an assignments block (its `doc-prompt.md` says "assignment information belongs in the assignments block above") has exactly one matched `<!-- assignments:start -->` / `<!-- assignments:end -->` pair — never missing, unbalanced, nested or repeated — and no other document has one: a Conditional Access `Conditions` table is never wrapped. |
+| Export timestamp | Every written document's `generatedAt` equals the export's `generatedAt` in `resources/metadata.yaml`. |
 | Stray artifacts | No leftover `DONE` receipts in document text, no truncated final block, every file ends cleanly. |
 | Nothing else touched | No document outside the work list was created or modified. **Record every document's mtime once these checks pass** — section 5 legitimately rewrites the files it splices, and section 6 compares against this snapshot. |
 
@@ -370,7 +377,19 @@ def fail(doc, msg):
 MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
 HEADING = re.compile(r"^(#+)\s+\S")
 INLINE = re.compile(r"`[^`]*`")
-_contracts, _groups = {}, {}
+DETAILS = re.compile(r"<details\b([^>]*)>")
+_contracts, _groups, _assign = {}, {}, {}
+
+_meta = pathlib.Path("resources/metadata.yaml")
+_ts = re.search(r'^generatedAt:\s*"?([^"\s]+)"?', _meta.read_text(encoding="utf-8"), re.M) if _meta.is_file() else None
+EXPORT_TS = _ts.group(1) if _ts else None
+
+def assignments_required(src):
+    """True when src's spec asks for an assignments block (its closed-set paragraph points at one)."""
+    spec = pathlib.Path(src).parent / "doc-prompt.md"
+    if spec not in _assign:
+        _assign[spec] = spec.is_file() and "assignment information belongs in the assignments block above" in spec.read_text(encoding="utf-8")
+    return _assign[spec]
 
 def heading_contract(src):
     """Ordered closed H2 set for src's type, read from its doc-prompt.md."""
@@ -449,6 +468,9 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                 fail(doc, f"{key} mismatch — wrong source documented")
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
+        stamp = re.search(r'^generatedAt:\s*"?([^"\s]+)', fm, re.M)
+        if EXPORT_TS and (not stamp or stamp.group(1) != EXPORT_TS):
+            fail(doc, "frontmatter generatedAt is not the export timestamp")
         summary = re.search(r"^summary:[ \t]+(.*)$", fm, re.M)
         if not summary:
             fail(doc, "frontmatter missing summary")
@@ -476,6 +498,7 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                     fail(doc, f"{field} '{got.group(1).strip()}' not in doc-groups {axis} set")
 
     in_fence, in_marker, h1, h2s, opens, closes = False, False, 0, [], 0, 0
+    no_setting, bad_notes = 0, set()
     for line in text.splitlines():
         if FENCE.match(line):
             in_fence = not in_fence
@@ -485,6 +508,12 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
         bare = INLINE.sub("", line)  # a <details> mentioned in inline code is prose, not a tag
         opens += bare.count("<details")
         closes += bare.count("</details>")
+        for attrs in DETAILS.findall(bare):
+            if not re.search(r'data-setting="[^"]+"', attrs):
+                no_setting += 1
+            note = re.search(r'data-note="([^"]*)"', attrs)
+            if note and note.group(1) not in ("security", "inert"):
+                bad_notes.add(note.group(1))
         mk = MARKER.match(line)
         if mk:
             in_marker = mk.group(1) == "start"
@@ -521,6 +550,14 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
 
     if opens != closes:
         fail(doc, f"<details> imbalance: {opens} open / {closes} close")
+    if no_setting:
+        fail(doc, "<details> block(s) without a data-setting path")
+    if bad_notes:
+        fail(doc, f"data-note value(s) outside security|inert: {', '.join(sorted(bad_notes))}")
+    if assignments_required(src) and "<!-- assignments:start -->" not in text:
+        fail(doc, "assignments markers missing — the spec asks for an assignments block")
+    if not assignments_required(src) and "<!-- assignments:start -->" in text:
+        fail(doc, "assignments markers in a document whose spec has no assignments block")
 
     for marker in ("assignments", "targeted-by", "used-by", "notifications"):
         s, e = text.count(f"<!-- {marker}:start -->"), text.count(f"<!-- {marker}:end -->")
@@ -645,8 +682,10 @@ section 5; it runs over the whole tree in one pass.
 
 For every **group** document and every **notification message template** document you generated this run, the
 reverse block does not exist yet — the agent does not emit it. Build it now from the maps in 5a (a group's
-`Targeted by`) and 5f (a template's `Used by`), insert it with its markers exactly as 5d shows, and write the
-document's `targetedBySha256` / `usedBySha256` from its work-list row. This is the same insertion 5e performs
+`Targeted by`) and 5f (a template's `Used by`), insert it with its markers exactly as 5d shows — at the end of
+the group's `Usage as assignment target` section or the template's `Usage and references` section, directly
+before the next `##` heading — and write the document's `targetedBySha256` / `usedBySha256` from its work-list
+row. This is the same insertion 5e performs
 for a migrated document, applied to a freshly generated one, so a new group or template page carries its
 reverse block and hash in the run that created it instead of waiting for a later re-splice.
 
@@ -673,7 +712,8 @@ not update will be re-spliced again on every future run.
 
 If a re-spliced document has no markers for that block yet — an older `Targeted by` / `Used by` page that
 predates them — insert the markers first exactly as 5e describes, then splice. A reverse re-splice never has a
-block to "replace" the first time; it inserts one.
+block to "replace" the first time; it inserts one, at the end of the group's `Usage as assignment target` or the
+template's `Usage and references` section (directly before the next `##` heading).
 
 The `Targeted by` block is wrapped in its own markers:
 
@@ -881,7 +921,7 @@ run that generated 148 documents and on a run that generated none.
   | Configured but unassigned | Assignment-capable resources with no assignment: display name and document path. |
   | Dangling targets | Assigned group GUIDs with no group in the reference map, and how many resources assign each. |
   | Credentials near expiry | Any expiry field (`expirationDateTime`, `tokenExpirationDateTime`, …) within 180 days of the export timestamp, and any already past it. Values are quoted in the YAML — match single, double and unquoted alike. |
-  | Plaintext credentials | A credential-shaped value the service did **not** mask, found by exactly three rules: (a) an XML/plist `<key>` naming a credential whose `<string>` holds one; (b) a scalar whose own key names a credential; (c) a `description` or `notes` value where a credential-shaped token follows a credential word. |
+  | Plaintext credentials | A value the service did **not** mask, found by exactly four rules — (a) to (c) only for a credential-shaped value: (a) an XML/plist `<key>` naming a credential whose `<string>` holds one; (b) a scalar whose own key names a credential; (c) a `description` or `notes` value where a credential-shaped token follows a credential word; (d) the `value` of an `omaSettings` entry with `isEncrypted: true` that is not masked — a secret the export's secret resolution wrote in plaintext, whatever its shape. |
 
   A value is **credential-shaped** when it is at least 10 characters and either a hex run of 16+ characters
   or a mix of at least three character classes. Test the hex case first: a long hex key is

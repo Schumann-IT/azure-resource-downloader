@@ -29,6 +29,7 @@ func NewIntuneBrandingProfileHandler(credential azcore.TokenCredential) (*GraphC
 			Lifecycle: []string{
 				"One default profile plus up to 25 profiles targeted at user groups (device groups aren't supported).",
 				"Hiding Remove and Reset (isRemoveDeviceDisabled, isFactoryResetDisabled) exists only in the default profile and only hides Company Portal actions; it doesn't restrict device settings.",
+				"enrollmentAvailability doesn't apply to iOS/iPadOS Automated Device Enrollment devices but does apply to Samsung Knox Mobile Enrollment (KME) devices, where unavailable stops enrollment in the out-of-box flow; Configuration Manager apps show only in the Windows Company Portal.",
 				"Distinct from Entra sign-in branding (organizationalBranding).",
 			},
 			RelatedTypes: []string{

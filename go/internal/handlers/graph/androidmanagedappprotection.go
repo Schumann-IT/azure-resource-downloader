@@ -31,17 +31,20 @@ func NewAndroidManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 			KeySettings: []string{
 				"dataBackupBlocked",
 				"screenCaptureBlocked",
-				"pinRequired",
+				"pinRequired (minimumPinLength, pinCharacterSet, fingerprintBlocked and biometricAuthenticationBlocked act only when it is true)",
 				"allowedOutboundDataTransferDestinations",
 				"allowedOutboundClipboardSharingLevel",
-				"requiredAndroidSafetyNetDeviceAttestationType",
+				"requiredAndroidSafetyNetDeviceAttestationType (the Play integrity verdict setting despite its SafetyNet name; requiredAndroidSafetyNetEvaluationType acts only once it is set)",
 				"minimumRequiredPatchVersion",
-				"maximumAllowedDeviceThreatLevel",
+				"maximumAllowedDeviceThreatLevel (with mobileThreatDefenseRemediationAction and mobileThreatDefensePartnerPriority; no effect unless an MTD connector feeds app protection)",
 			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
 			Lifecycle: []string{
 				"Apps pick up policy changes at check-in, typically every 30 minutes (every 12 hours while the user isn't licensed or targeted); apps that haven't checked in for 90 days may be deregistered.",
 				"The policy applies only to Intune-licensed users in targeted groups who sign in to the app; org data is removed only by an app selective wipe, applied the next time the app runs.",
+				"Only apps that integrate the Intune App SDK or are wrapped with the Intune App Wrapping Tool can be protected; the device needs the Company Portal app (enrollment isn't required) and Android 10.0 or later.",
+				"If a second policy targets a user and app that a policy already covers, the first stays applied and the second shows a conflict; policies applied at the same time conflict, and conflicting settings take the most restrictive value (numeric fields the recommended value).",
+				"Delivery shows in Apps > Monitor > App protection status, which lists app instances that checked in within the last 90 days; a device's applied settings can be checked in Microsoft Edge at about:intunehelp.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

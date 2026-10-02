@@ -210,14 +210,14 @@ and lights up the sidebar's per-item context.
   `summary: "Enforces X: requires Y"` parses into `Summary`.~~
 - ~~Goldens: `make -C go golden-update`, then review the diff per template family — only the 53
   `prompts/<type>/doc-prompt.md` files change, the exported-YAML goldens stay byte-identical; `make -C go test`.~~
-- Apply the prompt review: `git apply` the four patches in `Claude outputs/` —
+- ~~Apply the prompt review: `git apply` the four patches in `Claude outputs/` —
   `documentation-prompt-review-templates.patch`, `-run-prompt.patch`, `-metadata.patch`, `-tests.patch` (templates
   and partials T1–T16 and T20–T23, run prompt R1–R10, R12–R13 with five new §4 checks, the per-type metadata of all
   53 handlers, the intended test-assertion changes plus eleven new assertions). They were built on `5a0ad8d`
   (`HEAD` differs from it only in this file); apply all four from the repository root, before every other bullet
   below, and stop and report if `git apply --check` fails. Read the test changes like any other test edit: each keeps its
-  assertion's intent.
-- After the patches (every snippet anchor below was checked against the patched tree), C5 —
+  assertion's intent.~~
+- ~~After the patches (every snippet anchor below was checked against the patched tree), C5 —
   `internal/handlers/graph/devicecompliancescript.go`: `hasAssignments: false` and `Template:
   referencedPromptTemplateText` in its `documentation` literal. Keep the `/assignments` fetch and keep
   `item.SetAssignments(…)`, so the exported YAML and drift stay byte-identical; when the fetch returns one or more
@@ -230,13 +230,13 @@ and lights up the sidebar's per-item context.
   `HasAssignments()` is false and the prompt carries the referenced heading set (`References | Usage and references |
   Lifecycle and operations | Security | Definition`); `TestReferencedPromptTemplateAssignments` gains a
   `deviceComplianceScripts` case with `hasAssignments: false`; a helper test captures `logger.Default.SetOutput`
-  (restored in `t.Cleanup`, not parallel) and asserts the warning for `count` 2 and silence for 0.
-- C6: delete the `OmitGroupAxes: true` line in `devicecategory.go`, `mobilethreatdefenseconnector.go` and
+  (restored in `t.Cleanup`, not parallel) and asserts the warning for `count` 2 and silence for 0.~~
+- ~~C6: delete the `OmitGroupAxes: true` line in `devicecategory.go`, `mobilethreatdefenseconnector.go` and
   `ndesconnector.go` (`windowsautopilotdeviceidentity.go` keeps it); reword the `OmitGroupAxes` field comment and the
   "Record types opt out" comment in `internal/models/documentation.go` to the one remaining case (a type kept out of
   documentation runs). Test in `internal/handlers/graph/prompt_templates_test.go`: the three prompts contain
-  `DocumentationGroupsMarker()`, the `windowsAutopilotDeviceIdentities` prompt does not.
-- C7: in `internal/models/prompt_partials.tmpl` `prompt-links` "- Best-practice baseline: {{ . }}" → "- Microsoft
+  `DocumentationGroupsMarker()`, the `windowsAutopilotDeviceIdentities` prompt does not.~~
+- ~~C7: in `internal/models/prompt_partials.tmpl` `prompt-links` "- Best-practice baseline: {{ . }}" → "- Microsoft
   guidance: {{ . }}"; `prompt-references` "best-practice baselines)" → "Microsoft guidance)"; `prompt-baseline-rule`
   "…only where a best-practice baseline listed above covers the setting, and name that baseline;" → "…only where a
   Microsoft guidance page listed above states one for the setting, and name that page;" and "- No best-practice
@@ -250,12 +250,12 @@ and lights up the sidebar's per-item context.
   `internal/models/documentation_test.go` the three expected "- Best-practice baseline: " lines and both baseline
   cases of the lifecycle/baseline table; in `internal/handlers/prompt_rules_test.go` the `baselineListed` /
   `baselineUnlisted` constants; and `TestDocumentationPromptSectionShape` asserts no prompt contains
-  "best-practice" (case-insensitive).
-- C8: `prompt-url-rule` becomes "- Use real, verifiable URLs; link a setting only to a page listed under References
+  "best-practice" (case-insensitive).~~
+- ~~C8: `prompt-url-rule` becomes "- Use real, verifiable URLs; link a setting only to a page listed under References
   (an anchor on one is fine), otherwise give it no link — never a recalled, guessed or merely nearby URL."; add
   "link a setting only to a page listed under References" to the `required` list of
-  `TestDocumentationPromptSectionShape`.
-- The optional snippets: T17 — `documentation_prompt.tmpl` *Security*: drop "conditional-access conditions, " from
+  `TestDocumentationPromptSectionShape`.~~
+- ~~The optional snippets: T17 — `documentation_prompt.tmpl` *Security*: drop "conditional-access conditions, " from
   the example list; T18 — `prompt-closed-set` last sentence: "The comment lines below record this heading list (and,
   where present, the grouping vocabulary) for the documentation pipeline; do not copy them into the document.";
   T19 — `credential_prompt.tmpl`, `referenced_prompt.tmpl`, `singleton_prompt.tmpl`: directly after `{{ template
@@ -263,8 +263,8 @@ and lights up the sidebar's per-item context.
   subtype and document against that subtype's schema." (a test in `prompt_templates_test.go` asserts it in one prompt
   of each of the three families); R11 — `generate_prompt_template.md` §2 *Grouping*: "(its `@odata.type`,
   `platforms`, what the settings do, and the scope token in its name only where those don't decide it)", with an
-  assertion in `generateprompt_test.go`.
-- C3: the documented permission line becomes static while the run's own scope keeps following `resolve-secrets` —
+  assertion in `generateprompt_test.go`.~~
+- ~~C3: the documented permission line becomes static while the run's own scope keeps following `resolve-secrets` —
   `RequiredPermissions()` also feeds the dedicated-app consent prompt (`DedicatedAppRequirements`) and `debug token`'s
   coverage report, which must not ask for `ReadWrite.All` when secrets are not resolved. `GraphCollectionHandler`
   gains `runtimePermissions []string` (doc comment: the delegated scopes a run needs when they differ from the
@@ -275,7 +275,7 @@ and lights up the sidebar's per-item context.
   verbatim, so the metadata test's `requires '…'` hint check, probe grouping (`PermissionGroup` of the first scope)
   and audit routing (Intune prefix) are unaffected. Tests in `deviceconfiguration_test.go`: the existing runtime cases
   stay; new: `Documentation().RequiredPermissions` and `GetDocumentationPrompt()` are identical for `resolveSecrets`
-  false and true.
+  false and true.~~
 - `make -C go fmt`, `make -C go golden-update` (exactly the 53 prompt goldens change, no `*.golden.yaml`), review the
   per-type golden diff for wording slips (the review expects a few), then `make -C go test` and `make -C go check`.
 - Documentation at *done*: `README.md` (the template-family table and the closed-H2 contract with the new sets, the

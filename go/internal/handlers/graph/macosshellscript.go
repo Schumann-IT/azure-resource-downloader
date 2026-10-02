@@ -25,8 +25,13 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 		azureType:      "Microsoft.Graph/deviceShellScripts",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:     "An Intune macOS shell script run on managed Macs.",
-			KeySettings: []string{"runAsAccount", "executionFrequency", "retryCount", "blockExecutionNotifications"},
+			Purpose: "An Intune macOS shell script run on managed Macs.",
+			KeySettings: []string{
+				"runAsAccount (user: runs for every user signed in at run time and needs one signed in; otherwise as root)",
+				"executionFrequency",
+				"retryCount",
+				"blockExecutionNotifications",
+			},
 			EmbeddedPayloads: []string{
 				"scriptContent (shell script; base64 in Graph, decoded by the export's base64-decode transformer: inline by default, or into a .sh sidecar named after fileName in file mode)",
 			},
@@ -34,6 +39,10 @@ func NewMacOSShellScriptHandler(credential azcore.TokenCredential) (*GraphCollec
 			Lifecycle: []string{
 				"Without executionFrequency the script runs once; with a frequency it also runs after restarts and may run more often. Failures are retried only when retryCount is set, and runs longer than 60 minutes are stopped and reported as failed.",
 				"Requires the Intune management agent for macOS, which checks in about every 8 hours separately from MDM; deleting a script does not undo changes it already made on devices.",
+				"Requires a direct internet connection; connection through a proxy isn't supported.",
+				"The script must start with a #! line for an installed shell and be smaller than 1 MB; assignment filters aren't supported for shell scripts.",
+				"Run results show in the script's Device status and User status reports and change only when the result changes (otherwise the timestamp refreshes every 7 days); agent logs are in /Library/Logs/Microsoft/Intune and ~/Library/Logs/Microsoft/Intune.",
+				"Managing shell scripts needs an Intune role with Device configurations permissions.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

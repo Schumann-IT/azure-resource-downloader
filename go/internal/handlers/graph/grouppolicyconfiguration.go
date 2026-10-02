@@ -30,13 +30,19 @@ func NewGroupPolicyConfigurationHandler(credential azcore.TokenCredential) (*Gra
 		azureType:      "Microsoft.Graph/groupPolicyConfigurations",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
-			EmbeddedPayloads:    []string{"definitionValues (each configured ADMX setting with its expanded definition)"},
+			Purpose: "An Intune Administrative Templates (ADMX-backed) group policy configuration.",
+			EmbeddedPayloads: []string{
+				"definitionValues (each configured ADMX setting with its expanded definition; the values entered in the setting's presentations - text boxes, lists, drop-downs - are not exported, so state that rather than infer them)",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
 				"Since the 2412 release the built-in Administrative Templates profile type is deprecated and read-only; ADMX settings are configured in the Settings Catalog. Profiles based on imported custom ADMX (policyConfigurationIngestionType custom or mixed) can still be created.",
 				"Imported ADMX files (not exported) must stay uploaded while profiles use them; replacing an ADMX file requires deleting the profiles that use it first.",
 				"On unassign or delete, whether a setting reverts on Windows depends on its CSP.",
+				"A setting set differently here and in another Intune policy (such as the same ADMX setting in the Settings Catalog) shows as Conflict and must be resolved manually; against on-premises Group Policy there's no guaranteed winner unless MDMWinsOverGP (ControlPolicyConflict CSP) is enabled and covers the setting.",
+				"Assigned to a user group, the settings apply on every device the user enrolls and signs in to; assigned to a device group, they apply to every user of the device, and a computer setting (classType machine) assigned to users can also affect other users of that device.",
+				"Each profile reports device and user check-in status (Succeeded, Error, Conflict, Pending, Not applicable, meaning the Windows version or edition doesn't support the setting) and per-setting status; the Configuration policy assignment failures report lists errors and conflicts.",
+				"Changing these profiles needs at least the Intune Policy and Profile Manager role; in a custom role, setting an imported ADMX setting back to Not configured needs the Device configurations Delete permission, which Policy and Profile Manager includes.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)",

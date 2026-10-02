@@ -15,7 +15,7 @@ References:
 {{ template "prompt-url-rule" . }}
 
 Conditions:
-- start with a table `Condition | Include | Exclude`, one row per `conditions.*` dimension present in the YAML — users, groups, roles, guests or external users, applications / user actions / authentication contexts, platforms, locations, client app types, device filter, sign-in risk, user risk, service-principal risk, authentication flows — and no row for a dimension that is absent or empty.
+- start with a table `Condition | Include | Exclude`, one row per `conditions.*` dimension present in the YAML — users, groups, roles, guests or external users, applications / user actions / authentication contexts, client applications (workload identities), platforms, locations, client app types, device filter, sign-in risk, user risk, insider risk, service-principal risk, authentication flows — and no row for a dimension that is absent or empty.
 - write well-known values (`All`, `None`, `GuestsOrExternalUsers`, `Office365`, `AllTrusted` and the like) verbatim. Write every GUID bare unless the documentation run resolves it for you in a block it splices in; never name a role, application, named location or authentication strength from memory.
 - explain a device filter (`conditions.devices.deviceFilter`) clause by clause in plain language, together with its include/exclude mode.
 - follow the table with a short prose statement of who and what is in scope of this policy, and who and what is excluded.
@@ -23,13 +23,13 @@ Conditions:
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- document operational guidance: what the policy's `state` means in operation (report-only policies are evaluated and logged but not enforced), and what happens when the policy is disabled or deleted.
+- cover what the policy's `state` means in operation (report-only policies are evaluated and logged but not enforced) and what happens when the policy is disabled or deleted.
 
 Security:
 {{ template "prompt-change-role" . }}
 - state whether the policy is report-only or enforced, from `state`.
 - state whether any user or group is excluded — without claiming that an exclusion is an emergency-access (break-glass) account.
-- call out the grant and session controls that strengthen or weaken access,{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above{{ end }}.
+- call out the grant and session controls that strengthen or weaken access,{{ if .Links.BestPractices }} and any deviations from a value that a Microsoft guidance page listed above recommends{{ end }}.
 
 Settings:
 - document EVERY property present in the YAML outside `conditions` (`state`, `grantControls`, `sessionControls`, the timestamps and the rest).

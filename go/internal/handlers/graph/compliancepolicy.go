@@ -35,6 +35,9 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 			Lifecycle: []string{
 				"Compliance re-evaluates at the next device check-in; deleting or unassigning the policy can change device compliance state and Conditional Access outcomes.",
 				"Devices with no compliance policy assigned follow the tenant setting 'Mark devices with no compliance policy assigned as' (default: Compliant).",
+				"A compliance setting takes precedence over the same setting in a configuration policy, even a more secure one; with several compliance policies a device gets the most severe resulting status (Error, then NonCompliant, InGracePeriod, Compliant, NotApplicable, Unknown).",
+				"Results show on the policy (Device status, View report, Per-setting status) and under Reports > Device compliance (Noncompliant devices and settings); a device appears only after it checks in and reports, which can take up to 24 hours for an online device, and a setting in Error keeps the device's previous state for up to seven days.",
+				"Linux compliance covers the supported Ubuntu Desktop and Red Hat Enterprise Linux versions enrolled with the Microsoft Intune app; Linux policies can be assigned only to device groups, and Conditional Access for Linux protects Microsoft 365 web apps in Microsoft Edge.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",
@@ -44,7 +47,11 @@ func NewCompliancePolicyHandler(credential azcore.TokenCredential) (*GraphCollec
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
 			ReferencesNotificationTemplates: true,
-			KeySettings:                     []string{"platforms", "settings", "scheduledActionsForRule"},
+			KeySettings: []string{
+				"platforms",
+				"settings",
+				"scheduledActionsForRule (the built-in Mark device noncompliant action can't be removed and its schedule is the grace period; a retire action only adds the device to the retire list for an admin to retire)",
+			},
 			Links: models.ResourceLinks{
 				EndpointDocs:    "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementcompliancepolicy?view=graph-rest-beta",
 				Permissions:     "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfigv2-devicemanagementcompliancepolicy-list?view=graph-rest-beta",

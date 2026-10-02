@@ -56,6 +56,8 @@ func NewApplePushNotificationCertificateHandler(credential azcore.TokenCredentia
 			Lifecycle: []string{
 				"The Apple MDM push certificate is valid for 365 days and must be renewed annually with the same Apple account that created it; after it expires there is a 30-day grace period to renew.",
 				"Apple device enrollment fails while it is expired; renew the certificate, never replace it - a replaced certificate forces all iOS/iPadOS devices to re-enroll.",
+				"If the Apple ID tied to the certificate changes (moving to a Managed Apple ID needs Apple to migrate the certificate), sign in to the Apple Push Certificates Portal with the new Apple ID, download the certificate again and upload it with that Apple ID.",
+				"Tenant administration > Tenant status (Connector status tab) shows the certificate as Warning within seven days of expiry and Unhealthy once expired.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/depOnboardingSettings (Apple automated device enrollment requires the push certificate)",

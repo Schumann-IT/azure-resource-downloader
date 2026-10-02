@@ -2,10 +2,10 @@ You are a senior Microsoft cloud and endpoint-management consultant. Generate cl
 
 {{ template "prompt-header" . }}
 
-The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): {{ if .HasAssignments }}besides its own assignments, OTHER exported resources point at it{{ else }}it has no assignments of its own — instead, OTHER exported resources point at it{{ end }}. Produce well-structured Markdown documentation with this layout:
+The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other objects use by ID (e.g. as a filter, condition, location, template or role){{ if .HasAssignments }}, and it also has assignments of its own{{ else }}; it has no assignments of its own{{ end }}; the lifecycle notes and related types above say which of those objects this export contains. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the object's display name.
-- Directly below the title, without a heading: a short summary paragraph describing what this object defines and how referencing policies use it. {{ template "prompt-purpose-rule" . }}
+- Directly below the title, without a heading: a short summary paragraph describing what this object defines and how the objects that use it depend on it. {{ template "prompt-purpose-rule" . }}
 - Directly after the summary paragraph, a metadata table stating the resource type, the resource ID and the object's key identifying fields, where present.
 {{- if .HasAssignments }}
 {{ template "prompt-assignments" . }}
@@ -18,22 +18,23 @@ References:
 {{ template "prompt-url-rule" . }}
 
 Usage and references:
-- explain how referencing policies use this object — what it decides or supplies in them — and what breaks in a referencing policy when this object is changed or deleted.
-- do not list the referencing resources yourself; where the documentation run provides a list of them, it splices that block in.
+- explain how the objects that use this one depend on it — what it decides or supplies in them — and, as far as the lifecycle notes state it, what happens to them when it is changed or deleted; never assume that a deletion breaks them.
+- do not list the referencing resources yourself; where the documentation run provides a list of them, it adds that block at the end of this section.
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- document deprecation or migration status and edit/versioning behavior.
+- cover deprecation or migration status and edit or versioning behavior.
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive content{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above, including the impact on every policy that references this object{{ end }}.
+- call out security-sensitive content{{ if .Links.BestPractices }} and any deviations from a value that a Microsoft guidance page listed above recommends, including the impact on every object that uses it{{ end }}.
 
 Definition:
 - document EVERY setting/property present in the YAML.
 {{- template "prompt-key-settings" . }}
 - Render each setting as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link — e.g. `<details data-setting="rule">`.
 {{ template "prompt-details-attrs" . }}
+- If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
 - If the object contains a rule or filter expression (e.g. an assignment filter `rule`), explain the expression clause by clause in plain language and flag clauses that rely on mutable or spoofable attributes.
 {{ template "prompt-complete-rule" . }}
 {{ template "prompt-baseline-rule" . }}

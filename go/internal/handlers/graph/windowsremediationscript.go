@@ -28,7 +28,7 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			Purpose: "An Intune Windows remediation script package (detection + remediation).",
 			KeySettings: []string{
 				"runAsAccount",
-				"enforceSignatureCheck",
+				"enforceSignatureCheck (on: scripts run under the device's PowerShell execution policy, Restricted by default on Windows clients, must be UTF-8 without BOM, and signed scripts need their certificate in Trusted Publishers; off: Bypass policy)",
 				"runAs32Bit",
 				"isGlobalScript",
 				"assignments[].runSchedule",
@@ -42,6 +42,9 @@ func NewWindowsRemediationScriptHandler(credential azcore.TokenCredential) (*Gra
 			Lifecycle: []string{
 				"Detection runs on the schedule set per assignment (runSchedule: once, hourly or daily); the remediation script runs only when detection exits with code 1 and runRemediationScript is enabled for that assignment.",
 				"Requires Windows Enterprise E3/E5, Education A3/A5 or Windows VDA per user (licensing is confirmed once per tenant), Entra joined or hybrid joined devices and the Intune Management Extension; isGlobalScript marks read-only Microsoft-provided packages.",
+				"A detection or remediation script's output is limited to 2,048 characters.",
+				"Detection and remediation status shows under Devices > Manage devices > Scripts and remediations and per device in Device status (output exportable as CSV); devices fetch packages every 8 hours, and recurring results are reported on change and at least every 7 days.",
+				"Managing Remediations needs Intune role permissions in the Device configurations category.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

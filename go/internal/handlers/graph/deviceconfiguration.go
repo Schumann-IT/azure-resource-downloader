@@ -43,21 +43,26 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 
 	// Reading device configurations needs DeviceManagementConfiguration.Read.All;
 	// resolving masked OMA-URI secrets to plaintext requires the stronger
-	// ReadWrite.All scope, so report that when secret resolution is enabled.
+	// ReadWrite.All scope, so the run asks for that when secret resolution is
+	// enabled. The documented permission line stays static (both scopes, and when
+	// each applies), so the prompt and its promptSha256 do not depend on the
+	// setting.
 	requiredPermission := "DeviceManagementConfiguration.Read.All"
 	if resolveSecrets {
 		requiredPermission = "DeviceManagementConfiguration.ReadWrite.All"
 	}
 
 	return &GraphCollectionHandler{
-		azureType:      "Microsoft.Graph/deviceConfigurations",
-		hasAssignments: true,
+		azureType:          "Microsoft.Graph/deviceConfigurations",
+		hasAssignments:     true,
+		runtimePermissions: []string{requiredPermission},
 		documentation: models.ResourceDocumentation{
 			Purpose: "A legacy Intune device configuration profile (template-based): custom profiles use OMA-URI settings on Windows and Android and an imported configuration profile (.mobileconfig) on iOS/iPadOS and macOS; the collection also holds Windows update rings (windowsUpdateForBusinessConfiguration).",
 			KeySettings: []string{
-				"omaSettings (isEncrypted and secretReferenceValueId mark secret values)",
+				"omaSettings (isEncrypted and secretReferenceValueId mark secret values; with secret resolution on, an encrypted entry's value is plaintext in the export and is never reprinted)",
 				"payloadFileName",
 				"deploymentChannel",
+				"deviceManagementApplicabilityRuleOsEdition, deviceManagementApplicabilityRuleOsVersion, deviceManagementApplicabilityRuleDeviceMode (Windows applicability rules: within the assigned groups they include or exclude devices by OS edition, version or device mode, per ruleType; devices left out report Not applicable)",
 			},
 			EmbeddedPayloads: []string{
 				"omaSettings (custom OMA-URI values; omaSettingStringXml values are base64 XML that the export decodes the same way; encrypted values are resolved only when secret resolution is enabled)",
@@ -65,10 +70,15 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 				"configurationXml (macOS custom app configuration XML; base64 in Graph, decoded by the export like payload)",
 				"trustedRootCertificate (base64 certificate of trusted root certificate profiles; not decoded by the export)",
 			},
-			RequiredPermissions: []string{requiredPermission},
+			RequiredPermissions: []string{
+				"DeviceManagementConfiguration.Read.All",
+				"DeviceManagementConfiguration.ReadWrite.All (only with resolve-secrets: true, to resolve encrypted OMA-URI values to plaintext)",
+			},
 			Lifecycle: []string{
 				"Legacy templates are being replaced by the Settings Catalog: since 2408 no new macOS Endpoint protection or Extensions profiles can be created (existing ones keep working), and Intune announced the end of the legacy iOS/iPadOS and macOS software update profiles in favour of declarative (DDM) updates.",
 				"On unassign or delete, Wi-Fi, VPN, certificate and email profiles are removed; for other settings it depends on the platform (Android keeps them, iOS/iPadOS removes them, Windows depends on the CSP), and deleting an update ring leaves its settings on the device.",
+				"If another configuration policy (settings catalog, endpoint security, baseline) sets the same setting differently, the device reports a Conflict to resolve manually; Intune doesn't evaluate custom OMA-URI or Apple configuration-file payloads, and Apple applies conflicting custom settings at random.",
+				"Each profile reports per device and user Succeeded, Error, Conflict, Pending or Not applicable (OS version or edition unsupported, or excluded by an applicability rule) plus a per-setting status; the Configuration policy assignment failures report lists errors and conflicts across profiles.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceManagementConfigurationPolicies (Settings Catalog successor)",
@@ -81,7 +91,7 @@ func NewDeviceConfigurationHandler(credential azcore.TokenCredential, resolveSec
 				"Microsoft.Graph/ndesConnectors (SCEP and PKCS certificate profiles)",
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
-			SubtypeNote: "Legacy profiles are heavily polymorphic (windows10CustomConfiguration, macOSCustomConfiguration, windows10EndpointProtectionConfiguration, ...) - identify the concrete profile type from @odata.type first.",
+			SubtypeNote: "Legacy profiles are heavily polymorphic (windows10CustomConfiguration, macOSCustomConfiguration, windows10EndpointProtectionConfiguration, ...) - identify the concrete profile type from @odata.type first. Android custom profiles (androidCustomConfiguration) are for Android device administrator, deprecated and unavailable on devices with Google Mobile Services. A windows81 type isn't necessarily Windows 8.1: trusted certificate profiles created for Windows 10 and later show as Windows 8.1 and later and work on Windows 10/11. SCEP and PKCS certificate profiles fail on devices that don't trust the root CA, so the trusted certificate profile (also in this collection) must be deployed to the same groups; SCEP profiles reference it directly. Update rings (windowsUpdateForBusinessConfiguration) support Pro, Pro Education, Enterprise, Education, IoT Enterprise and Windows Team, and partly Holographic for Business; LTSC doesn't support the feature-update controls (pause, deferral, uninstall period, pre-release builds, deadline); a pause or extension lasts at most 35 days.",
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-deviceconfiguration-list?view=graph-rest-beta",

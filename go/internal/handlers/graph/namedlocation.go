@@ -36,6 +36,8 @@ func NewNamedLocationHandler(credential azcore.TokenCredential) (*GraphCollectio
 				"Referenced by Conditional Access location conditions; a location marked trusted can't be deleted until the trusted mark is removed.",
 				"Deleted locations are soft-deleted and can be restored within 30 days.",
 				"Limits: at most 195 IP-based named locations with up to 2,000 ranges each and CIDR masks larger than /8; trusted locations also improve ID Protection risk calculation.",
+				"countryLookupMethod authenticatorAppGps needs Microsoft Authenticator on the user's mobile device, which shares its GPS location every hour (also for report-only policies) and denies jailbroken devices; GPS location doesn't work when only passwordless methods are set.",
+				"IP ranges are matched against the public IP address a sign-in comes from, not a device's private intranet address; behind a cloud proxy or VPN that is the proxy's address, because the X-Forwarded-For header isn't used (Global Secure Access source IP restoration avoids this).",
 			},
 			RelatedTypes: []string{"Microsoft.Graph/conditionalAccessPolicies"},
 			SubtypeNote:  "Polymorphic: ipNamedLocation (ipRanges, isTrusted), countryNamedLocation (countriesAndRegions, countryLookupMethod, includeUnknownCountriesAndRegions; no trusted flag) and compliantNetworkNamedLocation (Global Secure Access compliant network) - identify the concrete type from @odata.type.",

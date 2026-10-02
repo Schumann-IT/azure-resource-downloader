@@ -23,14 +23,21 @@ func NewWindowsDriverUpdateProfileHandler(credential azcore.TokenCredential) (*G
 		azureType:      "Microsoft.Graph/windowsDriverUpdateProfiles",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
-			KeySettings:         []string{"approvalType", "deploymentDeferralInDays"},
+			Purpose: "An Intune Windows driver update profile that controls how driver updates are approved and deployed.",
+			KeySettings: []string{
+				"approvalType (fixed once the policy is created)",
+				"deploymentDeferralInDays (0 to 30 days, counted from when a driver is added to the policy; automatic approval only)",
+			},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
 				"Pausing applies to individual driver updates, is best effort and doesn't roll back completed installs; driver policies can't roll back drivers.",
 				"If a device is in several driver policies, an Approved status in any of them wins, so assign each device to one policy only.",
 				"With automatic approval only recommended drivers are approved (after deploymentDeferralInDays); other drivers wait in Needs review, so review approvals in both modes.",
 				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement, Entra joined or hybrid joined devices and update rings that allow Windows drivers; assignment filters aren't supported.",
+				"Devices must run Windows Pro, Pro Education, Enterprise or Education (not LTSC), send at least Required diagnostic data and have the Microsoft Account Sign-In Assistant service (wlidsvc) enabled and running.",
+				"Update rings' quality update deadline, grace period and user experience settings apply to approved drivers, but their quality update deferral doesn't; driver policies don't apply during Autopilot, when Windows may still install critical drivers an admin hasn't approved.",
+				"Status shows in Reports > Windows Updates (Windows Driver updates summary and Windows Driver Update Report) and failures in Devices > Monitor > Driver update policies with alerts; driver reporting needs the tenant setting Enable features that require Windows diagnostic data in processor configuration.",
+				"Managing these policies needs at least the Policy and Profile Manager role or a custom role with Device configurations permissions plus read access to managed devices (e.g. Organization/Read, Managed devices/Read); viewing their reports needs a role such as Read Only Operator or Help Desk Operator.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

@@ -32,9 +32,11 @@ func NewWindowsPlatformScriptHandler(credential azcore.TokenCredential) (*GraphC
 			},
 			RequiredPermissions: []string{"DeviceManagementScripts.Read.All", "DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
-				"Platform scripts run once per device or user and run again only when the script or its policy changes; a failed run is retried at the next three Intune Management Extension check-ins, and a run times out after 30 minutes.",
-				"Device-assigned scripts also run for each new user who signs in (not on multi-session SKUs); devices must be Microsoft Entra joined or hybrid joined, and scripts don't run in S mode or on Surface Hub.",
+				"Platform scripts run once per device or user and run again only when the script or its policy changes; a failed run is retried at the next three Intune Management Extension check-ins, and a run times out after 30 minutes. Scripts run before Win32 apps.",
+				"Device-assigned scripts also run for each new user who signs in (not on multi-session SKUs); devices must be Microsoft Entra joined or hybrid joined, and scripts don't run on Windows Home, in S mode or on Surface Hub.",
 				"Deleting a script does not undo changes it made; for recurring logic use Remediations (deviceHealthScripts).",
+				"A script must be smaller than 200 KB (ASCII), and assignment filters aren't supported for platform scripts.",
+				"Run results show in the script's Device status and User status reports (Monitor); on the device, AgentExecutor.log in C:\\ProgramData\\Microsoft\\IntuneManagementExtension\\Logs records each script run.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceHealthScripts (Remediations, for recurring scripts)",

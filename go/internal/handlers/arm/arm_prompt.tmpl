@@ -16,17 +16,17 @@ References:
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- document operational guidance: what happens when the resource is deleted (including cascade effects, e.g. deleting a resource group deletes ALL contained resources) and backup/recovery considerations.
-- note missing governance guardrails visible in the YAML (e.g. absent tags or locks).
+- cover what happens when the resource is deleted (including cascade effects, e.g. deleting a resource group deletes ALL contained resources) and how it can be recovered.
+- note governance gaps the YAML itself shows (e.g. absent tags). Resource locks, backup, diagnostic settings and RBAC role assignments are not part of this export — never state whether they exist.
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive properties (public network access, TLS versions, encryption at rest, managed identities, shared key access, boot diagnostics, etc.){{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above, including the security impact{{ end }}.
+- call out the security-sensitive properties present in the YAML (e.g. TLS version, encryption at rest, shared key access, network rules){{ if .Links.BestPractices }} and any deviations from a value that a Microsoft guidance page listed above recommends, including the security impact{{ end }}. The export carries a reduced property set: never report a property as missing, disabled or misconfigured only because it is absent from the YAML.
 
 Properties:
 - document EVERY property present in the YAML.
 {{- template "prompt-key-settings" . }}
-- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link — e.g. `<details data-setting="properties.encryption.keySource">`.
+- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link — e.g. `<details data-setting="properties.minimumTlsVersion">`.
 {{ template "prompt-details-attrs" . }}
 {{ template "prompt-complete-rule" . }}
 {{ template "prompt-baseline-rule" . }}

@@ -912,6 +912,12 @@ func TestDefaultGeneratePromptTemplateWording(t *testing.T) {
 		"and a non-empty one-line double-quoted `summary`",
 		`fail(doc, "frontmatter missing summary")`,
 		`fail(doc, "frontmatter summary not a non-empty double-quoted line")`,
+		`fail(doc, "frontmatter generatedAt is not the export timestamp")`,
+		`fail(doc, "<details> block(s) without a data-setting path")`,
+		`fail(doc, "assignments markers missing — the spec asks for an assignments block")`,
+		`fail(doc, "assignments markers in a document whose spec has no assignments block")`,
+		"The Conditional\nAccess `Conditions` table is not an assignments block",
+		"what the settings do, and the\n  scope token in its name only where those don't decide it",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("template missing %q", want)

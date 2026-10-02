@@ -28,8 +28,11 @@ func NewAssignmentFilterHandler(credential azcore.TokenCredential) (*GraphCollec
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
 				"A filter that is still used in any assignment can't be deleted; remove it from all assignments first.",
-				"Rule changes re-evaluate at the next device or app check-in.",
+				"Rule changes re-evaluate at the next device or app check-in; a property not yet set when the device enrolls (such as deviceCategory) evaluates as empty, and an app installed on that result isn't removed automatically once the property is set.",
 				"At most 200 filters per tenant and 3,072 characters per filter; app filters (assignmentFilterManagementType apps) apply only to app protection and app configuration policies.",
+				"Each referencing assignment stores one filter id with its own include or exclude mode, and an assignment can only use a filter whose platform matches the policy's platform.",
+				"For managed devices, when a device gets the same policy through several assignments, Exclude mode wins over no filter, which wins over Include, and filters in the same mode combine with OR; for apps the winning intent is chosen first.",
+				"Results appear up to 30 minutes after evaluation and are kept 30 days, per device under Devices > All devices > (device) > Filter evaluation and in app and Settings Catalog device status reports (app filters: App protection and App configuration status reports); Associated Assignments lists the policies and modes using it.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (filters refine group assignments)",

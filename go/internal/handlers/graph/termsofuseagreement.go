@@ -26,15 +26,17 @@ func NewTermsOfUseAgreementHandler(credential azcore.TokenCredential) (*GraphCol
 			Purpose:  "An Entra ID Terms of Use agreement presented via Conditional Access.",
 			KeySettings: []string{
 				"isViewingBeforeAcceptanceRequired",
-				"isPerDeviceAcceptanceRequired",
+				"isPerDeviceAcceptanceRequired (needs devices registered in Microsoft Entra ID; not supported for B2B users or the Intune Enrollment app, which must be excluded from policies requiring these terms)",
 				"userReacceptRequiredFrequency",
 				"termsExpiration",
 			},
 
 			RequiredPermissions: []string{"Agreement.Read.All"},
 			Lifecycle: []string{
-				"Enforced through Conditional Access grant controls; a new document version forces re-acceptance only when 'Require reaccept' is set, and re-acceptance can also be scheduled (userReacceptRequiredFrequency).",
+				"Enforced through Conditional Access grant controls; a new document version forces re-acceptance only when 'Require reaccept' is set, and re-acceptance can also be scheduled (termsExpiration, userReacceptRequiredFrequency); users are prompted to reaccept only once their session has expired.",
+				"After creation only the name (displayName, internal only), the display name users see (set per document file) and Require users to expand (isViewingBeforeAcceptanceRequired) can be changed, and new document versions or languages added (an existing document can't be modified); any other change, such as per-device acceptance or consent expiry, needs a new terms of use.",
 				"Acceptances are kept for the life of the terms of use; deleting it, or the tenant losing Entra ID P1/P2, deletes all of its acceptance records.",
+				"Who accepted or declined, with per-user history, shows under Accepted and Declined on the terms of use page; each consent is also an audit log event, and audit logs are stored for 30 days.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/conditionalAccessPolicies (terms-of-use grants)",

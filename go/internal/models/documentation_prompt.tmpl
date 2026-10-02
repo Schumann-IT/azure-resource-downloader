@@ -17,14 +17,13 @@ References:
 
 Lifecycle and operations:
 {{ template "prompt-lifecycle-rule" . }}
-- document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned
-- renewal/expiry obligations.
+- cover deprecation or migration status, what happens when the resource is deleted or unassigned, and any renewal or expiry obligation.
 
 Security:
 {{ template "prompt-change-role" . }}
-- call out security-sensitive settings (secrets, certificates, encryption, conditional-access conditions, etc.)
+- call out security-sensitive settings (secrets, certificates, encryption, etc.)
 {{- if .Links.BestPractices }}
-- any deviations from the best-practice baselines listed above, including the security impact.
+- any deviations from a value that a Microsoft guidance page listed above recommends, including the security impact.
 {{- end }}
 
 Settings:
@@ -39,7 +38,7 @@ Settings:
 {{ template "prompt-referenced-ids" . }}
 {{- template "prompt-embedded-payloads" . }}
 {{- if .ReferencesNotificationTemplates }}
-- This resource's noncompliance actions (`scheduledActionsForRule[].scheduledActionConfigurations[].notificationTemplateId`) can reference Microsoft.Graph/notificationMessageTemplates by id. For every such reference present, document it inside the Settings section and wrap the referenced template in `<!-- notifications:start -->` / `<!-- notifications:end -->` markers on their own lines — the same deterministic-splice contract as the assignments block, so it can be re-rendered when a template is renamed without regenerating the page. When a notification-template reference map is provided (a full docs generate-prompt run) resolve each id to the template's display name and link its document; otherwise keep the raw GUID. Never invent a template name, and omit the markers entirely when no action references a template.
+- This resource's noncompliance actions (`scheduledActionsForRule[].scheduledActionConfigurations[].notificationTemplateId`) can reference Microsoft.Graph/notificationMessageTemplates by id. For every such reference present, document it inside the Settings section and wrap the referenced template in `<!-- notifications:start -->` / `<!-- notifications:end -->` markers on their own lines — the same deterministic-splice contract as the assignments block, so it can be re-rendered when a template is renamed without regenerating the page. Put only the bare template GUID between the markers — the template's name and document are filled in later; never invent a template name, and omit the markers entirely when no action references a template.
 {{- end }}
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
 {{ template "prompt-present-rule" . }}
