@@ -76,6 +76,46 @@ and lights up the sidebar's per-item context.
 > this batch and wait for the next regeneration; *mask dedicated secret properties* joins one only if it
 > extends the redaction rule.
 >
+> **Prompt review (2026-10-02).** A Claude Cowork review of the harmonised templates, the shared partials, the run
+> prompt and the 53 assembled prompts against Microsoft Learn (`Claude outputs/documentation-prompt-review.md`,
+> git-ignored; built on `5a0ad8d`). Four problems matter before the regeneration: credential-shaped values under
+> credential-named keys and the plaintext OMA-URI values `resolve-secrets` writes fall outside the redaction rule
+> (T1, R7); the assignments explanation can land inside the splice markers and is lost, the CA *Conditions* table
+> gets wrapped too, and nothing checks for missing markers (T4, R1, R2, R4); every *Lifecycle and operations*
+> section asks questions the curated notes cannot answer (T2); decoded scripts are never required verbatim (T6,
+> R12). Three templates invite false claims (credential renewal pitfall and lead time T7/T8; ARM locks, backup and
+> identities the export never carries T13; group `department`/`jobTitle` called user-editable T9). Per type: 227
+> Learn-backed findings (13 wrong, 141 missing, 73 optional). Its four patches —
+> `documentation-prompt-review-{templates,run-prompt,metadata,tests}.patch` in `Claude outputs/` — apply together to
+> `5a0ad8d` and are the implementer's input; the commit diff is the record. The prompts grow by about 25 %.
+>
+> **Decision.** C1 when the gated changes ship: with this entry, before the one regeneration.
+>
+> **Decision.** C2 plaintext OMA-URI secrets: redact them in the documents (in the patches); the export keeps them.
+>
+> **Decision.** C3 the `deviceConfigurations` permission line: a static line naming both scopes and when each
+> applies, now; the parked idea *relax secret resolution to a read scope* stays for later.
+>
+> **Decision.** C4 optional per-type findings: apply all 227.
+>
+> **Decision.** C5 `deviceComplianceScripts`: the referenced template with `hasAssignments: false`, still fetching
+> `/assignments` and warning when it returns entries.
+>
+> **Decision.** C6 doc-groups for record types: drop `OmitGroupAxes` for `deviceCategories`,
+> `mobileThreatDefenseConnectors` and `ndesConnectors`; keep it for `windowsAutopilotDeviceIdentities`.
+>
+> **Decision.** C7 procedural links: label them *Microsoft guidance*; the baseline rule applies only where a listed
+> page states a recommended value.
+>
+> **Decision.** C8 per-setting links: only to pages listed under *References*, anchors included.
+>
+> **Decision.** C9 `windowsAutopilotDeviceIdentities`: stays out of documentation runs; its metadata stays current.
+>
+> **Decision.** C10 change roles: type by type, named only where the type's notes give one.
+>
+> **Decision.** C11 Conditional Access targets: resolved in the run later — the parked idea *resolve Conditional
+> Access targets in the documentation run*.
+>
 > **Owner.** No tracked file outside `go/`. The last bullet writes the git-ignored
 > `Claude outputs/prompt-review-instructions.md` at the repository root (never staged or committed). No
 > sequencing with the web side: the paired web entry hard-codes the same heading sets and ships independently.
@@ -167,11 +207,36 @@ and lights up the sidebar's per-item context.
   `summary: "Enforces X: requires Y"` parses into `Summary`.~~
 - ~~Goldens: `make -C go golden-update`, then review the diff per template family — only the 53
   `prompts/<type>/doc-prompt.md` files change, the exported-YAML goldens stay byte-identical; `make -C go test`.~~
+- Apply the prompt review: `git apply` the four patches in `Claude outputs/` —
+  `documentation-prompt-review-templates.patch`, `-run-prompt.patch`, `-metadata.patch`, `-tests.patch` (templates
+  and partials T1–T16 and T20–T23, run prompt R1–R10, R12–R13 with five new §4 checks, the per-type metadata of all
+  53 handlers, the intended test-assertion changes plus eleven new assertions). They were built on `5a0ad8d`;
+  stop and report if `git apply --check` fails. Read the test changes like any other test edit: each keeps its
+  assertion's intent.
+- The chosen snippets from the review's *Not in the patches* section: C5 (`devicecompliancescript.go`:
+  `hasAssignments: false`, `Template: referencedPromptTemplateText`, keep the `/assignments` fetch and log a warning
+  when it returns entries, with a handler test for both cases); C6 (remove `OmitGroupAxes` from `devicecategory.go`,
+  `mobilethreatdefenseconnector.go`, `ndesconnector.go`); C7 (*Microsoft guidance* label in `prompt-links`,
+  `prompt-references`, `prompt-baseline-rule` and the *Security* bullet of the default, CA, referenced, singleton and
+  ARM templates, with the tests that pin the label); C8 (`prompt-url-rule`: link a setting only to a page listed
+  under References); and the optional items T17 (Security example list), T18 (both marker lines are pipeline data),
+  T19 (subtype rule in the credential, referenced and singleton templates) and R11 (grouping: the name decides last).
+- C3: `deviceConfigurations` declares a static permission line naming `DeviceManagementConfiguration.Read.All` and,
+  for `resolve-secrets`, `DeviceManagementConfiguration.ReadWrite.All`, so switching the setting no longer moves the
+  type's `promptSha256`. Check the other readers of `RequiredPermissions` first (probe grouping uses the first
+  scope, audit routing, the dedicated-app consent message) and keep `Read.All` first.
+- `make -C go fmt`, `make -C go golden-update` (exactly the 53 prompt goldens change, no `*.golden.yaml`), review the
+  per-type golden diff for wording slips (the review expects a few), then `make -C go test` and `make -C go check`.
 - Documentation at *done*: `README.md` (the template-family table and the closed-H2 contract with the new sets, the
   run prompt described as full or incremental, the `summary:` frontmatter field written by the agent);
   `CHANGELOG.md` `### Changed` (consistent templates, the run prompt) and `### Added` (`summary:`, noting that it
   and `platformGroup` / `functionGroup` appear on the next regeneration), with **regenerate the documentation** in
   bold.
+  Also from the prompt review: `README.md` *Security notes* — the credential-shaped free-text bullet now also covers
+  values under credential-named keys and, with `resolve-secrets`, the resolved OMA-URI values (documents never
+  reprint them; the export still holds them); the template-family table moves `deviceComplianceScripts` to the
+  referenced family; the run prompt's new §4 checks. `CHANGELOG.md` `### Changed` names the redaction, the
+  assignment-marker checks and the Learn-checked per-type notes, under the same **regenerate the documentation**.
 - ~~Last, after every other bullet: write the Claude Cowork review brief
   `Claude outputs/prompt-review-instructions.md` at the repository root (git-ignored, never committed — input for
   a later Cowork session, not repository documentation). It tells Cowork to read the eight templates
@@ -204,9 +269,10 @@ branch), L (several branches or a design change).
 
 1. **The pre-regeneration batch** (scheduled; the shared prompt partials, the per-handler metadata and the
    template content fixes with the CA template — paired with web *Style the Conditional Access `Conditions`
-   section* — already shipped): *run-prompt fixes and `summary:`* is the last one, then one documentation
-   regeneration for all of them. The two regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*)
-   did not join it and wait for the next regeneration.
+   section* — already shipped): *consistent prompt templates, run-prompt fixes and `summary:`*, including the
+   2026-10-02 prompt review, is the last one, then one documentation regeneration for all of them. The two
+   regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*) did not join it and wait for the next
+   regeneration.
 2. **The compare track** (cross-project, must): *`resource compare`* ships with web *Move the compare
    normalisation to the CLI*; web *manual pairing* and *one-sided resource* follow on the CLI's rule; *version the
    drift observation* rides the first drift contract change.
@@ -217,6 +283,34 @@ branch), L (several branches or a design change).
    redaction rule instead of masking.
 
 ## Parked ideas — export & metadata
+
+### Idea: ARM values as plain data with their REST names
+
+*Area:* export & metadata · *Impact:* medium · *Effort:* S · *Ships with:* a re-baseline (every storage account and VM changes
+once)
+
+The ARM transforms put Azure SDK structs straight into the property map (`armstorage.NetworkRuleSet` and
+`Encryption`, `armcompute.OSDisk` and `ImageReference`), so yaml.v3 writes untagged fields under lowercased Go
+names and nil pointers as `null`: the export reads `properties.encryption.keysource`,
+`properties.networkRuleSet.defaultaction`, `storageProfile.osDisk.deleteoption` instead of the REST names, and drift
+deltas print pointer addresses. Round-trip each struct through `encoding/json` into a `map[string]any` (the SDK's
+json tags carry the REST names and `omitempty`) in `internal/handlers/arm/storageaccount.go` and `virtualmachine.go`;
+add a test asserting `keySource`, `defaultAction` and `deleteOption`, and an ARM golden YAML. Effect: ARM YAML keys
+change once, so drift reports every storage account and VM as changed — **re-baseline with `resource download` right
+after shipping**. **Parked** because it needs that re-baseline (code follow-up CF2 of the 2026-10-02 prompt review;
+also the Go review's G2). **Revisit** with the next planned re-download.
+
+### Idea: Edge for Windows settings in targeted managed app configurations
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone; a re-baseline if the YAML grows
+
+Learn builds the Windows (Microsoft Edge) managed-apps configuration in the settings catalog, and Graph models those
+settings as the `settings` relationship of `targetedManagedAppConfiguration`, which a plain GET does not return; the
+handler (`internal/handlers/graph/targetedmanagedappconfiguration.go`) expands only `apps`. Check with a tenant that has
+an Edge for Windows managed-apps configuration; if the settings are missing, add `settings` to the `$expand` (or page
+`/settings`) and a KeySettings note. Effect: those policies' YAML grows once. **Parked** because it needs a tenant with
+such a configuration to confirm (code follow-up CF4 of the 2026-10-02 prompt review). **Revisit** when one is
+available.
 
 ### Idea: export the tenant `deviceManagement.settings`
 
@@ -266,6 +360,8 @@ to "dedicated secret properties (passwords, tokens)" — that moves every `promp
 Effect: YAML changes only where a secret was present. **Parked** because it needs one export from a tenant with VPP
 tokens and a macOS ADE profile that creates a local admin account to confirm. **Revisit** when such a tenant is
 available, or at once if any of the three properties appears in an export.
+The prompt half is covered by the 2026-10-02 prompt review (rule T1 in go entry 1: documents never reprint values
+under credential-named keys); this idea is now the export half only — masking before the value reaches disk.
 
 ### Idea: Intune branding images as content summaries
 
@@ -393,6 +489,23 @@ The comparison reads names from `metadata.yaml`; the exported YAML keeps ids as 
 object's name.
 
 ## Parked ideas — contract
+
+### Idea: resolve Conditional Access targets in the documentation run
+
+*Area:* contract · *Impact:* medium · *Effort:* M · *Ships with:* a go/web pair (a new marker class in the browser); the next
+regeneration
+
+The CA template keeps group, role and application GUIDs bare "unless the documentation run resolves it for you in a
+block it splices in", but the run has no CA splice: `docs generate-prompt` builds the referenced groups and the
+reference map from `assignments[].target.groupId` only, so a group used only by Conditional Access gets no document
+and every CA document shows bare GUIDs. Collect `conditions.users.includeGroups` / `excludeGroups` into the
+referenced groups and the reference map (`internal/docs/generateprompt.go`); give CA documents a forward hash and a
+`<!-- ca-targets:start -->` block rendered by the run as `Direction | Kind | Target` at the end of *Conditions* (the
+template asks for it with bare GUIDs, like the assignments block); register the marker class in
+`web/src/docs/section-hooks.ts` (`MARKER_BLOCK_CLASSES`). Effect: new documents for CA-only groups; every CA document
+is re-spliced once. **Parked** by decision C11 of the 2026-10-02 prompt review: a browser-contract change that should
+not hold up the regeneration batch. **Revisit** when readers ask who a CA policy targets by name, or with the next
+contract change on the web side.
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
