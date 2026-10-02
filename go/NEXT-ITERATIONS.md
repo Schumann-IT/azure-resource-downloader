@@ -41,52 +41,73 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 > copied into the repository, every fixture is synthetic and built in a temp directory.
 >
 > **From the code.** The model is `docs generate-index` (`cmd/docs/generate_index.go`,
-> `internal/docs/generateindex.go`): an offline, deterministic `docs` command over `resources/metadata.yaml` and the
-> exported data (plus a config key — `taxonomy:`, which the catalog entry follows), with `--domain` / `--out`,
+> `internal/docs/generateindex.go`): an offline, deterministic `docs` command over `resources/metadata.yaml` and
+> the exported data (plus a config key — `taxonomy:`, which the catalog entry follows), with `--domain` / `--out`,
 > `cmdutil.ResolveExportDir`, exit 2 for "cannot answer" and a dry-run that writes nothing. Unlike its
-> `writeIndexFile` (plain `os.WriteFile`), write with `docs.WriteFileAtomic`. Tree ownership follows
-> `resource drift`: `drift.ClearTree`, `WriteObservation` and `rebaselineClearDrift` in `cmd/resource/download.go`. Assignment parsing exists in
-> `internal/docs/assignments.go` (`parseAssignments`, `buildGroupInfo`, `buildFilterInfo`, the zero-GUID filter
-> sentinel). `metadata.yaml` carries raw `assignmentTargets`, `groupTypes`, `platforms`, `odataType` — not a
-> group's `membershipRule` nor a filter's `platform`/`rule`, which come from the groups' and filters' YAML.
-> ADMX presentation values are not exported (parked idea *export ADMX presentation values*). No repository
-> fixtures exist for ADMX `definitionValues`, intent `settings`, `assignmentFilters` or collection-valued Settings
-> Catalog settings.
+> `writeIndexFile` (plain `os.WriteFile`), write with `docs.WriteFileAtomic`. Tree ownership follows `resource
+> drift`: `drift.ClearTree`, `WriteObservation` and `rebaselineClearDrift` in `cmd/resource/download.go`.
+> Assignment parsing exists in `internal/docs/assignments.go` (`parseAssignments`, `buildGroupInfo`,
+> `buildFilterInfo`, the zero-GUID filter sentinel). `metadata.yaml` carries raw `assignmentTargets`,
+> `groupTypes`, `platforms`, `odataType` — not a group's `membershipRule` nor a filter's `platform`/`rule`, which
+> come from the groups' and filters' YAML. ADMX presentation values are not exported (parked idea *export ADMX
+> presentation values*). No repository fixtures exist for ADMX `definitionValues`, intent `settings`,
+> `assignmentFilters` or collection-valued Settings Catalog settings.
+>
+> **Compliance is not only a check.** On macOS (and iOS/iPadOS) several compliance settings — the password ones in
+> particular — are applied to the device, not only evaluated. A compliance policy and a configuration profile can
+> then enforce the same control with different values, or a configuration can enforce a value the compliance check
+> rejects (devices non-compliant by design). Both are mechanically decidable once the catalog says which compliance
+> property and which configuration keys describe the same control: the `equivalences` of the entry *A consistency
+> rule and topic catalog in the configuration*. This entry builds the alias hook and the comparison; the catalog
+> entry supplies the real mappings. Without a catalog the detector works on exact keys only.
 >
 > **Not regeneration-gated.** No `*_prompt.tmpl` changes; no document changes.
 
 **Plan.**
 
 - New package `internal/consistency` and command `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`,
-  registered in `cmd/docs.go`; flags `--domain` and `--out` like `docs generate-index`; the flag and subcommand surface
-  tests in `cmd/docs_test.go` and `cmd/resource_test.go`); refuses with exit 2 without `resources/metadata.yaml`
-  or on a tenant mismatch.
+  registered in `cmd/docs.go`; flags `--domain` and `--out` like `docs generate-index`; the flag and subcommand
+  surface tests in `cmd/docs_test.go` and `cmd/resource_test.go`); refuses with exit 2 without
+  `resources/metadata.yaml` or on a tenant mismatch.
 - Setting index `(resource, canonicalKey, value, state)`: Settings Catalog `settingDefinitionId`, walking choice
   children and group collections, with choice, simple and collection values in one comparable form and secret
   `valueState` as `set`; custom OMA-URI by lowercase `omaUri`, masked or encrypted values as "set, value unknown";
   the Settings Catalog ↔ OMA-URI bridge through the CSP path derived from
   `device_vendor_msft_policy_config_<area>_<setting>` (compared lowercase); ADMX by `definition.id` and `enabled`;
   intents by `definitionId` and parsed `valueJson`; legacy typed configurations by `@odata.type#property` within the
-  same `@odata.type`; compliance policies indexed as class `requirement`, never compared as values. A masked value is
-  never a value conflict.
+  same `@odata.type`; compliance policies (`deviceCompliancePolicies` by `@odata.type#property`, Settings Catalog
+  compliance by `settingDefinitionId`) indexed as class `requirement`. A masked value is never a value conflict.
+- Alias hook for equivalences: canonical keys can be joined through an equivalence table (from the catalog entry's
+  `equivalences`; an empty table here, a fixture table in the tests). Each equivalence names the members (a
+  compliance property and/or configuration keys), a relation — `same` (both sides enforce the control) or a check
+  operator `>=`, `<=`, `=`, `required` with the compliance side as the requirement — whether the compliance side is
+  enforced on the device for that platform, and a `status` (`verified` | `verify`).
 - Scope model and overlap verdict per resource pair: include and exclude sets (groups, all devices, all users),
   filters with mode, platform, and target kind (dynamic group rule `device.` vs `user.`; assigned groups `unknown`).
   `none` when platforms differ, either side is unassigned, one include set is a subset of the other's exclude set,
   the same filter is used in opposite modes, or device-only meets user-only where that decides it; `certain` when
   the same group is included in both and excluded in neither, or all devices / all users on both without
   exclusions on the same platform; `possible` otherwise. Built on `internal/docs/assignments.go`.
-- Mechanical findings: a canonical key set in two or more resources whose overlap is not `none` is a `conflict`
-  (values differ) or a `duplicate` (same value), each carrying its overlap verdict.
+- Mechanical findings: a canonical key (or an equivalence group) set in two or more resources whose overlap is not
+  `none` is a `conflict` (two enforcing sides with different values — two configurations, or an enforcing
+  compliance setting and a configuration), a `duplicate` (same value), or a `contradiction` (a configuration value
+  that fails a compliance requirement under the equivalence's operator, e.g. an enforced minimum password length of
+  8 against a required 12), each carrying its overlap verdict, the operator and both values. A finding resting on an
+  equivalence with `status: verify` is reported with confidence `possible`, never as a hard conflict. A compliance
+  requirement with no in-scope configuration is not a mechanical finding (rule R1 in the analysis job).
 - Output: `<tenant>/consistency/metadata.yaml` (`exportGeneratedAt`, tool version, counts) and
-  `consistency/mechanical.yaml` (sorted, deterministic), both written with `docs.WriteFileAtomic`; `--dry-run` writes
-  nothing and reports the counts. A summary line per kind at the end of the run.
+  `consistency/mechanical.yaml` (sorted, deterministic), both written with `docs.WriteFileAtomic`; `--dry-run`
+  writes nothing and reports the counts. A summary line per kind at the end of the run.
 - Tree ownership: `consistency.ClearTree` (its own constant and hard-coded path), called by `resource download`
   next to `rebaselineClearDrift` — after a successful metadata write, never on dry-run, a failure only warns.
   `.claude/rules/go-export-safety.md` (and its Windsurf twin `go/.windsurf/rules/04-security-and-ops.md`): a
   `consistency/` bullet under *Output layout*, the "only other deletes" sentence and the prune exclusion list.
-- Tests: the normalisers per source type, CSP derivation, the overlap truth table, mechanical detection on a
-  synthetic tenant (including an L1/Admin complement pair — one policy excludes the admin group, its twin includes
-  only it — that must come out `none`), byte-equal reruns, dry-run, refusals, `ClearTree` on re-baseline.
+- Tests: the normalisers per source type, CSP derivation, the overlap truth table, the alias hook with a fixture
+  equivalence table (a macOS compliance password length against a configuration profile's: `conflict` when both
+  enforce, `contradiction` when the configuration fails the requirement, `possible` for a `verify` equivalence),
+  mechanical detection on a synthetic tenant (including an L1/Admin complement pair — one policy excludes the
+  admin group, its twin includes only it — that must come out `none`), byte-equal reruns, dry-run, refusals,
+  `ClearTree` on re-baseline.
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
 
@@ -94,14 +115,18 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 
 *Kind:* feat
 
-**Goal.** The operator can tell the consistency analysis which cross-type relations to check and how to group
-resources into topics, with each rule's resolution semantics and its Microsoft Learn source written down — so the
-LLM step of the analysis judges against a reviewed catalog instead of recall.
+**Goal.** The operator can tell the consistency analysis which settings describe the same control across policy
+types (compliance included), which cross-type relations to check, and how to group resources into topics — each
+with its resolution semantics and its Microsoft Learn source written down — so the mechanical step can compare
+compliance against configuration and the LLM step judges against a reviewed catalog instead of recall.
 
 > **Decision.** The catalog is a configuration key like `taxonomy:` (operator-editable, validated), not embedded
 > data.
 >
-> **Shape.** A general key `consistency:` with `topics` (id, label, match patterns over setting keys,
+> **Shape.** A general key `consistency:` with `equivalences` (id, members — a compliance property and/or
+> configuration keys: Settings Catalog `settingDefinitionId`s, OMA-URI paths, legacy `@odata.type#property` —, a
+> relation `same | >= | <= | = | required`, `enforced` per platform for the compliance side, a Microsoft Learn
+> reference, `status: verified | verify`), `topics` (id, label, match patterns over setting keys,
 > `@odata.type`s and type names; a resource may sit in several topics) and `rules` (id, description, left and right
 > selectors, what counts as a violation, resolution semantics — which setting wins —, a Microsoft Learn reference,
 > `status: verified | verify`). Seed rules from the Cowork draft, all to be verified: R1 compliance requires
@@ -112,22 +137,47 @@ LLM step of the analysis judges against a reviewed catalog instead of recall.
 > contradicts the policy's platform or enrollment type; R7 enrollment/ESP/Autopilot targeting inconsistent with its
 > dynamic group rule; R8 a macOS Platform SSO / account setting conflicting with password compliance.
 >
+> **Equivalences replace the parked mapping idea.** Joining a legacy typed property and a Settings Catalog / CSP
+> setting is the same problem as joining a compliance property and a configuration setting, so the former parked
+> idea *a curated legacy-property → CSP mapping* is part of `equivalences`.
+>
+> **Microsoft Learn check by Claude Cowork.** The seed catalog's semantics — which compliance settings are enforced
+> on which platform, which setting wins, which keys describe one control — need sourced verification, which a Cowork
+> session with web access does best (as for the metadata and prompt reviews). The entry's last bullet writes its
+> brief; the result enters the backlog later like those reviews did.
+>
 > **Not regeneration-gated.**
 
 **Plan.**
 
 - The `consistency:` key through `/add-config-option`: a general key in `internal/config` (`keyScopes`), read by
   `docs analyze-consistency` like `generate-index` reads `taxonomy:`; types, compilation and validation in
-  `internal/consistency` (id pattern, selectors resolve against the index's source types, references are
-  `https://learn.microsoft.com/…`), with errors naming the offending entry.
+  `internal/consistency` (id pattern, selectors and equivalence members resolve against the index's source types,
+  relations from the closed set, references are `https://learn.microsoft.com/…`), with errors naming the offending
+  entry; the compiled `equivalences` feed the mechanical detector's alias hook.
 - The compiled catalog's hash in `consistency/metadata.yaml`; an absent catalog means mechanical findings only.
 - Both example files stay no-ops (the key illustrated in comments only); the worked example
-  `config-tailored-intune.yaml` carries a seed catalog — topics: encryption, Defender/EDR, firewall, Windows Update,
-  identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each rule's semantics
-  and reference checked against Microsoft Learn; anything Learn does not settle stays `status: verify`, never
-  guessed.
-- Tests: validation errors, compilation, the catalog hash, `cmd/config_test.go` partition coverage.
-- Documentation at *done*: `README.md` (the key, its shape, the seed catalog); `CHANGELOG.md` `### Added`.
+  `config-tailored-intune.yaml` carries a seed catalog — equivalences: the macOS and iOS/iPadOS password and
+  passcode family first (compliance ↔ Settings Catalog ↔ legacy device restrictions), then encryption
+  (FileVault/BitLocker), firewall, minimum OS version; topics: encryption, Defender/EDR, firewall, Windows Update,
+  identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
+  semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
+  `status: verify`, never guessed.
+- Tests: validation errors (unknown relation, unresolvable member, non-Learn reference), compilation, the catalog
+  hash, the equivalences reaching the detector (a seed macOS password equivalence turns a fixture pair into a
+  `contradiction`), `cmd/config_test.go` partition coverage.
+- Documentation at *done*: `README.md` (the key, its three sections, the seed catalog); `CHANGELOG.md` `### Added`.
+- Last, after every other bullet: write the Claude Cowork review brief `Claude
+  outputs/consistency-catalog-review-instructions.md` (git-ignored, never committed — input for a Cowork session,
+  not repository documentation). It tells Cowork to read the seed catalog in `go/config-tailored-intune.yaml`
+  (`consistency:` — equivalences, topics, rules), the README's description of the key and its closed vocabularies,
+  and the indexed source types; to check every entry against Microsoft Learn — that the members of each
+  equivalence describe the same control, the relation and operator, which compliance settings are enforced on
+  which platform (macOS, iOS/iPadOS, Windows, Android), each rule's violation and resolution semantics ("which
+  setting wins"), and that every reference URL resolves and supports the claim; to name missing high-value
+  equivalences and rules; and to return a change plan in the shape of the earlier reviews — per entry a verdict
+  (keep / fix / drop / add), ready-to-paste YAML, `status: verified` only with a cited Learn source, open
+  questions where Learn is silent — with no repository edits and nothing read under `output/`.
 
 ## 3. The consistency analysis job
 
@@ -160,17 +210,17 @@ operator can act on.
   expected output size like `generate.md` §3), `overlap` (a compact pair matrix per cluster) and `rules`; preflight
   like `drift.CheckCurrent` (`exportGeneratedAt` equals `resources/metadata.yaml` `generatedAt`); `--prompt`
   substitutes a template.
-- The template's procedure: one agent per cluster writing `consistency/chunks/NN.json` against a fixed schema;
-  a shipped verification script (stdlib Python ≥ 3.9, read-only, same conventions as the run prompt's §6/§7 scripts)
+- The template's procedure: one agent per cluster writing `consistency/chunks/NN.json` against a fixed schema; a
+  shipped verification script (stdlib Python ≥ 3.9, read-only, same conventions as the run prompt's §6/§7 scripts)
   that fails a finding whose cited source or key is missing, whose cited value differs from the YAML (masked
   excepted), whose overlap disagrees with the matrix, whose vocabulary is outside the closed sets (`rule` from the
-  catalog or `mechanical` / `other` with a justification; `kind` conflict | duplicate | gap | ineffective |
-  precedence; `severity` critical | high | medium | low; `overlap` certain | possible), or that restates a
-  mechanical finding without citing it; then the orchestrator writes `consistency/findings.yaml`,
+  catalog or `mechanical` / `other` with a justification; `kind` conflict | duplicate | contradiction | gap |
+  ineffective | precedence; `severity` critical | high | medium | low; `overlap` certain | possible), or that
+  restates a mechanical finding without citing it; then the orchestrator writes `consistency/findings.yaml`,
   `consistency/index.md` and a report.
-- `documentation-agent-instructions.md`: the third job "analyze consistency for `<tenant>`" — prompt file, preflight,
-  the two-phase gate, the allow-list (`consistency/chunks/**`, `findings.yaml`, `index.md`, `report-*.md`) and never
-  `analyze.md`, `metadata.yaml`, `mechanical.yaml`, `docs/`, `resources/`.
+- `documentation-agent-instructions.md`: the third job "analyze consistency for `<tenant>`" — prompt file,
+  preflight, the two-phase gate, the allow-list (`consistency/chunks/**`, `findings.yaml`, `index.md`,
+  `report-*.md`) and never `analyze.md`, `metadata.yaml`, `mechanical.yaml`, `docs/`, `resources/`.
 - Root `CLAUDE.md`: `consistency/` in the Go → web contract list.
 - Tests: the template validates its markers; rendering on a synthetic tenant; the verification script run on
   fixtures rejects planted bad findings (wrong value, wrong overlap, bad vocabulary, duplicate of a mechanical
@@ -377,18 +427,6 @@ golden YAML that the assignment objects are identical. Effect: none expected; on
 because the current call works. **Revisit** if it starts failing, or with other work on these handlers.
 
 ## Parked ideas — drift & compare
-
-### Idea: a curated legacy-property → CSP mapping for the consistency analysis
-
-*Area:* drift & compare · *Impact:* medium · *Effort:* M · *Ships with:* after go *Index settings and assignment
-scopes and report same-setting conflicts*
-
-The mechanical consistency step compares legacy typed `deviceConfigurations` only within the same `@odata.type`, so a
-BitLocker, Defender, firewall or password setting configured once through a legacy profile and once through the
-Settings Catalog is never matched. A curated mapping `legacy property → CSP path` for those high-value areas would let
-both meet under one canonical key. **Parked** because it is curated data that goes stale and its worth depends on how
-often tenants mix both surfaces. **Revisit** when the mechanical results on a real tenant show cross-surface pairs the
-LLM step keeps catching by hand.
 
 ### Idea: per-document backlinks to consistency findings
 
