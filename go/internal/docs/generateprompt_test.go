@@ -1435,6 +1435,12 @@ func TestSectionSixReferenceScriptMigratedPolicy(t *testing.T) {
 	if !strings.Contains(string(prompt), "| Document | Type | Reason | assignmentsSha256 | notificationsSha256 |") {
 		t.Fatalf("migrate table missing from the rendered prompt")
 	}
+	mergedRow := "| `" + policyDoc + "` | " + compType +
+		" | document predates the assignment markers; document predates the noncompliance-notification markers | `" +
+		items[policyDoc].AssignmentsSha256 + "` | `" + items[policyDoc].NotificationsSha256 + "` |"
+	if !strings.Contains(string(prompt), mergedRow) {
+		t.Fatalf("prompt lacks the single merged migrate row:\n%s", mergedRow)
+	}
 	script := embeddedScript(t, string(prompt), section6Docstring)
 	if out, code := runScript(t, python, dir, script); code != 0 {
 		t.Fatalf("migrated policy with both hashes: exit %d\n%s", code, out)

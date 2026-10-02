@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"azure-resource-downloader/internal/cmdutil"
@@ -194,9 +196,10 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 		}
 	}
 	if len(res.Migrate) > 0 {
-		log.Info("Documents to migrate to assignment markers", "count", len(res.Migrate))
-		for _, it := range res.Migrate {
-			log.Info("  needs marker migration", "doc", it.DocPath)
+		docs, reasons := migrateByDocument(res.Migrate)
+		log.Info("Documents to migrate to assignment or noncompliance-notification markers", "count", len(docs))
+		for _, doc := range docs {
+			log.Info("  needs marker migration", "doc", doc, "reason", reasons[doc])
 		}
 	}
 	if len(res.ForwardResplice) > 0 {
@@ -237,4 +240,33 @@ func reportGeneratePrompt(res *docsengine.GeneratePromptResult, dryRun bool) {
 			"resplice_used_by", len(res.UsedByResplice),
 			"resplice_notifications", len(res.NotificationsResplice))
 	}
+}
+
+// migrateByDocument groups migrate items by document: a document missing both
+// the assignment and the notification markers has two items but is one
+// document to migrate. It returns the distinct document paths in sorted order
+// and each document's item reasons joined with "; " in item order.
+func migrateByDocument(items []docsengine.WorkItem) ([]string, map[string]string) {
+	reasons := map[string]string{}
+	var docs []string
+	for _, it := range items {
+		prev, seen := reasons[it.DocPath]
+		if !seen {
+			docs = append(docs, it.DocPath)
+		}
+		reasons[it.DocPath] = strings.Join(nonEmpty(prev, it.Reason), "; ")
+	}
+	sort.Strings(docs)
+	return docs, reasons
+}
+
+// nonEmpty returns the arguments that are not blank, in order.
+func nonEmpty(parts ...string) []string {
+	var out []string
+	for _, p := range parts {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

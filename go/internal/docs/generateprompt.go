@@ -161,9 +161,10 @@ type GeneratePromptResult struct {
 	// name was renamed (or appeared/disappeared). It is the forward counterpart
 	// of UsedByResplice.
 	NotificationsResplice []RespliceItem
-	// Migrate lists current documents of an assignment-capable type that predate
-	// the assignment markers, so the markers must be inserted before the block
-	// can be spliced.
+	// Migrate lists current documents missing a marker their content needs
+	// (assignments or noncompliance notifications) — one item per missing
+	// marker, so a document missing both has two; renderMigrate merges them
+	// into one row.
 	Migrate []WorkItem
 }
 
