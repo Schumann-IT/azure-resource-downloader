@@ -276,8 +276,8 @@ and lights up the sidebar's per-item context.
   and audit routing (Intune prefix) are unaffected. Tests in `deviceconfiguration_test.go`: the existing runtime cases
   stay; new: `Documentation().RequiredPermissions` and `GetDocumentationPrompt()` are identical for `resolveSecrets`
   false and true.~~
-- `make -C go fmt`, `make -C go golden-update` (exactly the 53 prompt goldens change, no `*.golden.yaml`), review the
-  per-type golden diff for wording slips (the review expects a few), then `make -C go test` and `make -C go check`.
+- ~~`make -C go fmt`, `make -C go golden-update` (exactly the 53 prompt goldens change, no `*.golden.yaml`), review the
+  per-type golden diff for wording slips (the review expects a few), then `make -C go test` and `make -C go check`.~~
 - Documentation at *done*: `README.md` (the template-family table and the closed-H2 contract with the new sets, the
   run prompt described as full or incremental, the `summary:` frontmatter field written by the agent);
   `CHANGELOG.md` `### Changed` (consistent templates, the run prompt) and `### Added` (`summary:`, noting that it

@@ -41,9 +41,12 @@ type GraphCollectionHandler struct {
 	// may set this true for a type that is readable with the plain az login
 	// session.
 	worksWithCLICredential bool
-	// hasAssignments marks a type that has an assignments concept (its fetchItem
-	// populates assignments). It is surfaced via HasAssignments so the export can
-	// record it per type, and defaults false for types with no assignments.
+	// hasAssignments marks a type that has an assignments concept, so its
+	// documentation prompt carries the assignments block; a fetchItem may still
+	// export /assignments entries for a type without one (deviceComplianceScripts),
+	// which warnUnexpectedAssignments reports. It is surfaced via HasAssignments so
+	// the export can record it per type, and defaults false for types with no
+	// assignments.
 	hasAssignments bool
 	// runtimePermissions, when set, are the delegated scopes a run needs when
 	// they differ from the documented list (documentation.RequiredPermissions):
