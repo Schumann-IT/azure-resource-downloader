@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,11 +65,11 @@ func TestIndexCompliancePoliciesAreRequirements(t *testing.T) {
 
 func TestNormaliseOMAURI(t *testing.T) {
 	tests := map[string]string{
-		"./Device/Vendor/MSFT/Policy/Config/Defender/AllowRealtimeMonitoring":           "device_vendor_msft_policy_config_defender_allowrealtimemonitoring",
-		"./Vendor/MSFT/Policy/Config/Browser/AllowCookies":                              "device_vendor_msft_policy_config_browser_allowcookies",
-		"./User/Vendor/MSFT/Policy/Config/Start/HideRecentlyAddedApps":                  "user_vendor_msft_policy_config_start_hiderecentlyaddedapps",
-		"./Device/Vendor/MSFT/Policy/Config/ADMX_Power/PW_PromptPasswordOnResume_DC_1":  "device_vendor_msft_policy_config_admx_power_pw_promptpasswordonresume_dc_1",
-		"  ./device/vendor/msft/Policy/Config/Update/ActiveHoursStart  ":                "device_vendor_msft_policy_config_update_activehoursstart",
+		"./Device/Vendor/MSFT/Policy/Config/Defender/AllowRealtimeMonitoring":          "device_vendor_msft_policy_config_defender_allowrealtimemonitoring",
+		"./Vendor/MSFT/Policy/Config/Browser/AllowCookies":                             "device_vendor_msft_policy_config_browser_allowcookies",
+		"./User/Vendor/MSFT/Policy/Config/Start/HideRecentlyAddedApps":                 "user_vendor_msft_policy_config_start_hiderecentlyaddedapps",
+		"./Device/Vendor/MSFT/Policy/Config/ADMX_Power/PW_PromptPasswordOnResume_DC_1": "device_vendor_msft_policy_config_admx_power_pw_promptpasswordonresume_dc_1",
+		"  ./device/vendor/msft/Policy/Config/Update/ActiveHoursStart  ":               "device_vendor_msft_policy_config_update_activehoursstart",
 	}
 	for in, want := range tests {
 		equal(t, want, normaliseOMAURI(in), in)
@@ -116,17 +117,17 @@ func TestIndexOMASettings(t *testing.T) {
 
 func TestIndexTypedProperties(t *testing.T) {
 	doc := map[string]interface{}{
-		"@odata.type":             "#microsoft.graph.windowsUpdateForBusinessConfiguration",
-		"@odata.context":          "ctx",
-		"id":                      "id",
-		"displayName":             "name",
-		"description":             "d",
-		"version":                 3,
-		"createdDateTime":         "t",
-		"lastModifiedDateTime":    "t",
-		"roleScopeTagIds":         []interface{}{"0"},
-		"assignments":             []interface{}{"x"},
-		"scheduledActionsForRule": []interface{}{"x"},
+		"@odata.type":                        "#microsoft.graph.windowsUpdateForBusinessConfiguration",
+		"@odata.context":                     "ctx",
+		"id":                                 "id",
+		"displayName":                        "name",
+		"description":                        "d",
+		"version":                            3,
+		"createdDateTime":                    "t",
+		"lastModifiedDateTime":               "t",
+		"roleScopeTagIds":                    []interface{}{"0"},
+		"assignments":                        []interface{}{"x"},
+		"scheduledActionsForRule":            []interface{}{"x"},
 		"qualityUpdatesDeferralPeriodInDays": 7,
 		"driversExcluded":                    false,
 		"automaticUpdateMode":                "notConfigured",
@@ -146,6 +147,34 @@ func TestIndexTypedProperties(t *testing.T) {
 	equal(t, "everyday", got[prefix+"installationSchedule.scheduledInstallDay"].Value, "nested objects flatten to dotted paths")
 	equal(t, `["a","b"]`, got[prefix+"allowed"].Value)
 	hasLen(t, got, 4, "non-settings, OData annotations and not-configured values are never indexed: %v", got)
+}
+
+func TestIndexTypedPayloadAndCredentials(t *testing.T) {
+	doc := map[string]interface{}{
+		"@odata.type":      "#microsoft.graph.macOSCustomConfiguration",
+		"payload":          "<plist>inline-payload-text</plist>",
+		"configurationXml": "<xml>inline-xml-text</xml>",
+	}
+	got := indexOf(t, "Microsoft.Graph/deviceConfigurations/m.yaml", typeDeviceConfigurations, doc)
+	sum := sha256.Sum256([]byte("<plist>inline-payload-text</plist>"))
+	equal(t, "sha256:"+hex.EncodeToString(sum[:]), got["#microsoft.graph.macOSCustomConfiguration#payload"].Value)
+	for _, s := range got {
+		if strings.Contains(s.Value, "inline-") {
+			t.Errorf("inline payload text must not appear in the value: %q", s.Value)
+		}
+	}
+
+	wifi := map[string]interface{}{
+		"@odata.type":  "#microsoft.graph.windowsWifiConfiguration",
+		"preSharedKey": "hunter2",
+		"ssid":         "corp",
+	}
+	got = indexOf(t, "Microsoft.Graph/deviceConfigurations/w.yaml", typeDeviceConfigurations, wifi)
+	psk := got["#microsoft.graph.windowsWifiConfiguration#preSharedKey"]
+	if !psk.Unknown {
+		t.Errorf("a credential-named property must be unknown: %+v", psk)
+	}
+	empty(t, psk.Value, "a credential value is never written")
 }
 
 func TestIndexGroupPolicyAndIntents(t *testing.T) {

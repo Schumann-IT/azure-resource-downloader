@@ -10,10 +10,10 @@ import (
 
 // addExportFlags declares the flags the docs subcommands that write one file
 // share: --domain to name the export folder (and select that tenant's
-// configuration profile), and --out to override the output path. Only --out's usage differs per command
-// (each writes a different file with a different default), so it is the one
-// parameter; the flags stay local to each subcommand rather than persistent on
-// the docs parent for the same reason.
+// configuration profile), and --out to override the output path. Only --out's
+// usage differs per command (each writes a different file with a different
+// default), so it is the one parameter; the flags stay local to each
+// subcommand rather than persistent on the docs parent for the same reason.
 //
 // The credentials these commands may need to resolve the tenant domain come
 // from that profile, not from flags, so there is exactly one place a tenant's

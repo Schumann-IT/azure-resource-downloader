@@ -387,39 +387,42 @@ func isMaskedValue(v interface{}) bool {
 // export moved to a sidecar artifact compares by the artifact bytes' SHA-256.
 func indexOMASettings(doc map[string]interface{}, artifacts map[string]bool, typeDir string, c *collector) {
 	for _, raw := range listOf(doc["omaSettings"]) {
-		s, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
+		if s, ok := raw.(map[string]interface{}); ok {
+			indexOMASetting(s, artifacts, typeDir, c)
 		}
-		uri, _ := s["omaUri"].(string)
-		if strings.TrimSpace(uri) == "" {
-			continue
-		}
-		key := normaliseOMAURI(uri)
-		encrypted, _ := s["isEncrypted"].(bool)
-		ref, _ := s["secretReferenceValueId"].(string)
-		value, hasValue := s["value"]
-		if encrypted || ref != "" || isMaskedValue(value) {
-			c.add(key, rawValue{sourceKey: uri, unknown: true})
-			continue
-		}
-		if !hasValue {
-			if fileName, _ := s["fileName"].(string); fileName != "" && artifacts[fileName] {
-				c.add(key, artifactValue(uri, filepath.Join(typeDir, filepath.Base(fileName))))
-			}
-			continue
-		}
-		if notConfigured(value, false) {
-			continue
-		}
-		rv := leafValue(uri, value)
-		// An XML payload (an ADMX <enabled/> with its data elements) is not a
-		// scalar: across the bridge it can only be listed as unknown.
-		if strings.HasPrefix(strings.TrimSpace(rv.scalar), "<") {
-			rv.scalar = ""
-		}
-		c.add(key, rv)
 	}
+}
+
+// indexOMASetting indexes one omaSettings item.
+func indexOMASetting(s map[string]interface{}, artifacts map[string]bool, typeDir string, c *collector) {
+	uri, _ := s["omaUri"].(string)
+	if strings.TrimSpace(uri) == "" {
+		return
+	}
+	key := normaliseOMAURI(uri)
+	encrypted, _ := s["isEncrypted"].(bool)
+	ref, _ := s["secretReferenceValueId"].(string)
+	value, hasValue := s["value"]
+	if encrypted || ref != "" || isMaskedValue(value) {
+		c.add(key, rawValue{sourceKey: uri, unknown: true})
+		return
+	}
+	if !hasValue {
+		if fileName, _ := s["fileName"].(string); fileName != "" && artifacts[fileName] {
+			c.add(key, artifactValue(uri, filepath.Join(typeDir, filepath.Base(fileName))))
+		}
+		return
+	}
+	if notConfigured(value, false) {
+		return
+	}
+	rv := leafValue(uri, value)
+	// An XML payload (an ADMX <enabled/> with its data elements) is not a
+	// scalar: across the bridge it can only be listed as unknown.
+	if strings.HasPrefix(strings.TrimSpace(rv.scalar), "<") {
+		rv.scalar = ""
+	}
+	c.add(key, rv)
 }
 
 // artifactValue hashes a sidecar artifact; a missing artifact is unknown.
@@ -463,7 +466,29 @@ func walkTyped(odataType, path string, v interface{}, c *collector) {
 		return
 	}
 	key := odataType + "#" + path
-	c.add(key, leafValue(key, v))
+	c.add(key, typedLeaf(key, path, v))
+}
+
+// credentialSuffixes end the property names whose values are credentials.
+var credentialSuffixes = []string{"password", "passphrase", "secret", "sharedkey", "token"}
+
+// typedLeaf builds the raw value of one typed property. A credential-named
+// property is unknown (never written in clear), and an inline macOS payload
+// compares by the same SHA-256 the sidecar path uses, so it is never written
+// to the finding as text.
+func typedLeaf(key, path string, v interface{}) rawValue {
+	last := strings.ToLower(path[strings.LastIndex(path, ".")+1:])
+	for _, suffix := range credentialSuffixes {
+		if strings.HasSuffix(last, suffix) {
+			return rawValue{sourceKey: key, unknown: true}
+		}
+	}
+	if s, ok := v.(string); ok && (path == "payload" || path == "configurationXml") {
+		sum := sha256.Sum256([]byte(s))
+		h := "sha256:" + hex.EncodeToString(sum[:])
+		return rawValue{sourceKey: key, value: h, scalar: h}
+	}
+	return leafValue(key, v)
 }
 
 // indexMacOSPayload indexes a custom macOS profile's payload when the export

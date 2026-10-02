@@ -239,18 +239,7 @@ func readDoc(resourcesDir, key string) (map[string]interface{}, string) {
 // scopeInputs resolves the target kind of every group and the platform and
 // rule of every filter that an indexed resource's assignments reference.
 func scopeInputs(m *docs.Metadata, resourcesDir string, indexed map[string]string) (map[string]string, map[string]filterInfo) {
-	groupRefs := map[string]bool{}
-	filterRefs := map[string]bool{}
-	for key := range indexed {
-		for _, t := range docs.ParseAssignmentTargets(m.Resources[key].AssignmentTargets) {
-			if t.GroupID != "" {
-				groupRefs[t.GroupID] = true
-			}
-			if t.FilterID != "" {
-				filterRefs[t.FilterID] = true
-			}
-		}
-	}
+	groupRefs, filterRefs := referencedTargets(m, indexed)
 
 	groupKinds := map[string]string{}
 	filters := map[string]filterInfo{}
@@ -261,14 +250,7 @@ func scopeInputs(m *docs.Metadata, resourcesDir string, indexed map[string]strin
 			if !groupRefs[entry.ResourceId] {
 				continue
 			}
-			groupKinds[entry.ResourceId] = kindUnknown
-			if !isDynamic(entry.GroupTypes) {
-				continue
-			}
-			if doc, _ := readDoc(resourcesDir, key); doc != nil {
-				rule, _ := doc["membershipRule"].(string)
-				groupKinds[entry.ResourceId] = groupKind(rule)
-			}
+			groupKinds[entry.ResourceId] = resolveGroupKind(resourcesDir, key, entry.GroupTypes)
 		case typeFilters:
 			if !filterRefs[entry.ResourceId] {
 				continue
@@ -281,6 +263,38 @@ func scopeInputs(m *docs.Metadata, resourcesDir string, indexed map[string]strin
 		}
 	}
 	return groupKinds, filters
+}
+
+// referencedTargets collects the group and filter ids the indexed resources'
+// assignments reference.
+func referencedTargets(m *docs.Metadata, indexed map[string]string) (groupRefs, filterRefs map[string]bool) {
+	groupRefs = map[string]bool{}
+	filterRefs = map[string]bool{}
+	for key := range indexed {
+		for _, t := range docs.ParseAssignmentTargets(m.Resources[key].AssignmentTargets) {
+			if t.GroupID != "" {
+				groupRefs[t.GroupID] = true
+			}
+			if t.FilterID != "" {
+				filterRefs[t.FilterID] = true
+			}
+		}
+	}
+	return groupRefs, filterRefs
+}
+
+// resolveGroupKind is unknown unless the group is dynamic and its document
+// readable, then the kind its membership rule names.
+func resolveGroupKind(resourcesDir, key string, groupTypes []string) string {
+	if !isDynamic(groupTypes) {
+		return kindUnknown
+	}
+	doc, _ := readDoc(resourcesDir, key)
+	if doc == nil {
+		return kindUnknown
+	}
+	rule, _ := doc["membershipRule"].(string)
+	return groupKind(rule)
 }
 
 func isDynamic(groupTypes []string) bool {

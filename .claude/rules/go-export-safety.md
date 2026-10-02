@@ -36,7 +36,8 @@ Everything lives under `<output>/<tenant>/`, `<tenant>` being the Entra default 
 
 ## `resources/metadata.yaml` — facts, and the prune contract
 `prune` (config-only, no flag) is the **only** delete path inside the export; the only other deletes go
-through `drift.ClearTree` and `consistency.ClearTree` and touch only `drift/` or `consistency/`. These rules make that safe — never relax them:
+through `drift.ClearTree` and `consistency.ClearTree` and touch only `drift/` or `consistency/`. These rules
+make that safe — never relax them:
 - It describes the **export directory, not the tenant**. Never remove an entry while its file exists on disk;
   a resource gone from the tenant becomes `presentInTenant: false` with facts and hash retained. Only a prune
   that actually deleted the file removes an entry.

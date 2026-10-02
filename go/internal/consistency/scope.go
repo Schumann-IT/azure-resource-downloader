@@ -263,16 +263,22 @@ func certainOverlap(a, b *Scope) bool {
 			continue
 		}
 		for _, y := range b.includes {
-			if y.filterID != "" {
-				continue
-			}
-			switch {
-			case x.allDevices && y.allDevices, x.allUsers && y.allUsers:
-				return true
-			case x.groupID != "" && x.groupID == y.groupID && !a.excludes[x.groupID] && !b.excludes[x.groupID]:
+			if y.filterID == "" && certainPair(a, b, x, y) {
 				return true
 			}
 		}
+	}
+	return false
+}
+
+// certainPair reports whether the unfiltered inclusions x (of a) and y (of b)
+// certainly overlap.
+func certainPair(a, b *Scope, x, y target) bool {
+	switch {
+	case x.allDevices && y.allDevices, x.allUsers && y.allUsers:
+		return true
+	case x.groupID != "" && x.groupID == y.groupID:
+		return !a.excludes[x.groupID] && !b.excludes[x.groupID]
 	}
 	return false
 }

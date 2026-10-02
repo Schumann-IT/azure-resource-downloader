@@ -54,18 +54,27 @@ func detect(settings []Setting, scopes map[string]*Scope, eqs []Equivalence) ([]
 	}
 	// Equivalence pairs: every pair of member settings the equivalence joins.
 	for _, e := range d.eqs.ordered {
-		var idx []int
-		seen := map[string]bool{}
-		for _, m := range e.Members {
-			if seen[m] {
-				continue
-			}
-			seen[m] = true
-			idx = append(idx, byKey[m]...)
-		}
-		d.pairs(idx, e)
+		d.pairs(memberIndexes(e, byKey), e)
 	}
+	return d.sorted()
+}
 
+// memberIndexes lists the settings of every distinct member of e.
+func memberIndexes(e *Equivalence, byKey map[string][]int) []int {
+	var idx []int
+	seen := map[string]bool{}
+	for _, m := range e.Members {
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		idx = append(idx, byKey[m]...)
+	}
+	return idx
+}
+
+// sorted returns the findings and unknown-value pairs in their stable order.
+func (d *detector) sorted() ([]Finding, []UnknownValue) {
 	findings := make([]Finding, 0, len(d.findings))
 	for _, f := range d.findings {
 		findings = append(findings, f)
@@ -108,13 +117,7 @@ func (d *detector) pairs(idx []int, e *Equivalence) {
 	for i := 0; i < len(idx); i++ {
 		for j := i + 1; j < len(idx); j++ {
 			a, b := &d.settings[idx[i]], &d.settings[idx[j]]
-			if a.Resource == b.Resource {
-				continue
-			}
-			if d.contextOf(a, b) != e {
-				continue
-			}
-			if e == nil && a.Key != b.Key {
+			if !d.inContext(a, b, e) {
 				continue
 			}
 			if a.Resource > b.Resource {
@@ -123,6 +126,15 @@ func (d *detector) pairs(idx []int, e *Equivalence) {
 			d.evaluate(a, b, e)
 		}
 	}
+}
+
+// inContext reports whether the pair, from different resources, belongs to
+// context e.
+func (d *detector) inContext(a, b *Setting, e *Equivalence) bool {
+	if a.Resource == b.Resource || d.contextOf(a, b) != e {
+		return false
+	}
+	return e != nil || a.Key == b.Key
 }
 
 // contextOf decides which comparison a pair belongs to: two configurations on
@@ -213,7 +225,12 @@ func (d *detector) judge(a, b *Setting, e *Equivalence) (string, bool) {
 		return "", true
 	}
 
-	// A configuration against a compliance requirement that only checks it.
+	return d.judgeRequirement(a, b, e)
+}
+
+// judgeRequirement judges a configuration against a compliance requirement
+// that only checks it.
+func (d *detector) judgeRequirement(a, b *Setting, e *Equivalence) (string, bool) {
 	var config, requirement *Setting
 	switch {
 	case a.Class == ClassConfiguration && b.Class == ClassRequirement:
