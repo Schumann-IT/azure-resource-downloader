@@ -6,7 +6,7 @@ started: 2026-09-29
 finished: 2026-09-30
 branch: feat/drift-attribution
 pr: 33
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Attribute each drift finding to an actor and a time, from the tenant's Log Analytics audit tables
 

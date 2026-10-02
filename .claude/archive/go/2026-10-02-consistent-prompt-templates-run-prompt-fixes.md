@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-02
 branch: feat/prompt-consistency
 pr: 54
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Consistent prompt templates, run-prompt fixes and the `summary:` frontmatter line
 

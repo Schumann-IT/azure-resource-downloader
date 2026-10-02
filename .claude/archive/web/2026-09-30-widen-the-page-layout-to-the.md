@@ -6,7 +6,7 @@ started: 2026-09-30
 finished: 2026-09-30
 branch: feat/drift-attribution
 pr: 33
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Widen the page layout to the 2xl breakpoint
 

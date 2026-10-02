@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-01
 branch: docs/plan-exclude-type
 pr: 38
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Monitor CI in the background instead of waiting for it
 

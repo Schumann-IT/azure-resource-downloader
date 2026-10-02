@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-01
 branch: build/dependency-updates
 pr: 40
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Routine dependency updates with a byte-neutrality guard, and Dependabot
 

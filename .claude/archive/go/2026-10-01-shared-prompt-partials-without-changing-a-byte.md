@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-01
 branch: feat/pre-regeneration-batch
 pr: 51
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Shared prompt partials, without changing a byte
 

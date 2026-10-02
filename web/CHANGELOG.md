@@ -13,7 +13,7 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
-## [0.4.0]
+## [0.4.0] - 2026-10-02
 
 ### Added
 

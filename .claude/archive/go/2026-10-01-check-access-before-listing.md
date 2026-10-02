@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-01
 branch: docs/plan-dependency-updates
 pr: 39
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Check access before listing, and refuse a run that would be mostly refused
 

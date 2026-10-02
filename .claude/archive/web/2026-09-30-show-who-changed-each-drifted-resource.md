@@ -6,7 +6,7 @@ started: 2026-09-30
 finished: 2026-09-30
 branch: feat/drift-attribution
 pr: 33
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Show who changed each drifted resource, from the CLI's audit attribution
 

@@ -6,7 +6,7 @@ started: 2026-10-01
 finished: 2026-10-02
 branch: feat/regeneration-batch
 pr: 52
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Correct and complete the per-handler documentation metadata
 

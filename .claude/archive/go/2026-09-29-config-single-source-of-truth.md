@@ -6,7 +6,7 @@ started: 2026-09-29
 finished: 2026-09-29
 branch: chore/refacor-command-line-surface
 pr: 30
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Make configuration the single source of truth, with per-tenant profiles selected by domain
 

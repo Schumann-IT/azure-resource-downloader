@@ -6,7 +6,7 @@ started: 2026-09-30
 finished: 2026-10-01
 branch: fix/branch-gate-archived-entry
 pr: 36
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Count an archived entry as a backlog change in the branch gate
 

@@ -11,7 +11,7 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
-## [0.4.0]
+## [0.4.0] - 2026-10-02
 
 ### Added
 

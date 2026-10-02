@@ -6,7 +6,7 @@ started: 2026-10-02
 finished: 2026-10-02
 branch: prepare-documentation-agent-run
 pr: 55
-changelog: Unreleased
+changelog: 0.4.0
 ---
 ## Ship the section-6 reference check and the section-7 signal sweep as scripts in the run prompt
 
