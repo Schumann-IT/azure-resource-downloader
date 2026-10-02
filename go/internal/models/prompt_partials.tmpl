@@ -68,7 +68,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 {{- define "prompt-related" }}
 {{- if .RelatedTypes }}
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 {{- range .RelatedTypes }}
 - {{ . }}
 {{- end }}
@@ -137,16 +137,28 @@ Take the purpose from the resource's own `description` and its settings; where t
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 {{- end }}
 
-{{- define "prompt-redaction-lead" -}}
-- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the
-{{- end }}
-
 {{- define "prompt-redaction-rule" -}}
-{{ template "prompt-redaction-lead" . }} **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
+- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 {{- end }}
 
-{{- define "prompt-redaction-rule-record" -}}
-{{ template "prompt-redaction-lead" . }} **Lifecycle and operations** section as an exposed credential to rotate (a record has no Security section). The literal value stays only in the source YAML.
+{{- define "prompt-details-attrs" -}}
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
+{{- end }}
+
+{{- define "prompt-complete-rule" -}}
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
+{{- end }}
+
+{{- define "prompt-present-rule" -}}
+- Only describe what is actually present; never invent values.
+{{- end }}
+
+{{- define "prompt-lifecycle-rule" -}}
+{{- if .Lifecycle -}}
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
+{{- else -}}
+- State only what the YAML itself shows, and say that deprecation or migration status is not documented here.
+{{- end }}
 {{- end }}
 
 {{- define "prompt-closed-set" -}}

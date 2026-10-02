@@ -25,7 +25,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 - Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access
 - Best-practice baseline: https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-policy-common
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/namedLocations
 - Microsoft.Graph/authenticationStrengthPolicies
 - Microsoft.Graph/termsOfUseAgreements
@@ -56,6 +56,7 @@ Conditions:
 - this section holds targeting prose and tables only — no `<details data-setting>` blocks; the `conditions.*` properties are documented here, not in `Settings`.
 
 Lifecycle and operations:
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
 - document operational guidance: what the policy's `state` means in operation (report-only policies are evaluated and logged but not enforced), and what happens when the policy is disabled or deleted.
 
 Security:
@@ -68,18 +69,15 @@ Settings:
 - document EVERY property present in the YAML outside `conditions` (`state`, `grantControls`, `sessionControls`, the timestamps and the rest).
 - give particular attention to: state, conditions.users, conditions.applications, conditions.locations, grantControls.builtInControls, grantControls.authenticationStrength, sessionControls.
 - entries of that list under `conditions` are covered in the Conditions section — no `<details data-setting>` block for them here.
-- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.
+- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link — e.g. `<details data-setting="grantControls.builtInControls">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
 - State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="grantControls.builtInControls">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="security"` when the property is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
-- Do not omit any property outside `conditions`; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
-- Only describe settings that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
-
-Targeting — the users, groups, roles, applications and conditions under `conditions` — belongs in the `Conditions` section; this document has no assignments block.
 
 These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
 

@@ -18,7 +18,7 @@ import (
 )
 
 // generatePromptTemplate is the default template spliced by GeneratePrompt. This
-// embedded file is the source of truth for the incremental documentation prompt;
+// embedded file is the source of truth for the documentation prompt;
 // edit it directly. (It must live inside this package because go:embed cannot
 // reach outside the package directory.)
 //
@@ -181,7 +181,7 @@ func (r *GeneratePromptResult) HasPendingWork() bool {
 }
 
 // GeneratePrompt compares resources/metadata.yaml against the documents under
-// docs/ and renders the incremental documentation prompt. It writes exactly one
+// docs/ and renders the documentation prompt. It writes exactly one
 // file (OutPath) unless DryRun is set, never touches resources/ and never
 // deletes anything.
 //

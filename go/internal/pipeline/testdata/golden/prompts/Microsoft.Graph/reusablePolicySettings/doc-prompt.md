@@ -21,14 +21,14 @@ Reference material for this resource type (treat these as authoritative; prefer 
 - Admin center: https://intune.microsoft.com/#view/Microsoft_Intune_Workflows/SecurityManagementMenu/~/overview
 - Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-security/reusable-settings-groups
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)
 
 The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is a supporting object that other policies reference by ID (e.g. as a filter, condition, location, template or role): it has no assignments of its own — instead, OTHER exported resources point at it. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the object's display name.
 - Directly below the title, without a heading: a short summary paragraph describing what this object defines and how referencing policies use it. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
-- A metadata table stating the resource type, the resource ID and the object's key identifying fields, where present.
+- Directly after the summary paragraph, a metadata table stating the resource type, the resource ID and the object's key identifying fields, where present.
 
 Then the following H2 sections, unnumbered, in this order:
 
@@ -42,6 +42,7 @@ Usage and references:
 - do not list the referencing resources yourself; where the documentation run provides a list of them, it splices that block in.
 
 Lifecycle and operations:
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
 - document deprecation or migration status and edit/versioning behavior.
 
 Security:
@@ -49,17 +50,17 @@ Security:
 - call out security-sensitive content and any deviations from the best-practice baselines listed above, including the impact on every policy that references this object.
 
 Definition:
-- document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.
+- document EVERY setting/property present in the YAML.
 - give particular attention to: settingDefinitionId, referencingConfigurationPolicyCount, version.
-- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="rule">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
+- Render each setting as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link — e.g. `<details data-setting="rule">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
 - If the object contains a rule or filter expression (e.g. an assignment filter `rule`), explain the expression clause by clause in plain language and flag clauses that rely on mutable or spoofable attributes.
-- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
+- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
 - This resource carries embedded or encoded payloads: settingInstance (nested setting instance; Endpoint Privilege Management certificate groups embed the certificate as a base64 value). Document each inside its owning setting's expanded body. A payload the export already decoded (inline in the YAML, or as a sidecar file next to it) is documented as decoded. A payload still encoded is decoded and pretty-printed only when it is text (XML, JSON, a script), documenting each contained key/value the same way, with nested `<details>` blocks for the payload's keys where that aids readability; binary content (certificates, images) is stated as present and never reprinted.
-- Only describe settings that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 

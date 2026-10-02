@@ -872,12 +872,58 @@ func TestParseFrontmatter(t *testing.T) {
 		t.Errorf("parsed = %+v", fm)
 	}
 
+	// A double-quoted summary keeps an inner ": " intact instead of breaking the frontmatter.
+	withSummary := []byte("---\nsource: a.yaml\nsummary: \"Enforces X: requires Y\"\n---\n# body\n")
+	fm, ok = parseFrontmatter(withSummary)
+	if !ok {
+		t.Fatal("expected valid frontmatter with a quoted summary")
+	}
+	if fm.Summary != "Enforces X: requires Y" {
+		t.Errorf("Summary = %q, want %q", fm.Summary, "Enforces X: requires Y")
+	}
+
 	for _, bad := range [][]byte{
 		[]byte("# no frontmatter\n"),
 		[]byte("---\nunterminated: true\n"),
 	} {
 		if _, ok := parseFrontmatter(bad); ok {
 			t.Errorf("expected parse failure for %q", bad)
+		}
+	}
+}
+
+// TestDefaultGeneratePromptTemplateWording pins the run-wide wording of the
+// embedded run prompt: it describes full and incremental runs alike, asks for
+// the double-quoted summary frontmatter line and checks it, names every
+// settings-section variant and bans bare URLs.
+func TestDefaultGeneratePromptTemplateWording(t *testing.T) {
+	text := string(DefaultGeneratePromptTemplate())
+
+	if !strings.HasPrefix(text, "# Documentation generation prompt (template)\n") {
+		t.Errorf("template title = %q", strings.SplitN(text, "\n", 2)[0])
+	}
+	for _, want := range []string{
+		"It covers either every resource (a first run, or a run after a template change moved every",
+		"summary: \"",
+		"`summary` is required: one sentence taken from the document's summary paragraph",
+		"always a double-quoted YAML string on one line",
+		"a `Settings`, `Properties` or `Definition` section",
+		"never a bare URL",
+		"and a non-empty one-line double-quoted `summary`",
+		`fail(doc, "frontmatter missing summary")`,
+		`fail(doc, "frontmatter summary not a non-empty double-quoted line")`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("template missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{
+		"This is an **incremental** run",
+		"put the source YAML filename\nin backticks on its own line",
+		"a `Properties` or `Settings` section",
+	} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("template unexpectedly contains %q", unwanted)
 		}
 	}
 }

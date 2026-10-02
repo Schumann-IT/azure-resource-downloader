@@ -179,8 +179,8 @@ var promptPartialNames = []string{
 	"prompt-related", "prompt-header", "prompt-key-settings", "prompt-embedded-payloads",
 	"prompt-assignments", "prompt-purpose-rule", "prompt-references", "prompt-url-rule",
 	"prompt-baseline-rule", "prompt-change-role", "prompt-referenced-ids", "prompt-settings-grouping",
-	"prompt-masked-rule", "prompt-redaction-lead", "prompt-redaction-rule", "prompt-redaction-rule-record",
-	"prompt-closed-set",
+	"prompt-masked-rule", "prompt-redaction-rule", "prompt-details-attrs", "prompt-complete-rule",
+	"prompt-present-rule", "prompt-lifecycle-rule", "prompt-closed-set",
 }
 
 func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
@@ -213,6 +213,11 @@ func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
 				"- Use real, verifiable URLs;",
 				"- Where a value is masked or redacted by the service",
 				"**credential-shaped**",
+				"call it out in the **Security** section as an exposed credential to rotate",
+				"- Open each block as `<details data-setting=\"<exact YAML path>\">`",
+				"- Do not omit a property this section covers;",
+				"- Only describe what is actually present; never invent values.",
+				"- Build on the lifecycle notes listed above",
 				"These H2 headings are a closed set and a machine contract",
 			},
 		},
@@ -369,6 +374,37 @@ func TestPromptClosedSetAssignmentsPointer(t *testing.T) {
 		if !strings.Contains(prompt, "identifying fields belong in the metadata table above") {
 			t.Errorf("HasAssignments=%v: closed-set lost the metadata-table pointer", hasAssignments)
 		}
+	}
+}
+
+// TestPromptLifecycleRule verifies the lifecycle rule builds on the curated
+// lifecycle notes when the type has them, and otherwise confines the section to
+// what the YAML shows and states that deprecation status is not documented.
+func TestPromptLifecycleRule(t *testing.T) {
+	const (
+		withNotes    = "- Build on the lifecycle notes listed above and add only what the YAML itself shows."
+		withoutNotes = "- State only what the YAML itself shows, and say that deprecation or migration status is not documented here."
+	)
+	tests := []struct {
+		name      string
+		lifecycle []string
+		present   string
+		absent    string
+	}{
+		{name: "with lifecycle notes", lifecycle: []string{"Superseded by the Settings Catalog."}, present: withNotes, absent: withoutNotes},
+		{name: "without lifecycle notes", present: withoutNotes, absent: withNotes},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := ResourceDocumentation{AzureType: "Microsoft.Test/things", Lifecycle: tt.lifecycle}
+			runPromptAssertions(t, BuildDocumentationPrompt(doc), []string{"Lifecycle and operations:\n" + tt.present}, []string{tt.absent})
+
+			doc.Template = `{{ template "prompt-lifecycle-rule" . }}`
+			want := tt.present + "\n\n" + DocumentationGroupsMarker()
+			if got := BuildDocumentationPrompt(doc); got != want {
+				t.Errorf("prompt-lifecycle-rule = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

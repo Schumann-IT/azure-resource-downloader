@@ -22,7 +22,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-softwareupdate-windowsqualityupdateprofile-list?view=graph-rest-beta
 - Best-practice baseline: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-expedite-policy
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/groups (assignment target groups)
 - Microsoft.Graph/deviceConfigurations (update rings whose deferral the expedite bypasses)
 - Microsoft.Graph/roleScopeTags (roleScopeTagIds)
@@ -42,6 +42,7 @@ References:
 - Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
 - document operational guidance: deprecation or migration status, what happens when the resource is deleted or unassigned
 - renewal/expiry obligations.
 
@@ -53,16 +54,15 @@ Security:
 Settings:
 - document EVERY setting/property present in the YAML.
 - give particular attention to: expeditedUpdateSettings (qualityUpdateRelease, daysUntilForcedReboot), releaseDateDisplayName, deployableContentDisplayName.
-- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.
-- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
+- Render each setting as a collapsible HTML `<details>` block, collapsed by default, so the reader can click a setting to unfold it: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link — e.g. `<details data-setting="installExperience.runAsAccount">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
 - If the YAML carries an `@odata.type`, first identify the concrete subtype and document against that subtype's schema.
-- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph/ARM schema and say so explicitly.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
+- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
 - If the YAML references an externally decoded sidecar file (e.g. a `.ps1`/`.sh`/`.mobileconfig` written next to the YAML), document its contents inside the owning setting's expanded body.
-- Only describe settings that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 

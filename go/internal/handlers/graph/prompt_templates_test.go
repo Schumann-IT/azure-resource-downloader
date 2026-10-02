@@ -122,7 +122,7 @@ func TestConditionalAccessPromptTemplate(t *testing.T) {
 		"\nConditions:\n",
 		"`Condition | Include | Exclude`",
 		"\n<!-- doc-headings: References | Conditions | Lifecycle and operations | Security | Settings -->\n",
-		"belongs in the `Conditions` section",
+		"its targeting is documented in the `Conditions` section",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)
@@ -132,6 +132,7 @@ func TestConditionalAccessPromptTemplate(t *testing.T) {
 		"a table of any assignments/targeting present",
 		"assignment information belongs in the assignments block above",
 		"<!-- assignments:",
+		"Targeting — the users",
 	} {
 		if strings.Contains(prompt, unwanted) {
 			t.Errorf("prompt unexpectedly contains %q", unwanted)
@@ -188,7 +189,8 @@ func TestReferencedPromptTemplateAssignments(t *testing.T) {
 }
 
 // TestGroupPromptTemplateHeader verifies the group template renders the shared
-// header: every curated link, including the Admin center, and related types.
+// header — every curated link, including the Admin center, and related types —
+// and the group heading set, References and Lifecycle and operations included.
 func TestGroupPromptTemplateHeader(t *testing.T) {
 	handler, err := NewGroupHandler(fakeTokenCredential{})
 	if err != nil {
@@ -201,6 +203,9 @@ func TestGroupPromptTemplateHeader(t *testing.T) {
 		"- Required permissions: ",
 		"Related resource types exported alongside this one",
 		"`Targeted by` block",
+		"\nReferences:\n",
+		"\nLifecycle and operations:\n",
+		"\n<!-- doc-headings: References | Membership | Usage as assignment target | Lifecycle and operations | Security | Properties -->\n",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)
@@ -211,10 +216,11 @@ func TestGroupPromptTemplateHeader(t *testing.T) {
 	}
 }
 
-// TestRecordPromptTemplateRedaction verifies the record template carries the
-// redaction rule in its record wording: the exposed credential is called out
-// in Lifecycle and operations, since a record has no Security section.
-func TestRecordPromptTemplateRedaction(t *testing.T) {
+// TestRecordPromptTemplateSecurity verifies the record template has a Security
+// section like every other family: the change role and the exposed-credential
+// call-out live there, the redaction rule points at it, the standard data-note
+// wording applies, and the old Lifecycle-section variant is gone.
+func TestRecordPromptTemplateSecurity(t *testing.T) {
 	handler, err := NewDeviceCategoryHandler(fakeTokenCredential{})
 	if err != nil {
 		t.Fatalf("constructor unexpected error: %v", err)
@@ -223,14 +229,43 @@ func TestRecordPromptTemplateRedaction(t *testing.T) {
 
 	for _, want := range []string{
 		"`«redacted — secret present in source»`",
-		"call it out in the **Lifecycle and operations** section as an exposed credential to rotate",
-		"`data-note=\"security\"` only on a block whose value you redacted",
+		"call it out in the **Security** section as an exposed credential to rotate",
+		"Add `data-note=\"security\"` when the property is one called out in the Security section",
+		"\nSecurity:\n- name the permission needed to read this resource",
+		"- call out any exposed credential found under the redaction rule below.",
+		"\n<!-- doc-headings: References | Lifecycle and operations | Security | Properties -->",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)
 		}
 	}
-	if strings.Contains(prompt, "in the **Security** section") {
-		t.Error("record prompt points at a Security section it does not have")
+	for _, unwanted := range []string{
+		"call it out in the **Lifecycle and operations** section",
+		"(a record has no Security section)",
+		"only on a block whose value you redacted",
+	} {
+		if strings.Contains(prompt, unwanted) {
+			t.Errorf("prompt unexpectedly contains %q", unwanted)
+		}
+	}
+}
+
+// TestCredentialPromptTemplateHeadings verifies the credential heading set puts
+// Expiry and renewal right after References, before Lifecycle and operations,
+// and that the sections appear in that order in the instructions too.
+func TestCredentialPromptTemplateHeadings(t *testing.T) {
+	handler, err := NewVppTokenHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("constructor unexpected error: %v", err)
+	}
+	prompt := handler.GetDocumentationPrompt()
+
+	const headings = "\n<!-- doc-headings: References | Expiry and renewal | Lifecycle and operations | Security | Properties -->\n"
+	if !strings.Contains(prompt, headings) {
+		t.Errorf("prompt missing %q", headings)
+	}
+	expiry, lifecycle := strings.Index(prompt, "\nExpiry and renewal:\n"), strings.Index(prompt, "\nLifecycle and operations:\n")
+	if expiry < 0 || lifecycle < 0 || expiry > lifecycle {
+		t.Errorf("Expiry and renewal (at %d) must precede Lifecycle and operations (at %d)", expiry, lifecycle)
 	}
 }

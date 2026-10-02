@@ -21,7 +21,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 - Best-practice baseline: https://learn.microsoft.com/en-us/intune/fundamentals/certificates/connector/overview
 - Best-practice baseline: https://learn.microsoft.com/en-us/intune/fundamentals/certificates/scep-infrastructure
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/deviceConfigurations (SCEP and PKCS certificate profiles)
 - Microsoft.Graph/roleScopeTags (roleScopeTagIds)
 
@@ -29,7 +29,7 @@ The configuration is provided as a YAML file exported by azure-resource-download
 
 - An H1 title set to the record's display name or primary identifier (e.g. serial number, connector name).
 - Directly below the title, without a heading: a short summary paragraph describing what this record represents and its role in the tenant. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
-- A metadata table stating the resource type, the resource ID and the record's key identifying fields (e.g. serial number, model, state, last sync time), where present.
+- Directly after the summary paragraph, a metadata table stating the resource type, the resource ID and the record's key identifying fields (e.g. serial number, model, state, last sync time), where present.
 
 Then the following H2 sections, unnumbered, in this order:
 
@@ -39,21 +39,27 @@ References:
 - Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
 - explain how records of this type appear and disappear (registration/sync/deletion), what a stale or error state means, and what happens downstream when the record is removed.
+
+Security:
 - name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
+- call out security-sensitive properties.
 - call out any exposed credential found under the redaction rule below.
 
 Properties:
-- document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance.
+- document EVERY property present in the YAML.
 - give particular attention to: state, lastConnectionDateTime, connectorVersion, machineName, enrolledDateTime.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="enrollmentState">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="inert"` when the property is present but has no effect because a gating setting is off, and `data-note="security"` only on a block whose value you redacted under the rule below. Omit the attribute otherwise. Use no other value.
+- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance — e.g. `<details data-setting="enrollmentState">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
+- State a recommended or best-practice value only where a best-practice baseline listed above covers the setting, and name that baseline; otherwise document the configured value only — never a recommendation from general knowledge.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
-- Only describe properties that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
-- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Lifecycle and operations** section as an exposed credential to rotate (a record has no Security section). The literal value stays only in the source YAML.
+- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 
 These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
 
-<!-- doc-headings: References | Lifecycle and operations | Properties -->
+<!-- doc-headings: References | Lifecycle and operations | Security | Properties -->

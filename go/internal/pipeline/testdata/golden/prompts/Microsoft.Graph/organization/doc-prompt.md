@@ -19,7 +19,7 @@ Reference material for this resource type (treat these as authoritative; prefer 
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/organization?view=graph-rest-1.0
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/organization-list?view=graph-rest-1.0
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/organizationalBranding
 - Microsoft.Graph/onPremisesSynchronization (same tenant)
 
@@ -27,7 +27,7 @@ The configuration is provided as a YAML file exported by azure-resource-download
 
 - An H1 title naming the configuration area (derived from the resource type), since singletons have no meaningful display name.
 - Directly below the title, without a heading: a short summary paragraph describing what this tenant-wide configuration controls and its current overall posture. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
-- A metadata table stating the resource type and the resource ID.
+- Directly after the summary paragraph, a metadata table stating the resource type and the resource ID.
 
 Then the following H2 sections, unnumbered, in this order:
 
@@ -37,6 +37,7 @@ References:
 - Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
 
 Lifecycle and operations:
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
 - document operational guidance: deprecation or migration status, side effects of changing tenant-wide values on existing users and devices
 - who in the organization typically owns this configuration.
 
@@ -45,15 +46,15 @@ Security:
 - call out security-sensitive settings.
 
 Settings:
-- document EVERY setting/property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link.
+- document EVERY setting/property present in the YAML.
 - give particular attention to: verifiedDomains, technicalNotificationMails, securityComplianceNotificationMails, onPremisesSyncEnabled, tenantType, privacyProfile.
+- Render each setting as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the setting key (YAML path) and its configured value; the expanded body documents what the setting does and, under the URL rule, a reference link — e.g. `<details data-setting="installExperience.runAsAccount">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
 - No best-practice baseline is listed for this type: document configured values only, without recommended or best-practice values.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="installExperience.runAsAccount">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="security"` when the setting is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
-- Do not omit any property; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
-- Only describe settings that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
 - If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Security** section as an exposed credential to rotate. The literal value stays only in the source YAML.
 

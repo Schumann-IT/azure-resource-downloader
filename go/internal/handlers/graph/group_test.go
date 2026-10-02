@@ -32,6 +32,7 @@ func TestGroupHandler_GetDocumentationPromptUsesOverrideTemplate(t *testing.T) {
 		"Membership:",
 		"Usage as assignment target:",
 		"give particular attention to: groupTypes, membershipRule (for dynamic groups), membershipRuleProcessingState, securityEnabled, mailEnabled, isAssignableToRole.",
+		"<!-- doc-headings: References | Membership | Usage as assignment target | Lifecycle and operations | Security | Properties -->",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)
@@ -40,7 +41,8 @@ func TestGroupHandler_GetDocumentationPromptUsesOverrideTemplate(t *testing.T) {
 
 	// The default template's settings/assignments layout must not leak in.
 	for _, unwanted := range []string{
-		"Then the following H2 sections, unnumbered, in this order:\n\nReferences:",
+		"If the YAML carries an `@odata.type`, first identify the concrete subtype",
+		"externally decoded sidecar file",
 		"a table of any assignments/targeting present",
 	} {
 		if strings.Contains(prompt, unwanted) {

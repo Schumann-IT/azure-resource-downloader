@@ -1,4 +1,4 @@
-# Incremental documentation generation prompt (template)
+# Documentation generation prompt (template)
 
 <!--
 This file is a TEMPLATE, not a prompt to paste as-is.
@@ -32,10 +32,11 @@ what failure it prevents — goes in the appendix at the bottom. Put explanation
 You are generating end-user documentation for an Azure/Entra/Intune tenant export produced by
 **azure-resource-downloader**.
 
-This is an **incremental** run. The inventory and change detection have already been done for you: the work
-list below is complete and closed. Document exactly what it names — nothing more, nothing less. Do not walk
-the export looking for other resources, do not hash anything to decide what changed, and do not re-litigate
-which resource types are in scope.
+The inventory and change detection have already been done for you: the work list below is complete and
+closed. It covers either every resource (a first run, or a run after a template change moved every
+`promptSha256`) or only what changed since the last run — either way, document exactly what it names, nothing
+more, nothing less. Do not walk the export looking for other resources, do not hash anything to decide what
+changed, and do not re-litigate which resource types are in scope.
 
 ## Run parameters (already decided — do not ask)
 
@@ -141,8 +142,8 @@ carries the same value. Read it once per type and reuse it — never copy it onc
 
 For each resource type in the work list, read its `doc-prompt.md` **in full** before writing anything for
 that type. It defines the required layout for that type: title, summary paragraph, metadata table, the exact
-H2 sections in order, and a `Properties` or `Settings` section requiring every remaining property as a
-collapsed HTML `<details>` block whose `<summary>` carries the property path and configured value.
+H2 sections in order, and a `Settings`, `Properties` or `Definition` section requiring every remaining property
+as a collapsed HTML `<details>` block whose `<summary>` carries the property path and configured value.
 
 Follow it exactly. Specs differ meaningfully between types — an `assignmentFilters` document is a short rule
 explanation with no settings payload; a `deviceManagementConfigurationPolicies` document may carry hundreds
@@ -150,8 +151,15 @@ of settings. Never substitute a generic template.
 
 ### Headings
 
-`#` is the resource display name, `##` its sections. Directly under the title, put the source YAML filename
-in backticks on its own line so any statement can be traced to its source.
+`#` is the resource display name, `##` its sections. The summary paragraph sits directly under the title, as
+every spec says. The source YAML filename goes into the metadata table as a `Source` row, in backticks, so any
+statement can be traced to its source.
+
+### Links
+
+Write every link as a Markdown link `[label](url)` — never a bare URL. A link to another document is relative
+to the document you are writing, and only to a document whose path this run gives you (the work list, the
+reference maps in section 5); never guess the path of a document.
 
 ### Frontmatter (required)
 
@@ -164,12 +172,18 @@ sourceSha256: 5d6b32f8…
 promptSha256: 95cb34be…
 platformGroup: Windows            # one value from this type's doc-groups marker (see Grouping below)
 functionGroup: Compliance         # one value from the same marker; n/a when the axis does not apply
+summary: "Requires a minimum Windows build on corporate devices."  # one sentence from the summary paragraph
 generatedAt: 2026-08-13T08:31:00Z  # the export timestamp from above, verbatim — not the current time
 ---
 ```
 
 `source` is a path relative to the tenant folder, not a bare filename — the resource and its document live in
 different trees.
+
+`summary` is required: one sentence taken from the document's summary paragraph, plain text without Markdown
+or links, always a double-quoted YAML string on one line (write `\"` for a quote inside it). Always quote it:
+an unquoted value containing `: ` breaks the whole frontmatter, and a document whose frontmatter does not parse
+is treated as stale and regenerated on every run.
 
 `generatedAt` copies the export timestamp because **the hashes alone decide staleness**. Stamping wall-clock
 time instead would make every regeneration rewrite every file, turning a no-op run into a full-tree diff and
@@ -182,8 +196,8 @@ them during the section-5 splice, in the same pass that resolves the blocks they
 computed from information outside the document's own resource (a group renamed elsewhere, a policy re-pointed
 at a different group; see 5d). Leave them out of the frontmatter you write; section 5 fills them in.
 
-This frontmatter is how the next incremental run knows whether your document is still current. A document
-without it is treated as stale and regenerated from scratch every time.
+This frontmatter is how the next run knows whether your document is still current. A document without it is
+treated as stale and regenerated from scratch every time.
 
 ### Grouping (required)
 
@@ -328,7 +342,7 @@ _Replaced by the tool: every source path the work list names, one per line._
 | Check | Expectation |
 |---|---|
 | Coverage | Every work-list entry in `chunks/expected.txt` was packed into a chunk **and** produced a document at its derived path. Zero missing, zero dropped from chunking. An empty `chunks/` directory, or a whole type left out of chunking, fails here — the check diffs the authoritative list against both the chunks and the documents on disk, never the chunks against themselves. |
-| Frontmatter | Every written document has valid frontmatter whose `sourceSha256` and `promptSha256` equal the values from its chunk file. A mismatch means an agent documented the wrong file. |
+| Frontmatter | Every written document has valid frontmatter whose `sourceSha256` and `promptSha256` equal the values from its chunk file, and a non-empty one-line double-quoted `summary`. A hash mismatch means an agent documented the wrong file. |
 | Heading structure | Exactly one `#` heading per document. Count headings **outside fenced code blocks only** — shell scripts embedded in `deviceShellScripts` / `deviceManagementScripts` documents contain `##` comment lines that are not headings. |
 | Heading vocabulary | Every `##` **outside fenced code blocks and outside `<!-- …:start -->`/`<!-- …:end -->` marker pairs** is in the closed set declared for that document's type — the `doc-headings` list in its `doc-prompt.md` — spelled exactly, in order, without duplicates. The marker-pair exemption is what lets the tool-spliced `## Targeted by` block (section 5) live in group documents without being part of the authored contract. Same fenced-code caveat as *Heading structure*. |
 | Grouping vocabulary | For every type whose `doc-prompt.md` carries a `<!-- doc-groups: … -->` marker, each of its documents has both a `platformGroup` and a `functionGroup` in frontmatter, each a single value from that marker's respective closed set (`n/a` included) — missing or out-of-set fails. A type with no marker takes neither field; its documents are counted as axis *uncategorised* and reported, never failed. |
@@ -435,6 +449,15 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                 fail(doc, f"{key} mismatch — wrong source documented")
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
+        summary = re.search(r"^summary:(.*)$", fm, re.M)
+        if not summary:
+            fail(doc, "frontmatter missing summary")
+        else:
+            val = summary.group(1).strip()
+            quoted = re.fullmatch(r'"((?:[^"\\]|\\.)*)"(?:\s+#.*)?', val)
+            inner = quoted.group(1) if quoted else ""
+            if not inner.strip() or "`" in inner or re.search(r"\[[^\]]*\]\([^)]*\)", inner):
+                fail(doc, "frontmatter summary not a non-empty double-quoted line")
 
         groups = groups_contract(src)
         if groups is None:
@@ -1072,12 +1095,12 @@ checks only at the end means a truncated document is discovered after the splice
 
 ### D. Why the summary is tool-fed and written last (7)
 
-The summary is tenant-wide, but this prompt is incremental: the work list is only the documents that changed,
-so counting it would describe the delta, not the tenant, and a no-op run would summarise nothing. The
-`summary-facts` block is computed from `metadata.yaml`, which is complete every run, so the summary stays
-correct regardless of how little changed. It is written last because it names the state the documents
-describe, and it is regenerated every run and never hash-tracked — it has no source of its own to compare
-against, so there is nothing to make it incremental.
+The summary is tenant-wide, but the work list may be only the documents that changed, so counting it would
+describe the delta, not the tenant, and a no-op run would summarise nothing. The `summary-facts` block is
+computed from `metadata.yaml`, which is complete every run, so the summary stays correct regardless of how
+little changed. It is written last because it names the state the documents describe, and it is regenerated
+every run and never hash-tracked — it has no source of its own to compare against, so there is nothing to make
+it incremental.
 
 ### E. Why the management summary is fed, not observed (7)
 
