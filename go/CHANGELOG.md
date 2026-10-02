@@ -168,7 +168,7 @@ This project is released independently of the documentation browser in `web/`: i
   expiry* lists only certificates and tokens — not update-ring pause windows. The sweep never prints a secret
   value. Documents migrated to the noncompliance-notification markers now receive their block hash, so they are
   no longer re-spliced on every run, and `docs generate-prompt` lists each document to migrate once, with every
-  reason. Takes effect at the next `docs generate-prompt`; no regeneration is needed.
+  reason. Takes effect at the next `docs generate-prompt`; no regeneration is needed. (#55)
 
 - **One shape for every documentation template, and documents that never reprint a secret.** All eight
   templates now follow one section order — *References*, the type's own sections, *Lifecycle and operations*,
