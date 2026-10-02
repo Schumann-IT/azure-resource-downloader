@@ -242,7 +242,7 @@ object's name.
 
 ## Parked ideas — contract
 
-### Idea: resolve Conditional Access targets in the documentation run
+### Idea: resolve group references outside assignments in the documentation run
 
 *Area:* contract · *Impact:* medium · *Effort:* M · *Ships with:* a go/web pair (a new marker class in the browser); the next
 regeneration
@@ -258,6 +258,13 @@ template asks for it with bare GUIDs, like the assignments block); register the 
 is re-spliced once. **Parked** by decision C11 of the 2026-10-02 prompt review: a browser-contract change that should
 not hold up the regeneration batch. **Revisit** when readers ask who a CA policy targets by name, or with the next
 contract change on the web side.
+
+The same gap exists outside Conditional Access: the authentication methods policy targets groups from its own
+settings (`authenticationMethodConfigurations[].includeTargets[].id`, e.g. the X.509 certificate method), which the
+reference map does not cover either. On the 2026-10-02 run of `iis.mitarbeiterangebote-staging.de` that document
+showed a bare GUID for an exported group (`co_developers`), and the group got no document of its own. When picked
+up, collect every non-assignment group reference — CA include/exclude groups and authentication-method include
+targets — through one table of reference paths per type, so a new type with inline group targets is one row.
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
@@ -278,6 +285,21 @@ on it.
 as versioned in the root `CLAUDE.md`'s contract list.
 
 ## Parked ideas — templates
+
+### Idea: default objects are not "configured but unassigned"
+
+*Area:* templates · *Impact:* low · *Effort:* S · *Ships with:* standalone; takes effect on the next `docs generate-prompt`
+
+The tenant summary's *Assignment posture* (`summary-facts` block, `renderSummaryFacts` in
+`internal/docs/generateprompt_render.go`) counts every resource of an assignment-capable type without targets as
+*configured but unassigned*, and the run report lists them as "policies with no assignments". Built-in default
+objects land there although they are never assigned the way a policy is: the 2026-10-02 run of
+`iis.mitarbeiterangebote-staging.de` listed the *Default Branding profile* (`intuneBrandingProfiles`, applies to
+everyone) and the *Default scope tag* (`roleScopeTags` id `0`, applies to everything). Exclude them by a fact the
+export already records (the branding profile's `isDefaultProfile`, the scope tag's id `0`) — a one-line rule per
+type in the summary facts, plus a run-prompt sentence that defaults are not findings. **Parked** because the signal
+is noise, not wrong data, and readers see the names. **Revisit** when the summary's posture numbers are used for
+reporting, or with the next change to the summary facts.
 
 ### Idea: per-finding severity in document `Security` sections
 

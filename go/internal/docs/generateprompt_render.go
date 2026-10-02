@@ -264,22 +264,49 @@ func renderUsedByMap(m *Metadata, usedBy map[string][]usedByRow) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderMigrate lists documents predating the assignment markers that must have
-// the markers inserted before their block can be spliced. It is "none" when
-// there are none.
+// renderMigrate lists documents predating the assignment or noncompliance-
+// notification markers that must have the markers inserted before their block
+// can be spliced. A document missing both markers yields two work items; they
+// are merged into one row (reasons joined in item order, each hash cell taken
+// from the item that carries it), sorted by document path. It is the
+// empty-state sentence when there are none.
 func renderMigrate(items []WorkItem) string {
 	if len(items) == 0 {
-		return "_No documents need migrating — every assignment-capable document already carries the markers._"
+		return "_No documents need migrating — every current document already carries the markers its content needs._"
 	}
 
-	sorted := append([]WorkItem(nil), items...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].DocPath < sorted[j].DocPath })
+	type row struct {
+		docPath, resourceType, reasons, assignments, notifications string
+	}
+	var rows []*row
+	byDoc := map[string]*row{}
+	for _, it := range items {
+		r, ok := byDoc[it.DocPath]
+		if !ok {
+			r = &row{docPath: it.DocPath, resourceType: it.ResourceType}
+			byDoc[it.DocPath] = r
+			rows = append(rows, r)
+		}
+		if it.Reason != "" {
+			if r.reasons != "" {
+				r.reasons += "; "
+			}
+			r.reasons += it.Reason
+		}
+		if it.AssignmentsSha256 != "" {
+			r.assignments = it.AssignmentsSha256
+		}
+		if it.NotificationsSha256 != "" {
+			r.notifications = it.NotificationsSha256
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].docPath < rows[j].docPath })
 
 	var b strings.Builder
-	b.WriteString("| Document | Type | assignmentsSha256 |\n")
-	b.WriteString("|---|---|---|\n")
-	for _, it := range sorted {
-		fmt.Fprintf(&b, "| `%s` | %s | %s |\n", it.DocPath, it.ResourceType, hashCell(it.AssignmentsSha256))
+	b.WriteString("| Document | Type | Reason | assignmentsSha256 | notificationsSha256 |\n")
+	b.WriteString("|---|---|---|---|---|\n")
+	for _, r := range rows {
+		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s |\n", r.docPath, r.resourceType, r.reasons, hashCell(r.assignments), hashCell(r.notifications))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

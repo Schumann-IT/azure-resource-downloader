@@ -2,6 +2,7 @@
 .DS_Store
 output/
 output.bak/
+output.bak*/
 
 # Binary built from the repository root
 azure-rd

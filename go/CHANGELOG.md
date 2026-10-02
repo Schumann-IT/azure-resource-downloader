@@ -160,6 +160,16 @@ This project is released independently of the documentation browser in `web/`: i
 
 #### Documentation and drift analysis
 
+- **The documentation run checks references and sweeps for findings with scripts it ships.** The run prompt
+  now carries the section-6 reference check and the summary's signal sweep as scripts instead of leaving each
+  agent to write its own, so every run checks the same way: links in a *Filter* column and display names with
+  brackets no longer cause false failures, credentials in install and uninstall command lines are found, names
+  like `…AUTHKEY` count as credential words, timestamps are never mistaken for secrets, and *credentials near
+  expiry* lists only certificates and tokens — not update-ring pause windows. The sweep never prints a secret
+  value. Documents migrated to the noncompliance-notification markers now receive their block hash, so they are
+  no longer re-spliced on every run, and `docs generate-prompt` lists each document to migrate once, with every
+  reason. Takes effect at the next `docs generate-prompt`; no regeneration is needed. (#55)
+
 - **One shape for every documentation template, and documents that never reprint a secret.** All eight
   templates now follow one section order — *References*, the type's own sections, *Lifecycle and operations*,
   *Security*, the settings section — and one shape for the settings section: group documents gain *References*
