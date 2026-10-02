@@ -11,6 +11,8 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added
 
 #### Documentation and drift analysis

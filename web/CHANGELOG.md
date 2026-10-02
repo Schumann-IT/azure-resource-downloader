@@ -13,6 +13,8 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added
 
 #### Release workflow
