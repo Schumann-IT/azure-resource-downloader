@@ -1,7 +1,7 @@
 # azure-rd — tenant configuration export & documentation
 
 `azure-rd` exports the configuration of an **Entra ID / Intune tenant** (plus a few Azure Resource Manager
-types) as clean, reproducible YAML, and drives the **incremental, AI-generated documentation** of that export.
+types) as clean, reproducible YAML, and drives the **AI-generated documentation** of that export — full or incremental.
 
 It is the CLI half of the [azure-resource-downloader](../README.md) monorepo; the sibling
 [`web/`](../web/README.md) project browses what this tool and the documentation agent produce. The two share
@@ -39,7 +39,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Output layout](#output-layout)
 - [Export metadata (`metadata.yaml`)](#export-metadata-metadatayaml)
 - [Per-type documentation prompts (`doc-prompt.md`)](#per-type-documentation-prompts-doc-promptmd)
-- [Incremental documentation (`docs/generate.md`)](#incremental-documentation-docsgeneratemd)
+- [Documentation generation (`docs/generate.md`)](#documentation-generation-docsgeneratemd)
 - [Navigation index (`docs/index.yaml`)](#navigation-index-docsindexyaml)
 - [Supported resource types](#supported-resource-types)
 - [Transformations](#transformations)
@@ -408,7 +408,7 @@ INFO Tenant listing finished resources=3 types_unknown=1 types_empty=12
 ### `docs generate-prompt`
 
 Compares `resources/metadata.yaml` against the documents under `docs/` and writes
-`output/<tenant>/docs/generate.md`: the incremental documentation prompt. Never fetches a resource, never
+`output/<tenant>/docs/generate.md`: the documentation generation prompt. Never fetches a resource, never
 writes under `resources/`.
 
 ```bash
@@ -431,7 +431,7 @@ resolvable, no `metadata.yaml`, tenant mismatch, unreadable `--prompt` template)
 `--exit-code`.
 
 What the comparison decides, and what the agent then does, is described under
-[Incremental documentation](#incremental-documentation-docsgeneratemd).
+[Documentation generation](#documentation-generation-docsgeneratemd).
 
 ### `docs generate-index`
 
@@ -974,55 +974,62 @@ in an error hint declared. Eight template families cover the type shapes:
 |---|---|---|
 | default (`internal/models/documentation_prompt.tmpl`) | every settings-bearing Graph policy, profile, app and script type | full layout: metadata table, assignments block, `References`, `Lifecycle and operations`, `Security`, `Settings` with one collapsible `<details data-setting="…">` per setting |
 | `conditional-access` (`conditional_access_prompt.tmpl`) | `conditionalAccessPolicies` | `References`, `Conditions`, `Lifecycle and operations`, `Security`, `Settings`: targeting is documented from `conditions.*` (users, groups, roles, applications, locations, platforms, client apps, risk) as a `Condition \| Include \| Exclude` table in `Conditions`; no assignments block |
-| `referenced` | `assignmentFilters`, `roleScopeTags`, `roleDefinitions`, `notificationMessageTemplates`, `namedLocations`, `authenticationStrengthPolicies`, `termsOfUseAgreements`, `reusablePolicySettings` | objects other policies reference *by id*: explains what referencing them means; templates carry the `Used by` block; a referenced type that has assignments of its own (`roleScopeTags`) also gets the assignments block |
-| `group` | `groups` | dynamic membership rule explained clause by clause; usage defers to the `Targeted by` block |
-| `record` | `windowsAutopilotDeviceIdentities`, `deviceCategories`, `mobileThreatDefenseConnectors`, `ndesConnectors` | short registry-record layout, no settings payload, no grouping axes; an exposed credential is called out under `Lifecycle and operations` |
-| `singleton` | `deviceManagement`, `organization`, `organizationalBranding`, `onPremisesSynchronization`, `authenticationMethodsPolicy`, `authorizationPolicy` | tenant-wide single objects |
-| `credential` | `applePushNotificationCertificate`, `depOnboardingSettings`, `vppTokens` | expiry and renewal obligations; masked token values |
-| `arm` (`internal/handlers/arm/arm_prompt.tmpl`) | the three ARM types | ARM-specific metadata and references |
+| `referenced` | `assignmentFilters`, `roleScopeTags`, `roleDefinitions`, `notificationMessageTemplates`, `namedLocations`, `authenticationStrengthPolicies`, `termsOfUseAgreements`, `reusablePolicySettings`, `deviceComplianceScripts` | `References`, `Usage and references`, `Lifecycle and operations`, `Security`, `Definition`: objects other policies reference *by id* (a compliance discovery script reaches devices only through the compliance policy that selects it); templates carry the `Used by` block; a referenced type that has assignments of its own (`roleScopeTags`) also gets the assignments block |
+| `group` | `groups` | `References`, `Membership`, `Usage as assignment target`, `Lifecycle and operations`, `Security`, `Properties`: dynamic membership rule explained clause by clause; usage defers to the `Targeted by` block |
+| `record` | `windowsAutopilotDeviceIdentities`, `deviceCategories`, `mobileThreatDefenseConnectors`, `ndesConnectors` | `References`, `Lifecycle and operations`, `Security`, `Properties`: short registry-record layout, no settings payload; `windowsAutopilotDeviceIdentities` carries no grouping axes |
+| `singleton` | `deviceManagement`, `organization`, `organizationalBranding`, `onPremisesSynchronization`, `authenticationMethodsPolicy`, `authorizationPolicy` | `References`, `Lifecycle and operations`, `Security`, `Settings`: tenant-wide single objects |
+| `credential` | `applePushNotificationCertificate`, `depOnboardingSettings`, `vppTokens` | `References`, `Expiry and renewal`, `Lifecycle and operations`, `Security`, `Properties`: expiry and renewal obligations; masked token values |
+| `arm` (`internal/handlers/arm/arm_prompt.tmpl`) | the three ARM types | `References`, `Lifecycle and operations`, `Security`, `Properties`: ARM-specific metadata and references |
 
 The Graph overrides live in `internal/handlers/graph/*_prompt.tmpl`. A handler picks its family through the
 `Template` field of its `models.ResourceDocumentation`; `models.BuildDocumentationPrompt` renders it and appends
-the grouping vocabulary marker unless the type opts out (`OmitGroupAxes`). Every family shares the same header
-(type, permissions, lifecycle, reference links, related types) and the same evidence rules, kept in
-`internal/models/prompt_partials.tmpl`:
+the grouping vocabulary marker unless the type opts out (`OmitGroupAxes`, today only
+`windowsAutopilotDeviceIdentities`). Every family follows one section order — `References`, then its
+type-specific sections, then `Lifecycle and operations`, `Security` and its settings section — and one shape for
+the settings section, and shares the same header (type, permissions, lifecycle, reference links, related types)
+and the same evidence rules, kept in `internal/models/prompt_partials.tmpl`:
 
-- **Links only to known pages.** A setting gets a reference link only when a specific page is known; there are no
-  approximate or guessed links. `References` lists the curated links from the header (API reference, schema,
-  permissions page, admin center, best-practice baselines).
-- **Recommendations only under a baseline.** A recommended value is given only where a listed best-practice
-  baseline covers the setting; a type without one documents its configured values only.
+- **Links only to listed pages.** `References` lists the curated links from the header (API reference, schema,
+  permissions page, admin center, *Microsoft guidance*); a setting links only to one of those pages (an anchor
+  on one is fine) — never to a recalled, guessed or nearby URL.
+- **Recommendations only where Microsoft states one.** A recommended value is given only where a listed
+  *Microsoft guidance* page states one for the setting, naming that page; a type without one documents its
+  configured values only.
 - **Facts, not inferences.** The summary takes the purpose from the resource's own description and settings, or
-  says it is not documented, and never infers it from the display name. A review cadence is asked for only where a
+  says it is not documented, and never infers it from the display name. *Lifecycle and operations* builds on the
+  type's curated lifecycle notes and adds only what the YAML shows. A review cadence is asked for only where a
   credential expires. Referenced objects (filters, scope tags, named locations, strengths, templates) stay ids
   unless a block the run splices in resolves them.
 - **Security** names the read permission and, where the metadata or the permissions page supports it, the admin
   role needed to change the resource.
 - **Large settings payloads** (more than 30 top-level blocks) are grouped under `###` headings by category.
 - **Embedded payloads** are described as the export delivers them: a decoded payload as decoded, an encoded text
-  payload decoded, binary content stated as present and never reprinted.
+  payload decoded, binary content stated as present and never reprinted. A decoded script is reproduced in full
+  and verbatim.
 
 Contracts every document must honour, because the browser and the incremental engine depend on them:
 
-- **Closed H2 set.** The `##` headings are fixed per family (`References | Lifecycle and operations | Security
-  | Settings` for the default family, `References | Conditions | Lifecycle and operations | Security | Settings`
-  for Conditional Access) and recorded in the prompt as `<!-- doc-headings: … -->`. The browser
-  styles and deep-links sections by heading, so no other H2 may appear.
+- **Closed H2 set.** The `##` headings are fixed per family (the table above) and recorded in the prompt as
+  `<!-- doc-headings: … -->`. The browser styles and deep-links sections by heading, so no other H2 may appear.
 - **Frontmatter** with `source`, `sourceSha256`, `promptSha256` and the block hashes (below), plus the
-  LLM-authored index signals `summary`, `platformGroup`, `functionGroup` (the allowed grouping values are
-  emitted in the prompt as `<!-- doc-groups: … -->`).
+  LLM-authored index signals `summary` — one plain-text sentence, double-quoted on one line, which
+  `docs generate-index` copies into `index.yaml` for the browser — and `platformGroup`, `functionGroup` (the
+  allowed grouping values are emitted in the prompt as `<!-- doc-groups: … -->`).
 - **Marked splice blocks.** Assignments tables sit between `<!-- assignments:start -->`/`end` markers,
   noncompliance-notification references between `<!-- notifications:start -->`/`end`, a group's reverse index
   between `<!-- targeted-by:start -->`/`end`, a template's between `<!-- used-by:start -->`/`end`. They are
   re-rendered mechanically without regenerating the document. An assignments table has the columns
   `Direction | Target | Filter | Intent` (`Intent` for apps only); Conditional Access documents have none.
-- **Credential redaction.** A credential-shaped value in a free-text field or decoded payload that the service
-  did not mask is replaced by `«redacted — secret present in source»`, marked `data-note="security"` and called
-  out under `Security` (records: `Lifecycle and operations`); the literal stays only in the YAML.
+- **Credential redaction.** A credential-shaped value that the service did not mask — in a free-text field, a
+  decoded payload, under a credential-named key, or an OMA-URI value resolved with `resolve-secrets` — is
+  replaced by `«redacted — secret present in source»`, marked `data-note="security"` and called out under
+  `Security`; the literal stays only in the YAML.
 
-## Incremental documentation (`docs/generate.md`)
+## Documentation generation (`docs/generate.md`)
 
-`docs generate-prompt` turns "document this tenant" into a closed, exact work list. It reads
+`docs generate-prompt` turns "document this tenant" into a closed, exact work list. The list covers every
+resource on a first run or after a template change moves every `promptSha256`, and only what changed otherwise;
+the prompt is the same either way. It reads
 `metadata.yaml` and every in-scope document's frontmatter once, then splices its findings into the prompt
 template and writes `docs/generate.md`.
 
@@ -1056,7 +1063,9 @@ the tool and carried on the work-list rows; the agent copies them into frontmatt
 1. The work list, grouped by type, with reason and hashes per row.
 2. Read each type's `doc-prompt.md` in full; frontmatter, heading and marker contracts.
 3. Fan generation out to parallel subagents, one type per chunk, sized by expected output.
-4. Scripted structural verification (frontmatter, headings, balanced `<details>`, coverage against the list).
+4. Scripted structural verification: frontmatter (including a double-quoted one-line `summary`), headings,
+   balanced `<details>` each with a `data-setting` path, assignment markers present exactly where the type's
+   spec asks for them, `generatedAt` equal to the export timestamp, and coverage against the list.
 5. Deterministic splice of all four block kinds from the reference maps; marker migration.
 6. Scripted referential verification (every GUID resolved, links symmetric).
 7. Write `docs/summary.md` — the tenant landing page (management summary with severity-ranked findings, at a
@@ -1154,7 +1163,7 @@ no subscription is available.
 | Type | Notes |
 |---|---|
 | `Microsoft.Graph/deviceManagementConfigurationPolicies` | Settings Catalog, full settings tree via `$expand=settings`. Also carries Apple **DDM** policies (`technologies` contains `appleRemoteManagement`). |
-| `Microsoft.Graph/deviceConfigurations` | Legacy profiles, polymorphic incl. Custom/OMA-URI. `resolve-secrets` additionally needs `DeviceManagementConfiguration.ReadWrite.All`. |
+| `Microsoft.Graph/deviceConfigurations` | Legacy profiles, polymorphic incl. Custom/OMA-URI. `resolve-secrets` additionally needs `DeviceManagementConfiguration.ReadWrite.All`; the documentation prompt names both scopes either way, so switching the setting does not regenerate these documents. |
 | `Microsoft.Graph/deviceCompliancePolicies` | Classic per-platform policies, `$expand=scheduledActionsForRule($expand=scheduledActionConfigurations)`; notification template references are recorded as facts. |
 | `Microsoft.Graph/compliancePolicies` | Settings Catalog based (Linux), `$expand=settings,scheduledActionsForRule(…)`, named via `name`. |
 | `Microsoft.Graph/groupPolicyConfigurations` | Administrative Templates; `definitionValues?$expand=definition` child collection attached. |
@@ -1178,7 +1187,7 @@ the dedicated-app scope list.
 | `Microsoft.Graph/deviceShellScripts` | macOS shell scripts. Assignments read via `$expand=assignments` (no `/assignments` route in beta). |
 | `Microsoft.Graph/deviceCustomAttributeShellScripts` | macOS custom attribute scripts; same assignment caveat. |
 | `Microsoft.Graph/deviceHealthScripts` | Remediations (detection + remediation script pair). |
-| `Microsoft.Graph/deviceComplianceScripts` | Windows custom-compliance detection scripts (base64 `detectionScriptContent`). Distinct from Remediations. |
+| `Microsoft.Graph/deviceComplianceScripts` | Windows custom-compliance detection scripts (base64 `detectionScriptContent`). Distinct from Remediations. No assignments of their own — they reach devices through the compliance policy that selects them; `/assignments` is still read and exported, with a warning when it returns entries. |
 
 **Intune — apps and app protection** — `DeviceManagementApps.Read.All`
 
@@ -1357,9 +1366,10 @@ Secrets are never logged: tokens, client secrets and resolved OMA-URI values are
   It is off by default, logs a warning when on, needs `DeviceManagementConfiguration.ReadWrite.All` in the token
   (delegated — the Intune backend rejects app-only tokens for this call), and degrades per setting: a value that
   cannot be resolved stays masked. Treat an export produced with it as sensitive material.
-- **Credential-shaped free text.** Descriptions and decoded payloads sometimes contain pasted credentials the
-  service does not mask. The prompts require the model to redact such values in the documentation and flag
-  them under `Security`; the literal stays only in the YAML.
+- **Credential-shaped free text.** Descriptions, decoded payloads and values under credential-named keys
+  sometimes carry credentials the service does not mask, and `resolve-secrets` writes OMA-URI values in
+  plaintext. The prompts require the model to redact all of them in the documentation and flag them under
+  `Security`; the literal stays only in the YAML.
 - **Files** are written `0644`, directories `0755`. The tool deletes only with `prune` configured, only under
   `resources/`, and only what a complete run proved gone.
 

@@ -65,10 +65,10 @@ branch), L (several branches or a design change).
 
 **Ships together.**
 
-1. **The pre-regeneration batch**: *Style the Conditional Access `Conditions` section* and go *Template content
-   fixes and a Conditional Access template* have shipped; the go batch ends with *run-prompt fixes*, then one
-   documentation regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which the
-   scheduled *Per-item context in the sidebar* and the idea *per-document identity* build on.
+1. **The pre-regeneration batch** has shipped on both sides (the CA `Conditions` styling, the harmonised heading
+   sets and the go templates with the `summary:` field); one documentation regeneration remains. It lights up
+   `summary:`, which the scheduled *Per-item context in the sidebar* and the idea *per-document identity* build
+   on.
 2. **The compare track** (cross-project, must): *Move the compare normalisation to the CLI* ships with go
    *`resource compare`*; *manual pairing* and *a one-sided resource* follow.
 3. **The no-JS keystone**: decide *Drop the no-client-side-JavaScript rule* first; *search* (which subsumes the
