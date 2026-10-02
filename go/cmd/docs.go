@@ -32,5 +32,6 @@ download first to refresh the export, then a docs command to act on it.`,
 	cmd.AddCommand(docs.NewGeneratePromptCommand())
 	cmd.AddCommand(docs.NewGenerateIndexCommand())
 	cmd.AddCommand(docs.NewAnalyzeDriftCommand())
+	cmd.AddCommand(docs.NewAnalyzeConsistencyCommand())
 	return cmd
 }

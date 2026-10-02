@@ -80,7 +80,7 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 
 **Plan.**
 
-- New package `internal/consistency` and command `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`,
+- ~~New package `internal/consistency` and command `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`,
   registered in `cmd/docs.go`), offline with `--domain` like `docs generate-index` (`exportCredential`,
   `cmdutil.ResolveExportDir`). Flags: `--domain` only — split `addExportFlags` in `cmd/docs/flags.go` so the domain
   flag and its completion can be declared alone; the command writes a fixed tree, so `--out` (and `--prompt`)
@@ -88,11 +88,11 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   forbidden). Surface tests: `cmd/docs_test.go` (offers `--domain`; does not offer `--out`, `--prompt`,
   `--exit-code`) and the docs subcommand list in `cmd/resource_test.go`. Exit 2 (`exitCannotAnswer`) without
   `resources/metadata.yaml` (`docs.ErrNoMetadata`), on a tenant mismatch (`docs.ErrTenantMismatch`) or when a write
-  fails; findings never change the exit code.
-- Inputs: every `resources/metadata.yaml` entry with `presentInTenant: true` and neither `skipped` nor `filtered`, of
+  fails; findings never change the exit code.~~
+- ~~Inputs: every `resources/metadata.yaml` entry with `presentInTenant: true` and neither `skipped` nor `filtered`, of
   the indexed types below, read from `resources/<metadata key>`; a file that is missing or does not parse is warned
-  about by key, counted as `unreadable` and skipped — the run continues. Other types are not indexed in v1.
-- Setting index `(resource key, source type, canonicalKey, value, class)`:
+  about by key, counted as `unreadable` and skipped — the run continues. Other types are not indexed in v1.~~
+- ~~Setting index `(resource key, source type, canonicalKey, value, class)`:
   `Microsoft.Graph/deviceManagementConfigurationPolicies` and `Microsoft.Graph/compliancePolicies` by
   `settingDefinitionId`, walking choice children and group collections, choice option ids, simple and collection
   values in one comparable form; `Microsoft.Graph/deviceConfigurations` custom profiles by each `omaSettings[]`
@@ -106,45 +106,45 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   `Microsoft.Graph/groupPolicyConfigurations` by `definitionValues[].definition.id` with value `enabled`
   (presentation values are not exported); `Microsoft.Graph/deviceManagementIntents` by `settings[].definitionId` with
   the parsed `valueJson` in canonical JSON. Class `requirement` for `deviceCompliancePolicies` and
-  `compliancePolicies`, `configuration` for the rest.
-- Typed properties that are not settings: `id`, `displayName`, `description`, `version`, `createdDateTime`,
+  `compliancePolicies`, `configuration` for the rest.~~
+- ~~Typed properties that are not settings: `id`, `displayName`, `description`, `version`, `createdDateTime`,
   `lastModifiedDateTime`, `roleScopeTagIds`, `assignments`, `scheduledActionsForRule`, `omaSettings` and every key
   starting with or containing `@odata.`. Not configured, never indexed: null, empty string or list, the enum value
   `notConfigured`, and boolean `false` (the legacy profiles render it "Not configured"; an explicit `false` is missed
-  rather than every default reported as a duplicate).
-- Secrets never leave the export: a Settings Catalog secret (`valueState` present), an `isEncrypted` or masked
+  rather than every default reported as a duplicate).~~
+- ~~Secrets never leave the export: a Settings Catalog secret (`valueState` present), an `isEncrypted` or masked
   OMA-URI value is indexed as `set (value unknown)` even when `resolve-secrets` wrote it in plaintext — never written
   under `consistency/`, never logged, never compared. A pair with an unknown value is never a value finding; it is
-  listed under `unknownValues`.
-- Alias hook for equivalences: an `Equivalence` type in `internal/consistency` joins canonical keys through an
+  listed under `unknownValues`.~~
+- ~~Alias hook for equivalences: an `Equivalence` type in `internal/consistency` joins canonical keys through an
   equivalence table (the catalog entry's `equivalences`; the command passes an empty table here, the tests a fixture
   table). Each equivalence names the members (a compliance property and/or configuration keys, in the index's
   canonical form), a relation — `same` (both sides enforce the control) or a check operator `>=`, `<=`, `=`,
   `required` with the compliance side as the requirement — whether the compliance side is enforced on the device
-  per platform, and a `status` (`verified` | `verify`).
-- Scope model per resource from its `assignmentTargets`, built on `internal/docs/assignments.go` — export what the
+  per platform, and a `status` (`verified` | `verify`).~~
+- ~~Scope model per resource from its `assignmentTargets`, built on `internal/docs/assignments.go` — export what the
   package needs (`parseAssignments`, the row fields, the zero-GUID sentinel handling) instead of copying it: include
   and exclude sets (groups, All devices, All users), filters with mode, and a target kind per group (`device.` vs
   `user.` in a dynamic group's `membershipRule`, read from the group's YAML; assigned groups `unknown`); a filter's
   `platform` and `rule` from the `Microsoft.Graph/assignmentFilters` YAML; the resource's platform from metadata
-  `platforms`, else the `@odata.type` prefix (`windows…`, `macOS…`, `ios…`, `android…`), else `unknown`.
-- Overlap verdict per resource pair: `none` when both platforms are known and differ; when either side has no
+  `platforms`, else the `@odata.type` prefix (`windows…`, `macOS…`, `ios…`, `android…`), else `unknown`.~~
+- ~~Overlap verdict per resource pair: `none` when both platforms are known and differ; when either side has no
   include; when one side's include groups all sit in the other side's exclude set and that exclusion is honoured
   (Intune ignores an exclusion that mixes kinds — a known `device.` group excluded from a user include or All users,
   or the reverse — so a known mismatch stays `possible`; an `unknown` kind counts as matching); or when every include
   on one side carries a filter in `include` mode that every include on the other side carries in `exclude` mode.
   Target kind alone never decides `none`: a user assignment reaches the devices its users sign in to. `certain` when
   the same group, or All devices on both, or All users on both, is included without a filter and excluded on neither
-  side, on the same known platform; `possible` otherwise. Each pair also records the target kinds and filter ids.
-- Mechanical findings, one per resource pair: a canonical key (or an equivalence group) set in two or more resources
+  side, on the same known platform; `possible` otherwise. Each pair also records the target kinds and filter ids.~~
+- ~~Mechanical findings, one per resource pair: a canonical key (or an equivalence group) set in two or more resources
   whose overlap is not `none` is a `conflict` (two enforcing sides with different values — two configurations, or an
   enforcing compliance setting and a configuration), a `duplicate` (same value), or a `contradiction` (a
   configuration value that fails a compliance requirement under the equivalence's operator, e.g. an enforced minimum
   password length of 8 against a required 12), each carrying its overlap verdict, the operator and both values, and
   `confidence: firm | possible` — `possible` when it rests on an equivalence with `status: verify`, never a hard
   conflict. A compliance requirement with no in-scope configuration is not a mechanical finding (rule R1 in the
-  analysis job).
-- Output, both via `docs.WriteFileAtomic` (directory `0755`, files `0644`), `mechanical.yaml` first and
+  analysis job).~~
+- ~~Output, both via `docs.WriteFileAtomic` (directory `0755`, files `0644`), `mechanical.yaml` first and
   `metadata.yaml` last: `<tenant>/consistency/mechanical.yaml` — `version: 1`, `findings` sorted by kind, key, then
   the two resource keys (lower first), each with `kind`, `key` (the canonical key or `equivalence:<id>`), `overlap`,
   `confidence`, `operator` (equivalences only) and `a` / `b` (`resource` metadata key, `sourceKey`, `value`); and
@@ -152,13 +152,13 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   `consistency/metadata.yaml` — `version: 1`, `tenant`, `exportGeneratedAt` (the export's `generatedAt`),
   `exportComplete`, `toolVersion`, counts (indexed resources and settings per source type, `unreadable`, findings per
   kind × overlap, `unknownValues`); no wall-clock time, so reruns are byte-equal. Other files in `consistency/` are
-  left alone. `--dry-run` writes and clears nothing and reports the counts; a summary line per kind ends the run.
-- Tree ownership: `consistency.ClearTree` (its own `DirName` constant and a constructed path, like `drift.ClearTree`),
+  left alone. `--dry-run` writes and clears nothing and reports the counts; a summary line per kind ends the run.~~
+- ~~Tree ownership: `consistency.ClearTree` (its own `DirName` constant and a constructed path, like `drift.ClearTree`),
   called by `resource download` next to `rebaselineClearDrift` — after a successful metadata write, never on dry-run,
   a failure only warns. `.claude/rules/go-export-safety.md` (and its Windsurf twin
   `go/.windsurf/rules/04-security-and-ops.md`): a `consistency/` bullet under *Output layout*, the "only other
-  deletes" sentence and the prune exclusion list.
-- Tests (`internal/consistency`, synthetic fixtures in temp directories only): the normalisers per source type,
+  deletes" sentence and the prune exclusion list.~~
+- ~~Tests (`internal/consistency`, synthetic fixtures in temp directories only): the normalisers per source type,
   the not-configured and non-setting exclusions, the OMA-URI ↔ Settings Catalog bridge (including an ADMX-backed id
   with underscores and a non-scalar side landing in `unknownValues`), a resolved secret value never appearing in
   either output file, the overlap truth table (including a mixed-kind exclusion staying `possible` and a user-only vs
@@ -168,9 +168,15 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   tenant (including an L1/Admin complement pair — one policy excludes an assigned admin group, its twin includes only
   it — that must come out `none`), an unreadable resource warned and counted, a `presentInTenant: false` entry not
   indexed, byte-equal reruns, dry-run writing nothing, the refusals; `ClearTree` and the re-baseline call in
-  `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).
+  `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).~~
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
+- Follow-up (found by a dry run over a real export): typed macOS custom profiles
+  (`macOSCustomConfiguration`, `macOSCustomAppConfiguration`) index their identity and payload properties
+  (`payload`, `payloadName`, `payloadFileName`, `bundleId`, `configurationXml`, `fileName`) as settings, so any two
+  unrelated custom profiles on overlapping scopes come out as a `conflict` on those keys — the bulk of the
+  mechanical conflicts in that export. Decide whether to treat them as non-settings, key them by payload
+  identifier, or leave them to the catalog.
 
 ## 2. A consistency rule and topic catalog in the configuration
 
