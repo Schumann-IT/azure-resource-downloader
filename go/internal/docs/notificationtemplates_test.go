@@ -239,7 +239,7 @@ func TestGeneratePromptNotificationsMigrate(t *testing.T) {
 	// Policy doc is current but predates the notification markers.
 	writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp"})
 
-	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate(), DryRun: true})
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
 	if err != nil {
 		t.Fatalf("GeneratePrompt: %v", err)
 	}
@@ -257,6 +257,14 @@ func TestGeneratePromptNotificationsMigrate(t *testing.T) {
 	}
 	if found.NotificationsSha256 != notifHash(m, []string{"T1"}) {
 		t.Errorf("migrate item must carry the forward hash, got %q", found.NotificationsSha256)
+	}
+	prompt, err := os.ReadFile(filepath.Join(tenantDir, DocsDirName, GenerateFileName))
+	if err != nil {
+		t.Fatalf("read rendered prompt: %v", err)
+	}
+	wantRow := "| `docs/" + compType + "/policy.md` | " + compType + " | " + found.Reason + " |  | `" + found.NotificationsSha256 + "` |"
+	if !strings.Contains(string(prompt), wantRow) {
+		t.Errorf("rendered migrate block lacks the policy's row %q", wantRow)
 	}
 }
 

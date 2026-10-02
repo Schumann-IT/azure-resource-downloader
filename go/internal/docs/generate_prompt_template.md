@@ -19,7 +19,7 @@ Marked blocks the tool replaces (start/end markers stay, content between them is
              assignments tables whose target names moved, "Targeted by" blocks whose targeting moved,
              "Used by" blocks whose referencing resources moved, and noncompliance-notification blocks
              whose referenced template was renamed
-  migrate    documents predating the assignment markers; rendered as "none" when there are none
+  migrate    documents predating the assignment or noncompliance-notification markers; rendered as "none" when there are none
   expected   every source path the work list names, one per line, for the section-4 coverage check
   summary-facts  tenant-wide counts, platforms, assignment posture and coverage for the summary (section 7)
 
@@ -797,7 +797,9 @@ marker. The row's reason names which. Rendered as "none" when there are none._
 <!-- migrate:end -->
 
 For each, insert the markers around the existing block without altering anything else, then apply 5c
-normally. The same one-off insertion applies to any block whose markers are absent, including the reverse
+normally. Then write each filled hash cell of the row — `assignmentsSha256`, `notificationsSha256` — into that
+document's frontmatter; a migrated document whose hash you did not write is re-spliced on every future run. The
+same one-off insertion applies to any block whose markers are absent, including the reverse
 `<!-- targeted-by -->` / `<!-- used-by -->` blocks that a freshly generated or older group/template document
 has never carried (5c, 5d): create the markers, then splice. This is a one-off per document; once inserted the
 markers persist.

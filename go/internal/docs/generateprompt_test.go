@@ -390,6 +390,50 @@ func TestGeneratePromptMigrate(t *testing.T) {
 	}
 }
 
+func TestRenderMigrate(t *testing.T) {
+	const header = "| Document | Type | Reason | assignmentsSha256 | notificationsSha256 |\n|---|---|---|---|---|\n"
+	const assignReason = "document predates the assignment markers"
+	const notifReason = "document predates the noncompliance-notification markers"
+	tests := []struct {
+		name  string
+		items []WorkItem
+		want  string
+	}{
+		{
+			name: "empty",
+			want: "_No documents need migrating — every current document already carries the markers its content needs._",
+		},
+		{
+			name:  "assignments only",
+			items: []WorkItem{{DocPath: "docs/a/x.md", ResourceType: "a", Reason: assignReason, AssignmentsSha256: "AAA"}},
+			want:  header + "| `docs/a/x.md` | a | " + assignReason + " | `AAA` |  |",
+		},
+		{
+			name:  "notifications only",
+			items: []WorkItem{{DocPath: "docs/a/x.md", ResourceType: "a", Reason: notifReason, NotificationsSha256: "NNN"}},
+			want:  header + "| `docs/a/x.md` | a | " + notifReason + " |  | `NNN` |",
+		},
+		{
+			name: "two items of one document merge and rows sort by document",
+			items: []WorkItem{
+				{DocPath: "docs/b/z.md", ResourceType: "b", Reason: assignReason, AssignmentsSha256: "ZZZ"},
+				{DocPath: "docs/a/x.md", ResourceType: "a", Reason: assignReason, AssignmentsSha256: "AAA"},
+				{DocPath: "docs/a/x.md", ResourceType: "a", Reason: notifReason, NotificationsSha256: "NNN"},
+			},
+			want: header +
+				"| `docs/a/x.md` | a | " + assignReason + "; " + notifReason + " | `AAA` | `NNN` |\n" +
+				"| `docs/b/z.md` | b | " + assignReason + " | `ZZZ` |  |",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderMigrate(tt.items); got != tt.want {
+				t.Errorf("renderMigrate =\n%s\nwant\n%s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGeneratePromptReverseResplice(t *testing.T) {
 	tenantDir, m := assignmentScenario(t)
 	// Policy is fully current (source/prompt/assignments all match).
@@ -1147,6 +1191,15 @@ var referenceFixtureMtime = time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)
 // by document path.
 func referenceFixture(t *testing.T) (string, map[string]WorkItem) {
 	t.Helper()
+	return referenceFixtureMigrating(t, false)
+}
+
+// referenceFixtureMigrating is referenceFixture with the option of a policy
+// document that is current but carries neither marker when the prompt is
+// rendered, so it lands in the migrate table as one merged row; the policy is
+// then rewritten with the fixture body and both hashes from its Migrate items.
+func referenceFixtureMigrating(t *testing.T, policyMigrates bool) (string, map[string]WorkItem) {
+	t.Helper()
 	tenantDir := t.TempDir()
 	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
 	m := &Metadata{
@@ -1178,6 +1231,9 @@ func referenceFixture(t *testing.T) (string, map[string]WorkItem) {
 	}
 	// Current before the prompt is rendered, so it is in none of the three lists.
 	writeDoc(t, tenantDir, assignmentFiltersType+"/other.yaml", "s-oth", "p-flt")
+	if policyMigrates {
+		writeDocFM(t, tenantDir, compType+"/policy.yaml", docFM{srcSha: "s-pol", promptSha: "p-comp"})
+	}
 
 	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
 	if err != nil {
@@ -1186,6 +1242,20 @@ func referenceFixture(t *testing.T) (string, map[string]WorkItem) {
 	items := map[string]WorkItem{}
 	for _, it := range res.ToGenerate {
 		items[it.DocPath] = it
+	}
+	// A document missing both markers has one Migrate item per marker; the
+	// hashes to write are the union.
+	for _, it := range res.Migrate {
+		merged := items[it.DocPath]
+		merged.ResourceType, merged.SourcePath, merged.DocPath = it.ResourceType, it.SourcePath, it.DocPath
+		merged.SourceSha256, merged.PromptSha256 = it.SourceSha256, it.PromptSha256
+		if it.AssignmentsSha256 != "" {
+			merged.AssignmentsSha256 = it.AssignmentsSha256
+		}
+		if it.NotificationsSha256 != "" {
+			merged.NotificationsSha256 = it.NotificationsSha256
+		}
+		items[it.DocPath] = merged
 	}
 	if len(items) != 4 {
 		t.Fatalf("fixture work list = %+v, want policy, group, template and filter", res.ToGenerate)
@@ -1347,6 +1417,33 @@ func TestSectionSixReferenceScript(t *testing.T) {
 				t.Errorf("exit %d, want 1 with %q:\n%s", code, tt.message, out)
 			}
 		})
+	}
+}
+
+// TestSectionSixReferenceScriptMigratedPolicy runs the section-6 script over a
+// tree whose policy was migrated: it was listed in the migrate table with both
+// hashes, and was rewritten carrying them. The script must read both hash
+// columns by header, pass, and fail when the notifications hash is dropped.
+func TestSectionSixReferenceScriptMigratedPolicy(t *testing.T) {
+	python := requirePython(t)
+	policyDoc := "docs/" + compType + "/policy.md"
+	dir, items := referenceFixtureMigrating(t, true)
+	prompt, err := os.ReadFile(filepath.Join(dir, DocsDirName, GenerateFileName))
+	if err != nil {
+		t.Fatalf("read rendered prompt: %v", err)
+	}
+	if !strings.Contains(string(prompt), "| Document | Type | Reason | assignmentsSha256 | notificationsSha256 |") {
+		t.Fatalf("migrate table missing from the rendered prompt")
+	}
+	script := embeddedScript(t, string(prompt), section6Docstring)
+	if out, code := runScript(t, python, dir, script); code != 0 {
+		t.Fatalf("migrated policy with both hashes: exit %d\n%s", code, out)
+	}
+
+	editFixtureDoc(t, dir, policyDoc, "notificationsSha256: "+items[policyDoc].NotificationsSha256+"\n", "")
+	out, code := runScript(t, python, dir, script)
+	if code != 1 || !strings.Contains(out, "notificationsSha256 missing or not the value the prompt gives") {
+		t.Errorf("exit %d, want 1 with the missing notificationsSha256 message:\n%s", code, out)
 	}
 }
 

@@ -167,7 +167,7 @@ or miss a finding because of a script it got wrong.
 - Documentation at *done*: `README.md` *Documentation generation*, items 6 and 7 of the agent's steps (the
   shipped reference-check and signal-sweep scripts; command-line credentials in the summary); `CHANGELOG.md`
   `### Changed`.
-- Follow-up (found while implementing): `renderMigrate` (`internal/docs/generateprompt_render.go`) prints only
+- ~~Follow-up (found while implementing): `renderMigrate` (`internal/docs/generateprompt_render.go`) prints only
   `| Document | Type | assignmentsSha256 |`, although `GeneratePrompt` also appends a `Migrate` item carrying
   `NotificationsSha256` (reason "document predates the noncompliance-notification markers"). A document migrated
   for its notification markers never receives that hash — the next run lists it as a notifications re-splice —
@@ -182,14 +182,14 @@ or miss a finding because of a script it got wrong.
   - an empty cell (`hashCell("")`) for a hash the document is not migrated for, so an assignments-only row has a
     blank `notificationsSha256` and a notifications-only row a blank `assignmentsSha256`;
   - the empty-state sentence "_No documents need migrating — every current document already carries the markers
-    its content needs._".
-- Follow-up, `internal/docs/generate_prompt_template.md` (run prompt, not hashed): the header comment's `migrate`
+    its content needs._".~~
+- ~~Follow-up, `internal/docs/generate_prompt_template.md` (run prompt, not hashed): the header comment's `migrate`
   line reads "documents predating the assignment or noncompliance-notification markers; …"; 5e's paragraph after
   the `migrate` block gains, after "then apply 5c normally", the sentence "Then write each filled hash cell of the
   row — `assignmentsSha256`, `notificationsSha256` — into that document's frontmatter; a migrated document whose
   hash you did not write is re-spliced on every future run." No change to the section-6 script: it reads hash
-  columns by header name and skips blank cells.
-- Follow-up tests: a table test for `renderMigrate` in `generateprompt_test.go` — empty input gives the
+  columns by header name and skips blank cells.~~
+- ~~Follow-up tests: a table test for `renderMigrate` in `generateprompt_test.go` — empty input gives the
   empty-state sentence; an assignments-only, a notifications-only and a two-item same-document input give the
   five-column header, the blank cells as above, one merged row with both reasons and both hashes, rows sorted by
   document. Extend `TestGeneratePromptNotificationsMigrate` (`notificationtemplates_test.go`) to assert the
@@ -198,7 +198,7 @@ or miss a finding because of a script it got wrong.
   document is written current (`sourceSha256` / `promptSha256` matching) but without either marker **before**
   `GeneratePrompt` runs, so it lands in `migrate` as one merged row; then rewrite it with the fixture body and
   both hashes from the `Migrate` items. Assert exit 0 on that tree, and exit 1 with
-  "notificationsSha256 missing or not the value the prompt gives" when its `notificationsSha256` line is removed.
+  "notificationsSha256 missing or not the value the prompt gives" when its `notificationsSha256` line is removed.~~
 
 ## Parked ideas
 
