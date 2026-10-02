@@ -40,9 +40,12 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 > assignment-filter and collection-valued Settings Catalog YAML **read-only, for key structure only**; no value is
 > copied into the repository, every fixture is synthetic and built in a temp directory.
 >
-> **From the code.** Precedents: `cmd/docs/analyze_drift.go` (flags, `cmdutil.ResolveExportDir`, exit 2 = cannot
-> answer, dry-run), `drift.ClearTree` and `rebaselineClearDrift` in `cmd/resource/download.go`. Write files with
-> `docs.WriteFileAtomic` (analyze-drift's `os.WriteFile` is not the model). Assignment parsing exists in
+> **From the code.** The model is `docs generate-index` (`cmd/docs/generate_index.go`,
+> `internal/docs/generateindex.go`): an offline, deterministic `docs` command over `resources/metadata.yaml` and the
+> exported data (plus a config key — `taxonomy:`, which the catalog entry follows), with `--domain` / `--out`,
+> `cmdutil.ResolveExportDir`, exit 2 for "cannot answer" and a dry-run that writes nothing. Unlike its
+> `writeIndexFile` (plain `os.WriteFile`), write with `docs.WriteFileAtomic`. Tree ownership follows
+> `resource drift`: `drift.ClearTree`, `WriteObservation` and `rebaselineClearDrift` in `cmd/resource/download.go`. Assignment parsing exists in
 > `internal/docs/assignments.go` (`parseAssignments`, `buildGroupInfo`, `buildFilterInfo`, the zero-GUID filter
 > sentinel). `metadata.yaml` carries raw `assignmentTargets`, `groupTypes`, `platforms`, `odataType` — not a
 > group's `membershipRule` nor a filter's `platform`/`rule`, which come from the groups' and filters' YAML.
@@ -55,7 +58,7 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 **Plan.**
 
 - New package `internal/consistency` and command `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`,
-  registered in `cmd/docs.go`; flags `--domain` and `--out` like analyze-drift; the flag and subcommand surface
+  registered in `cmd/docs.go`; flags `--domain` and `--out` like `docs generate-index`; the flag and subcommand surface
   tests in `cmd/docs_test.go` and `cmd/resource_test.go`); refuses with exit 2 without `resources/metadata.yaml`
   or on a tenant mismatch.
 - Setting index `(resource, canonicalKey, value, state)`: Settings Catalog `settingDefinitionId`, walking choice
@@ -136,7 +139,9 @@ export and the tool's overlap matrix before it is accepted, so the result is a v
 operator can act on.
 
 > **Mirrors** `docs analyze-drift`: the CLI writes a prompt file with marked blocks; a Claude session runs it as
-> its own two-phase job. Paired with the web entry *The consistency view* (the browser renders
+> its own two-phase job. Precedent: `cmd/docs/analyze_drift.go` and `internal/drift/analyzeprompt.go` (embedded
+> template, `docs.ValidateMarkers` / `SpliceMarker` / `StripTemplateHeader`, the `CheckCurrent` preflight,
+> `--prompt`). Paired with the web entry *The consistency view* (the browser renders
 > `consistency/index.md`).
 >
 > **Contract.** `consistency/` joins the Go → web contract: `consistency/index.md` (the human report, rendered by
