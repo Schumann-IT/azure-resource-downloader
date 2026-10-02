@@ -1050,7 +1050,7 @@ with `no-prompt` set) is reported and skipped — no document of that type can b
 | **Re-splice, notifications** | `notificationsSha256` moved — a notification template the policy names was renamed | re-render the notifications block only |
 | **Re-splice, reverse** | a group's `targetedBySha256` moved — the set of resources assigning it changed | re-render the group's `Targeted by` block |
 | **Re-splice, used-by** | a template's `usedBySha256` moved — the set of policies referencing it changed | re-render the template's `Used by` block |
-| **Migrate** | an assignment-capable document predates the markers | insert the markers so it joins the cycle |
+| **Migrate** | a document predates the assignment or noncompliance-notification markers its content needs (one row per document, with the reason and every hash it must carry) | insert the markers and copy the row's hashes so it joins the cycle |
 
 The forward/reverse split is the point: renaming one group changes no policy's YAML, so no policy is
 regenerated — only their assignments blocks are re-spliced, from a **reference map** the tool renders
@@ -1065,16 +1065,24 @@ the tool and carried on the work-list rows; the agent copies them into frontmatt
 3. Fan generation out to parallel subagents, one type per chunk, sized by expected output.
 4. Scripted structural verification: frontmatter (including a double-quoted one-line `summary`), headings,
    balanced `<details>` each with a `data-setting` path, assignment markers present exactly where the type's
-   spec asks for them, `generatedAt` equal to the export timestamp, and coverage against the list.
+   spec asks for them and never nested or out of order, `generatedAt` equal to the export timestamp, and
+   coverage against the list.
 5. Deterministic splice of all four block kinds from the reference maps; marker migration.
-6. Scripted referential verification (every GUID resolved, links symmetric).
+6. Referential verification with a script the prompt ships: every group GUID in a marked block resolved or
+   flagged, links symmetric in both directions (read from the assignment *Target* and the reverse *Resource*
+   columns, never from a *Filter* column), every link target present, marker pairs intact, every written
+   block hash the one the prompt gives, and nothing outside the lists touched since section 4.
 7. Write `docs/summary.md` — the tenant landing page (management summary with severity-ranked findings, at a
    glance, assignment posture, coverage caveats), fed from a `summary-facts` block the tool computes from
-   `metadata.yaml` so it describes the tenant even on a run that wrote nothing.
+   `metadata.yaml` so it describes the tenant even on a run that wrote nothing, and from a signal sweep the
+   prompt also ships as a script: not in force, unassigned, dangling targets, credentials near expiry (only
+   certificates and tokens) and plaintext credentials — including credential arguments in command lines —
+   reported by path, key and length, never by value.
 8. Write `docs/report-<UTC timestamp>.md` — the run's plan, what was written and re-spliced, checks passed,
    dangling references, findings.
 
-The default template is embedded in the binary (`internal/docs/generate_prompt_template.md`); `--prompt`
+The shipped scripts need Python 3.9 or later with the standard library only, and only read. The default
+template is embedded in the binary (`internal/docs/generate_prompt_template.md`); `--prompt`
 substitutes your own. Only the marked blocks (`export`, `worklist`, `refmap`, `usedbymap`, `resplice`,
 `migrate`, `expected`, `summary-facts`) are filled by the tool; the prose is editable.
 
