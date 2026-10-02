@@ -49,11 +49,14 @@ or miss a finding because of a script it got wrong.
 > read: section 6 reads `docs/` (documents and the rendered `docs/generate.md`) and `chunks/mtimes.json`; the
 > sweep reads `resources/` (YAML, `metadata.yaml`, `doc-prompt.md`, plist sidecars) and prints to stdout.
 > Neither writes a file. The tightened section-4 marker check (order and nesting) fails only documents that
-> already broke section 2's "never nest markers, never a start without its end" rule.
+> already broke section 2's "never nest markers, never a start without its end" rule. The follow-up changes only
+> the rendered prompt's `migrate` table (`docs/generate.md`, read by the agent and the section-6 script, never by
+> the web project) and adds `notificationsSha256` to migrated documents' frontmatter — a key the frontmatter
+> already defines.
 >
 > **Owner.** none — every change is under `go/`. No sequencing constraint.
 >
-> **Implementer.** opus
+> **Implementer.** sonnet — the remaining follow-up is a render change, a prompt sentence and tests.
 
 **Plan.**
 
@@ -164,11 +167,38 @@ or miss a finding because of a script it got wrong.
 - Documentation at *done*: `README.md` *Documentation generation*, items 6 and 7 of the agent's steps (the
   shipped reference-check and signal-sweep scripts; command-line credentials in the summary); `CHANGELOG.md`
   `### Changed`.
-- Follow-up (found while implementing): `renderMigrate` prints only an `assignmentsSha256` column, so a document
-  migrated for its noncompliance-notification markers never receives the `notificationsSha256` its work item
-  carries — the agent cannot write it, the next run lists it as a notifications re-splice, and the section-6
-  *Hashes updated* check has no column to verify. Render the `notificationsSha256` column in the `migrate`
-  table (blank for assignments-only rows) and cover it in `generateprompt_test.go`.
+- Follow-up (found while implementing): `renderMigrate` (`internal/docs/generateprompt_render.go`) prints only
+  `| Document | Type | assignmentsSha256 |`, although `GeneratePrompt` also appends a `Migrate` item carrying
+  `NotificationsSha256` (reason "document predates the noncompliance-notification markers"). A document migrated
+  for its notification markers never receives that hash — the next run lists it as a notifications re-splice —
+  and section 6's *Hashes updated* check has no column to verify. 5e also says "the row's reason names which",
+  but no Reason column is rendered. A compliance policy missing both markers yields two items for the same
+  document. Change `renderMigrate` to:
+  - header `| Document | Type | Reason | assignmentsSha256 | notificationsSha256 |` (the re-splice tables'
+    `Document | Type | Reason | <hash>` order, hashes in the work list's order);
+  - **one row per document**: merge items sharing a `DocPath` — reasons joined with `; ` in item order
+    (assignments first, as `GeneratePrompt` appends them), each hash cell from whichever item carries it — then
+    sort by `DocPath`;
+  - an empty cell (`hashCell("")`) for a hash the document is not migrated for, so an assignments-only row has a
+    blank `notificationsSha256` and a notifications-only row a blank `assignmentsSha256`;
+  - the empty-state sentence "_No documents need migrating — every current document already carries the markers
+    its content needs._".
+- Follow-up, `internal/docs/generate_prompt_template.md` (run prompt, not hashed): the header comment's `migrate`
+  line reads "documents predating the assignment or noncompliance-notification markers; …"; 5e's paragraph after
+  the `migrate` block gains, after "then apply 5c normally", the sentence "Then write each filled hash cell of the
+  row — `assignmentsSha256`, `notificationsSha256` — into that document's frontmatter; a migrated document whose
+  hash you did not write is re-spliced on every future run." No change to the section-6 script: it reads hash
+  columns by header name and skips blank cells.
+- Follow-up tests: a table test for `renderMigrate` in `generateprompt_test.go` — empty input gives the
+  empty-state sentence; an assignments-only, a notifications-only and a two-item same-document input give the
+  five-column header, the blank cells as above, one merged row with both reasons and both hashes, rows sorted by
+  document. Extend `TestGeneratePromptNotificationsMigrate` (`notificationtemplates_test.go`) to assert the
+  rendered `migrate` block (`DryRun` result or `docs/generate.md`) contains the item's `notificationsSha256` in
+  the policy's row. Section-6 script (same `python3` skip): a variant of `referenceFixture` in which the policy
+  document is written current (`sourceSha256` / `promptSha256` matching) but without either marker **before**
+  `GeneratePrompt` runs, so it lands in `migrate` as one merged row; then rewrite it with the fixture body and
+  both hashes from the `Migrate` items. Assert exit 0 on that tree, and exit 1 with
+  "notificationsSha256 missing or not the value the prompt gives" when its `notificationsSha256` line is removed.
 
 ## Parked ideas
 
