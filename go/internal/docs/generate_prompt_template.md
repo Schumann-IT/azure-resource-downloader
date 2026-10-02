@@ -449,12 +449,14 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
                 fail(doc, f"{key} mismatch — wrong source documented")
         if not re.search(r"^source:\s*resources/", fm, re.M):
             fail(doc, "frontmatter source is not a resources/ path")
-        summary = re.search(r"^summary:(.*)$", fm, re.M)
+        summary = re.search(r"^summary:[ \t]+(.*)$", fm, re.M)
         if not summary:
             fail(doc, "frontmatter missing summary")
         else:
+            if len(re.findall(r"^summary:", fm, re.M)) > 1:
+                fail(doc, "frontmatter summary not a non-empty double-quoted line")
             val = summary.group(1).strip()
-            quoted = re.fullmatch(r'"((?:[^"\\]|\\.)*)"(?:\s+#.*)?', val)
+            quoted = re.fullmatch(r'"((?:[^"\\]|\\["\\])*)"(?:\s+#.*)?', val)
             inner = quoted.group(1) if quoted else ""
             if not inner.strip() or "`" in inner or re.search(r"\[[^\]]*\]\([^)]*\)", inner):
                 fail(doc, "frontmatter summary not a non-empty double-quoted line")

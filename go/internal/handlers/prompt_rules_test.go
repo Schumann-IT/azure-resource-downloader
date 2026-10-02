@@ -135,7 +135,12 @@ func TestDocumentationPromptSectionShape(t *testing.T) {
 	}
 	registry := NewRegistry(stubCredential{}, "sub-123", false)
 
-	for _, resourceType := range registry.GetAllTypes() {
+	types := registry.GetAllTypes()
+	if len(types) == 0 {
+		t.Fatal("registry has no types")
+	}
+
+	for _, resourceType := range types {
 		t.Run(resourceType, func(t *testing.T) {
 			handler, err := registry.Get(resourceType)
 			if err != nil {
@@ -167,6 +172,20 @@ func TestDocumentationPromptSectionShape(t *testing.T) {
 			}
 
 			runRequired(t, prompt, required)
+			baseline := baselineListed
+			if !strings.Contains(prompt, baselineListed) {
+				baseline = baselineUnlisted
+			}
+			assertRuleOrder(t, prompt, []string{
+				"- Open each block as `<details data-setting=",
+				"- Do not omit a property this section covers;",
+				baseline,
+				"- When this section would hold more than 30 top-level blocks",
+				"- Document a referenced object",
+				"- Only describe what is actually present;",
+				"- Where a value is masked or redacted by the service",
+				"**credential-shaped**",
+			})
 			if strings.Contains(prompt, baselineListed) == strings.Contains(prompt, baselineUnlisted) {
 				t.Error("prompt must carry exactly one of the two baseline-rule variants")
 			}
@@ -189,5 +208,23 @@ func runRequired(t *testing.T, prompt string, want []string) {
 		if !strings.Contains(prompt, w) {
 			t.Errorf("prompt missing %q", w)
 		}
+	}
+}
+
+// assertRuleOrder reports every text of ordered that is absent from prompt or
+// does not appear after the previous one, so the rules keep their order.
+func assertRuleOrder(t *testing.T, prompt string, ordered []string) {
+	t.Helper()
+	prev, prevText := -1, ""
+	for _, text := range ordered {
+		idx := strings.Index(prompt, text)
+		if idx < 0 {
+			t.Errorf("prompt missing %q", text)
+			continue
+		}
+		if idx <= prev {
+			t.Errorf("rule %q must come after %q", text, prevText)
+		}
+		prev, prevText = idx, text
 	}
 }
