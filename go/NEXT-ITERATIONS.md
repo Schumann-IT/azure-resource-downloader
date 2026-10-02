@@ -8,13 +8,14 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## 1. Ship the section-6 reference check as a script in the run prompt
+## 1. Ship the section-6 reference check and the section-7 signal sweep as scripts in the run prompt
 
 *Kind:* fix
 
-**Goal.** Every documentation run checks its cross-document references the same way, with a script the run
-prompt ships — as it already does for the structural checks (section 4) and the summary check (section 7) —
-instead of each agent writing its own, so a run cannot fail or pass on a check it got wrong.
+**Goal.** Every documentation run checks its cross-document references and sweeps the export for the tenant
+summary's signals the same way, with scripts the run prompt ships — as it already does for the structural checks
+(section 4) and the summary check (section 7) — instead of each agent writing its own, so a run cannot fail, pass
+or miss a finding because of a script it got wrong.
 
 > **Why.** Section 6 of `internal/docs/generate_prompt_template.md` describes six checks in a table and tells the
 > agent to "script them the same way", but ships no script. On the first documentation run with the harmonised
@@ -23,8 +24,16 @@ instead of each agent writing its own, so a run cannot fail or pass on a check i
 > back-reference. The agent corrected its script and the re-run was clean, but the next run writes a new script
 > with new bugs.
 >
+> **Signal sweep (2026-10-02, tenant `cb-gmbh.com`).** Section 7 defines a five-signal sweep over `resources/` in
+> prose and leaves the script to the agent. On that run the agent had to widen the credential-word list itself
+> (it first missed `REMOTEOFFICEAUTHKEY`), the closed rules (a)–(d) miss a credential in a command line (a
+> TeamViewer `APITOKEN=` in `mobileApps` `installCommandLine` — the document redacted it, the summary did not
+> list it), and *Credentials near expiry* picked up update-ring pause expiries, which are not credentials. The
+> agent excluded ISO timestamps and pause dates by hand. The same run's documents and section 6 were clean.
+>
 > **Not regeneration-gated.** The run prompt is not hashed; no document changes. Takes effect at the next
-> `docs generate-prompt`.
+> `docs generate-prompt`. The summary's *configured but unassigned* count for default objects is a separate
+> parked idea (*default objects are not "configured but unassigned"*).
 
 **Plan.**
 
@@ -39,12 +48,30 @@ instead of each agent writing its own, so a run cannot fail or pass on a check i
   re-spliced document carries the block hashes its work-list row names); *nothing else touched* (against
   `chunks/mtimes.json`). The table stays as the explanation; the prose says to run the script and repair what it
   reports.
+- `internal/docs/generate_prompt_template.md` section 7: ship the signal sweep as a script
+  (`"""Section 7 signal sweep. Run from the tenant folder before writing docs/summary.md. Prints each signal with
+  the resources it names."""`) and keep the table as the explanation. Within it:
+  - one credential-word list, stated once and used by rules (a)–(c): `password`, `passwd`, `pwd`, `passphrase`,
+    `secret`, `token` (incl. `apitoken`), `apikey`, and any key containing `key` together with `auth`, `access`,
+    `private` or `shared` (`authkey`, `accesskey`, `privatekey`, `sharedkey`), case-insensitive;
+  - a new rule (e) for command lines: in `installCommandLine` / `uninstallCommandLine` (and any key ending in
+    `CommandLine`), a `NAME=value` or `/name value` pair whose name is a credential word and whose value is
+    credential-shaped;
+  - the credential-shaped test unchanged, plus explicit exclusions: ISO-8601 timestamps and dates are never
+    credential-shaped;
+  - *Credentials near expiry* reads only the expiry fields of credential types (certificates, tokens: e.g.
+    `expirationDateTime`, `tokenExpirationDateTime`) — update-ring `featureUpdatesPauseExpiryDateTime` /
+    `qualityUpdatesPauseExpiryDateTime` and similar pause windows are not credentials and are not reported there.
+  The rule (c) caution (free-text fields only) stays.
 - Tests (`internal/docs/generateprompt_test.go`): the rendered `generate.md` contains the section-6 script, and its
   symmetry check reads group links from the *Target* / *Resource* columns only. Optionally a fixture-based run of
   the script on a tiny synthetic tenant (one policy, one group, one filter, one template) that passes clean and
-  fails on a planted one-sided link.
-- Documentation at *done*: `README.md` *Documentation generation*, item 6 of the agent's steps ("scripted
-  referential verification" names the shipped script); `CHANGELOG.md` `### Changed`.
+  fails on a planted one-sided link. The section-7 sweep script is present, names the credential-word list and
+  rule (e), and (optionally, on a synthetic `resources/` tree) reports an `APITOKEN=` in an `installCommandLine` and
+  an `authkey` plist value while ignoring an ISO timestamp and an update-ring pause expiry.
+- Documentation at *done*: `README.md` *Documentation generation*, items 6 and 7 of the agent's steps (the
+  shipped reference-check and signal-sweep scripts; command-line credentials in the summary); `CHANGELOG.md`
+  `### Changed`.
 
 ## Parked ideas
 
