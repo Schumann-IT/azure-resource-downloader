@@ -8,6 +8,44 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
+## 1. Ship the section-6 reference check as a script in the run prompt
+
+*Kind:* fix
+
+**Goal.** Every documentation run checks its cross-document references the same way, with a script the run
+prompt ships — as it already does for the structural checks (section 4) and the summary check (section 7) —
+instead of each agent writing its own, so a run cannot fail or pass on a check it got wrong.
+
+> **Why.** Section 6 of `internal/docs/generate_prompt_template.md` describes six checks in a table and tells the
+> agent to "script them the same way", but ships no script. On the first documentation run with the harmonised
+> templates (tenant `iis.mitarbeiterangebote-staging.de`, 2026-10-02) the agent's own script first reported a
+> false failure: it counted the filter link in a group's `Targeted by` row (the *Filter* column) as a group
+> back-reference. The agent corrected its script and the re-run was clean, but the next run writes a new script
+> with new bugs.
+>
+> **Not regeneration-gated.** The run prompt is not hashed; no document changes. Takes effect at the next
+> `docs generate-prompt`.
+
+**Plan.**
+
+- `internal/docs/generate_prompt_template.md` section 6: a Python script beside the table, in the same style as
+  sections 4 and 7 (`"""Section 6 reference checks. Run from the tenant folder after section 5. Exit 1 if anything
+  failed."""`), implementing every row of the table: *assignment resolution* (no bare group GUID in a marked
+  block without a resolved name or `⚠️ not in export`); *link symmetry* — policy → group from the assignments
+  table's *Target* column only and group → policy from the `Targeted by` table's *Resource* column only (filter
+  links in the *Filter* column are not group references), and compliance policy ↔ notification template from the
+  `notifications` and `Used by` blocks; *link targets exist* (every relative link inside a marked block resolves
+  under `docs/`); *marker pairs survived* (call the section-4 helper); *hashes updated* (each written or
+  re-spliced document carries the block hashes its work-list row names); *nothing else touched* (against
+  `chunks/mtimes.json`). The table stays as the explanation; the prose says to run the script and repair what it
+  reports.
+- Tests (`internal/docs/generateprompt_test.go`): the rendered `generate.md` contains the section-6 script, and its
+  symmetry check reads group links from the *Target* / *Resource* columns only. Optionally a fixture-based run of
+  the script on a tiny synthetic tenant (one policy, one group, one filter, one template) that passes clean and
+  fails on a planted one-sided link.
+- Documentation at *done*: `README.md` *Documentation generation*, item 6 of the agent's steps ("scripted
+  referential verification" names the shipped script); `CHANGELOG.md` `### Changed`.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
@@ -242,7 +280,7 @@ object's name.
 
 ## Parked ideas — contract
 
-### Idea: resolve Conditional Access targets in the documentation run
+### Idea: resolve group references outside assignments in the documentation run
 
 *Area:* contract · *Impact:* medium · *Effort:* M · *Ships with:* a go/web pair (a new marker class in the browser); the next
 regeneration
@@ -258,6 +296,13 @@ template asks for it with bare GUIDs, like the assignments block); register the 
 is re-spliced once. **Parked** by decision C11 of the 2026-10-02 prompt review: a browser-contract change that should
 not hold up the regeneration batch. **Revisit** when readers ask who a CA policy targets by name, or with the next
 contract change on the web side.
+
+The same gap exists outside Conditional Access: the authentication methods policy targets groups from its own
+settings (`authenticationMethodConfigurations[].includeTargets[].id`, e.g. the X.509 certificate method), which the
+reference map does not cover either. On the 2026-10-02 run of `iis.mitarbeiterangebote-staging.de` that document
+showed a bare GUID for an exported group (`co_developers`), and the group got no document of its own. When picked
+up, collect every non-assignment group reference — CA include/exclude groups and authentication-method include
+targets — through one table of reference paths per type, so a new type with inline group targets is one row.
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 
@@ -278,6 +323,21 @@ on it.
 as versioned in the root `CLAUDE.md`'s contract list.
 
 ## Parked ideas — templates
+
+### Idea: default objects are not "configured but unassigned"
+
+*Area:* templates · *Impact:* low · *Effort:* S · *Ships with:* standalone; takes effect on the next `docs generate-prompt`
+
+The tenant summary's *Assignment posture* (`summary-facts` block, `renderSummaryFacts` in
+`internal/docs/generateprompt_render.go`) counts every resource of an assignment-capable type without targets as
+*configured but unassigned*, and the run report lists them as "policies with no assignments". Built-in default
+objects land there although they are never assigned the way a policy is: the 2026-10-02 run of
+`iis.mitarbeiterangebote-staging.de` listed the *Default Branding profile* (`intuneBrandingProfiles`, applies to
+everyone) and the *Default scope tag* (`roleScopeTags` id `0`, applies to everything). Exclude them by a fact the
+export already records (the branding profile's `isDefaultProfile`, the scope tag's id `0`) — a one-line rule per
+type in the summary facts, plus a run-prompt sentence that defaults are not findings. **Parked** because the signal
+is noise, not wrong data, and readers see the names. **Revisit** when the summary's posture numbers are used for
+reporting, or with the next change to the summary facts.
 
 ### Idea: per-finding severity in document `Security` sections
 
