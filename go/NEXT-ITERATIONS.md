@@ -59,61 +59,124 @@ and lights up the sidebar's per-item context.
 > Settings`; arm `References | Lifecycle and operations | Security | Properties`; credential `References | Expiry
 > and renewal | Lifecycle and operations | Security | Properties`; record `References | Lifecycle and operations |
 > Security | Properties`; group `References | Membership | Usage as assignment target | Lifecycle and operations |
-> Security | Properties`. Every heading is already in the browser's section vocabulary; the paired web entry
-> *Section styling follows the CLI's harmonised heading sets* updates its comment and guards the vocabulary.
+> Security | Properties`. Every heading is one of the eleven the browser already styles (`References`,
+> `Conditions`, `Membership`, `Usage as assignment target`, `Usage and references`, `Expiry and renewal`,
+> `Lifecycle and operations`, `Security`, `Settings`, `Properties`, `Definition`); the browser keys on the text, not
+> the order. Frontmatter: every document the run writes carries `summary: "<one sentence>"` — a double-quoted
+> YAML string on one line, plain text (no Markdown, no links), taken from the summary paragraph; `docs
+> generate-index` already copies it unchanged into `docs/index.yaml` `resources[].summary`, which the browser
+> shows as plain, escaped text and treats absent or empty as "no summary". `data-setting` / `data-note`
+> (`security` | `inert`) keep their meaning in every family, record included.
 >
 > **Regeneration-gated.** Every type's `promptSha256` moves; this entry rides the pending regeneration and is the
 > last before it. The run prompt is not hashed, but no existing document gets `summary:` without regeneration.
 > The run prompt's heading check reads each type's `<!-- doc-headings: … -->` line (`heading_contract`), so the new
-> sets need no hard-coded change there.
+> sets need no hard-coded change there. The other regeneration-gated parked ideas (*per-finding severity in
+> document `Security` sections*, *bootstrap the curated taxonomy from per-document LLM suggestions*) stay out of
+> this batch and wait for the next regeneration; *mask dedicated secret properties* joins one only if it
+> extends the redaction rule.
+>
+> **Owner.** No tracked file outside `go/`. The last bullet writes the git-ignored
+> `Claude outputs/prompt-review-instructions.md` at the repository root (never staged or committed). No
+> sequencing with the web side: the paired web entry hard-codes the same heading sets and ships independently.
 >
 > **Implementer.** opus
 
 **Plan.**
 
-- Section order and presence per the Contract: reorder `internal/handlers/graph/credential_prompt.tmpl`; add
-  *References* (`prompt-references` + `prompt-url-rule`) and *Lifecycle and operations* to `group_prompt.tmpl`;
-  add *Security* (`prompt-change-role` + security-sensitive properties) to `record_prompt.tmpl`; update every
-  `doc-headings` line.
-- One settings-section shape in all eight templates, in this order: document every property; key settings;
-  `<details>` format; `data-setting` / `data-note`; subtype or unfamiliar-property rule; baseline rule; grouping;
-  referenced ids; embedded payloads; only present values, never invent; masked rule; redaction rule. New shared
-  partials in `internal/models/prompt_partials.tmpl`: `prompt-details-attrs` (the `data-setting` / `data-note`
-  rules; the per-template example path stays in the bullet before it or is dropped) and `prompt-complete-rule`
-  ("do not omit … infer its meaning from the Microsoft Graph/ARM schema and say so explicitly"). The baseline,
-  referenced-ids and embedded-payloads partials (all conditional) go into every template.
-- A shared `prompt-lifecycle-rule` in every *Lifecycle and operations* section: use the lifecycle notes listed
-  above, add only what the YAML shows.
-- `record_prompt.tmpl` uses `prompt-redaction-rule`; delete `prompt-redaction-rule-record` and its test.
-- `prompt-related`: drop "cross-reference their YAML directories instead of guessing" — related types are context;
-  references to them follow the referenced-ids rule.
-- `conditional_access_prompt.tmpl`: remove the duplicate "Targeting … belongs in the Conditions section"
-  paragraph before the closed set.
-- One metadata-table wording in every template: "Directly after the summary paragraph, a metadata table stating …".
-- `internal/docs/generate_prompt_template.md`: title "Documentation generation prompt"; the intro says the work list
-  is closed and covers either every resource (a first run, or after a template change) or only what changed, and
-  to document exactly what it names; adjust the other "incremental" passages (the frontmatter rationale, the
-  summary passage) and the `internal/docs/generateprompt.go` doc comments that say "incremental documentation
-  prompt".
-- `internal/docs/generate_prompt_template.md`: require `summary:` in the frontmatter — one sentence, taken from the
-  document's summary paragraph, plain text; Markdown links only, and relative links to sibling documents under
-  `docs/`; the source filename goes into the metadata table, not under the title; the settings-like section reads
-  "`Settings`, `Properties` or `Definition`".
-- Tests: `make -C go golden-update` and review the diff per template family (exported-YAML goldens unchanged);
-  extend `internal/handlers/prompt_rules_test.go` — every registered type's `doc-headings` starts with
-  `References`, places type-specific sections before `Lifecycle and operations`, has `Security` second to last and
-  a settings-like section last; every prompt contains the shared settings partials and the lifecycle rule and no
-  "cross-reference their YAML directories"; a generate-prompt render test checks the neutral title, the `summary:`
-  rule and the "`Settings`, `Properties` or `Definition`" wording, and that the heading check accepts the
-  credential, group and record sets.
+- Section order and presence per the Contract. `internal/handlers/graph/credential_prompt.tmpl`: move *Expiry and
+  renewal* before *Lifecycle and operations*. `group_prompt.tmpl`: add *References* first (`prompt-references` +
+  `prompt-url-rule`; drop the `prompt-url-rule` call from its *Properties* section) and *Lifecycle and
+  operations* after *Usage as assignment target* (`prompt-lifecycle-rule`, plus: what deleting, restoring or
+  converting the group between assigned and dynamic membership means). `record_prompt.tmpl`: add *Security*
+  after *Lifecycle and operations* and move `prompt-change-role` and the exposed-credential call-out there,
+  plus "call out security-sensitive properties". Update the `<!-- doc-headings: … -->` line of credential,
+  group and record; the other five lines stay byte-identical.
+- One settings-section shape in all eight templates (`internal/models/documentation_prompt.tmpl` and the seven
+  `*_prompt.tmpl`), bullets in this order: (1) document every property the section covers (per-template scope
+  sentence: CA "outside `conditions`", group "every remaining property"); (2) `prompt-key-settings` (CA keeps its
+  "entries under `conditions`" bullet right after it); (3) the `<details>` format bullet, per template, ending
+  with its existing example `<details data-setting="…">` path; (4) `prompt-details-attrs`; (5) type-specific bullets
+  (default: the `@odata.type` subtype rule; referenced: the rule/filter-expression bullet); (6)
+  `prompt-complete-rule`; (7) `prompt-baseline-rule`; (8) `prompt-settings-grouping`; (9) `prompt-referenced-ids`;
+  (10) `prompt-embedded-payloads` (default keeps its notification-templates and sidecar-file bullets directly
+  after it); (11) `prompt-present-rule`; (12) `prompt-masked-rule`; (13) `prompt-redaction-rule`.
+- New partials in `internal/models/prompt_partials.tmpl`, each with neutral wording ("the block", "property"):
+  `prompt-details-attrs` — open each block as `<details data-setting="<exact YAML path>">`, the same string the
+  `<summary>` shows, never invented or abbreviated; `data-note="security"` when the property is one called out in
+  the Security section (this includes a value redacted under the redaction rule), `data-note="inert"` when present
+  but without effect because a gating setting is off, otherwise no attribute, no other value.
+  `prompt-complete-rule` — "Do not omit a property this section covers; if one is unfamiliar, infer its meaning
+  from the type's API schema (the schema reference listed above, where given) and say so explicitly."
+  `prompt-present-rule` — "Only describe what is actually present; never invent values." `prompt-lifecycle-rule`
+  — with `.Lifecycle`: build on the lifecycle notes listed above and add only what the YAML itself shows; without:
+  state only what the YAML shows and say that deprecation or migration status is not documented here. Fold
+  `prompt-redaction-lead` into `prompt-redaction-rule` (one partial, rendered text unchanged) and delete
+  `prompt-redaction-rule-record`.
+- `prompt-lifecycle-rule` is the first bullet of every *Lifecycle and operations* section (all eight templates);
+  the type-specific bullets after it stay.
+- `prompt-related`: the lead line becomes "Related resource types exported alongside this one (context only; a
+  reference to one of them follows the referenced-object rule below):" — the "cross-reference their YAML
+  directories instead of guessing" wording goes.
+- `conditional_access_prompt.tmpl`: delete the "Targeting — the users, groups, roles, applications and conditions
+  under `conditions` — belongs in the `Conditions` section; this document has no assignments block." paragraph
+  before the closed set; the intro already says it.
+- One metadata-table wording: credential, group, record, referenced, singleton and arm change "A metadata table
+  stating …" to "Directly after the summary paragraph, a metadata table stating …" (default and CA already do).
+- `internal/docs/generate_prompt_template.md`, run-wide wording: title "# Documentation generation prompt
+  (template)"; the intro replaces "This is an **incremental** run" with: the work list is closed and covers
+  either every resource (a first run, or a run after a template change moved every `promptSha256`) or only
+  what changed — document exactly what it names; the frontmatter passage says "the next run" instead of "the next
+  incremental run"; appendix D says the work list may be only the documents that changed. In
+  `internal/docs/generateprompt.go` the two doc comments say "the documentation prompt" instead of "the
+  incremental documentation prompt".
+- `internal/docs/generate_prompt_template.md`, section 2: the spec paragraph reads "a `Settings`, `Properties` or
+  `Definition` section"; *Headings* drops the "source YAML filename under the title" rule — the summary paragraph
+  sits directly under the title as every spec says, and the source filename becomes a `Source` row of the
+  metadata table; a *Links* rule: Markdown links `[label](url)` only, never a bare URL, and a link to another
+  document is relative and only to a document whose path the run gives you (the work list, the reference maps);
+  *Frontmatter*: the example gains `summary: "…"` after `functionGroup`, and a paragraph requires it — one
+  sentence taken from the document's summary paragraph, plain text without Markdown or links, always a
+  double-quoted YAML string on one line (`\"` for an inner quote), because an unquoted `: ` breaks the whole
+  frontmatter and the document is then regenerated every run.
+- `internal/docs/generate_prompt_template.md`, section 4: the *Frontmatter* row of the checks table adds "and a
+  non-empty one-line double-quoted `summary`"; the Python check, in the frontmatter branch, fails a work-list
+  document with "frontmatter missing summary" when there is no `^summary:` line, and with "frontmatter summary
+  not a non-empty double-quoted line" when the value is not `"…"` with non-empty content or contains a Markdown
+  link or backticks. Only work-list documents are checked, so documents retained from older runs are not failed.
+- Tests, `internal/handlers/prompt_rules_test.go` (every registered type): parse the `doc-headings` line —
+  first `References`; last one of `Settings`/`Properties`/`Definition`; second to last `Security`; third to last
+  `Lifecycle and operations`; every heading in a Go list of the eleven headings named in the Contract (the
+  browser's vocabulary, copied, not imported). Every prompt contains the `prompt-details-attrs`,
+  `prompt-complete-rule`, `prompt-present-rule`, masked and redaction texts, exactly one of the two baseline-rule
+  variants, and the `prompt-lifecycle-rule` text; none contains "cross-reference their YAML directories" or
+  "(a record has no Security section)".
+- Tests, intended assertion changes (planned, not weakened): `internal/models/documentation_test.go` —
+  `promptPartialNames` drops `prompt-redaction-lead` and `prompt-redaction-rule-record` and adds the four new
+  partials; a lifecycle-rule case with and without `Lifecycle`. `internal/handlers/graph/prompt_templates_test.go`
+  — `TestRecordPromptTemplateRedaction` becomes a record *Security* test (asserts "call it out in the **Security**
+  section", the standard `data-note` wording and the record heading set; asserts the Lifecycle-section wording is
+  gone); `TestConditionalAccessPromptTemplate` replaces "belongs in the `Conditions` section" with the intro's
+  "its targeting is documented in the `Conditions` section" and asserts "Targeting — the users" is absent;
+  `TestGroupPromptTemplateHeader` also asserts "References:" and "Lifecycle and operations:" and the group heading
+  set; a credential test asserts its heading set.
+- Tests, run prompt: in `internal/docs/generateprompt_test.go` a test over `DefaultGeneratePromptTemplate()`
+  asserts the "# Documentation generation prompt" title, no "This is an **incremental** run", the `summary:`
+  requirement and its double-quote rule, the "`Settings`, `Properties` or `Definition`" wording, the bare-URL
+  ban and the section-4 "frontmatter missing summary" check; `TestParseFrontmatter` gains a case where
+  `summary: "Enforces X: requires Y"` parses into `Summary`.
+- Goldens: `make -C go golden-update`, then review the diff per template family — only the 53
+  `prompts/<type>/doc-prompt.md` files change, the exported-YAML goldens stay byte-identical; `make -C go test`.
 - Documentation at *done*: `README.md` (the template-family table and the closed-H2 contract with the new sets, the
   run prompt described as full or incremental, the `summary:` frontmatter field written by the agent);
   `CHANGELOG.md` `### Changed` (consistent templates, the run prompt) and `### Added` (`summary:`, noting that it
   and `platformGroup` / `functionGroup` appear on the next regeneration), with **regenerate the documentation** in
   bold.
-- Last, after every other bullet: write the Claude Cowork review brief `Claude outputs/prompt-review-instructions.md`
-  (git-ignored, never committed — input for a later Cowork session, not repository documentation). It tells
-  Cowork to read the eight `*_prompt.tmpl` templates, `internal/models/prompt_partials.tmpl`, the run prompt
+- Last, after every other bullet: write the Claude Cowork review brief
+  `Claude outputs/prompt-review-instructions.md` at the repository root (git-ignored, never committed — input for
+  a later Cowork session, not repository documentation). It tells Cowork to read the eight templates
+  (`internal/models/documentation_prompt.tmpl` and the seven `*_prompt.tmpl`),
+  `internal/models/prompt_partials.tmpl`, the run prompt
   `internal/docs/generate_prompt_template.md` and the 53 assembled prompts under
   `go/internal/pipeline/testdata/golden/prompts/<type>/doc-prompt.md` (byte-for-byte what an export's
   `resources/<type>/doc-prompt.md` holds, without customer data — nothing under `output/` is read or uploaded);
