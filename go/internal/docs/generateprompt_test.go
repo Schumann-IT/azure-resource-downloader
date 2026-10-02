@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1355,6 +1356,11 @@ const (
 	plantedAPIToken = "Xk9#mQ2vLp7zRt"
 	plantedAuthKey  = "Rk7!pW3nZq9Lm2"
 	danglingGroupID = "99999999-9999-4999-8999-999999999999"
+
+	plantedQuotedArg = "Xy9!kLm2pQ"
+	plantedWifiKey   = "Zt5@bN8cYh3d"
+	plantedNote      = "Hn4$vT8wQe1x"
+	plantedOMA       = "Qw3$eR6tYu9i"
 )
 
 // writeResourceYAML writes a resource the way the pipeline does
@@ -1397,6 +1403,7 @@ func TestSectionSevenSignalSweep(t *testing.T) {
 				AssignmentTargets: []interface{}{allUsersTarget(), groupTarget(danglingGroupID)}},
 			configType + "/ios_custom.yaml":  {ResourceId: "ios", DisplayName: "iOS custom", PresentInTenant: true, AssignmentTargets: []interface{}{allUsersTarget()}},
 			configType + "/update_ring.yaml": {ResourceId: "ring", DisplayName: "Update ring", PresentInTenant: true},
+			configType + "/wifi.yaml":        {ResourceId: "wifi", DisplayName: "Wi-Fi", PresentInTenant: true, AssignmentTargets: []interface{}{allUsersTarget()}},
 			groupsType + "/m365.yaml":        {ResourceId: "grp", DisplayName: "M365 group", PresentInTenant: true},
 			vppType + "/vpp.yaml":            {ResourceId: "vpp", DisplayName: "VPP", PresentInTenant: true},
 		},
@@ -1410,6 +1417,7 @@ func TestSectionSevenSignalSweep(t *testing.T) {
 		"displayName":          "Agent",
 		"installCommandLine":   "setup.exe /quiet APITOKEN=" + plantedAPIToken,
 		"uninstallCommandLine": "msiexec /x {11111111-2222-3333-4444-555555555555} /quiet",
+		"repairCommandLine":    "msiexec /qn \"PASSWORD=" + plantedQuotedArg + "\"",
 	})
 	writeResourceYAML(t, resourcesDir, configType+"/ios_custom.yaml", map[string]interface{}{
 		"@odata.type":     "#microsoft.graph.iosCustomConfiguration",
@@ -1425,6 +1433,18 @@ func TestSectionSevenSignalSweep(t *testing.T) {
 		"displayName":                       "Update ring",
 		"featureUpdatesPauseExpiryDateTime": "2026-10-20T00:00:00Z",
 		"qualityUpdatesPauseExpiryDateTime": "2026-11-01T00:00:00Z",
+	})
+	writeResourceYAML(t, resourcesDir, configType+"/wifi.yaml", map[string]interface{}{
+		"@odata.type":  "#microsoft.graph.windows10CustomConfiguration",
+		"displayName":  "Wi-Fi",
+		"state":        "disabled",
+		"wifiPassword": plantedWifiKey,
+		"description":  "Setup note password: " + plantedNote,
+		"accessToken":  "2026-10-20T00:00:00Z",
+		"omaSettings": []interface{}{
+			map[string]interface{}{"omaUri": "./Device/Vendor/MSFT/A", "isEncrypted": true, "value": plantedOMA},
+			map[string]interface{}{"omaUri": "./Device/Vendor/MSFT/B", "isEncrypted": true, "value": "*****"},
+		},
 	})
 	writeResourceYAML(t, resourcesDir, groupsType+"/m365.yaml", map[string]interface{}{
 		"displayName":        "M365 group",
@@ -1453,6 +1473,11 @@ func TestSectionSevenSignalSweep(t *testing.T) {
 	}
 	for _, want := range []string{
 		"resources/" + appsType + "/agent.yaml  rule (e)  installCommandLine argument APITOKEN",
+		"resources/" + appsType + "/agent.yaml  rule (e)  repairCommandLine argument PASSWORD",
+		"resources/" + configType + "/wifi.yaml  state: disabled",
+		"resources/" + configType + "/wifi.yaml  rule (b)  wifiPassword  value length " + strconv.Itoa(len(plantedWifiKey)),
+		"resources/" + configType + "/wifi.yaml  rule (c)  description after 'password'  value length " + strconv.Itoa(len(plantedNote)),
+		"resources/" + configType + "/wifi.yaml  rule (d)  omaSettings[0].value  value length " + strconv.Itoa(len(plantedOMA)),
 		"resources/" + configType + "/ios_custom.yaml  rule (a)  payload plist key RemoteOfficeAuthKey",
 		"resources/" + configType + "/ios_custom.mobileconfig  rule (a)  plist key RemoteOfficeAuthKey",
 		"resources/" + vppType + "/vpp.yaml  expirationDateTime 2026-12-15T00:00:00Z  74 day(s) left",
@@ -1471,6 +1496,12 @@ func TestSectionSevenSignalSweep(t *testing.T) {
 		"uninstallCommandLine",
 		plantedAPIToken,
 		plantedAuthKey,
+		plantedQuotedArg,
+		plantedWifiKey,
+		plantedNote,
+		plantedOMA,
+		"omaSettings[1]",
+		"accessToken",
 	} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("sweep output must not contain %q:\n%s", unwanted, out)

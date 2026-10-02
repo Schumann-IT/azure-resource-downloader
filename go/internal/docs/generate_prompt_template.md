@@ -1353,7 +1353,8 @@ def when(v):
 
 def command_arguments(line):
     """(name, value) for NAME=value, /NAME:value, /NAME value and -NAME value arguments, quotes stripped."""
-    tokens, out = ARG_TOKEN.findall(line), []
+    tokens = [t[1:-1] if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" else t for t in ARG_TOKEN.findall(line)]
+    tokens, out = [t for t in tokens if t], []
     for i, tok in enumerate(tokens):
         m = re.match(r"^[/-]{0,2}([A-Za-z_][\w.\-]*)=(.*)$", tok) or re.match(r"^/([A-Za-z_][\w.\-]*):(.+)$", tok)
         if m:
