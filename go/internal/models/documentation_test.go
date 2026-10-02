@@ -35,7 +35,7 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"- An H1 title set to the resource's display name.",
 		"a short summary paragraph",
 		"a metadata table stating the resource type",
-		"a table of any assignments/targeting present",
+		"Then the assignments table, alone between a `<!-- assignments:start -->` line",
 		"Then the following H2 sections, unnumbered, in this order:",
 		"References:\n",
 		"Lifecycle and operations:\n",
@@ -46,7 +46,11 @@ func TestBuildDocumentationPromptAlwaysPresent(t *testing.T) {
 		"- document EVERY setting/property present in the YAML.",
 		"collapsible HTML `<details>` block, collapsed by default",
 		"externally decoded sidecar file",
-		"group names are NOT resolved",
+		"Never write a group name yourself",
+		"Never reprint a secret.",
+		"`omaSettings` entry with `isEncrypted: true`",
+		"never mention this prompt, the documentation run, splicing or markers",
+		"the owning setting's path, a `#` and the key's path inside the payload",
 		"never invent values",
 		"masked or redacted",
 		"credential-shaped",
@@ -76,7 +80,7 @@ func TestBuildDocumentationPromptOptionalFields(t *testing.T) {
 				"- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				"- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/schema",
 				"- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference",
-				"- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
+				"- Microsoft guidance: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
 				"Related resource types exported alongside this one",
 				"- Microsoft.Graph/groups (assignment target groups)",
 				"This resource carries embedded or encoded payloads: omaSettings (custom OMA-URI values)",
@@ -179,8 +183,8 @@ var promptPartialNames = []string{
 	"prompt-related", "prompt-header", "prompt-key-settings", "prompt-embedded-payloads",
 	"prompt-assignments", "prompt-purpose-rule", "prompt-references", "prompt-url-rule",
 	"prompt-baseline-rule", "prompt-change-role", "prompt-referenced-ids", "prompt-settings-grouping",
-	"prompt-masked-rule", "prompt-redaction-lead", "prompt-redaction-rule", "prompt-redaction-rule-record",
-	"prompt-closed-set",
+	"prompt-masked-rule", "prompt-redaction-rule", "prompt-details-attrs", "prompt-complete-rule",
+	"prompt-present-rule", "prompt-lifecycle-rule", "prompt-closed-set",
 }
 
 func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
@@ -207,12 +211,17 @@ func TestBuildDocumentationPromptOverrideCallsEveryPartial(t *testing.T) {
 				"- API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-deviceconfiguration?view=graph-rest-beta",
 				"- Schema reference: https://learn.microsoft.com/en-us/graph/api/resources/schema",
 				"- Required permissions: https://learn.microsoft.com/en-us/graph/permissions-reference",
-				"- Best-practice baseline: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
+				"- Microsoft guidance: https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines",
 				"Related resource types exported alongside this one",
 				"- give particular attention to: omaSettings, encrypted values.",
 				"- Use real, verifiable URLs;",
 				"- Where a value is masked or redacted by the service",
 				"**credential-shaped**",
+				"call it out in the **Security** section as an exposed credential to rotate",
+				"- Open each block as `<details data-setting=\"<exact YAML path>\">`",
+				"- Do not omit a property this section covers;",
+				"- Only describe what is actually present; never invent values.",
+				"- Build on the lifecycle notes listed above",
 				"These H2 headings are a closed set and a machine contract",
 			},
 		},
@@ -327,7 +336,7 @@ func TestPromptLinksPartialBytePinned(t *testing.T) {
 		"\n- Schema reference: " + doc.Links.SchemaReference +
 		"\n- Required permissions: " + doc.Links.Permissions +
 		"\n- Admin center: " + doc.Links.AdminCenter +
-		"\n- Best-practice baseline: " + doc.Links.BestPractices[0]
+		"\n- Microsoft guidance: " + doc.Links.BestPractices[0]
 	want += "\n\n" + DocumentationGroupsMarker()
 	if got != want {
 		t.Errorf("prompt-links = %q, want %q", got, want)
@@ -372,6 +381,41 @@ func TestPromptClosedSetAssignmentsPointer(t *testing.T) {
 	}
 }
 
+// TestPromptLifecycleRule verifies the lifecycle rule builds on the curated
+// lifecycle notes when the type has them (stating only the ones that apply),
+// and otherwise confines the section to what the YAML shows and states that
+// deprecation status is not documented; either way, points that don't apply are
+// skipped and a point the notes and the YAML don't support is reported as not
+// documented rather than filled in.
+func TestPromptLifecycleRule(t *testing.T) {
+	const (
+		coverRule    = "- Of the points below, skip those that don't apply to this resource and cover the others only as far as the lifecycle notes or the YAML support them; say once which of them are not documented here — never fill one in from general knowledge."
+		withNotes    = "- Build on the lifecycle notes listed above and add only what the YAML itself shows.\n- Of those notes, state the ones that apply to this resource (given its subtype, platform and settings) and leave out the ones that don't.\n" + coverRule
+		withoutNotes = "- State only what the YAML itself shows, and say that deprecation or migration status is not documented here.\n" + coverRule
+	)
+	tests := []struct {
+		name      string
+		lifecycle []string
+		present   string
+		absent    string
+	}{
+		{name: "with lifecycle notes", lifecycle: []string{"Superseded by the Settings Catalog."}, present: withNotes, absent: withoutNotes},
+		{name: "without lifecycle notes", present: withoutNotes, absent: withNotes},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := ResourceDocumentation{AzureType: "Microsoft.Test/things", Lifecycle: tt.lifecycle}
+			runPromptAssertions(t, BuildDocumentationPrompt(doc), []string{"Lifecycle and operations:\n" + tt.present}, []string{tt.absent})
+
+			doc.Template = `{{ template "prompt-lifecycle-rule" . }}`
+			want := tt.present + "\n\n" + DocumentationGroupsMarker()
+			if got := BuildDocumentationPrompt(doc); got != want {
+				t.Errorf("prompt-lifecycle-rule = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // TestPromptEvidenceRules verifies the evidence-bound partials: the URL rule
 // forbids guessed links, a recommended value is tied to a listed baseline (or
 // ruled out when none is listed), and the embedded-payload line decodes only
@@ -386,20 +430,20 @@ func TestPromptEvidenceRules(t *testing.T) {
 		{
 			name:    "URL rule gives no link rather than a guessed one",
 			mutate:  func(*ResourceDocumentation) {},
-			present: []string{"otherwise give it no link — never a guessed or merely nearby URL"},
+			present: []string{"otherwise give it no link — never a recalled, guessed or merely nearby URL"},
 			absent:  []string{"approximate"},
 		},
 		{
 			name:    "baseline listed",
 			mutate:  func(*ResourceDocumentation) {},
-			present: []string{"only where a best-practice baseline listed above covers the setting"},
-			absent:  []string{"No best-practice baseline is listed for this type"},
+			present: []string{"only where a Microsoft guidance page listed above states one for the setting"},
+			absent:  []string{"No Microsoft guidance is listed for this type"},
 		},
 		{
 			name:    "no baseline listed",
 			mutate:  func(d *ResourceDocumentation) { d.Links.BestPractices = nil },
-			present: []string{"No best-practice baseline is listed for this type"},
-			absent:  []string{"only where a best-practice baseline listed above covers the setting"},
+			present: []string{"No Microsoft guidance is listed for this type"},
+			absent:  []string{"only where a Microsoft guidance page listed above states one for the setting"},
 		},
 		{
 			name:   "embedded payloads decoded only when text",

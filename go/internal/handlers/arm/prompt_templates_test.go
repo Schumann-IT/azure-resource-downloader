@@ -36,7 +36,7 @@ func TestArmPromptTemplateOverride(t *testing.T) {
 					t.Errorf("prompt missing %q", want)
 				}
 			}
-			if strings.Contains(prompt, "a table of any assignments/targeting present") {
+			if strings.Contains(prompt, "Then the assignments table, alone between a `<!-- assignments:start -->` line") {
 				t.Error("prompt unexpectedly contains default-template assignments text")
 			}
 			if !strings.Contains(models.DefaultDocumentationPromptTemplate(), `template "prompt-assignments"`) {

@@ -36,6 +36,10 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 			Lifecycle: []string{
 				"Deprecated templates move here: the macOS Endpoint protection and Extensions templates (2408) and the Windows Administrative Templates (2412) are configured in the Settings Catalog.",
 				"Setting a value back to Not configured leaves the device value in place but stops enforcing it; when a new security baseline version ships, profiles on an older version become read-only until updated.",
+				"Configuration policies of every type have equal precedence: if another configuration policy (settings catalog, endpoint security, baseline or template) sets the same setting differently, it shows as Conflict and may not apply until an admin resolves it; Defender Antivirus exclusions merge instead.",
+				"Windows settings are user- or device-scoped: a device-scoped setting assigned to a user group applies to all users of each device that user signs in to, a user-scoped setting assigned to a device group applies to every user of that device, and a setting assigned in both scopes takes the user-scope value.",
+				"Each policy, endpoint security policies and security baselines included, reports device and user check-in status (Succeeded, Error, Conflict, Pending, Not applicable) and per-setting status; Devices > Monitor > Assignment failures lists policies that failed with an error or conflict.",
+				"Settings Catalog policies and security baselines can be created and changed with at least the Intune Policy and Profile Manager role.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/reusablePolicySettings (referenced by ID)",
@@ -57,6 +61,7 @@ func NewDeviceManagementConfigurationPolicyHandler(credential azcore.TokenCreden
 				SchemaReference: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfigv2-devicemanagementconfigurationsettingdefinition?view=graph-rest-beta",
 				AdminCenter:     "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMenu/~/configuration",
 			},
+			SubtypeNote: "Endpoint Privilege Management policies (elevation settings and elevation rules policies) need EPM licensed in the tenant, and elevation rules take effect only on devices that also receive an elevation settings policy that enables EPM. Policies whose technologies include microsoftSense (the Defender for Endpoint SENSE agent channel) also apply to devices that Defender for Endpoint security settings management manages without Intune enrollment; those devices accept device-group assignments only and ignore assignment filters.",
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {
 			var ids []string

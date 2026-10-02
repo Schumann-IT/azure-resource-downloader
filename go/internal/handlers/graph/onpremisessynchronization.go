@@ -36,12 +36,18 @@ func NewOnPremisesSynchronizationHandler(credential azcore.TokenCredential) (*Gr
 			RequiredPermissions: []string{"OnPremDirectorySynchronization.Read.All"},
 			Lifecycle: []string{
 				"Features and configuration can also be changed in the cloud through Microsoft Graph (PATCH /directory/onPremisesSynchronization/{id}); synchronizeUpnForManagedUsers can't be disabled once enabled.",
+				"While features.blockSoftMatchEnabled is on, newly hybrid-joined devices fail to soft-match their synchronized computer objects (InvalidSoftMatch error); the flag has to be turned off temporarily for those joins to proceed.",
+				"features.passwordWritebackEnabled isn't in use and can't be updated (password writeback is set up in Microsoft Entra Connect), and user writeback isn't currently supported.",
+				"Quarantined duplicate UPN or proxy address conflicts are reported only once, in the Identity Synchronization Error Report email to the tenant's technical notification contact; open conflicts show in the Microsoft 365 admin center (users only) and through Microsoft Entra PowerShell.",
 				"Reading it with delegated permissions requires the Global Administrator role (the only supported role).",
 			},
 			RelatedTypes: []string{"Microsoft.Graph/organization (same tenant; onPremisesSyncEnabled)"},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/onpremisesdirectorysynchronization?view=graph-rest-1.0",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/onpremisesdirectorysynchronization-get?view=graph-rest-1.0",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-syncservice-features",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

@@ -8,42 +8,6 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## 1. Run-prompt fixes and the `summary:` frontmatter line
-
-*Kind:* feat
-
-**Goal.** The run prompt (`docs/generate.md`) agrees with the type templates, asks for the one frontmatter field the
-browser is still missing, and fixes link formatting — so the scheduled regeneration also lights up the sidebar's
-per-item context.
-
-> Promoted from the parked idea *emit `summary:` in the generated document frontmatter*: the plumbing is complete
-> on both sides (`docFrontmatter.Summary`, `GenerateIndex`, the browser's per-item context), the field is absent
-> from every document only because the template never asks for it, and the web idea *a name filter and per-item
-> context in the sidebar* waits on it. `platformGroup` / `functionGroup`, already required but empty in the
-> reference exports that predate them, fill in on the same regeneration.
->
-> **Review findings (2026-10-01).** `generate_prompt_template.md:151-154` puts the source filename under the title
-> while every type template puts the summary there (only 201 of 263 documents carry the line);
-> `:143-145` says "a `Properties` or `Settings` section", forgetting `Definition`; documents mix bare URLs (~2800)
-> and Markdown links (~1400) and do not link sibling documents.
->
-> **Regeneration-gated in effect.** `generate_prompt_template.md` is not hashed, but no existing document gets the
-> new frontmatter without regeneration. The per-handler metadata and the template content fixes with the
-> Conditional Access template have shipped; this entry is the last before the one regeneration.
->
-> **Implementer.** sonnet
-
-**Plan.**
-
-- `internal/docs/generate_prompt_template.md`: require `summary:` in the frontmatter — one sentence, taken from the
-  document's summary paragraph, plain text; Markdown links only, and relative links to sibling documents under
-  `docs/`; the source filename goes into the metadata table, not under the title; the settings-like section reads
-  "`Settings`, `Properties` or `Definition`"; the Python heading check includes the Conditional Access heading set.
-- Tests: the rendered `generate.md` contains the `summary:` rule and the CA heading set (existing generate-prompt
-  render tests).
-- Documentation at *done*: `README.md` (frontmatter fields written by the agent); `CHANGELOG.md` `### Added`
-  (`summary:`), noting that it and `platformGroup` / `functionGroup` appear on the next regeneration.
-
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
@@ -56,11 +20,11 @@ branch), L (several branches or a design change).
 
 **Ships together.**
 
-1. **The pre-regeneration batch** (scheduled; the shared prompt partials, the per-handler metadata and the
-   template content fixes with the CA template — paired with web *Style the Conditional Access `Conditions`
-   section* — already shipped): *run-prompt fixes and `summary:`* is the last one, then one documentation
-   regeneration for all of them. The two regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*)
-   did not join it and wait for the next regeneration.
+1. **The pre-regeneration batch** has shipped: the shared prompt partials, the per-handler metadata, the template
+   content fixes with the CA template (paired with web *Style the Conditional Access `Conditions` section*) and the
+   consistent templates with the 2026-10-02 prompt review. What is left is one documentation regeneration of every
+   tenant. The two regen-gated ideas here (*per-finding severity*, *taxonomy bootstrap*) did not join it and wait
+   for the next regeneration.
 2. **The compare track** (cross-project, must): *`resource compare`* ships with web *Move the compare
    normalisation to the CLI*; web *manual pairing* and *one-sided resource* follow on the CLI's rule; *version the
    drift observation* rides the first drift contract change.
@@ -71,6 +35,34 @@ branch), L (several branches or a design change).
    redaction rule instead of masking.
 
 ## Parked ideas — export & metadata
+
+### Idea: ARM values as plain data with their REST names
+
+*Area:* export & metadata · *Impact:* medium · *Effort:* S · *Ships with:* a re-baseline (every storage account and VM changes
+once)
+
+The ARM transforms put Azure SDK structs straight into the property map (`armstorage.NetworkRuleSet` and
+`Encryption`, `armcompute.OSDisk` and `ImageReference`), so yaml.v3 writes untagged fields under lowercased Go
+names and nil pointers as `null`: the export reads `properties.encryption.keysource`,
+`properties.networkRuleSet.defaultaction`, `storageProfile.osDisk.deleteoption` instead of the REST names, and drift
+deltas print pointer addresses. Round-trip each struct through `encoding/json` into a `map[string]any` (the SDK's
+json tags carry the REST names and `omitempty`) in `internal/handlers/arm/storageaccount.go` and `virtualmachine.go`;
+add a test asserting `keySource`, `defaultAction` and `deleteOption`, and an ARM golden YAML. Effect: ARM YAML keys
+change once, so drift reports every storage account and VM as changed — **re-baseline with `resource download` right
+after shipping**. **Parked** because it needs that re-baseline (code follow-up CF2 of the 2026-10-02 prompt review;
+also the Go review's G2). **Revisit** with the next planned re-download.
+
+### Idea: Edge for Windows settings in targeted managed app configurations
+
+*Area:* export & metadata · *Impact:* low · *Effort:* S · *Ships with:* standalone; a re-baseline if the YAML grows
+
+Learn builds the Windows (Microsoft Edge) managed-apps configuration in the settings catalog, and Graph models those
+settings as the `settings` relationship of `targetedManagedAppConfiguration`, which a plain GET does not return; the
+handler (`internal/handlers/graph/targetedmanagedappconfiguration.go`) expands only `apps`. Check with a tenant that has
+an Edge for Windows managed-apps configuration; if the settings are missing, add `settings` to the `$expand` (or page
+`/settings`) and a KeySettings note. Effect: those policies' YAML grows once. **Parked** because it needs a tenant with
+such a configuration to confirm (code follow-up CF4 of the 2026-10-02 prompt review). **Revisit** when one is
+available.
 
 ### Idea: export the tenant `deviceManagement.settings`
 
@@ -120,6 +112,8 @@ to "dedicated secret properties (passwords, tokens)" — that moves every `promp
 Effect: YAML changes only where a secret was present. **Parked** because it needs one export from a tenant with VPP
 tokens and a macOS ADE profile that creates a local admin account to confirm. **Revisit** when such a tenant is
 available, or at once if any of the three properties appears in an export.
+The prompt half is covered by the 2026-10-02 prompt review (rule T1 in go entry 1: documents never reprint values
+under credential-named keys); this idea is now the export half only — masking before the value reaches disk.
 
 ### Idea: Intune branding images as content summaries
 
@@ -247,6 +241,23 @@ The comparison reads names from `metadata.yaml`; the exported YAML keeps ids as 
 object's name.
 
 ## Parked ideas — contract
+
+### Idea: resolve Conditional Access targets in the documentation run
+
+*Area:* contract · *Impact:* medium · *Effort:* M · *Ships with:* a go/web pair (a new marker class in the browser); the next
+regeneration
+
+The CA template keeps group, role and application GUIDs bare "unless the documentation run resolves it for you in a
+block it splices in", but the run has no CA splice: `docs generate-prompt` builds the referenced groups and the
+reference map from `assignments[].target.groupId` only, so a group used only by Conditional Access gets no document
+and every CA document shows bare GUIDs. Collect `conditions.users.includeGroups` / `excludeGroups` into the
+referenced groups and the reference map (`internal/docs/generateprompt.go`); give CA documents a forward hash and a
+`<!-- ca-targets:start -->` block rendered by the run as `Direction | Kind | Target` at the end of *Conditions* (the
+template asks for it with bare GUIDs, like the assignments block); register the marker class in
+`web/src/docs/section-hooks.ts` (`MARKER_BLOCK_CLASSES`). Effect: new documents for CA-only groups; every CA document
+is re-spliced once. **Parked** by decision C11 of the 2026-10-02 prompt review: a browser-contract change that should
+not hold up the regeneration batch. **Revisit** when readers ask who a CA policy targets by name, or with the next
+contract change on the web side.
 
 ### Idea: version the drift observation, and name `drift/` a Go → web contract
 

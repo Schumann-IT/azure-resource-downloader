@@ -15,37 +15,36 @@ References:
 {{ template "prompt-url-rule" . }}
 
 Conditions:
-- start with a table `Condition | Include | Exclude`, one row per `conditions.*` dimension present in the YAML — users, groups, roles, guests or external users, applications / user actions / authentication contexts, platforms, locations, client app types, device filter, sign-in risk, user risk, service-principal risk, authentication flows — and no row for a dimension that is absent or empty.
+- start with a table `Condition | Include | Exclude`, one row per `conditions.*` dimension present in the YAML — users, groups, roles, guests or external users, applications / user actions / authentication contexts, client applications (workload identities), platforms, locations, client app types, device filter, sign-in risk, user risk, insider risk, service-principal risk, authentication flows — and no row for a dimension that is absent or empty.
 - write well-known values (`All`, `None`, `GuestsOrExternalUsers`, `Office365`, `AllTrusted` and the like) verbatim. Write every GUID bare unless the documentation run resolves it for you in a block it splices in; never name a role, application, named location or authentication strength from memory.
 - explain a device filter (`conditions.devices.deviceFilter`) clause by clause in plain language, together with its include/exclude mode.
 - follow the table with a short prose statement of who and what is in scope of this policy, and who and what is excluded.
 - this section holds targeting prose and tables only — no `<details data-setting>` blocks; the `conditions.*` properties are documented here, not in `Settings`.
 
 Lifecycle and operations:
-- document operational guidance: what the policy's `state` means in operation (report-only policies are evaluated and logged but not enforced), and what happens when the policy is disabled or deleted.
+{{ template "prompt-lifecycle-rule" . }}
+- cover what the policy's `state` means in operation (report-only policies are evaluated and logged but not enforced) and what happens when the policy is disabled or deleted.
 
 Security:
 {{ template "prompt-change-role" . }}
 - state whether the policy is report-only or enforced, from `state`.
 - state whether any user or group is excluded — without claiming that an exclusion is an emergency-access (break-glass) account.
-- call out the grant and session controls that strengthen or weaken access,{{ if .Links.BestPractices }} and any deviations from the best-practice baselines listed above{{ end }}.
+- call out the grant and session controls that strengthen or weaken access,{{ if .Links.BestPractices }} and any deviations from a value that a Microsoft guidance page listed above recommends{{ end }}.
 
 Settings:
 - document EVERY property present in the YAML outside `conditions` (`state`, `grantControls`, `sessionControls`, the timestamps and the rest).
 {{- template "prompt-key-settings" . }}
 - entries of that list under `conditions` are covered in the Conditions section — no `<details data-setting>` block for them here.
-- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link.
+- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its configured value; the expanded body documents what the property does and, under the URL rule, a reference link — e.g. `<details data-setting="grantControls.builtInControls">`.
+{{ template "prompt-details-attrs" . }}
+{{ template "prompt-complete-rule" . }}
 {{ template "prompt-baseline-rule" . }}
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="grantControls.builtInControls">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="security"` when the property is one you called out in the Security section, or `data-note="inert"` when it is present but has no effect because a gating setting is off. Omit the attribute otherwise. Use no other value.
-- Do not omit any property outside `conditions`; if a property is unfamiliar, infer its meaning from the Microsoft Graph schema and say so explicitly.
 {{ template "prompt-settings-grouping" . }}
 {{ template "prompt-referenced-ids" . }}
-- Only describe settings that are actually present; never invent values.
+{{- template "prompt-embedded-payloads" . }}
+{{ template "prompt-present-rule" . }}
 {{ template "prompt-masked-rule" . }}
 {{ template "prompt-redaction-rule" . }}
-
-Targeting — the users, groups, roles, applications and conditions under `conditions` — belongs in the `Conditions` section; this document has no assignments block.
 
 {{ template "prompt-closed-set" . }}
 

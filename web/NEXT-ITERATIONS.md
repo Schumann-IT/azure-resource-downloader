@@ -8,6 +8,51 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/web/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
+## 1. Per-item context in the sidebar
+
+*Kind:* feat
+
+**Goal.** A reader sees what each document in the sidebar is about without opening it: every tree item whose
+document carries a one-sentence summary shows it as a short second line under its name, so two similarly named
+policies can be told apart at a glance. Items whose document has no summary yet look exactly as they do today.
+
+> **Why now.** The data path is complete: `docs generate-index` copies each document's frontmatter `summary` into
+> `docs/index.yaml`, and `buildNavigation()` (`src/docs/tenant-index.ts`) already fills `NavItem.summary`, which
+> the listing fallback (`views/tenant.hbs`) renders — only `views/partials/sidebar-tree.hbs` draws nothing. The
+> field was empty (0 of 263 and 0 of 148 resources) because the run prompt never asked for it; the go entry
+> *Consistent prompt templates, run-prompt fixes and the `summary:` frontmatter line* makes it required, so it fills
+> on the next regeneration.
+>
+> **Reconciled.** The parked idea assumed the compare pages share the tree partial; they have no sidebar (README,
+> *Sidebar navigation*), so the tree is drawn only through `views/partials/sidebar.hbs` on the document, resource,
+> drift and tenant pages. The `NavItem.note` comment still mentions a compare tree and is corrected here.
+>
+> **Contract.** The browser reads `resources[].summary` from `docs/index.yaml`: one line of plain text, absent or
+> empty meaning no second line. No CLI change.
+>
+> **Decision.** Badges in the tree: summary only for now; badges are the parked idea *Badges in the sidebar tree*.
+>
+> **Owner.** none — every file is under `web/`. Sequencing: ships with or after the prompt-consistency pair;
+> harmless before the regeneration. Not regeneration-gated (the browser moves no hash).
+>
+> **Implementer.** sonnet
+
+**Plan.**
+
+- `views/partials/sidebar-tree.hbs`: under each item's label render `{{this.summary}}` (escaped) as a second line,
+  only when it is non-empty — small and muted like the item `note`, clamped to two lines, full text in `title`; it
+  stays inside the item's `<a>`, so the item remains one link and no anchor is nested.
+- `src/styles.css` (or Tailwind utilities in the partial — `line-clamp-2` ships with v4): the clamp, a dark
+  variant, and a summary that stays readable on the active item's highlighted background; the existing
+  `:focus-visible` outline is unchanged.
+- `src/docs/tenant-index.ts`: correct the `NavItem.note` comment (no compare tree exists).
+- Tests: `test/docs.e2e.spec.ts` (via `sidebarOf()`) — a resource whose index entry has a `summary` shows it in
+  the sidebar; one without adds no second line; a summary containing `<b>` is escaped; the filter, `exempt` and
+  *pending* behaviour are unchanged. `test/styles-build.spec.ts`: the clamp rule survives the build.
+- Documentation at *done*: `README.md` *Sidebar navigation* (each item shows the document's one-line summary when
+  the index carries one); `CHANGELOG.md` `### Added` (Views and navigation), noting the summaries appear once the
+  documentation is regenerated with the current CLI.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
@@ -20,10 +65,10 @@ branch), L (several branches or a design change).
 
 **Ships together.**
 
-1. **The pre-regeneration batch**: *Style the Conditional Access `Conditions` section* and go *Template content
-   fixes and a Conditional Access template* have shipped; the go batch ends with *run-prompt fixes*, then one
-   documentation regeneration. That regeneration also lights up `summary:` (go *run-prompt fixes*), which *per-item context in
-   the sidebar* and *per-document identity* build on.
+1. **The pre-regeneration batch** has shipped on both sides (the CA `Conditions` styling, the harmonised heading
+   sets and the go templates with the `summary:` field); one documentation regeneration remains. It lights up
+   `summary:`, which the scheduled *Per-item context in the sidebar* and the idea *per-document identity* build
+   on.
 2. **The compare track** (cross-project, must): *Move the compare normalisation to the CLI* ships with go
    *`resource compare`*; *manual pairing* and *a one-sided resource* follow.
 3. **The no-JS keystone**: decide *Drop the no-client-side-JavaScript rule* first; *search* (which subsumes the
@@ -36,9 +81,9 @@ branch), L (several branches or a design change).
 6. **Dependencies**: *toolchain* → *NestJS 12* and *rendering stack* (golden test first) → *syntax highlighting*.
 7. **Housekeeping** is opportunistic: the ESLint ledger is paid off by whichever entry edits a baselined file.
 
-**Suggested order after the scheduled batch** (impact over effort): quick wins — *per-item context* (after the
-regeneration), *a resource landing page*, *summary table of contents*; unblockers — *the toolchain upgrade* and
-the no-JS decision; strategic — the compare track, *search*, *further export formats*; then the rest by impact.
+**Suggested order after the scheduled batch** (impact over effort): quick wins — *a resource landing page*,
+*summary table of contents*; unblockers — *the toolchain upgrade* and the no-JS decision; strategic — the compare
+track, *search*, *further export formats*; then the rest by impact.
 
 ## Parked ideas — platform rule
 
@@ -86,8 +131,8 @@ filter cannot hide the page you are on; `NavSection.active` exists to render one
 plus `.line:target` deliver `#L42`; `shiki` emits dual-theme output so dark mode can stay
 `prefers-color-scheme`; and `findings-table.ts` already tags rows with `data-severity` for a filter that cannot
 be built yet. Five parked ideas are blocked or deformed by it: **search across a tenant's documents** (the largest
-item on this list, parked squarely on it), **a name filter and per-item context in the sidebar** (no type-ahead
-without script, and remembering which sections were open is excluded on purpose), **an actionable findings
+item on this list, parked squarely on it), **a name filter in the sidebar** (no type-ahead without script, and
+remembering which sections were open is excluded on purpose), **an actionable findings
 block** (expressible only as sibling anchors plus `:target`, which spends the URL fragment `#findings` already
 owns and needs a *Show all* reset as part of the feature), **clickable breadcrumb segments** (CSS cannot open a
 collapsed `<details>` from an anchor, so it needs a whole new route and view), and **an explicit dark-mode
@@ -125,32 +170,40 @@ resource tree). **Parked** because it is the largest single feature on this list
 without an index and, realistically, client-side interaction — and no client-side JavaScript is a
 non-negotiable. **Revisit** when the corpus is large enough that the sidebar tree stops being navigable even
 with the shipped taxonomy filters, or if a server-rendered query page turns out to be enough. It subsumes the
-name filter in the sidebar idea above. This is the **first feature that would justify relaxing the rule** (its
+name filter in the sidebar idea below. This is the **first feature that would justify relaxing the rule** (its
 own idea below): a server-rendered `GET /:tenant/_search?q=` page is worth trying first, because it needs no
 script at all and would show whether the interactive version is wanted.
 
-### Idea: A name filter and per-item context in the sidebar
+### Idea: Badges in the sidebar tree
 
-*Area:* navigation · *Impact:* medium · *Effort:* M · *Ships with:* context half after go *run-prompt fixes and
-`summary:`* plus a regeneration; filter half subsumed by *search*
+*Area:* navigation · *Impact:* low · *Effort:* S · *Ships with:* after *Per-item context in the sidebar*
 
-Narrow the sidebar by part of a name (a server-side query parameter, composing with the shipped taxonomy
-filters rather than replacing them), and give each tree item the context the listing fallback already shows.
-**Parked** because the taxonomy filters cut the 263-item tree to a workable size along the axes that matter,
-which was the pressing half of the problem, and because a name filter without a text input is an awkward thing
-to offer — no client-side JavaScript means no type-ahead. **Revisit** if narrowing by axis proves
-insufficient, alongside the search idea below, which subsumes it, or if the no-client-side-JavaScript rule is
-relaxed (its own idea below): a text input with type-ahead, and remembering which sections were open, are the
-two halves that rule is holding back.
+Show the count-only badges the listing fallback already shows (`assignments`, `scope`, `platforms`, `@odata.type`)
+under each sidebar tree item, next to its summary line. The data is there: `NavItem.badges` is filled by
+`buildNavigation()` and `views/tenant.hbs` renders it. **Parked** because 263 items with badges would roughly
+double the tree's height, and the facet chips already narrow the tree by scope and platform. **Revisit** when
+readers ask for the badges in the tree, or if the tree gets a compact/expanded view choice (a query parameter,
+like the facets).
 
-What is settled if it is picked up: **badges are available today** — `assignments` (231 of 263), `scope` (93),
-`platforms` (73), `odataType` (137), plus the facet memberships the filter already renders. The per-item
-**summary is not**: it is present on **0 of 263** and **0 of 148** resources, because `GenerateIndex` reads it
-from each document's frontmatter and generated documents write only `source` and `generatedAt`. The index
-schema and the CLI plumbing are both correct, so that half is gated on a documentation **regeneration** whose
-template emits `summary:`, not on a change here — build it to render no second line when the field is absent
-and it lights up on its own. Remembering which sections were open across navigations stays **excluded on
-purpose** for as long as the no-client-side-JavaScript rule stands: that needs client-side state.
+### Idea: A name filter in the sidebar
+
+*Area:* navigation · *Impact:* low · *Effort:* M · *Ships with:* subsumed by *search*; easier after the no-JS
+decision
+
+Narrow the sidebar by part of a name — a server-side query parameter composing with the shipped taxonomy filters
+rather than replacing them. **Parked** because the taxonomy filters cut the 263-item tree to a workable size along
+the axes that matter, and because a name filter without type-ahead is an awkward thing to offer. **Revisit** if
+narrowing by axis proves insufficient, alongside the search idea above, which subsumes it, or if the
+no-client-side-JavaScript rule is relaxed (its own idea below): a text input with type-ahead, and remembering which
+sections were open, are the two halves that rule is holding back.
+
+What is settled if it is picked up: it needs nothing from the CLI (display names are in the index). A `?name=`
+parameter carried through `selectionHref()` / `toggled()` like the facet selection; validated per the
+query-parameter rule in `.claude/rules/web-style.md` (trimmed, length-limited, empty or invalid means no filter,
+never a 404); a case-insensitive substring match on `displayName`; the same `exempt` handling and match-count
+reconciliation as the facets; a `<form method="get">` text input — in bounds under the no-JS rule, but the app's
+first form. Remembering which sections were open across navigations stays **excluded on purpose** for as long as
+the no-client-side-JavaScript rule stands: that needs client-side state.
 
 ### Idea: A resource landing page
 

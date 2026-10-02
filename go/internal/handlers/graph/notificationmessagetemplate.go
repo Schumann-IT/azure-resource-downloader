@@ -32,6 +32,8 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			Lifecycle: []string{
 				"Referenced by noncompliance actions of compliance policies and by enrollment notifications.",
 				"Users whose locale has no localized message receive the default-locale message.",
+				"Message bodies are limited to 2,000 characters and compliance email subjects to 78. Emails render only the supported HTML tags (a with an HTTPS href, strong, b, u, ol, ul, li, p, br, code and the table elements); a compliance message with other markup or CSS is sent as plain text.",
+				"Compliance emails go to the email address in the user's profile, not the UPN (no address, no email), are sent from microsoft-noreply@microsoft.com, which mailbox policies must let through, and are expected within six hours of the device being marked noncompliant.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceCompliancePolicies (noncompliance actions)",
@@ -43,7 +45,7 @@ func NewNotificationMessageTemplateHandler(credential azcore.TokenCredential) (*
 			KeySettings: []string{
 				"brandingOptions",
 				"defaultLocale",
-				"localizedNotificationMessages (locale, subject, messageTemplate, isDefault)",
+				"localizedNotificationMessages (locale, subject, messageTemplate, isDefault; compliance messages can use the tokens {{UserName}}, {{DeviceName}}, {{DeviceId}} and {{OSAndVersion}})",
 			},
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-notification-notificationmessagetemplate?view=graph-rest-beta",

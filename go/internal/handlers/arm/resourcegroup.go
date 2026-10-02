@@ -41,12 +41,16 @@ func (h *ResourceGroupHandler) Documentation() models.ResourceDocumentation {
 	return models.ResourceDocumentation{
 		Template:            armPromptTemplateText,
 		AzureType:           h.GetType(),
-		Purpose:             "An Azure resource group: a container for related Azure resources that share a lifecycle. Its location only determines where the group's metadata is stored, and its tags are not inherited by the resources in it.",
+		Purpose:             "An Azure resource group: a container for related Azure resources that share a lifecycle. Its location sets where the group's metadata is stored and through which region ARM control-plane operations on its resources are routed (resources can sit in other regions); its tags aren't inherited by its resources.",
 		KeySettings:         []string{"location", "tags"},
 		RequiredPermissions: []string{"Reader (Azure RBAC role on the subscription)"},
 		Lifecycle: []string{
-			"Deleting a resource group irreversibly deletes ALL contained resources; a delete lock on any resource in the group blocks deleting the group.",
+			"Deleting a resource group deletes ALL contained resources and the group itself can't be recovered; some recently deleted resources might still be restored (soft delete where the type supports it and it was enabled, or an Azure support case, never guaranteed); resource locks on the group or any resource in it, and backup data, must be removed first.",
+			"Deleting the group needs only the resource group delete permission, not delete permission on each contained resource, and it overrides delete actions excluded through a role's notActions.",
 			"The location can't be changed after creation; use resource locks and consistent tagging for governance.",
+			"At most 50 tags per resource group; the deployment history keeps 800 deployments and is pruned automatically, but a CanNotDelete lock on the group stops the pruning, so deployments fail once the history reaches 800.",
+			"Resource locks (separate resources, also inherited from the subscription) and managedBy (the resource that manages the group) aren't exported: the YAML can't show whether the group is locked or managed by another resource.",
+			"The activity log is the only record of who created the resource group; it also records changes to and deletions of the group and its resources, and Azure keeps it 90 days (longer only where a diagnostic setting exports it).",
 		},
 		Links: models.ResourceLinks{
 			EndpointDocs: "https://learn.microsoft.com/en-us/rest/api/resources/resource-groups",

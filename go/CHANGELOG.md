@@ -13,6 +13,14 @@ This project is released independently of the documentation browser in `web/`: i
 
 ### Added
 
+#### Documentation and drift analysis
+
+- **Every generated document carries a one-line `summary`.** The run prompt now requires a plain-text,
+  double-quoted `summary:` in each document's frontmatter and its post-run check enforces it; `docs generate-index`
+  already copies it into `docs/index.yaml`, where the documentation browser can show it. It appears — together
+  with `platformGroup` / `functionGroup`, which older documents lack — with the next regeneration, so
+  **regenerate the documentation**. (#54)
+
 #### Release workflow
 
 - **Documentation prompts are pinned byte for byte.** `make test` now also compares every type's assembled
@@ -151,6 +159,22 @@ This project is released independently of the documentation browser in `web/`: i
   and the workflow skills. (#38)
 
 #### Documentation and drift analysis
+
+- **One shape for every documentation template, and documents that never reprint a secret.** All eight
+  templates now follow one section order — *References*, the type's own sections, *Lifecycle and operations*,
+  *Security*, the settings section — and one shape for the settings section: group documents gain *References*
+  and *Lifecycle and operations*, records gain *Security*, and credential documents put *Expiry and renewal* before
+  *Lifecycle and operations*. Values under credential-named keys and the OMA-URI values `resolve-secrets` resolves
+  are redacted in the documents like any other credential (the export still holds them); decoded scripts are
+  reproduced verbatim; lifecycle sections build on the curated notes instead of answering from memory; curated
+  pages are labelled *Microsoft guidance*, a recommended value appears only where such a page states one, and a
+  setting links only to a listed page. Every type's notes were checked against Microsoft Learn. Compliance
+  discovery scripts are documented as the referenced objects they are, without assignments; device categories,
+  Mobile Threat Defense and NDES connectors gain grouping fields; the `deviceConfigurations` prompt no longer
+  changes with `resolve-secrets`. The run prompt describes full and incremental runs alike, keeps links Markdown
+  and checks more after the run: every `<details>` names its setting, assignment markers sit exactly where the
+  type's spec asks for them, and `generatedAt` matches the export. Every type's prompt changes, so **regenerate
+  the documentation**. (#54)
 
 - **Conditional Access gets its own documentation template, and every template asks for evidence, not guesses.**
   A Conditional Access policy is documented from what actually targets it — its users, roles, applications,

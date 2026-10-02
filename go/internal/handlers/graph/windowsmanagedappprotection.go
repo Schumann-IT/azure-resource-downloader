@@ -35,12 +35,16 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 				"printBlocked",
 				"maximumAllowedDeviceThreatLevel",
 				"minimumRequiredOsVersion",
-				"periodOfflineBeforeWipeIsEnforced",
+				"periodOfflineBeforeWipeIsEnforced (PT0S means data is never wiped while offline)",
+				"periodOfflineBeforeAccessCheck (PT0S means access is blocked as soon as the device is offline)",
 			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
 			Lifecycle: []string{
 				"Windows MAM supports only unmanaged devices: MAM enrollment is blocked on a managed device, and the settings stop applying if the device becomes managed later.",
 				"It works together with an app configuration policy, Windows Security app threat defense and App Protection Conditional Access; the Windows Security Center threat defense connector needs Windows 11 23H2 or later.",
+				"MAM enrollment also requires a device that isn't Microsoft Entra joined or MDM-enrolled in any tenant and is workplace-joined by at most three users including the MAM user.",
+				"The policy applies only to Intune-licensed users in targeted groups who sign in to the app with their Microsoft Entra account.",
+				"If a second policy targets a user and app that a policy already covers, the first stays applied and the second shows a conflict; policies applied at the same time conflict, and conflicting settings take the most restrictive value (numeric fields the recommended value).",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",
@@ -49,10 +53,13 @@ func NewWindowsManagedAppProtectionHandler(credential azcore.TokenCredential) (*
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
 			Links: models.ResourceLinks{
-				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-windowsmanagedappprotection?view=graph-rest-beta",
-				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-mam-windowsmanagedappprotection-list?view=graph-rest-beta",
-				AdminCenter:   "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/protection",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/app-management/protection/enable-mam-windows"},
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-mam-windowsmanagedappprotection?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-mam-windowsmanagedappprotection-list?view=graph-rest-beta",
+				AdminCenter:  "https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/AppsMenu/~/protection",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/app-management/protection/enable-mam-windows",
+					"https://learn.microsoft.com/en-us/intune/app-management/protection/data-protection-framework",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

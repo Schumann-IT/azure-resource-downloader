@@ -26,7 +26,7 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 			Purpose: "An Intune Windows feature update profile that controls the targeted Windows feature update version.",
 			KeySettings: []string{
 				"featureUpdateVersion",
-				"rolloutSettings",
+				"rolloutSettings (gradual rollouts use offer groups of at least 100 devices; devices assigned after the final offer date get the offer immediately)",
 				"installLatestWindows10OnWindows11IneligibleDevice",
 				"installFeatureUpdatesOptional",
 				"endOfSupportDate",
@@ -36,6 +36,9 @@ func NewWindowsFeatureUpdateProfileHandler(credential azcore.TokenCredential) (*
 				"Holds devices on the specified feature version and never downgrades; track endOfSupportDate, versions shown as not supported no longer deploy.",
 				"When no feature update policy applies any more, the device stays enrolled in Windows Autopatch and gets no feature update until it is assigned a new profile or is unenrolled.",
 				"Requires Intune Plan 1 and a Windows license with the Autopatch entitlement (Pro, Enterprise or Education, not LTSC), Entra joined or hybrid joined devices sending at least Required diagnostic data, and update rings with feature update deferral 0.",
+				"Devices also need the Microsoft Account Sign-In Assistant service (wlidsvc) enabled and running; assignment filters aren't supported for feature update policies.",
+				"Status shows in Reports > Windows Updates (Windows Feature Update Report) and alerts in Devices > Monitor > Feature update failures; client-side data (install steps, client alerts) needs the tenant setting Enable features that require Windows diagnostic data in processor configuration; service-side data doesn't.",
+				"Managing these policies needs at least the Policy and Profile Manager role or a custom role with Device configurations permissions plus read access to managed devices (e.g. Organization/Read, Managed devices/Read); viewing their reports needs a role such as Read Only Operator or Help Desk Operator.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

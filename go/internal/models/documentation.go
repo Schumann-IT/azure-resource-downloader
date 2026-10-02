@@ -137,12 +137,10 @@ type ResourceDocumentation struct {
 	Template string
 	// OmitGroupAxes suppresses the doc-groups vocabulary marker (and therefore
 	// the platformGroup/functionGroup frontmatter contract) for this resource
-	// type. Inventory/registry record types (Autopilot device identities, device
-	// categories, connectors) set it: they are bulk registered entities, not
-	// configuration a reader browses by purpose, so leaving the marker off keeps
-	// their doc-prompt.md — and thus their promptSha256 — unchanged and their
-	// documents are not reissued for grouping alone. Every other type carries the
-	// marker automatically via the shared BuildDocumentationPrompt render path.
+	// type. Only a type kept out of documentation runs sets it (Autopilot device
+	// identities, bulk registered device records): no document is generated for
+	// it, so a grouping contract would constrain nothing. Every other type carries
+	// the marker automatically via the shared BuildDocumentationPrompt render path.
 	OmitGroupAxes bool
 }
 
@@ -178,7 +176,7 @@ func BuildDocumentationPrompt(doc ResourceDocumentation) string {
 	// frontmatter to the same set docs generate-index emits, and the generation
 	// checker can validate it. Rendered here on the shared path rather than in
 	// each template literal, so the models vocabulary constants stay canonical.
-	// Record types opt out (OmitGroupAxes) to keep their promptSha256 stable.
+	// A type kept out of documentation runs opts out (OmitGroupAxes).
 	if !doc.OmitGroupAxes {
 		prompt += "\n\n" + DocumentationGroupsMarker()
 	}

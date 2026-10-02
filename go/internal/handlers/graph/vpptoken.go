@@ -29,7 +29,7 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 				"expirationDateTime",
 				"appleId",
 				"state",
-				"automaticallyUpdateApps",
+				"automaticallyUpdateApps (token-level switch: a VPP app assignment's Prevent automatic updates works only when it is true)",
 				"lastSyncStatus",
 				"lastSyncDateTime",
 				"locationName",
@@ -39,6 +39,8 @@ func NewVppTokenHandler(credential azcore.TokenCredential) (*GraphCollectionHand
 			Lifecycle: []string{
 				"Each token is valid for one year; renew it by downloading it again from Apple Business Manager or Apple School Manager and updating the existing token in Intune. It shows 'invalid' when it has expired or the Managed Apple ID changed.",
 				"Deleting a token also deletes its apps and assignments and revokes their licenses without uninstalling the apps; a location token works with only one MDM tenant at a time.",
+				"Token pitfalls: importing the same location token into another MDM after importing it to Intune can lose license assignments and user records, and because DDM doesn't yet support available app assignments, re-uploading a token that has available app assignments (to manage it with DDM) loses them.",
+				"Intune syncs tokens with Apple daily (manual sync any time); Tenant status shows Warning within seven days of expiry or after a day without sync, Unhealthy once expired or after three days; duplicateLocationId means another token has the same location, and this one won't sync until the duplicate is removed.",
 				"Treat the token value as a secret and redact it if present.",
 			},
 			RelatedTypes: []string{

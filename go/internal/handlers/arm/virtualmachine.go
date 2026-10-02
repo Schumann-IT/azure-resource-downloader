@@ -54,7 +54,9 @@ func (h *VirtualMachineHandler) Documentation() models.ResourceDocumentation {
 			"Deallocating stops compute billing but disks are still billed; a VM stopped from inside the guest OS stays allocated and keeps being billed.",
 			"Deleting the VM can orphan NICs and disks unless their delete option (for example storageProfile.osDisk.deleteOption Delete) is set.",
 			"Unmanaged disks were retired on 31 March 2026: a VM whose OS disk is not a managed disk can no longer be started.",
-			"Keep OS patching and backup policies in place.",
+			"VM size series are retired on announced dates (announced for many v1 to v3 generation series): at the retirement date, remaining VMs of that series are deallocated and stop working.",
+			"Host metrics and the activity log are available without setup; guest OS performance data and logs need the Azure Monitor Agent and a data collection rule (VM insights sets up both).",
+			"Not exported: resource locks (separate resources, also inherited from the resource group and subscription), Azure Backup protection, boot diagnostics, managed identity, security profile, data disks, extensions, zones, NIC delete options and power state; absence from the YAML says nothing about them.",
 		},
 		Links: models.ResourceLinks{
 			EndpointDocs: "https://learn.microsoft.com/en-us/rest/api/compute/virtual-machines",
@@ -62,6 +64,7 @@ func (h *VirtualMachineHandler) Documentation() models.ResourceDocumentation {
 			BestPractices: []string{
 				"https://learn.microsoft.com/en-us/azure/virtual-machines/security-policy",
 				"https://learn.microsoft.com/en-us/azure/security/fundamentals/iaas",
+				"https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions",
 			},
 		},
 	}

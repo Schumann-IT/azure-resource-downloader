@@ -26,7 +26,7 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 		documentation: models.ResourceDocumentation{
 			Purpose: "A Windows Information Protection (WIP) policy (without enrollment) controlling work/personal data separation.",
 			KeySettings: []string{
-				"enforcementLevel",
+				"enforcementLevel (noProtection is the Off mode: WIP neither protects nor audits data, and switching a policy to Off makes devices try to decrypt WIP-tagged files on locally attached drives)",
 				"protectedApps",
 				"exemptApps",
 				"revokeOnMdmHandoffDisabled",
@@ -39,10 +39,12 @@ func NewWindowsInformationProtectionPolicyHandler(credential azcore.TokenCredent
 				"Microsoft began deprecating Windows Information Protection in July 2022 and removed it starting with Windows 11, version 24H2; Microsoft recommends Microsoft Purview Information Protection and Microsoft Purview Data Loss Prevention instead.",
 				"Unassigning the policy (Learn's way to turn WIP off) makes devices remove WIP file protection and the WIP configuration.",
 				"WIP without enrollment requires Microsoft Entra ID P1 or P2 and supports only one user per device.",
+				"If one user and device are targeted by both an MDM WIP policy and a WIP without enrollment (MAM) policy, the MDM policy applies on Microsoft Entra joined devices and the MAM policy on workplace-joined personal devices; Windows Home supports only WIP without enrollment.",
 			},
 			EmbeddedPayloads: []string{"dataRecoveryCertificate.certificate (base64 Data Recovery Agent certificate)"},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",
+				"Microsoft.Graph/mdmWindowsInformationProtectionPolicies (MDM WIP; it wins on Microsoft Entra joined devices targeted by both)",
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
 			Links: models.ResourceLinks{

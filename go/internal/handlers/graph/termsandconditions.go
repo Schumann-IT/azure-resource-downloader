@@ -28,7 +28,7 @@ func NewTermsAndConditionsHandler(credential azcore.TokenCredential) (*GraphColl
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
 				"Users must accept in Company Portal before they can enroll devices or access protected resources; editing with 'Require users to re-accept' increments version and assigned users must accept again.",
-				"Acceptance reports show the user, accepted version and time (up to 36 hours latency); Microsoft Entra terms of use offers stricter options, and users must accept both when both are configured.",
+				"Acceptance reports show the user, accepted version and time (up to 36 hours latency); acceptance is per user, not per device. Microsoft Entra terms of use offers stricter options, and users must accept both when both are configured.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

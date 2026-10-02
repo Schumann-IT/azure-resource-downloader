@@ -37,7 +37,7 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			Purpose: "An Entra ID group (Microsoft 365, security, mail-enabled security or distribution), often used as an assignment target for policies and apps.",
 			KeySettings: []string{
 				"groupTypes",
-				"membershipRule (for dynamic groups)",
+				"membershipRule (for dynamic groups; device.deviceOwnership takes Personal, Company or Unknown, and corporate devices are Company, which Intune shows as Corporate)",
 				"membershipRuleProcessingState",
 				"securityEnabled",
 				"mailEnabled",
@@ -45,7 +45,9 @@ func NewGroupHandler(credential azcore.TokenCredential) (*GraphCollectionHandler
 			},
 			RequiredPermissions: []string{"Group.Read.All"},
 			Lifecycle: []string{
-				"Deleted Microsoft 365 groups are soft-deleted and can be restored within 30 days with the same object ID; soft delete for cloud security groups is in preview, and distribution groups can't be restored.",
+				"Deleted Microsoft 365 groups are soft-deleted and can be restored within 30 days with the same object ID; soft delete for cloud security groups is in preview, and distribution groups can't be restored; a restored dynamic group is repopulated from its rule, which can take up to 24 hours.",
+				"Microsoft 365 groups can fall under the tenant's expiration policy (expirationDateTime, needs Entra ID P1 or P2 for their members): active groups renew automatically, owners are asked to renew the others, and a group that isn't renewed is deleted (restorable for 30 days).",
+				"Groups synced from on-premises Active Directory (onPremisesSyncEnabled true) can only be managed on-premises, and distribution lists and mail-enabled security groups only in the Exchange or Microsoft 365 admin center.",
 				"Dynamic membership rules re-evaluate automatically as attributes change (processing can be paused via membershipRuleProcessingState); dynamic groups need Entra ID P1.",
 				"isAssignableToRole can only be set at creation; groups referenced by policy assignments should not be deleted while in use.",
 			},

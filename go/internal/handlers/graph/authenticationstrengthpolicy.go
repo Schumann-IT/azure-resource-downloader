@@ -30,6 +30,9 @@ func NewAuthenticationStrengthPolicyHandler(credential azcore.TokenCredential) (
 				"Referenced by Conditional Access grant controls; built-in strengths can't be modified, custom ones are editable.",
 				"A custom strength can't be deleted while a Conditional Access policy references it.",
 				"Microsoft updates the built-in strengths when new methods become available, so built-in entries can change without an admin edit; up to 15 custom strengths, Entra ID P1 required.",
+				"Users without a registered method of the strength are sent to registration, but phone sign-in, passkeys (FIDO2; registered beforehand in managed mode), certificate-based authentication and Windows Hello for Business can't be registered there; if the strength leaves a user no method they can register and use, the user is blocked from the resource.",
+				"A strength doesn't restrict the initial authentication: Conditional Access is evaluated after it, so a user can still enter a password but must then satisfy the strength before continuing.",
+				"The sign-in logs show which strength was enforced: the Requirement column on the Authentication Details tab names it, and the Conditional Access tab shows the policy whose grant controls required it.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/conditionalAccessPolicies",

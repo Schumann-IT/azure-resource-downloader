@@ -24,13 +24,15 @@ func NewNdesConnectorHandler(credential azcore.TokenCredential) (*GraphCollectio
 		azureType: "Microsoft.Graph/ndesConnectors",
 		documentation: models.ResourceDocumentation{
 			Template:            recordPromptTemplateText,
-			OmitGroupAxes:       true,
 			Purpose:             "An on-premises Certificate Connector for Microsoft Intune registration (Graph: 'OnPrem Ndes connector'), used for SCEP certificate issuance through NDES.",
 			KeySettings:         []string{"state", "lastConnectionDateTime", "connectorVersion", "machineName", "enrolledDateTime"},
 			RequiredPermissions: []string{"DeviceManagementConfiguration.Read.All"},
 			Lifecycle: []string{
 				"The Certificate Connector for Microsoft Intune updates itself automatically (autoupdate.msappproxy.net, port 443) unless that is blocked; each release is supported for six months, and out-of-support versions may stop working.",
 				"Since 29 July 2021 it replaces the PFX Certificate Connector and the Microsoft Intune Connector.",
+				"In Tenant administration > Connectors and tokens > Certificate connectors, a deprecated connector version shows a Warning, then an Error after the six-month grace period (neither is a state value); logs: Event Viewer > Application and Service Logs > Microsoft > Intune > Certificate Connectors.",
+				"Up to 100 connector instances per tenant, each on its own Windows Server; all should run the same version, and a request goes to any instance with the needed feature. For SCEP it isn't supported on the issuing CA server, and it shouldn't share a server with the Intune Connector for Active Directory.",
+				"Strong mapping in the connector needs Windows Server 2019 or later; SCEP with a Microsoft CA needs NDES on the connector's server, and the connector is configured with an Intune Administrator account that has an Intune license.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceConfigurations (SCEP and PKCS certificate profiles)",

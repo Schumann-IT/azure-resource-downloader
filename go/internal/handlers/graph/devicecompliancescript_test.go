@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"testing"
 
 	betamodels "github.com/microsoftgraph/msgraph-beta-sdk-go/models"
@@ -42,5 +43,22 @@ func TestDeviceComplianceScriptHandler_Transform(t *testing.T) {
 	}
 	if transformed.Type != "Microsoft.Graph/deviceComplianceScripts" {
 		t.Errorf("Transform() Type = %q, want %q", transformed.Type, "Microsoft.Graph/deviceComplianceScripts")
+	}
+}
+
+// TestDeviceComplianceScriptHandler_ReferencedFamily verifies the type has no
+// assignments concept and documents with the referenced template's heading set:
+// a script is attached to a compliance policy, not assigned itself.
+func TestDeviceComplianceScriptHandler_ReferencedFamily(t *testing.T) {
+	handler, err := NewDeviceComplianceScriptHandler(fakeTokenCredential{})
+	if err != nil {
+		t.Fatalf("NewDeviceComplianceScriptHandler() unexpected error: %v", err)
+	}
+	if handler.HasAssignments() {
+		t.Error("HasAssignments() = true, want false")
+	}
+	const headings = "\n<!-- doc-headings: References | Usage and references | Lifecycle and operations | Security | Definition -->\n"
+	if prompt := handler.GetDocumentationPrompt(); !strings.Contains(prompt, headings) {
+		t.Errorf("prompt missing the referenced heading set %q", strings.TrimSpace(headings))
 	}
 }

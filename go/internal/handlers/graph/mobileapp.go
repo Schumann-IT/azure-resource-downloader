@@ -30,7 +30,7 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 				"installCommandLine",
 				"uninstallCommandLine",
 				"minimumSupportedOperatingSystem",
-				"installExperience (runAsAccount, deviceRestartBehavior)",
+				"installExperience (runAsAccount, deviceRestartBehavior; with basedOnReturnCode a hardReboot return code restarts the device immediately and a softReboot code only tells the user a restart is needed)",
 				"returnCodes",
 				"rules",
 				"allowedArchitectures",
@@ -47,6 +47,10 @@ func NewMobileAppHandler(credential azcore.TokenCredential) (*GraphCollectionHan
 			Lifecycle: []string{
 				"To remove an app from devices assign it as Uninstall (and remove the install assignment for those groups); delete the app from Intune only after removing its assignments and revoking any VPP licenses.",
 				"Win32 apps aren't uninstalled when a device unenrolls, and Win32 apps in a dependency relationship can't be deleted; supersedence is configured per app and the superseding app needs its own assignment.",
+				"Win32 apps need Windows Enterprise, Pro or Education devices that are enrolled in Intune and Microsoft Entra registered, joined or hybrid joined; the Intune Management Extension that installs them is added automatically and checks for new Win32 assignments every hour.",
+				"For most app types an Available assignment works only for user groups; Win32 apps and apps for Android Enterprise fully managed (COBO) or corporate-owned personally enabled (COPE) devices can also be Available to device groups.",
+				"When groups give one user or device different intents, Intune resolves the conflict (Required beats Uninstall; some pairs keep both Required and Available) before assignment filters, so a filter may not act as expected; an exclusion overrides only an inclusion of the same group type (user or device).",
+				"Install results show in Apps > Monitor > App install status and, per app, in Device install status and User install status (Installed, Failed, Install pending, Not installed, Not applicable); Microsoft Store and Android store apps assigned as Available report no install status.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

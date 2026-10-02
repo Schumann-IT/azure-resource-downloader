@@ -36,6 +36,7 @@ func NewReusablePolicySettingHandler(credential azcore.TokenCredential) (*GraphC
 			Lifecycle: []string{
 				"Referenced by ID from endpoint security (Settings Catalog based) profiles; edits apply automatically to every profile that includes the group and are redeployed according to that profile's assignments.",
 				"Limits: up to 100 instances per group and 100 groups per profile.",
+				"Reusable settings groups are a public preview feature, used only by Windows profiles: Windows Firewall rules (Windows 10 20H2 or later, or Windows 11), Device control and Endpoint Privilege Management elevation rules.",
 			},
 			RelatedTypes: []string{"Microsoft.Graph/deviceManagementConfigurationPolicies (referencing policies)"},
 			KeySettings:  []string{"settingDefinitionId", "referencingConfigurationPolicyCount", "version"},

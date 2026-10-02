@@ -41,11 +41,19 @@ type GraphCollectionHandler struct {
 	// may set this true for a type that is readable with the plain az login
 	// session.
 	worksWithCLICredential bool
-	// hasAssignments marks a type that has an assignments concept (its fetchItem
-	// populates assignments). It is surfaced via HasAssignments so the export can
-	// record it per type, and defaults false for types with no assignments.
+	// hasAssignments marks a type that has an assignments concept, so its
+	// documentation prompt carries the assignments block; a fetchItem may still
+	// export /assignments entries for a type without one (deviceComplianceScripts),
+	// which warnUnexpectedAssignments reports. It is surfaced via HasAssignments so
+	// the export can record it per type, and defaults false for types with no
+	// assignments.
 	hasAssignments bool
-	listIDs        func(ctx context.Context) ([]string, error)
+	// runtimePermissions, when set, are the delegated scopes a run needs when
+	// they differ from the documented list (documentation.RequiredPermissions):
+	// RequiredPermissions returns them for consent, the access check and audit
+	// routing, while the documentation prompt keeps the static documented list.
+	runtimePermissions []string
+	listIDs            func(ctx context.Context) ([]string, error)
 	// probe, when set, is the type's access probe: one GET of the
 	// collection's first page with a single item. It lets the access check
 	// that runs before a listing test a permission group without listing a
@@ -131,8 +139,12 @@ func (h *GraphCollectionHandler) RequiresDedicatedApp() bool {
 }
 
 // RequiredPermissions returns the delegated Microsoft Graph permissions this
-// type needs, as declared in its documentation metadata (for user messages).
+// run needs for the type: runtimePermissions when the constructor set them,
+// otherwise the list declared in its documentation metadata.
 func (h *GraphCollectionHandler) RequiredPermissions() []string {
+	if len(h.runtimePermissions) > 0 {
+		return h.runtimePermissions
+	}
 	return h.documentation.RequiredPermissions
 }
 
@@ -256,6 +268,21 @@ func warnAssignmentsFetchFailed(resourceType, itemID string, err error) {
 		"type", resourceType,
 		"id", itemID,
 		"error", err)
+}
+
+// warnUnexpectedAssignments logs a warning when the /assignments child
+// collection of an item returned entries although its type has no assignments
+// concept (hasAssignments is false). The entries are still exported, so the YAML
+// and drift stay complete, but the documentation prompt does not describe them.
+// A count of zero logs nothing.
+func warnUnexpectedAssignments(resourceType, itemID string, count int) {
+	if count <= 0 {
+		return
+	}
+	logger.Default.Warn("assignments returned for a type without an assignments concept; exported but not documented",
+		"type", resourceType,
+		"id", itemID,
+		"count", count)
 }
 
 // safeStringValue safely dereferences a string pointer

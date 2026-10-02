@@ -26,11 +26,17 @@ func NewTargetedManagedAppConfigurationHandler(credential azcore.TokenCredential
 		azureType:      "Microsoft.Graph/targetedManagedAppConfigurations",
 		hasAssignments: true,
 		documentation: models.ResourceDocumentation{
-			Purpose:             "An Intune app configuration policy for managed apps, delivered through the app protection (MAM) channel to Intune SDK-integrated apps regardless of the device's enrollment state.",
-			KeySettings:         []string{"customSettings", "appGroupType", "targetedAppManagementLevels"},
+			Purpose: "An Intune app configuration policy for managed apps, delivered through the app protection (MAM) channel to Intune SDK-integrated apps regardless of the device's enrollment state.",
+			KeySettings: []string{
+				"customSettings (name/value pairs defined by the app's vendor; values in {{ }} are tokens Intune fills per user)",
+				"appGroupType",
+				"targetedAppManagementLevels",
+			},
 			RequiredPermissions: []string{"DeviceManagementApps.Read.All"},
 			Lifecycle: []string{
 				"Managed apps check for app configuration every 30 minutes when an app protection policy also targets the user, otherwise every 720 minutes.",
+				"On Windows only Microsoft Edge for Windows can be configured, with Settings catalog settings as well as name/value pairs; on Android, Intune requires Android 10.0 or later.",
+				"On iOS/iPadOS, delivered values can be checked in the Intune diagnostic log: open about:intunehelp in Microsoft Edge, share the logs and search IntuneMAMDiagnostics.txt for ApplicationConfiguration.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

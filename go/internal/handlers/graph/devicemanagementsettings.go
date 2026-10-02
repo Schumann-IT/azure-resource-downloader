@@ -44,6 +44,7 @@ func NewDeviceManagementSettingsHandler(credential azcore.TokenCredential) (*Gra
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
 				"Informational singleton: nothing configurable is exported (the handler reads /deviceManagement without $select).",
+				"The API reference documents the tenant settings object (settings: secureByDefault, deviceComplianceCheckinThresholdDays and similar), which this export does not contain; Learn has no reference page for intuneAccountId or maximumDepTokens.",
 			},
 			RelatedTypes: []string{"Microsoft.Graph/depOnboardingSettings (maximumDepTokens limits the number of ADE tokens)"},
 			Links: models.ResourceLinks{

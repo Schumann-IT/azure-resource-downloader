@@ -28,11 +28,16 @@ func NewRoleDefinitionHandler(credential azcore.TokenCredential) (*GraphCollecti
 			KeySettings: []string{
 				"rolePermissions[].resourceActions[].allowedResourceActions",
 				"rolePermissions[].resourceActions[].notAllowedResourceActions",
-				"roleScopeTagIds",
+				"roleScopeTagIds (tags on the role itself: they control which scoped admins can see the role, not which objects its holders manage; that is set by the role assignment's scope tags, not exported)",
 			},
 			RequiredPermissions: []string{"DeviceManagementRBAC.Read.All"},
 			Lifecycle: []string{
-				"Only custom Intune roles are exported (built-in roles can't be edited); their assignments (admin groups, scope groups and scope tags) live in roleAssignments, which is not exported, and permissions from several assignments add up.",
+				"Only custom Intune roles are exported (built-in roles can't be edited); their assignments (admin groups, scope groups and scope tags) live in roleAssignments, which is not exported.",
+				"No exported type references a role definition: a role is enforced only through its role assignments, so the export holds no referencing policies for it.",
+				"Permissions from several role assignments add up and one can't deny what another grants; by default Intune also merges a permission category across assignments with different scope tags, which can over-grant access, unless the Scoped permissions setting (one-way, opt-in preview, not exported) is on.",
+				"Intune RBAC doesn't restrict Microsoft Entra roles: Global Administrator and Intune Administrator have full read/write access to Intune whatever the custom roles and scope tags allow.",
+				"Custom roles are created, edited and assigned by the Intune Administrator Entra role or, with less privilege, the built-in Intune Role Administrator role or a custom role with the Roles permissions plus Organization Read.",
+				"Effective access shows under Tenant administration > Roles > Monitor: My permissions, Roles by permission (which role, assignment and group grant a permission) and Admin permissions (per user).",
 				"Review custom roles against least privilege regularly.",
 			},
 			RelatedTypes: []string{

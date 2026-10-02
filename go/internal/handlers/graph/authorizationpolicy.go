@@ -43,12 +43,14 @@ func NewAuthorizationPolicyHandler(credential azcore.TokenCredential) (*GraphCol
 				"defaultUserRolePermissions",
 				"defaultUserRolePermissions.permissionGrantPoliciesAssigned",
 				"allowInvitesFrom",
-				"allowedToUseSSPR",
-				"guestUserRoleId",
+				"allowedToUseSSPR (whether administrator accounts can use self-service password reset; false blocks them even when the users' password reset policy includes them)",
+				"guestUserRoleId (a0b1b346-4d3e-4e8b-98f8-753987be4970 User, 10dae51f-b6af-4016-8d66-8c2a99b929b3 Guest User, 2af84b1e-32c8-42b7-82bc-daa82404023b Restricted Guest User)",
+				"allowEmailVerifiedUsersToJoinOrganization and allowedToSignUpEmailBasedSubscriptions (act together on self-service sign-up: the first decides whether new email-verified users can join the tenant, the second whether users can sign up at all)",
 			},
 			RequiredPermissions: []string{"Policy.Read.All"},
 			Lifecycle: []string{
 				"Tenant-wide singleton controlling default user role permissions, guest access and invitation settings, and user consent to apps (defaultUserRolePermissions.permissionGrantPoliciesAssigned); review it regularly.",
+				"Changing user consent (permissionGrantPoliciesAssigned) affects only future consent operations: permissions users already granted to applications stay in place until they are revoked.",
 				"blockMsolPowerShell only affects the MSOnline PowerShell module, which was retired on 30 May 2025.",
 			},
 			Links: models.ResourceLinks{

@@ -35,6 +35,8 @@ func NewMacOSCustomAttributeScriptHandler(credential azcore.TokenCredential) (*G
 			Lifecycle: []string{
 				"Custom attribute scripts run on managed Macs about every 8 hours (there is no admin-set schedule) and report the echoed value; the value must match customAttributeType (integer, string, or ISO-8601 dateTime) and be 20 KB or less.",
 				"Deploying one installs the Intune management agent for macOS.",
+				"The echoed value shows in the Result column of the profile's Device status and User status reports; Failed means a non-zero exit code or a malformed script, with the error in Result.",
+				"Requires a direct internet connection (proxies aren't supported), and the script must start with a #! line for an installed shell.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",

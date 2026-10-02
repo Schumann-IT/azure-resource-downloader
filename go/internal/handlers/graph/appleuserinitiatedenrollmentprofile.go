@@ -29,7 +29,8 @@ func NewAppleUserInitiatedEnrollmentProfileHandler(credential azcore.TokenCreden
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
 				"Profiles target user groups only (device groups aren't supported); when several apply, the higher-priority profile wins (0 is highest).",
-				"User enrollment with Company Portal is no longer supported for newly enrolled devices; account-driven user enrollment needs iOS/iPadOS 15 or later.",
+				"User enrollment with Company Portal is no longer supported for newly enrolled devices; account-driven user enrollment and web-based device enrollment need iOS/iPadOS 15 or later, and a web-based profile enrolls users on older versions through Company Portal device enrollment instead.",
+				"Account-driven user enrollment needs Managed Apple IDs (or federated authentication with Apple Business) and a service-discovery file under /.well-known/com.apple.remotemanagement on the sign-in domain, and uses JIT registration with Microsoft Authenticator; web-based device enrollment can use JIT registration too, and both need Microsoft Authenticator for work apps.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target user groups)",

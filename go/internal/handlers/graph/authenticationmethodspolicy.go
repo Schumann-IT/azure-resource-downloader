@@ -36,13 +36,20 @@ func NewAuthenticationMethodsPolicyHandler(credential azcore.TokenCredential) (*
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/authenticationMethodsPolicy",
 		documentation: models.ResourceDocumentation{
-			Template:            singletonPromptTemplateText,
-			Purpose:             "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
-			KeySettings:         []string{"authenticationMethodConfigurations", "registrationEnforcement", "policyMigrationState"},
+			Template: singletonPromptTemplateText,
+			Purpose:  "The tenant Entra ID authentication methods policy controlling which authentication methods are enabled and how.",
+			KeySettings: []string{
+				"authenticationMethodConfigurations",
+				"registrationEnforcement (users targeted by the registration campaign must also be enabled for the targeted method; an Authenticator campaign nudges only users whose authenticationMode is any or push, not deviceBasedPush)",
+				"policyMigrationState",
+			},
 			RequiredPermissions: []string{"Policy.Read.All"},
 			Lifecycle: []string{
 				"Tenant-wide singleton controlling which authentication methods users can register and use for MFA, SSPR and passwordless sign-in.",
-				"Since 30 September 2025 authentication methods can no longer be managed in the legacy MFA and SSPR policies; policyMigrationState shows whether legacy settings are still respected (premigration, migrationInProgress) or ignored (migrationComplete).",
+				"Since 30 September 2025 authentication methods can no longer be managed in the legacy MFA and SSPR policies; policyMigrationState shows whether legacy settings are still respected (premigration, migrationInProgress: a method enabled in any policy stays usable) or ignored (migrationComplete).",
+				"Security questions, the number of methods required to reset a password and the SSPR administrator policy are still managed in the legacy SSPR policy, outside this object, even when migration is complete.",
+				"A state of default means Microsoft managed: Microsoft Entra ID enables or disables the feature itself and may change that over time; currently the registration campaign runs under it with Microsoft-chosen settings, while location and application name in Authenticator notifications are disabled.",
+				"Registration and use of the methods show in the Authentication methods activity report (Entra ID > Authentication methods > Activity, Registration and Usage tabs), which needs Microsoft Entra ID P1 or P2.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/conditionalAccessPolicies",

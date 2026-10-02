@@ -34,7 +34,7 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 				"passwordRequired",
 				"osMinimumVersion",
 				"storageRequireEncryption",
-				"scheduledActionsForRule (grace period and actions)",
+				"scheduledActionsForRule (the built-in Mark device noncompliant action can't be removed and its schedule is the grace period; a retire action only adds the device to the retire list for an admin to retire)",
 				"deviceThreatProtectionRequiredSecurityLevel",
 				"deviceCompliancePolicyScript",
 			},
@@ -44,6 +44,8 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 				"scheduledActionsForRule defines grace periods and noncompliance actions.",
 				"Devices with no compliance policy assigned follow the tenant setting 'Mark devices with no compliance policy assigned as' (default: Compliant).",
 				"androidCompliancePolicy holds Android device administrator settings; device administrator management is no longer available on devices with Google Mobile Services.",
+				"A compliance setting takes precedence over the same setting in a configuration policy, even a more secure one; with several compliance policies a device gets the most severe resulting status (Error, then NonCompliant, InGracePeriod, Compliant, NotApplicable, Unknown).",
+				"Results show on the policy (Device status, View report, Per-setting status) and under Reports > Device compliance (Noncompliant devices and settings); a device appears only after it checks in and reports, which can take up to 24 hours for an online device, and a setting in Error keeps the device's previous state for up to seven days.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/groups (assignment target groups)",
@@ -54,15 +56,18 @@ func NewDeviceCompliancePolicyHandler(credential azcore.TokenCredential) (*Graph
 				"Microsoft.Graph/mobileThreatDefenseConnectors (device threat level settings)",
 				"Microsoft.Graph/roleScopeTags (roleScopeTagIds)",
 			},
-			SubtypeNote:                     "Classic compliance policies are platform-polymorphic (windows10CompliancePolicy, iosCompliancePolicy, androidDeviceOwnerCompliancePolicy, ...) - identify the platform from @odata.type first.",
+			SubtypeNote:                     "Classic compliance policies are platform-polymorphic (windows10CompliancePolicy, iosCompliancePolicy, androidDeviceOwnerCompliancePolicy, ...) - identify the platform from @odata.type first. windows81CompliancePolicy is the Windows 8.1 and later compliance platform; Intune ended support for devices running Windows 8.1 on 22 October 2022.",
 			ReferencesNotificationTemplates: true,
 			EmbeddedPayloads: []string{
 				"deviceCompliancePolicyScript.rulesContent (windows10CompliancePolicy custom compliance: base64-encoded JSON rules)",
 			},
 			Links: models.ResourceLinks{
-				EndpointDocs:  "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicecompliancepolicy?view=graph-rest-beta",
-				Permissions:   "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-devicecompliancepolicy-list?view=graph-rest-beta",
-				BestPractices: []string{"https://learn.microsoft.com/en-us/intune/device-security/compliance/overview"},
+				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-devicecompliancepolicy?view=graph-rest-beta",
+				Permissions:  "https://learn.microsoft.com/en-us/graph/api/intune-deviceconfig-devicecompliancepolicy-list?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/intune/device-security/compliance/overview",
+					"https://learn.microsoft.com/en-us/security/zero-trust/zero-trust-identity-device-access-policies-common",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

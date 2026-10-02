@@ -55,8 +55,11 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 
 			RequiredPermissions: []string{"OrganizationalBranding.Read.All", "Organization.Read.All"},
 			Lifecycle: []string{
+				"Custom branding requires Microsoft Entra ID P1 or P2, Microsoft 365 Business Standard or SharePoint (Plan 1).",
 				"One default branding plus per-locale localizations; a localization for the browser's language overrides the default, and how long changes take to appear varies by region.",
+				"On multitenant apps such as My Apps or Outlook the branding appears only after the user enters a username (at once with a domain hint such as whr=); B2B guests see their home tenant's branding, and personal Microsoft account sign-ins aren't branded.",
 				"Without a configured default branding Graph returns 404 and nothing is exported.",
+				"Custom CSS (customCSSRelativeUrl) is being retired: tenants created after 5 January 2026 can't use it, others that didn't already use it can't configure it since 21 July 2026, and its layout and positioning properties are being deprecated.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/organization",
@@ -77,6 +80,9 @@ func NewOrganizationalBrandingHandler(credential azcore.TokenCredential) (*Graph
 			Links: models.ResourceLinks{
 				EndpointDocs: "https://learn.microsoft.com/en-us/graph/api/resources/organizationalbranding?view=graph-rest-beta",
 				Permissions:  "https://learn.microsoft.com/en-us/graph/api/organizationalbranding-get?view=graph-rest-beta",
+				BestPractices: []string{
+					"https://learn.microsoft.com/en-us/entra/fundamentals/how-to-customize-branding",
+				},
 			},
 		},
 		listIDs: func(ctx context.Context) ([]string, error) {

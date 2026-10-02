@@ -24,8 +24,9 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 
 	return &GraphCollectionHandler{
 		azureType:      "Microsoft.Graph/deviceComplianceScripts",
-		hasAssignments: true,
+		hasAssignments: false,
 		documentation: models.ResourceDocumentation{
+			Template:    referencedPromptTemplateText,
 			Purpose:     "An Intune custom compliance (device compliance) script used to evaluate custom compliance settings.",
 			KeySettings: []string{"runAsAccount", "enforceSignatureCheck", "runAs32Bit"},
 			EmbeddedPayloads: []string{
@@ -36,6 +37,9 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 				"A discovery script used by a compliance policy can't be deleted until it is removed from that policy; each policy uses one script and each script one policy.",
 				"The Intune Management Extension checks for new or changed scripts and runs discovery every eight hours; a user's Check compliance runs the cached script without fetching updates.",
 				"Windows only (not Windows Home); assigning custom compliance installs the Intune Management Extension.",
+				"Each discovery script can be at most 1 MB and must finish within 10 minutes on Windows; output over 2048 characters may be truncated to invalid JSON (error 65009); Intune doesn't validate the script's syntax.",
+				"Results appear with the compliance policy that uses the script (per-setting status and Reports > Device compliance > Noncompliant devices and settings); error 65007 means the script failed, 65008 a setting is missing from its output, 65009 invalid JSON and 65010 an invalid datatype.",
+				"The script upload workflow doesn't support scope tags: creating, editing or viewing discovery scripts requires the Default scope tag.",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceCompliancePolicies (reference custom compliance scripts)",
@@ -80,6 +84,7 @@ func NewDeviceComplianceScriptHandler(credential azcore.TokenCredential) (*Graph
 				warnAssignmentsFetchFailed("Microsoft.Graph/deviceComplianceScripts", itemID, err)
 			} else if assignments != nil {
 				item.SetAssignments(assignments.GetValue())
+				warnUnexpectedAssignments("Microsoft.Graph/deviceComplianceScripts", itemID, len(assignments.GetValue()))
 			}
 			return item, nil
 		},

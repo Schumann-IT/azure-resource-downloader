@@ -14,47 +14,59 @@ Permissions required to read this resource type:
 Lifecycle notes for this resource type:
 - Deregister a device when it permanently leaves the organization (for example repair or end of life): delete its Intune device record first, because only devices not enrolled in Intune can be deleted from Autopilot.
 - Don't delete the Entra device object manually; for hybrid-joined devices delete the on-premises AD computer object instead.
+- A registered device without an assigned profile still receives the default Windows Autopilot profile; remove the registration if the device shouldn't go through Autopilot.
+- A hardware hash registered in one tenant can't be imported into another (ZtdDeviceAssignedToAnotherTenant); after a motherboard replacement the registered hash no longer matches and a new hash must be uploaded.
+- In Windows Autopilot devices the profile status moves from Unassigned through Assigning to Assigned; deploy the device only once it reads Assigned and Date assigned (deploymentProfileAssignedDateTime) is set.
+- An assigned user only pre-fills the sign-in UPN and greeting on supported OEMs (not with AD FS) and doesn't change which policies or apps apply; a device name set here is ignored for hybrid join, where the Domain Join profile names the device.
 - deviceAccountPassword (Surface Hub) is a secret: redact it if present.
 
 Reference material for this resource type (treat these as authoritative; prefer them over recalled knowledge):
 - API reference: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-windowsautopilotdeviceidentity?view=graph-rest-beta
 - Required permissions: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeviceidentity-list?view=graph-rest-beta
-- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/registration-overview
-- Best-practice baseline: https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot
+- Microsoft guidance: https://learn.microsoft.com/en-us/autopilot/registration-overview
+- Microsoft guidance: https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot
 
-Related resource types exported alongside this one (cross-reference their YAML directories instead of guessing):
+Related resource types exported alongside this one (context only; a reference to one of them follows the referenced-object rule below):
 - Microsoft.Graph/windowsAutopilotDeploymentProfiles
 - Microsoft.Graph/groups (dynamic device groups on ZTDId, OrderID (the group tag) or PurchaseOrderId)
 
-The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector), carries no configurable settings payload and has no assignments or targeting. Produce well-structured Markdown documentation with this layout:
+The configuration is provided as a YAML file exported by azure-resource-downloader. This resource is an inventory or registry record, not a policy: it represents a registered entity (e.g. a device identity, category or connector) and has no assignments or targeting; settings it does carry (e.g. a connector's toggles and thresholds) are documented like any other property. Produce well-structured Markdown documentation with this layout:
 
 - An H1 title set to the record's display name or primary identifier (e.g. serial number, connector name).
 - Directly below the title, without a heading: a short summary paragraph describing what this record represents and its role in the tenant. Take the purpose from the resource's own `description` and its settings; where they do not state it, say that the purpose is not documented — never infer it from the display name.
-- A metadata table stating the resource type, the resource ID and the record's key identifying fields (e.g. serial number, model, state, last sync time), where present.
+- Directly after the summary paragraph, a metadata table stating the resource type, the resource ID and the record's key identifying fields (e.g. serial number, model, state, last sync time), where present.
 
 Then the following H2 sections, unnumbered, in this order:
 
 References:
-- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, best-practice baselines) as a Markdown link labelled with what it is.
+- list every curated reference link given above (API reference, schema reference, required permissions, Admin center, Microsoft guidance) as a Markdown link labelled with what it is.
 - add a link for an individual setting only under the URL rule below.
-- Use real, verifiable URLs; link a setting only to a specific page you know, otherwise give it no link — never a guessed or merely nearby URL.
+- Use real, verifiable URLs; link a setting only to a page listed under References (an anchor on one is fine), otherwise give it no link — never a recalled, guessed or merely nearby URL.
 
 Lifecycle and operations:
-- explain how records of this type appear and disappear (registration/sync/deletion), what a stale or error state means, and what happens downstream when the record is removed.
+- Build on the lifecycle notes listed above and add only what the YAML itself shows.
+- Of those notes, state the ones that apply to this resource (given its subtype, platform and settings) and leave out the ones that don't.
+- Of the points below, skip those that don't apply to this resource and cover the others only as far as the lifecycle notes or the YAML support them; say once which of them are not documented here — never fill one in from general knowledge.
+- cover how records of this type appear and disappear (registration, sync, deletion), what a stale or error state means, and what happens downstream when the record is removed.
+
+Security:
 - name the permission needed to read this resource (from the permissions listed above), and the least-privileged role able to change it only where the lifecycle notes or the required-permissions page listed above support it — otherwise state that the change role is not documented here.
+- call out security-sensitive properties.
 - call out any exposed credential found under the redaction rule below.
 
 Properties:
-- document EVERY property present in the YAML as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance.
+- document EVERY property present in the YAML.
 - give particular attention to: groupTag, purchaseOrderIdentifier, serialNumber, deploymentProfileAssignmentStatus, enrollmentState, azureAdDeviceId, managedDeviceId.
-- Open each block as `<details data-setting="<exact YAML path>">`, e.g. `<details data-setting="enrollmentState">`. The path is the same string the `<summary>` shows — never invent or abbreviate it.
-- Add `data-note="inert"` when the property is present but has no effect because a gating setting is off, and `data-note="security"` only on a block whose value you redacted under the rule below. Omit the attribute otherwise. Use no other value.
+- Render each property as a collapsible HTML `<details>` block, collapsed by default: the `<summary>` holds the property key (YAML path) and its value; the expanded body documents what the property means and any operational relevance — e.g. `<details data-setting="enrollmentState">`.
+- Open each block as `<details data-setting="<exact YAML path>">`: the path is the same string the block's `<summary>` shows — never invented or abbreviated. For a block that documents a key inside a decoded payload, use the owning setting's path, a `#` and the key's path inside the payload (e.g. `payload#PayloadContent[0].PayloadType`), and show the same string in its `<summary>`. Add `data-note="security"` when the property is one called out in the Security section (this includes a value redacted under the redaction rule), or `data-note="inert"` when it is present but has no effect because a gating setting is off; otherwise add no attribute. Use no other value.
+- Do not omit a property this section covers; if one is unfamiliar, infer its meaning from the type's API schema (the schema reference listed above, where given) and say so explicitly.
+- State a recommended value only where a Microsoft guidance page listed above states one for the setting, and name that page; otherwise document the configured value only — never a recommendation from general knowledge.
 - When this section would hold more than 30 top-level blocks, group them under H3 headings by the leading segment of the setting path (for settings catalog settings: the category prefix of `settingDefinitionId`) — never by themes you invent.
 - Document a referenced object (an assignment filter, a `roleScopeTagIds` entry, a named location, an authentication strength, a notification template, a reusable policy setting and the like) by its bare id inside the owning setting's body. Name or link it only where the documentation run resolves it for you in a block it splices in; never name a referenced object from memory.
-- Only describe properties that are actually present; never invent values.
+- Only describe what is actually present; never invent values.
 - Where a value is masked or redacted by the service, state that explicitly and do not flag it as a misconfiguration.
-- If a value in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content) is **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and the service did **not** already mask it, do not reprint it: put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, mark the block `data-note="security"`, and call it out in the **Lifecycle and operations** section as an exposed credential to rotate (a record has no Security section). The literal value stays only in the source YAML.
+- Never reprint a secret. A value is a secret when it is (a) **credential-shaped** — at least 10 characters and either a 16+ character hex run or a mix of three or more character classes, but never a GUID, URL or identifier — and sits in a **free-text field** (`description`, `notes` and similar human-entered text) or inside a **decoded embedded payload** (a plist `<string>`, configuration XML, or base64-decoded content); (b) credential-shaped and the value of a property whose own key names a credential (`password`, `passphrase`, `secret`, `token`, `sharedKey`, `preSharedKey` and the like — not a key naming its metadata, such as `tokenName` or `tokenExpirationDateTime`); or (c) the `value` of an `omaSettings` entry with `isEncrypted: true` that the export resolved to plaintext, whatever its shape. Unless the service already masked it, put `«redacted — secret present in source»` in place of the value in both the `<summary>` and the body, still document what the field is, and mark the block `data-note="security"`. For (a) and (b), call it out in the **Security** section as an exposed credential to rotate; for (c), call it out there as a secret this export holds in plaintext because secret resolution was enabled. The literal value stays only in the source YAML.
 
-These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. The line below records this heading list for the documentation pipeline; do not copy it into the document.
+These H2 headings are a closed set and a machine contract: the documentation browser styles each section by its heading text. Write them verbatim — exact wording, exact casing, no numbering, no added words — in the order given, and emit no other H2. Do not introduce `## Metadata`, `## Overview`, `## At a glance`, `## Assignments` or `## Coverage caveats`: identifying fields belong in the metadata table above. If a finding fits no section, put it in the closest one — never in a new one. Use H3/H4 freely *inside* a section to structure it. Write for the document's reader: never mention this prompt, the documentation run, splicing or markers in the document's prose. The comment lines below record this heading list (and, where present, the grouping vocabulary) for the documentation pipeline; do not copy them into the document.
 
-<!-- doc-headings: References | Lifecycle and operations | Properties -->
+<!-- doc-headings: References | Lifecycle and operations | Security | Properties -->

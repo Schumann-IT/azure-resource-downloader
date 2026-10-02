@@ -33,6 +33,10 @@ func NewWindowsAutopilotDeviceIdentityHandler(credential azcore.TokenCredential)
 			Lifecycle: []string{
 				"Deregister a device when it permanently leaves the organization (for example repair or end of life): delete its Intune device record first, because only devices not enrolled in Intune can be deleted from Autopilot.",
 				"Don't delete the Entra device object manually; for hybrid-joined devices delete the on-premises AD computer object instead.",
+				"A registered device without an assigned profile still receives the default Windows Autopilot profile; remove the registration if the device shouldn't go through Autopilot.",
+				"A hardware hash registered in one tenant can't be imported into another (ZtdDeviceAssignedToAnotherTenant); after a motherboard replacement the registered hash no longer matches and a new hash must be uploaded.",
+				"In Windows Autopilot devices the profile status moves from Unassigned through Assigning to Assigned; deploy the device only once it reads Assigned and Date assigned (deploymentProfileAssignedDateTime) is set.",
+				"An assigned user only pre-fills the sign-in UPN and greeting on supported OEMs (not with AD FS) and doesn't change which policies or apps apply; a device name set here is ignored for hybrid join, where the Domain Join profile names the device.",
 				"deviceAccountPassword (Surface Hub) is a secret: redact it if present.",
 			},
 			RelatedTypes: []string{

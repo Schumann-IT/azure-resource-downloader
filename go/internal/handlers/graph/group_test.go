@@ -31,7 +31,8 @@ func TestGroupHandler_GetDocumentationPromptUsesOverrideTemplate(t *testing.T) {
 		"Permissions required to read this resource type:\n- Group.Read.All",
 		"Membership:",
 		"Usage as assignment target:",
-		"give particular attention to: groupTypes, membershipRule (for dynamic groups), membershipRuleProcessingState, securityEnabled, mailEnabled, isAssignableToRole.",
+		"give particular attention to: groupTypes, membershipRule (for dynamic groups; device.deviceOwnership takes Personal, Company or Unknown, and corporate devices are Company, which Intune shows as Corporate), membershipRuleProcessingState, securityEnabled, mailEnabled, isAssignableToRole.",
+		"<!-- doc-headings: References | Membership | Usage as assignment target | Lifecycle and operations | Security | Properties -->",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)
@@ -40,8 +41,9 @@ func TestGroupHandler_GetDocumentationPromptUsesOverrideTemplate(t *testing.T) {
 
 	// The default template's settings/assignments layout must not leak in.
 	for _, unwanted := range []string{
-		"Then the following H2 sections, unnumbered, in this order:\n\nReferences:",
-		"a table of any assignments/targeting present",
+		"If the YAML carries an `@odata.type`, first identify the concrete subtype",
+		"externally decoded sidecar file",
+		"Then the assignments table, alone between a `<!-- assignments:start -->` line",
 	} {
 		if strings.Contains(prompt, unwanted) {
 			t.Errorf("prompt unexpectedly contains default-template text %q", unwanted)

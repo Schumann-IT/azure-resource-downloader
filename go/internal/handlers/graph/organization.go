@@ -35,6 +35,7 @@ func NewOrganizationHandler(credential azcore.TokenCredential) (*GraphCollection
 			RequiredPermissions: []string{"Organization.Read.All"},
 			Lifecycle: []string{
 				"Read and update only (no create or delete); Graph can update only the notification contacts (technicalNotificationMails, securityComplianceNotificationMails and Phones, marketingNotificationEmails) and privacyProfile.",
+				"technicalNotificationMails holds the tenant's technical notification contacts; in a tenant synchronized from on-premises they receive the Identity Synchronization Error Report emails about directory synchronization errors.",
 				"Verified domains and technical notification contacts should be reviewed periodically.",
 			},
 			RelatedTypes: []string{

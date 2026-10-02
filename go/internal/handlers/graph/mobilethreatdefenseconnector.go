@@ -23,9 +23,8 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 	return &GraphCollectionHandler{
 		azureType: "Microsoft.Graph/mobileThreatDefenseConnectors",
 		documentation: models.ResourceDocumentation{
-			Template:      recordPromptTemplateText,
-			OmitGroupAxes: true,
-			Purpose:       "An Intune Mobile Threat Defense connector to an MTD partner (a third-party vendor, Microsoft Defender for Endpoint or Windows Security Center) whose device threat data feeds compliance and app protection evaluation.",
+			Template: recordPromptTemplateText,
+			Purpose:  "An Intune Mobile Threat Defense connector to an MTD partner (a third-party vendor, Microsoft Defender for Endpoint or Windows Security Center) whose device threat data feeds compliance and app protection evaluation.",
 			KeySettings: []string{
 				"androidEnabled",
 				"iosEnabled",
@@ -34,13 +33,19 @@ func NewMobileThreatDefenseConnectorHandler(credential azcore.TokenCredential) (
 				"partnerState",
 				"partnerUnresponsivenessThresholdInDays",
 				"androidDeviceBlockedOnMissingPartnerData, iosDeviceBlockedOnMissingPartnerData, macDeviceBlockedOnMissingPartnerData, windowsDeviceBlockedOnMissingPartnerData",
-				"androidMobileApplicationManagementEnabled, iosMobileApplicationManagementEnabled",
+				"androidMobileApplicationManagementEnabled, iosMobileApplicationManagementEnabled, windowsMobileApplicationManagementEnabled",
+				"partnerUnsupportedOsVersionBlocked",
+				"allowPartnerToCollectIOSApplicationMetadata, allowPartnerToCollectIOSPersonalApplicationMetadata, allowPartnerToCollectIosCertificateMetadata, allowPartnerToCollectIosPersonalCertificateMetadata (inventory data shared with the partner; the personal-device options add unmanaged apps and certificates)",
 				"lastHeartbeatDateTime",
 			},
 			RequiredPermissions: []string{"DeviceManagementServiceConfig.Read.All"},
 			Lifecycle: []string{
+				"A non-Microsoft partner's connector is added under Tenant administration > Connectors and tokens > Mobile Threat Defense after the Intune connector is set up in the partner console (Defender for Endpoint's is set up under Endpoint security > Microsoft Defender for Endpoint); its toggles and threshold are admin-set settings, and the Mobile Threat Defense pane shows Connection status and Last synchronized.",
+				"Adding or changing the connector needs the Endpoint Security Manager role or a custom role with Read and Modify on the Mobile Threat Defense permission.",
 				"If the partner sends no heartbeat for partnerUnresponsivenessThresholdInDays the connector becomes unresponsive and Intune ignores the partner's compliance state; the *DeviceBlockedOnMissingPartnerData settings decide whether devices can be compliant before partner data arrives.",
-				"Only one partner per platform can feed app protection (MAM) evaluation.",
+				"partnerState: notSetUp means setup is incomplete, available means set up but no platform toggle is on, enabled means at least one toggle is on, unavailable means the connector is deprovisioned and the partner must have Intune provision it again, error means the connector has an error code.",
+				"With two or more partners enabled for compliance on one platform, every device of that platform must run each partner's app and is noncompliant if one fails to submit a scan; Defender for Endpoint beside a third-party partner can instead be checked by separate compliance policies per group.",
+				"Microsoft Defender for Endpoint and a non-Microsoft partner can both be enabled for app protection (MAM) evaluation on a platform; an app uses only one of them, chosen by each app protection policy's mobileThreatDefensePartnerPriority (Defender when unset).",
 			},
 			RelatedTypes: []string{
 				"Microsoft.Graph/deviceCompliancePolicies (threat-level based compliance)",
