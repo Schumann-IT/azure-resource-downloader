@@ -139,7 +139,7 @@ section of the [repository README](../README.md) for the procedure.
   documentation template the same section order, adds *References* and *Lifecycle and operations* to group
   documents and *Security* to record documents; the browser styles these sections like every other contract
   section, and a test keeps its vocabulary in step with the CLI's heading sets. Visible once the documentation is
-  regenerated.
+  regenerated. (#54)
 
 - **Conditional Access documents get a styled `Conditions` section.** The CLI's new Conditional Access template
   documents a policy's targeting in a `Conditions` section; the browser now gives it the relations colour and an

@@ -5,6 +5,7 @@ status: done
 started: 2026-10-02
 finished: 2026-10-02
 branch: feat/prompt-consistency
+pr: 54
 changelog: Unreleased
 ---
 ## Section styling follows the CLI's harmonised heading sets

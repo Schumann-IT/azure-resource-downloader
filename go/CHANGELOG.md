@@ -19,7 +19,7 @@ This project is released independently of the documentation browser in `web/`: i
   double-quoted `summary:` in each document's frontmatter and its post-run check enforces it; `docs generate-index`
   already copies it into `docs/index.yaml`, where the documentation browser can show it. It appears — together
   with `platformGroup` / `functionGroup`, which older documents lack — with the next regeneration, so
-  **regenerate the documentation**.
+  **regenerate the documentation**. (#54)
 
 #### Release workflow
 
@@ -174,7 +174,7 @@ This project is released independently of the documentation browser in `web/`: i
   changes with `resolve-secrets`. The run prompt describes full and incremental runs alike, keeps links Markdown
   and checks more after the run: every `<details>` names its setting, assignment markers sit exactly where the
   type's spec asks for them, and `generatedAt` matches the export. Every type's prompt changes, so **regenerate
-  the documentation**.
+  the documentation**. (#54)
 
 - **Conditional Access gets its own documentation template, and every template asks for evidence, not guesses.**
   A Conditional Access policy is documented from what actually targets it — its users, roles, applications,
