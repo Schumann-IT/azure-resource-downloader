@@ -15,20 +15,24 @@ export const SECTION_HEADING_CLASS = 'doc-section-heading';
 
 export const METADATA_TABLE_CLASS = 'doc-metadata';
 
-// The union of the seven per-template heading sets, plus the tenant summary's
+// The union of the eight per-template heading sets, plus the tenant summary's
 // own vocabulary. Slugs, not headings: `slugifyHeading` is what maps one to the
 // other, and the stylesheet keys on these values.
 //
-//   default / singleton  references, lifecycle-and-operations, security, settings
-//   arm                  references, lifecycle-and-operations, security, properties
-//   conditional-access   references, conditions, lifecycle-and-operations, security, settings
-//   group                membership, usage-as-assignment-target, security, properties
-//   credential           + expiry-and-renewal
-//   record               references, lifecycle-and-operations, properties
-//   referenced           + usage-and-references, definition (also used by
-//                        roleScopeTags and reusablePolicySettings)
-//   summary.md           management-summary, at-a-glance, assignment-posture,
-//                        coverage-caveats (+ H3 findings, recommendations)
+//   default             references, lifecycle-and-operations, security, settings
+//   singleton           references, lifecycle-and-operations, security, settings
+//   arm                 references, lifecycle-and-operations, security, properties
+//   conditional-access  references, conditions, lifecycle-and-operations, security, settings
+//   group               references, membership, usage-as-assignment-target,
+//                       lifecycle-and-operations, security, properties
+//   credential          references, expiry-and-renewal, lifecycle-and-operations,
+//                       security, properties
+//   record              references, lifecycle-and-operations, security, properties
+//   referenced          references, usage-and-references, lifecycle-and-operations,
+//                       security, definition (also used by roleScopeTags and
+//                       reusablePolicySettings)
+//   summary.md          management-summary, at-a-glance, assignment-posture,
+//                       coverage-caveats (+ H3 findings, recommendations)
 //
 // `targeted-by` and `used-by` are spliced into a document inside a marker pair
 // but are real H2s in the body, so they belong here too.

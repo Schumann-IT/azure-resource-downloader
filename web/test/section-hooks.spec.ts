@@ -136,6 +136,71 @@ describe('applySectionHeadings', () => {
     expect(tokens[0].attrGet('class')).toBe(SECTION_HEADING_CLASS);
   });
 
+  // Copied from the CLI's per-template heading sets (never imported from
+  // `go/`); a CLI heading change has to update this table.
+  const HEADING_SETS: Record<string, string[]> = {
+    default: ['References', 'Lifecycle and operations', 'Security', 'Settings'],
+    'conditional-access': [
+      'References',
+      'Conditions',
+      'Lifecycle and operations',
+      'Security',
+      'Settings',
+    ],
+    referenced: [
+      'References',
+      'Usage and references',
+      'Lifecycle and operations',
+      'Security',
+      'Definition',
+    ],
+    singleton: [
+      'References',
+      'Lifecycle and operations',
+      'Security',
+      'Settings',
+    ],
+    arm: ['References', 'Lifecycle and operations', 'Security', 'Properties'],
+    credential: [
+      'References',
+      'Expiry and renewal',
+      'Lifecycle and operations',
+      'Security',
+      'Properties',
+    ],
+    record: ['References', 'Lifecycle and operations', 'Security', 'Properties'],
+    group: [
+      'References',
+      'Membership',
+      'Usage as assignment target',
+      'Lifecycle and operations',
+      'Security',
+      'Properties',
+    ],
+  };
+
+  const HEADING_CASES: Array<[string, string]> = Object.entries(
+    HEADING_SETS,
+  ).flatMap(([family, headings]) =>
+    headings.map((h): [string, string] => [family, h]),
+  );
+
+  it.each(HEADING_CASES)('styles the %s heading "%s"', (_family, text) => {
+    const tokens = heading('h2', text);
+    applySectionHeadings(tokens as any);
+    expect(tokens[0].attrGet('data-section')).toBe(slugifyHeading(text));
+    expect(tokens[0].attrGet('class')).toBe(SECTION_HEADING_CLASS);
+  });
+
+  it('keeps every heading set within the section vocabulary', () => {
+    const slugs = new Set(
+      Object.values(HEADING_SETS).flatMap((set) => set.map(slugifyHeading)),
+    );
+    for (const slug of slugs) {
+      expect(SECTION_VOCABULARY).toContain(slug);
+    }
+  });
+
   it('leaves an unrecognised heading addressable but unstyled', () => {
     const tokens = heading('h2', 'Metadata');
     applySectionHeadings(tokens as any);
