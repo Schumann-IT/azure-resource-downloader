@@ -33,42 +33,134 @@ or miss a finding because of a script it got wrong.
 >
 > **Not regeneration-gated.** The run prompt is not hashed; no document changes. Takes effect at the next
 > `docs generate-prompt`. The summary's *configured but unassigned* count for default objects is a separate
-> parked idea (*default objects are not "configured but unassigned"*).
+> parked idea (*default objects are not "configured but unassigned"*). No other entry or parked idea needs to
+> ride along.
+>
+> **Scope.** Update-ring pause windows (`featureUpdatesPauseExpiryDateTime`, `qualityUpdatesPauseExpiryDateTime`)
+> and a Microsoft 365 group's `expirationDateTime` leave the sweep entirely: they are not credentials, the signal
+> list stays closed at five (appendix E), and a paused ring is already described in its own document. The
+> marker-pair check is shared by copy, not import: the agent pastes each script as its own file, so section 6
+> carries a verbatim copy of the section-4 helper and a test keeps the two identical.
+>
+> **Contract.** No artefact the web project reads changes. Documents keep their frontmatter, their four marker
+> blocks (`assignments`, `targeted-by`, `used-by`, `notifications`) and their table shapes; `docs/summary.md`
+> keeps `# Tenant summary`, the four H2 headings, the `### Findings` / `### Recommendations` H3 pair and the
+> `Severity | Finding | Affected | Documents` table with `critical` / `high` / `medium`. The new scripts only
+> read: section 6 reads `docs/` (documents and the rendered `docs/generate.md`) and `chunks/mtimes.json`; the
+> sweep reads `resources/` (YAML, `metadata.yaml`, `doc-prompt.md`, plist sidecars) and prints to stdout.
+> Neither writes a file. The tightened section-4 marker check (order and nesting) fails only documents that
+> already broke section 2's "never nest markers, never a start without its end" rule.
+>
+> **Owner.** none — every change is under `go/`. No sequencing constraint.
+>
+> **Implementer.** opus
 
 **Plan.**
 
-- `internal/docs/generate_prompt_template.md` section 6: a Python script beside the table, in the same style as
-  sections 4 and 7 (`"""Section 6 reference checks. Run from the tenant folder after section 5. Exit 1 if anything
-  failed."""`), implementing every row of the table: *assignment resolution* (no bare group GUID in a marked
-  block without a resolved name or `⚠️ not in export`); *link symmetry* — policy → group from the assignments
-  table's *Target* column only and group → policy from the `Targeted by` table's *Resource* column only (filter
-  links in the *Filter* column are not group references), and compliance policy ↔ notification template from the
-  `notifications` and `Used by` blocks; *link targets exist* (every relative link inside a marked block resolves
-  under `docs/`); *marker pairs survived* (call the section-4 helper); *hashes updated* (each written or
-  re-spliced document carries the block hashes its work-list row names); *nothing else touched* (against
-  `chunks/mtimes.json`). The table stays as the explanation; the prose says to run the script and repair what it
-  reports.
-- `internal/docs/generate_prompt_template.md` section 7: ship the signal sweep as a script
-  (`"""Section 7 signal sweep. Run from the tenant folder before writing docs/summary.md. Prints each signal with
-  the resources it names."""`) and keep the table as the explanation. Within it:
-  - one credential-word list, stated once and used by rules (a)–(c): `password`, `passwd`, `pwd`, `passphrase`,
-    `secret`, `token` (incl. `apitoken`), `apikey`, and any key containing `key` together with `auth`, `access`,
-    `private` or `shared` (`authkey`, `accesskey`, `privatekey`, `sharedkey`), case-insensitive;
-  - a new rule (e) for command lines: in `installCommandLine` / `uninstallCommandLine` (and any key ending in
-    `CommandLine`), a `NAME=value` or `/name value` pair whose name is a credential word and whose value is
-    credential-shaped;
-  - the credential-shaped test unchanged, plus explicit exclusions: ISO-8601 timestamps and dates are never
-    credential-shaped;
-  - *Credentials near expiry* reads only the expiry fields of credential types (certificates, tokens: e.g.
-    `expirationDateTime`, `tokenExpirationDateTime`) — update-ring `featureUpdatesPauseExpiryDateTime` /
-    `qualityUpdatesPauseExpiryDateTime` and similar pause windows are not credentials and are not reported there.
-  The rule (c) caution (free-text fields only) stays.
-- Tests (`internal/docs/generateprompt_test.go`): the rendered `generate.md` contains the section-6 script, and its
-  symmetry check reads group links from the *Target* / *Resource* columns only. Optionally a fixture-based run of
-  the script on a tiny synthetic tenant (one policy, one group, one filter, one template) that passes clean and
-  fails on a planted one-sided link. The section-7 sweep script is present, names the credential-word list and
-  rule (e), and (optionally, on a synthetic `resources/` tree) reports an `APITOKEN=` in an `installCommandLine` and
-  an `authkey` plist value while ignoring an ISO timestamp and an update-ring pause expiry.
+- Constraints for both new scripts (state them in the template prose once, above the section-6 script): Python ≥
+  3.9 standard library only (no PyYAML — like sections 4 and 7, the agent's environment is not guaranteed to have
+  it); run from the tenant folder; read-only (write no file); never print a credential value (print the resource
+  path, the key path or argument name, the rule and the value's length). The script text must not contain the
+  literal start or end comment of any tool-filled block (`export`, `worklist`, `refmap`, `usedbymap`, `resplice`,
+  `migrate`, `expected`, `summary-facts`): `ValidateMarkers` requires each exactly once in the template, so build
+  such strings from the name (`f"<!-- {name}:start -->"`), as the section-4 script already does.
+- `internal/docs/generate_prompt_template.md` section 4: move the inline marker loop (`for marker in
+  ("assignments", "targeted-by", "used-by", "notifications")`) into a function `def marker_problems(text):` that
+  returns a list of messages and is called once per document with `fail(doc, msg)` for each. It keeps the
+  existing *unbalanced* and *repeated* messages and adds *end before start* and *nested* (another block's start
+  between a start and its end). The section-4 table's *Assignment markers* row and section 2's "never nest"
+  sentence already state the rule; no prose change beyond that.
+- `internal/docs/generate_prompt_template.md` section 6: a Python block in a four-backtick fence (as in sections 4
+  and 7) after the table, docstring
+  `"""Section 6 reference checks. Run from the tenant folder after section 5. Exit 1 if anything failed."""`,
+  the same `fail(doc, msg)` / `Counter` summary / exit-code shape as section 4, walking every document under
+  `docs/` except the root files. It implements every row of the table:
+  - *Assignment resolution* — inside any of the four marked blocks, every GUID except the all-zero filter
+    sentinel shares its table cell (or, outside a table, its line) with a Markdown link or `⚠️ not in export`.
+  - *Link symmetry* — tables are read by their header row. Policy → group: links in the assignments table's
+    *Target* column only, resolved relative to the document; the group document's `targeted-by` table must have
+    a *Resource*-column link resolving back to the policy. Group → policy: links in the `targeted-by` *Resource*
+    column only; that document's assignments *Target* column must link back. Links in the *Filter* column (either
+    table) are never group references. Compliance policy ↔ notification template: every link in a policy's
+    `notifications` block must be answered by a *Resource*-column link in the template's `used-by` table, and
+    every such *Resource* link by a link in that policy's `notifications` block.
+  - *Link targets exist* — every relative link inside a marked block (anchors and `http(s)` links ignored)
+    resolves to a file under `docs/`.
+  - *Marker pairs survived* — a verbatim copy of section 4's `marker_problems`.
+  - *Hashes updated* — the script reads the rendered prompt (`docs/generate.md`, or the path given as its first
+    argument) and, inside its `worklist`, `resplice` and `migrate` blocks, every table whose header has a
+    `Document` column: for each row and each of `assignmentsSha256` / `notificationsSha256` / `usedBySha256` /
+    `targetedBySha256` present as a column with a non-empty cell, the document's frontmatter must carry that key
+    with that value. A missing prompt file fails.
+  - *Nothing else touched* — against `chunks/mtimes.json` (missing → fail: section 4 has not passed): a document
+    whose mtime moved, or that is not in the snapshot, must be named in the `worklist`, `resplice` or `migrate`
+    block; a snapshot document that no longer exists fails.
+  The table stays as the explanation; the sentence "Script them the same way" becomes: run the script after
+  section 5, repair what it reports through the section-5 splice script (never by hand), and re-run until it
+  exits 0. The *Marker pairs survived* row says the script carries the section-4 helper.
+- `internal/docs/generate_prompt_template.md` section 7: ship the signal sweep as a Python block in a four-backtick fence
+  (as in sections 4 and 7) under *Where the facts come from*, docstring `"""Section 7 signal sweep. Run from the tenant folder before writing
+  docs/summary.md. Prints each signal with the resources it names."""`. It reads YAML with a small
+  indentation-aware walker over the `yaml.v3` output shape (mapping scalars with their key path, `|` / `>` block
+  scalars joined, the keys of each list item grouped), measures time against `metadata.yaml`'s `generatedAt`
+  (never the clock), prints one section per signal with a count and deduplicated, sorted lines, and exits 0
+  (1 only when `resources/metadata.yaml` is missing). It sweeps `resources/**/*.yaml` except `metadata.yaml`, plus
+  `.mobileconfig` / `.plist` / `.xml` sidecars for rule (a) only, so the result does not depend on the
+  `base64-decode` transformer's inline or file mode. Within it:
+  - *Not in force* — top-level `state: enabledForReportingButNotEnforced`, `state: disabled` or
+    `isEnabled: false`, counted per type with each resource's path.
+  - *Configured but unassigned* — from `metadata.yaml`: entries with `presentInTenant: true` whose type has
+    `hasAssignments: true` and that carry no `assignmentTargets`, with display name and derived document path —
+    the same set the `summary-facts` block counts.
+  - *Dangling targets* — from `metadata.yaml`: every `groupId` in a present entry's `assignmentTargets` that is
+    not the `resourceId` of any `Microsoft.Graph/groups/…` entry, with the number of resources assigning it —
+    the GUIDs the `refmap` block flags dangling.
+  - *Credentials near expiry* — only types whose `doc-prompt.md` `doc-headings` marker lists `Expiry and renewal`
+    (the credential family: Apple push certificate, VPP tokens, DEP onboarding settings), and only their
+    top-level `expirationDateTime` / `tokenExpirationDateTime`, quoted or not: past, or within 180 days of the
+    export timestamp, printed with the date and the days left.
+  - one credential-word list, stated once and used by rules (a), (b), (c) and (e): `password`, `passwd`, `pwd`,
+    `passphrase`, `secret`, `token`, `apikey`, `authkey`, `accesskey`, `privatekey`, `sharedkey`. A name matches
+    when, lowercased with `_`, `-` and `.` removed and one trailing `value` / `text` / `string` dropped, it ends
+    with a list word (`wifiPassword`, `preSharedKey`, `REMOTEOFFICEAUTHKEY`, `APITOKEN` match; `tokenName`,
+    `passwordMinimumLength`, `tokenExpirationDateTime` do not). Rule (c) instead looks for a list word as a
+    whole word in the free text.
+  - *Plaintext credentials*, rules (a)–(d) as today, plus rule (e): in `installCommandLine`,
+    `uninstallCommandLine` and any key ending in `CommandLine` (case-insensitive), a `NAME=value`, `/NAME value`,
+    `/NAME:value` or `-NAME value` argument (quotes stripped) whose name matches the list and whose value is
+    credential-shaped.
+  - credential-shaped as today (≥ 10 characters; a hex run of 16+ first, else at least three of lowercase,
+    uppercase, digit, other non-space), with these exclusions added to the existing ones: ISO-8601 dates and
+    timestamps (`YYYY-MM-DD`, optionally `T…`) and any value containing whitespace are never credential-shaped.
+  The table stays as the explanation and is updated to match: the *Credentials near expiry* row names the
+  credential types and their two fields and says pause windows and group expiry are not credentials; the
+  *Plaintext credentials* row says "exactly five rules" and adds (e); the credential-shaped paragraph gains the
+  two exclusions. The rule (c) caution (free-text fields only) stays. The sentence introducing the sweep says to
+  run the shipped script, not to write one.
+- Tests (`internal/docs/generateprompt_test.go`), presence: the default template contains both docstrings,
+  `def marker_problems(`, the *Target* / *Resource* column names the section-6 symmetry reads, the
+  credential-word list, rule (e)'s `CommandLine` match and `Expiry and renewal`; and a `GeneratePrompt` run with
+  the default template still succeeds (no tool-filled marker literal leaked into a script).
+- Tests, helper identity: extract the two `def marker_problems` bodies from the template (by the section-4 and
+  section-6 docstrings) and assert they are byte-identical.
+- Tests, section-6 fixture run (skip with `t.Skip` when `exec.LookPath("python3")` fails; CI's
+  `ubuntu-latest` has it): in `t.TempDir()`, a tenant with one compliance policy assigned to one group with an
+  assignment filter and referencing one notification template; `docs/generate.md` produced by `GeneratePrompt`
+  on that fixture so the parser is pinned to the real table shapes; hand-written documents whose blocks and
+  frontmatter hashes match the work list; `chunks/mtimes.json` written from the files' mtimes. Extract the
+  script from the rendered prompt, run it with the tenant as working directory. Clean → exit 0, including with
+  the filter link in the group's `Targeted by` *Filter* column. Each planted defect → exit 1 with its message:
+  the policy row removed from the group's `Targeted by`, a bare group GUID in an assignments block, a wrong
+  `targetedBySha256`, a document outside the three lists touched (`os.Chtimes`), a `notifications` link with no
+  `Used by` answer.
+- Tests, sweep fixture run (same skip): a `resources/` tree with `metadata.yaml` (`generatedAt`
+  `2026-10-02T00:00:00Z`) holding a win32 app with `installCommandLine: setup.exe APITOKEN=<planted>`, an iOS
+  custom profile whose plist carries `<key>RemoteOfficeAuthKey</key><string><planted></string>`, an update ring
+  with both pause expiries inside 180 days, a Microsoft 365 group with `expirationDateTime` inside 180 days, a VPP
+  token expiring inside 180 days (with its credential-family `doc-prompt.md`), a `tokenName` with a
+  three-class value, and one unassigned assignment-capable resource. Assert the output reports the `APITOKEN`
+  argument (rule e), the plist key (rule a), the VPP expiry and the unassigned resource; does not report the
+  pause expiries, the group expiry or `tokenName`; and never contains either planted value.
 - Documentation at *done*: `README.md` *Documentation generation*, items 6 and 7 of the agent's steps (the
   shipped reference-check and signal-sweep scripts; command-line credentials in the summary); `CHANGELOG.md`
   `### Changed`.
