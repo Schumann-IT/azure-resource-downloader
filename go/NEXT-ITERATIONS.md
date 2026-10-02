@@ -8,6 +8,198 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
+## 1. Index settings and assignment scopes and report same-setting conflicts
+
+*Kind:* feat
+
+**Goal.** An operator can find out, from the export alone and without choosing what to compare, where two
+resources configure the same setting differently — or redundantly — for scopes that can reach the same device or
+user. A new command, `docs analyze-consistency`, indexes every configured setting, models every resource's
+assignment scope, and writes the same-setting conflicts and duplicates it finds into a new `consistency/` tree.
+
+> **Why.** The tenant summary has a *consistency* paragraph ("does any setting contradict another",
+> `internal/docs/generate_prompt_template.md` §7) that nothing feeds: the summary may judge only from
+> `summary-facts`, the reference map and the five-signal sweep. A Claude Cowork draft
+> (`Claude outputs/consistency-analysis-plan.md`, git-ignored, written without the code) proposed the feature;
+> this entry is its deterministic first step, reconciled with the code. The later steps are the entries
+> *A consistency rule and topic catalog in the configuration*, *The consistency analysis job*, and *Feed the
+> consistency findings into the tenant summary*, plus the web entry *The consistency view*.
+>
+> **Principles.** Deterministic first: Go indexes, scopes and compares same-setting values; no LLM in this entry.
+> Independent of the documentation: everything comes from `resources/` (YAML and `metadata.yaml`), so the command
+> can run right after `resource download`. Facts stay in `resources/metadata.yaml`; the analysis is a `docs`
+> command's decision and lives in its own tree.
+>
+> **Decision.** Scope v1: mechanical first; the rule catalog, the LLM job, the summary signal and the web view are
+> the following entries.
+>
+> **Decision.** `<tenant>/consistency/` describes one export: a re-baselining `resource download` clears it, like
+> `drift/`. The web browser renders it in v1 (the web entry *The consistency view*).
+>
+> **Decision.** Shapes: before writing normalisers, the implementer may read one real export's ADMX, intent,
+> assignment-filter and collection-valued Settings Catalog YAML **read-only, for key structure only**; no value is
+> copied into the repository, every fixture is synthetic and built in a temp directory.
+>
+> **From the code.** Precedents: `cmd/docs/analyze_drift.go` (flags, `cmdutil.ResolveExportDir`, exit 2 = cannot
+> answer, dry-run), `drift.ClearTree` and `rebaselineClearDrift` in `cmd/resource/download.go`. Write files with
+> `docs.WriteFileAtomic` (analyze-drift's `os.WriteFile` is not the model). Assignment parsing exists in
+> `internal/docs/assignments.go` (`parseAssignments`, `buildGroupInfo`, `buildFilterInfo`, the zero-GUID filter
+> sentinel). `metadata.yaml` carries raw `assignmentTargets`, `groupTypes`, `platforms`, `odataType` — not a
+> group's `membershipRule` nor a filter's `platform`/`rule`, which come from the groups' and filters' YAML.
+> ADMX presentation values are not exported (parked idea *export ADMX presentation values*). No repository
+> fixtures exist for ADMX `definitionValues`, intent `settings`, `assignmentFilters` or collection-valued Settings
+> Catalog settings.
+>
+> **Not regeneration-gated.** No `*_prompt.tmpl` changes; no document changes.
+
+**Plan.**
+
+- New package `internal/consistency` and command `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`,
+  registered in `cmd/docs.go`; flags `--domain` and `--out` like analyze-drift; the flag and subcommand surface
+  tests in `cmd/docs_test.go` and `cmd/resource_test.go`); refuses with exit 2 without `resources/metadata.yaml`
+  or on a tenant mismatch.
+- Setting index `(resource, canonicalKey, value, state)`: Settings Catalog `settingDefinitionId`, walking choice
+  children and group collections, with choice, simple and collection values in one comparable form and secret
+  `valueState` as `set`; custom OMA-URI by lowercase `omaUri`, masked or encrypted values as "set, value unknown";
+  the Settings Catalog ↔ OMA-URI bridge through the CSP path derived from
+  `device_vendor_msft_policy_config_<area>_<setting>` (compared lowercase); ADMX by `definition.id` and `enabled`;
+  intents by `definitionId` and parsed `valueJson`; legacy typed configurations by `@odata.type#property` within the
+  same `@odata.type`; compliance policies indexed as class `requirement`, never compared as values. A masked value is
+  never a value conflict.
+- Scope model and overlap verdict per resource pair: include and exclude sets (groups, all devices, all users),
+  filters with mode, platform, and target kind (dynamic group rule `device.` vs `user.`; assigned groups `unknown`).
+  `none` when platforms differ, either side is unassigned, one include set is a subset of the other's exclude set,
+  the same filter is used in opposite modes, or device-only meets user-only where that decides it; `certain` when
+  the same group is included in both and excluded in neither, or all devices / all users on both without
+  exclusions on the same platform; `possible` otherwise. Built on `internal/docs/assignments.go`.
+- Mechanical findings: a canonical key set in two or more resources whose overlap is not `none` is a `conflict`
+  (values differ) or a `duplicate` (same value), each carrying its overlap verdict.
+- Output: `<tenant>/consistency/metadata.yaml` (`exportGeneratedAt`, tool version, counts) and
+  `consistency/mechanical.yaml` (sorted, deterministic), both written with `docs.WriteFileAtomic`; `--dry-run` writes
+  nothing and reports the counts. A summary line per kind at the end of the run.
+- Tree ownership: `consistency.ClearTree` (its own constant and hard-coded path), called by `resource download`
+  next to `rebaselineClearDrift` — after a successful metadata write, never on dry-run, a failure only warns.
+  `.claude/rules/go-export-safety.md` (and its Windsurf twin `go/.windsurf/rules/04-security-and-ops.md`): a
+  `consistency/` bullet under *Output layout*, the "only other deletes" sentence and the prune exclusion list.
+- Tests: the normalisers per source type, CSP derivation, the overlap truth table, mechanical detection on a
+  synthetic tenant (including an L1/Admin complement pair — one policy excludes the admin group, its twin includes
+  only it — that must come out `none`), byte-equal reruns, dry-run, refusals, `ClearTree` on re-baseline.
+- Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
+  `CHANGELOG.md` `### Added`.
+
+## 2. A consistency rule and topic catalog in the configuration
+
+*Kind:* feat
+
+**Goal.** The operator can tell the consistency analysis which cross-type relations to check and how to group
+resources into topics, with each rule's resolution semantics and its Microsoft Learn source written down — so the
+LLM step of the analysis judges against a reviewed catalog instead of recall.
+
+> **Decision.** The catalog is a configuration key like `taxonomy:` (operator-editable, validated), not embedded
+> data.
+>
+> **Shape.** A general key `consistency:` with `topics` (id, label, match patterns over setting keys,
+> `@odata.type`s and type names; a resource may sit in several topics) and `rules` (id, description, left and right
+> selectors, what counts as a violation, resolution semantics — which setting wins —, a Microsoft Learn reference,
+> `status: verified | verify`). Seed rules from the Cowork draft, all to be verified: R1 compliance requires
+> encryption/Defender/firewall but no in-scope configuration enables it; R2 compliance minimum OS above what the
+> update rings / feature-update profiles deliver; R3 a CA policy requires a compliant device but the targeted users
+> have no compliance policy for a covered platform; R4 the same control configured through several surfaces; R5
+> update-ring feature deferral with a feature-update profile on an overlapping scope; R6 a filter property that
+> contradicts the policy's platform or enrollment type; R7 enrollment/ESP/Autopilot targeting inconsistent with its
+> dynamic group rule; R8 a macOS Platform SSO / account setting conflicting with password compliance.
+>
+> **Not regeneration-gated.**
+
+**Plan.**
+
+- The `consistency:` key through `/add-config-option`: a general key in `internal/config` (`keyScopes`), read by
+  `docs analyze-consistency` like `generate-index` reads `taxonomy:`; types, compilation and validation in
+  `internal/consistency` (id pattern, selectors resolve against the index's source types, references are
+  `https://learn.microsoft.com/…`), with errors naming the offending entry.
+- The compiled catalog's hash in `consistency/metadata.yaml`; an absent catalog means mechanical findings only.
+- Both example files stay no-ops (the key illustrated in comments only); the worked example
+  `config-tailored-intune.yaml` carries a seed catalog — topics: encryption, Defender/EDR, firewall, Windows Update,
+  identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each rule's semantics
+  and reference checked against Microsoft Learn; anything Learn does not settle stays `status: verify`, never
+  guessed.
+- Tests: validation errors, compilation, the catalog hash, `cmd/config_test.go` partition coverage.
+- Documentation at *done*: `README.md` (the key, its shape, the seed catalog); `CHANGELOG.md` `### Added`.
+
+## 3. The consistency analysis job
+
+*Kind:* feat
+
+**Goal.** A documentation agent can judge the cross-type relations the mechanical step cannot decide — within
+bounded topic clusters, against the rule catalog — and every finding it writes is checked by a script against the
+export and the tool's overlap matrix before it is accepted, so the result is a verified list of contradictions an
+operator can act on.
+
+> **Mirrors** `docs analyze-drift`: the CLI writes a prompt file with marked blocks; a Claude session runs it as
+> its own two-phase job. Paired with the web entry *The consistency view* (the browser renders
+> `consistency/index.md`).
+>
+> **Contract.** `consistency/` joins the Go → web contract: `consistency/index.md` (the human report, rendered by
+> the browser) and `consistency/findings.yaml` (machine-readable); the browser never serves `analyze.md`,
+> `metadata.yaml`, `mechanical.yaml`, `findings.yaml` or `chunks/`.
+>
+> **Owner.** `documentation-agent-instructions.md` (repository root) gets the third job; the root `CLAUDE.md`
+> Go → web contract list gains `consistency/`.
+>
+> **Not regeneration-gated.** The new prompt template is not hashed.
+
+**Plan.**
+
+- `docs analyze-consistency` also writes `consistency/analyze.md` from an embedded template (`go:embed`, atomic
+  write, header stripped) with marked blocks `export`, `mechanical`, `clusters` (deterministic per topic, split by
+  expected output size like `generate.md` §3), `overlap` (a compact pair matrix per cluster) and `rules`; preflight
+  like `drift.CheckCurrent` (`exportGeneratedAt` equals `resources/metadata.yaml` `generatedAt`); `--prompt`
+  substitutes a template.
+- The template's procedure: one agent per cluster writing `consistency/chunks/NN.json` against a fixed schema;
+  a shipped verification script (stdlib Python ≥ 3.9, read-only, same conventions as the run prompt's §6/§7 scripts)
+  that fails a finding whose cited source or key is missing, whose cited value differs from the YAML (masked
+  excepted), whose overlap disagrees with the matrix, whose vocabulary is outside the closed sets (`rule` from the
+  catalog or `mechanical` / `other` with a justification; `kind` conflict | duplicate | gap | ineffective |
+  precedence; `severity` critical | high | medium | low; `overlap` certain | possible), or that restates a
+  mechanical finding without citing it; then the orchestrator writes `consistency/findings.yaml`,
+  `consistency/index.md` and a report.
+- `documentation-agent-instructions.md`: the third job "analyze consistency for `<tenant>`" — prompt file, preflight,
+  the two-phase gate, the allow-list (`consistency/chunks/**`, `findings.yaml`, `index.md`, `report-*.md`) and never
+  `analyze.md`, `metadata.yaml`, `mechanical.yaml`, `docs/`, `resources/`.
+- Root `CLAUDE.md`: `consistency/` in the Go → web contract list.
+- Tests: the template validates its markers; rendering on a synthetic tenant; the verification script run on
+  fixtures rejects planted bad findings (wrong value, wrong overlap, bad vocabulary, duplicate of a mechanical
+  finding) and accepts a correct one.
+- Documentation at *done*: `README.md` (the job, the `consistency/` files); `CHANGELOG.md` `### Added`.
+
+## 4. Feed the consistency findings into the tenant summary
+
+*Kind:* feat
+
+**Goal.** The tenant summary's *consistency* paragraph says something real: it judges from the verified consistency
+findings when an analysis exists for this export, and says plainly that none was run when it does not.
+
+> **From the code.** The gate follows `internal/drift/analyzeprompt_audit.go` (`loadAttributionState`: absent /
+> unreadable / outdated / current; never fails the run). The summary contract — `# Tenant summary`, the four H2s,
+> `### Findings` / `### Recommendations`, severity `critical | high | medium` — stays; the five-signal sweep stays
+> untouched.
+>
+> **Not regeneration-gated.** The run prompt is not hashed.
+
+**Plan.**
+
+- `docs generate-prompt` reads `consistency/findings.yaml` and renders a new `consistency` marker block (added to
+  `requiredMarkers`): counts by kind × severity, the top findings linked to `consistency/index.md`, and the state —
+  rendered as findings only when its `exportGeneratedAt` equals `resources/metadata.yaml` `generatedAt`, otherwise
+  as "absent", "unreadable" or "outdated — not used".
+- Run prompt §7: four inputs instead of three; the *consistency* paragraph judges from the new block, or says
+  "consistency analysis not run for this export"; appendix E explains the fourth input; the summary check script
+  unchanged in contract.
+- Tests: each state renders as specified; the block carries findings only for a current file.
+- Documentation at *done*: `README.md` (the pipeline order: `resource download` → `docs analyze-consistency` → the
+  consistency job → `docs generate-prompt` → the documentation job → `docs generate-index`); `CHANGELOG.md`
+  `### Changed`.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
@@ -180,6 +372,26 @@ golden YAML that the assignment objects are identical. Effect: none expected; on
 because the current call works. **Revisit** if it starts failing, or with other work on these handlers.
 
 ## Parked ideas — drift & compare
+
+### Idea: a curated legacy-property → CSP mapping for the consistency analysis
+
+*Area:* drift & compare · *Impact:* medium · *Effort:* M · *Ships with:* after go *Index settings and assignment
+scopes and report same-setting conflicts*
+
+The mechanical consistency step compares legacy typed `deviceConfigurations` only within the same `@odata.type`, so a
+BitLocker, Defender, firewall or password setting configured once through a legacy profile and once through the
+Settings Catalog is never matched. A curated mapping `legacy property → CSP path` for those high-value areas would let
+both meet under one canonical key. **Parked** because it is curated data that goes stale and its worth depends on how
+often tenants mix both surfaces. **Revisit** when the mechanical results on a real tenant show cross-surface pairs the
+LLM step keeps catching by hand.
+
+### Idea: per-document backlinks to consistency findings
+
+*Area:* drift & compare · *Impact:* low · *Effort:* M · *Ships with:* after the consistency analysis job and its web view
+
+Link each resource's document to the consistency findings that cite it (a marked block or a browser-side lookup in
+`consistency/findings.yaml`), so a reader of one policy sees that it conflicts with another. **Parked** because the
+summary and the consistency view already list the findings. **Revisit** when readers ask for it from a policy page.
 
 ### Idea: `resource compare` — an offline comparison of two exports, and the home of the cross-tenant identity rule
 
