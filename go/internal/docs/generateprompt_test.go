@@ -1,14 +1,18 @@
 package docs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"azure-resource-downloader/internal/models"
+	"azure-resource-downloader/internal/pipeline"
 )
 
 // writeDoc writes a generated document with frontmatter for the given metadata
@@ -954,5 +958,522 @@ func TestNotListedWithReasons(t *testing.T) {
 				t.Errorf("notListedWithReasons() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The docstrings that identify the run prompt's shipped Python scripts.
+const (
+	section4Docstring    = `"""Section 4 structural checks. Run from the tenant folder. Exit 1 if anything failed."""`
+	section6Docstring    = `"""Section 6 reference checks. Run from the tenant folder after section 5. Exit 1 if anything failed."""`
+	signalSweepDocstring = `"""Section 7 signal sweep. Run from the tenant folder before writing docs/summary.md. Prints each signal with the resources it names."""`
+)
+
+// embeddedScript cuts the Python script identified by docstring out of its
+// four-backtick fence in text.
+func embeddedScript(t *testing.T, text, docstring string) string {
+	t.Helper()
+	i := strings.Index(text, docstring)
+	if i < 0 {
+		t.Fatalf("no script with docstring %s", docstring)
+	}
+	const open = "````python\n"
+	start := strings.LastIndex(text[:i], open)
+	end := strings.Index(text[i:], "\n````")
+	if start < 0 || end < 0 {
+		t.Fatalf("script %s is not inside a four-backtick python fence", docstring)
+	}
+	return text[start+len(open) : i+end+1]
+}
+
+// pythonFunction returns a top-level Python function's source: its def line and
+// every following line up to the next unindented one.
+func pythonFunction(t *testing.T, script, name string) string {
+	t.Helper()
+	i := strings.Index(script, "def "+name+"(")
+	if i < 0 {
+		t.Fatalf("script has no function %s", name)
+	}
+	lines := strings.Split(script[i:], "\n")
+	out := lines[:1]
+	for _, l := range lines[1:] {
+		if l != "" && !strings.HasPrefix(l, " ") {
+			break
+		}
+		out = append(out, l)
+	}
+	return strings.TrimRight(strings.Join(out, "\n"), "\n")
+}
+
+// requirePython skips the test when no python3 is on the PATH; CI's runner has one.
+func requirePython(t *testing.T) string {
+	t.Helper()
+	p, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not available")
+	}
+	return p
+}
+
+// runScript runs a Python script with dir as its working directory and returns
+// its combined output and exit code.
+func runScript(t *testing.T, python, dir, script string) (string, int) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "script.py")
+	if err := os.WriteFile(path, []byte(script), 0644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	cmd := exec.CommandContext(t.Context(), python, path)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+		return string(out), 0
+	case errors.As(err, &exitErr):
+		return string(out), exitErr.ExitCode()
+	default:
+		t.Fatalf("run script: %v", err)
+		return "", -1
+	}
+}
+
+// TestDefaultGeneratePromptTemplateShipsScripts pins the scripts the run prompt
+// ships for sections 6 and 7, so no run has to write its own.
+func TestDefaultGeneratePromptTemplateShipsScripts(t *testing.T) {
+	text := string(DefaultGeneratePromptTemplate())
+	for _, want := range []string{
+		section6Docstring,
+		signalSweepDocstring,
+		"def marker_problems(",
+		`column_links(doc, blk(doc, "assignments"), "Target")`,
+		`column_links(group, blk(group, "targeted-by"), "Resource")`,
+		`WORDS = ("password", "passwd", "pwd", "passphrase", "secret", "token", "apikey", "authkey", "accesskey", "privatekey", "sharedkey")`,
+		`key.lower().endswith("commandline")`,
+		`CREDENTIAL_TYPES_HEADING = "Expiry and renewal"`,
+		"found by exactly five rules",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("template missing %q", want)
+		}
+	}
+
+	// The scripts must not carry a literal tool-filled marker: rendering would
+	// refuse the template, or splice into the script instead of the block.
+	tenantDir := t.TempDir()
+	writeMeta(t, tenantDir, &Metadata{GeneratedAt: "2026-10-02T00:00:00Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{}, Resources: map[string]ResourceMeta{}})
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
+	if err != nil {
+		t.Fatalf("GeneratePrompt with the default template: %v", err)
+	}
+	out, err := os.ReadFile(res.OutPath)
+	if err != nil {
+		t.Fatalf("read prompt: %v", err)
+	}
+	for _, docstring := range []string{section4Docstring, section6Docstring, signalSweepDocstring} {
+		if !strings.Contains(string(out), docstring) {
+			t.Errorf("rendered prompt lost the script %s", docstring)
+		}
+	}
+}
+
+// TestMarkerProblemsHelperIsShared keeps the section-6 copy of the marker-pair
+// helper identical to section 4's: the agent pastes each script as its own file,
+// so the helper is shared by copy, not import.
+func TestMarkerProblemsHelperIsShared(t *testing.T) {
+	text := string(DefaultGeneratePromptTemplate())
+	s4 := pythonFunction(t, embeddedScript(t, text, section4Docstring), "marker_problems")
+	s6 := pythonFunction(t, embeddedScript(t, text, section6Docstring), "marker_problems")
+	if s4 != s6 {
+		t.Errorf("marker_problems differs between sections 4 and 6:\n--- section 4\n%s\n--- section 6\n%s", s4, s6)
+	}
+}
+
+// TestMarkerProblemsDetectsOrderAndNesting runs the section-4 helper over
+// documents whose marked blocks are well formed, reversed and nested.
+func TestMarkerProblemsDetectsOrderAndNesting(t *testing.T) {
+	python := requirePython(t)
+	helper := pythonFunction(t, embeddedScript(t, string(DefaultGeneratePromptTemplate()), section4Docstring), "marker_problems")
+	script := "import re, sys\n\n" + helper + "\n\nprint(marker_problems(sys.stdin.read()))\n"
+	tests := []struct {
+		name string
+		doc  string
+		want string
+	}{
+		{"well formed", "<!-- assignments:start -->\nx\n<!-- assignments:end -->\n<!-- notifications:start -->\ny\n<!-- notifications:end -->\n", "[]"},
+		{"end before start", "<!-- assignments:end -->\nx\n<!-- assignments:start -->\n", "assignments markers: end before start"},
+		{"nested", "<!-- targeted-by:start -->\n<!-- assignments:start -->\n<!-- assignments:end -->\n<!-- targeted-by:end -->\n", "assignments markers nested inside targeted-by"},
+		{"unbalanced", "<!-- used-by:start -->\n", "used-by markers unbalanced: 1 start / 0 end"},
+		{"repeated", "<!-- used-by:start -->\n<!-- used-by:end -->\n<!-- used-by:start -->\n<!-- used-by:end -->\n", "used-by markers repeated (2 pairs)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "helper.py")
+			if err := os.WriteFile(path, []byte(script), 0644); err != nil {
+				t.Fatalf("write helper: %v", err)
+			}
+			cmd := exec.CommandContext(t.Context(), python, path)
+			cmd.Stdin = strings.NewReader(tt.doc)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("run helper: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), tt.want) {
+				t.Errorf("marker_problems = %s, want it to contain %q", out, tt.want)
+			}
+		})
+	}
+}
+
+// Resource ids of the section-6 fixture: a compliance policy assigned to a group
+// through an assignment filter and notifying through a template, plus a second
+// filter whose document is current and so outside every list.
+const (
+	refPolicyID   = "11111111-1111-4111-8111-111111111111"
+	refGroupID    = "22222222-2222-4222-8222-222222222222"
+	refTemplateID = "33333333-3333-4333-8333-333333333333"
+	refFilterID   = "44444444-4444-4444-8444-444444444444"
+	refOtherID    = "55555555-5555-4555-8555-555555555555"
+)
+
+// referenceFixtureMtime is the section-4 snapshot time of every fixture document.
+var referenceFixtureMtime = time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)
+
+// referenceFixture builds a tenant whose documents section 6 must pass: the
+// prompt is rendered by GeneratePrompt so the script reads the real table
+// shapes, the documents carry the work list's hashes, and chunks/mtimes.json
+// records their mtimes. It returns the tenant directory and the work-list rows
+// by document path.
+func referenceFixture(t *testing.T) (string, map[string]WorkItem) {
+	t.Helper()
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+	m := &Metadata{
+		GeneratedAt: "2026-10-02T00:00:00Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			compType:                         {PromptSha256: "p-comp", HasAssignments: true},
+			groupsType:                       {PromptSha256: "p-grp"},
+			notificationMessageTemplatesType: {PromptSha256: "p-tmpl"},
+			assignmentFiltersType:            {PromptSha256: "p-flt"},
+		},
+		Resources: map[string]ResourceMeta{
+			compType + "/policy.yaml": {
+				ResourceId: refPolicyID, DisplayName: "Policy", SourceSha256: "s-pol", PresentInTenant: true,
+				AssignmentTargets:        []interface{}{groupTargetWithFilter(refGroupID, refFilterID, "include")},
+				NotificationTemplateRefs: []string{refTemplateID},
+			},
+			groupsType + "/group.yaml": {
+				ResourceId: refGroupID, DisplayName: "Group", SourceSha256: "s-grp", PresentInTenant: true,
+				SecurityEnabled: boolPtr(true),
+			},
+			notificationMessageTemplatesType + "/template.yaml": {ResourceId: refTemplateID, DisplayName: "Template", SourceSha256: "s-tmpl", PresentInTenant: true},
+			assignmentFiltersType + "/filter.yaml":              {ResourceId: refFilterID, DisplayName: "Filter", SourceSha256: "s-flt", PresentInTenant: true},
+			assignmentFiltersType + "/other.yaml":               {ResourceId: refOtherID, DisplayName: "Other", SourceSha256: "s-oth", PresentInTenant: true},
+		},
+	}
+	writeMeta(t, tenantDir, m)
+	for _, rtype := range []string{compType, groupsType, notificationMessageTemplatesType, assignmentFiltersType} {
+		writePromptFile(t, resourcesDir, rtype)
+	}
+	// Current before the prompt is rendered, so it is in none of the three lists.
+	writeDoc(t, tenantDir, assignmentFiltersType+"/other.yaml", "s-oth", "p-flt")
+
+	res, err := GeneratePrompt(GeneratePromptOptions{TenantDir: tenantDir, Template: DefaultGeneratePromptTemplate()})
+	if err != nil {
+		t.Fatalf("GeneratePrompt: %v", err)
+	}
+	items := map[string]WorkItem{}
+	for _, it := range res.ToGenerate {
+		items[it.DocPath] = it
+	}
+	if len(items) != 4 {
+		t.Fatalf("fixture work list = %+v, want policy, group, template and filter", res.ToGenerate)
+	}
+
+	bodies := map[string]string{
+		"docs/" + compType + "/policy.md": "# Policy\n\n## Assignments\n\n<!-- assignments:start -->\n\n" +
+			"| Direction | Target | Filter |\n|---|---|---|\n" +
+			"| Include | [Group](../groups/group.md) · assigned security group · `" + refGroupID + "` | include [Filter](../assignmentFilters/filter.md) |\n\n" +
+			"<!-- assignments:end -->\n\n## Settings\n\n<!-- notifications:start -->\n" +
+			"Noncompliance actions notify through [Template](../notificationMessageTemplates/template.md).\n" +
+			"<!-- notifications:end -->\n",
+		"docs/" + groupsType + "/group.md": "# Group\n\n## Usage as assignment target\n\n<!-- targeted-by:start -->\n## Targeted by\n\n" +
+			"1 resource assigns this group.\n\n| Resource | Type | Direction | Filter |\n|---|---|---|---|\n" +
+			"| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n" +
+			"<!-- targeted-by:end -->\n",
+		"docs/" + notificationMessageTemplatesType + "/template.md": "# Template\n\n## Usage and references\n\n<!-- used-by:start -->\n## Used by\n\n" +
+			"1 resource references this template in a noncompliance action.\n\n| Resource | Type |\n|---|---|\n" +
+			"| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n<!-- used-by:end -->\n",
+		"docs/" + assignmentFiltersType + "/filter.md": "# Filter\n",
+	}
+	for doc, body := range bodies {
+		it, ok := items[doc]
+		if !ok {
+			t.Fatalf("%s is not in the work list", doc)
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "---\nsource: %s\nsourceSha256: %s\npromptSha256: %s\n", it.SourcePath, it.SourceSha256, it.PromptSha256)
+		for _, h := range [][2]string{
+			{"assignmentsSha256", it.AssignmentsSha256}, {"notificationsSha256", it.NotificationsSha256},
+			{"usedBySha256", it.UsedBySha256}, {"targetedBySha256", it.TargetedBySha256},
+		} {
+			if h[1] != "" {
+				fmt.Fprintf(&b, "%s: %s\n", h[0], h[1])
+			}
+		}
+		b.WriteString("generatedAt: 2026-10-02T00:00:00Z\n---\n" + body)
+		path := filepath.Join(tenantDir, filepath.FromSlash(doc))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", doc, err)
+		}
+		if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+			t.Fatalf("write %s: %v", doc, err)
+		}
+	}
+
+	// The section-4 snapshot, on whole seconds so Python reads back the same value.
+	snapshot := map[string]int64{}
+	for doc := range bodies {
+		snapshot[doc] = referenceFixtureMtime.Unix()
+	}
+	snapshot["docs/"+assignmentFiltersType+"/other.md"] = referenceFixtureMtime.Unix()
+	for doc := range snapshot {
+		if err := os.Chtimes(filepath.Join(tenantDir, filepath.FromSlash(doc)), referenceFixtureMtime, referenceFixtureMtime); err != nil {
+			t.Fatalf("chtimes %s: %v", doc, err)
+		}
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tenantDir, "chunks"), 0755); err != nil {
+		t.Fatalf("mkdir chunks: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tenantDir, "chunks", "mtimes.json"), data, 0644); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+	return tenantDir, items
+}
+
+// editFixtureDoc replaces old with replacement in one fixture document.
+func editFixtureDoc(t *testing.T, tenantDir, doc, old, replacement string) {
+	t.Helper()
+	path := filepath.Join(tenantDir, filepath.FromSlash(doc))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", doc, err)
+	}
+	if !strings.Contains(string(data), old) {
+		t.Fatalf("%s does not contain %q", doc, old)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(data), old, replacement, 1)), 0644); err != nil {
+		t.Fatalf("write %s: %v", doc, err)
+	}
+}
+
+// TestSectionSixReferenceScript runs the shipped section-6 script, taken from
+// the rendered prompt, over a clean fixture and over one planted defect per
+// check.
+func TestSectionSixReferenceScript(t *testing.T) {
+	python := requirePython(t)
+	policyDoc := "docs/" + compType + "/policy.md"
+	groupDoc := "docs/" + groupsType + "/group.md"
+	templateDoc := "docs/" + notificationMessageTemplatesType + "/template.md"
+
+	tests := []struct {
+		name    string
+		plant   func(t *testing.T, dir string, items map[string]WorkItem)
+		message string
+	}{
+		{name: "clean, with the filter link in the Targeted by Filter column"},
+		{
+			name: "policy row removed from the group's Targeted by",
+			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
+				editFixtureDoc(t, dir, groupDoc, "| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies | Include | include [Filter](../assignmentFilters/filter.md) |\n", "")
+			},
+			message: "assigns a group whose Targeted by does not list this document",
+		},
+		{
+			name: "bare group GUID in an assignments block",
+			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
+				editFixtureDoc(t, dir, policyDoc, "[Group](../groups/group.md) · assigned security group · ", "")
+			},
+			message: "bare GUID in a marked block",
+		},
+		{
+			name: "wrong targetedBySha256",
+			plant: func(t *testing.T, dir string, items map[string]WorkItem) {
+				editFixtureDoc(t, dir, groupDoc, "targetedBySha256: "+items[groupDoc].TargetedBySha256, "targetedBySha256: 0000")
+			},
+			message: "targetedBySha256 missing or not the value the prompt gives",
+		},
+		{
+			name: "document outside the three lists touched",
+			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
+				later := referenceFixtureMtime.Add(time.Hour)
+				if err := os.Chtimes(filepath.Join(dir, "docs", filepath.FromSlash(assignmentFiltersType), "other.md"), later, later); err != nil {
+					t.Fatalf("chtimes: %v", err)
+				}
+			},
+			message: "changed since section 4 but not in the work-list, re-splice or migrate lists",
+		},
+		{
+			name: "notifications link with no Used by answer",
+			plant: func(t *testing.T, dir string, _ map[string]WorkItem) {
+				editFixtureDoc(t, dir, templateDoc, "| [Policy](../deviceCompliancePolicies/policy.md) | deviceCompliancePolicies |\n", "")
+			},
+			message: "notifies through a template whose Used by does not list this document",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, items := referenceFixture(t)
+			if tt.plant != nil {
+				tt.plant(t, dir, items)
+			}
+			prompt, err := os.ReadFile(filepath.Join(dir, DocsDirName, GenerateFileName))
+			if err != nil {
+				t.Fatalf("read rendered prompt: %v", err)
+			}
+			out, code := runScript(t, python, dir, embeddedScript(t, string(prompt), section6Docstring))
+			if tt.message == "" {
+				if code != 0 {
+					t.Fatalf("clean fixture: exit %d\n%s", code, out)
+				}
+				return
+			}
+			if code != 1 || !strings.Contains(out, tt.message) {
+				t.Errorf("exit %d, want 1 with %q:\n%s", code, tt.message, out)
+			}
+		})
+	}
+}
+
+// Credentials planted in the signal-sweep fixture; the sweep must report where
+// they are and never print them.
+const (
+	plantedAPIToken = "Xk9#mQ2vLp7zRt"
+	plantedAuthKey  = "Rk7!pW3nZq9Lm2"
+	danglingGroupID = "99999999-9999-4999-8999-999999999999"
+)
+
+// writeResourceYAML writes a resource the way the pipeline does
+// (pipeline.MarshalResourceYAML), so the sweep reads the real yaml.v3 shape.
+func writeResourceYAML(t *testing.T, resourcesDir, key string, data map[string]interface{}) {
+	t.Helper()
+	b, err := pipeline.MarshalResourceYAML(data)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", key, err)
+	}
+	path := filepath.Join(resourcesDir, filepath.FromSlash(key))
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", key, err)
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		t.Fatalf("write %s: %v", key, err)
+	}
+}
+
+// TestSectionSevenSignalSweep runs the shipped signal sweep over a resources/
+// tree holding a command-line token, a plist credential, a VPP token near
+// expiry, non-credential expiries, a credential-looking non-credential key, an
+// unassigned resource and a dangling group target.
+func TestSectionSevenSignalSweep(t *testing.T) {
+	python := requirePython(t)
+	tenantDir := t.TempDir()
+	resourcesDir := filepath.Join(tenantDir, models.ResourcesDirName)
+	const (
+		appsType   = "Microsoft.Graph/mobileApps"
+		configType = "Microsoft.Graph/deviceConfigurations"
+		vppType    = "Microsoft.Graph/vppTokens"
+	)
+	writeMeta(t, tenantDir, &Metadata{
+		GeneratedAt: "2026-10-02T00:00:00Z", Tenant: "example.com", Run: RunMeta{Complete: true},
+		Types: map[string]TypeMeta{
+			appsType: {HasAssignments: true}, configType: {HasAssignments: true}, groupsType: {}, vppType: {},
+		},
+		Resources: map[string]ResourceMeta{
+			appsType + "/agent.yaml": {ResourceId: "app", DisplayName: "Agent", PresentInTenant: true,
+				AssignmentTargets: []interface{}{allUsersTarget(), groupTarget(danglingGroupID)}},
+			configType + "/ios_custom.yaml":  {ResourceId: "ios", DisplayName: "iOS custom", PresentInTenant: true, AssignmentTargets: []interface{}{allUsersTarget()}},
+			configType + "/update_ring.yaml": {ResourceId: "ring", DisplayName: "Update ring", PresentInTenant: true},
+			groupsType + "/m365.yaml":        {ResourceId: "grp", DisplayName: "M365 group", PresentInTenant: true},
+			vppType + "/vpp.yaml":            {ResourceId: "vpp", DisplayName: "VPP", PresentInTenant: true},
+		},
+	})
+
+	plist := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n" +
+		"  <key>RemoteOfficeAuthKey</key>\n  <string>" + plantedAuthKey + "</string>\n" +
+		"  <key>PayloadDisplayName</key>\n  <string>Remote office</string>\n</dict>\n</plist>\n"
+	writeResourceYAML(t, resourcesDir, appsType+"/agent.yaml", map[string]interface{}{
+		"@odata.type":          "#microsoft.graph.win32LobApp",
+		"displayName":          "Agent",
+		"installCommandLine":   "setup.exe /quiet APITOKEN=" + plantedAPIToken,
+		"uninstallCommandLine": "msiexec /x {11111111-2222-3333-4444-555555555555} /quiet",
+	})
+	writeResourceYAML(t, resourcesDir, configType+"/ios_custom.yaml", map[string]interface{}{
+		"@odata.type":     "#microsoft.graph.iosCustomConfiguration",
+		"displayName":     "iOS custom",
+		"payload":         plist,
+		"payloadFileName": "remote.mobileconfig",
+	})
+	if err := os.WriteFile(filepath.Join(resourcesDir, filepath.FromSlash(configType), "ios_custom.mobileconfig"), []byte(plist), 0644); err != nil {
+		t.Fatalf("write sidecar: %v", err)
+	}
+	writeResourceYAML(t, resourcesDir, configType+"/update_ring.yaml", map[string]interface{}{
+		"@odata.type":                       "#microsoft.graph.windowsUpdateForBusinessConfiguration",
+		"displayName":                       "Update ring",
+		"featureUpdatesPauseExpiryDateTime": "2026-10-20T00:00:00Z",
+		"qualityUpdatesPauseExpiryDateTime": "2026-11-01T00:00:00Z",
+	})
+	writeResourceYAML(t, resourcesDir, groupsType+"/m365.yaml", map[string]interface{}{
+		"displayName":        "M365 group",
+		"expirationDateTime": "2026-12-01T00:00:00Z",
+		"groupTypes":         []interface{}{"Unified"},
+	})
+	writeResourceYAML(t, resourcesDir, vppType+"/vpp.yaml", map[string]interface{}{
+		"expirationDateTime": "2026-12-15T00:00:00Z",
+		"tokenName":          "Contoso-VPP-2026a",
+	})
+	for rtype, headings := range map[string]string{
+		appsType:   "References | Lifecycle and operations | Security | Properties",
+		configType: "References | Lifecycle and operations | Security | Settings",
+		groupsType: "References | Membership | Usage as assignment target | Lifecycle and operations | Security | Properties",
+		vppType:    "References | Expiry and renewal | Lifecycle and operations | Security | Properties",
+	} {
+		spec := "spec\n<!-- doc-headings: " + headings + " -->\n"
+		if err := os.WriteFile(filepath.Join(resourcesDir, filepath.FromSlash(rtype), docPromptFileName), []byte(spec), 0644); err != nil {
+			t.Fatalf("write spec: %v", err)
+		}
+	}
+
+	out, code := runScript(t, python, tenantDir, embeddedScript(t, string(DefaultGeneratePromptTemplate()), signalSweepDocstring))
+	if code != 0 {
+		t.Fatalf("sweep exit %d:\n%s", code, out)
+	}
+	for _, want := range []string{
+		"resources/" + appsType + "/agent.yaml  rule (e)  installCommandLine argument APITOKEN",
+		"resources/" + configType + "/ios_custom.yaml  rule (a)  payload plist key RemoteOfficeAuthKey",
+		"resources/" + configType + "/ios_custom.mobileconfig  rule (a)  plist key RemoteOfficeAuthKey",
+		"resources/" + vppType + "/vpp.yaml  expirationDateTime 2026-12-15T00:00:00Z  74 day(s) left",
+		"Update ring  docs/" + configType + "/update_ring.md",
+		"## Configured but unassigned: 1",
+		danglingGroupID + "  assigned by 1 resource(s)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sweep output missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{
+		"PauseExpiryDateTime",
+		"m365.yaml",
+		"tokenName",
+		"uninstallCommandLine",
+		plantedAPIToken,
+		plantedAuthKey,
+	} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("sweep output must not contain %q:\n%s", unwanted, out)
+		}
 	}
 }

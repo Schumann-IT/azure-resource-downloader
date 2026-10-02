@@ -374,6 +374,28 @@ def fail(doc, msg):
     problems[msg] += 1
     print(f"FAIL {doc}: {msg}")
 
+def marker_problems(text):
+    """Problems with the four marked blocks: unbalanced, repeated, end before start, nested."""
+    found, unbalanced, open_blocks = [], set(), []
+    for marker in ("assignments", "targeted-by", "used-by", "notifications"):
+        s, e = text.count(f"<!-- {marker}:start -->"), text.count(f"<!-- {marker}:end -->")
+        if s != e:
+            unbalanced.add(marker)
+            found.append(f"{marker} markers unbalanced: {s} start / {e} end")
+        elif s > 1:
+            found.append(f"{marker} markers repeated ({s} pairs)")
+    for m in re.finditer(r"<!-- (assignments|targeted-by|used-by|notifications):(start|end) -->", text):
+        name, edge = m.group(1), m.group(2)
+        if edge == "start":
+            if open_blocks:
+                found.append(f"{name} markers nested inside {open_blocks[-1]}")
+            open_blocks.append(name)
+        elif name in open_blocks:
+            del open_blocks[open_blocks.index(name):]
+        elif name not in unbalanced:
+            found.append(f"{name} markers: end before start")
+    return list(dict.fromkeys(found))
+
 MARKER = re.compile(r"^<!--\s*[\w-]+:(start|end)\s*-->\s*$")
 HEADING = re.compile(r"^(#+)\s+\S")
 INLINE = re.compile(r"`[^`]*`")
@@ -559,12 +581,8 @@ for src, (docpath, prompt_sha, source_sha) in expected.items():
     if not assignments_required(src) and "<!-- assignments:start -->" in text:
         fail(doc, "assignments markers in a document whose spec has no assignments block")
 
-    for marker in ("assignments", "targeted-by", "used-by", "notifications"):
-        s, e = text.count(f"<!-- {marker}:start -->"), text.count(f"<!-- {marker}:end -->")
-        if s != e:
-            fail(doc, f"{marker} markers unbalanced: {s} start / {e} end")
-        elif s > 1:
-            fail(doc, f"{marker} markers repeated ({s} pairs)")
+    for msg in marker_problems(text):
+        fail(doc, msg)
 
     if re.search(r"^DONE ", text, re.M):
         fail(doc, "leftover DONE receipt")
@@ -804,16 +822,209 @@ raw GUID, mark it `⚠️ not in export`, and list every one in your final repor
 ## 6. Verify references (mandatory — do not skip)
 
 Section 4 checked each document against itself. These checks compare documents to each other and to the
-reference map, so they only become meaningful once section 5 has run. Script them the same way.
+reference map, so they only become meaningful once section 5 has run. Run the script below after section 5,
+repair what it reports through the section-5 splice script (never by hand), and re-run it until it exits 0.
 
 | Check | Expectation |
 |---|---|
 | Assignment resolution | No bare group GUID remains inside a marked block without a resolved name beside it or an explicit `⚠️ not in export`. |
-| Link symmetry | Every group linked from a policy's assignment table has a document, and that document's **Targeted by** list contains that policy. Every template a compliance policy references — both from that policy's **noncompliance-notification** block and from the template's **Used by** list — agrees in both directions. Each direction comes from one lookup, so a mismatch means the splice went wrong. |
+| Link symmetry | Every group linked from a policy's assignment table has a document, and that document's **Targeted by** list contains that policy. Every template a compliance policy references — both from that policy's **noncompliance-notification** block and from the template's **Used by** list — agrees in both directions. Each direction comes from one lookup, so a mismatch means the splice went wrong. Only the assignments table's *Target* column and the reverse tables' *Resource* column are read; a link in a *Filter* column is never a group reference. |
 | Link targets exist | Every relative link inside a marked block resolves to a file that exists under `docs/`. |
-| Marker pairs survived | The splice left every `assignments`, `targeted-by`, `used-by` and `notifications` pair matched and unnested. Re-run that check from section 4 — a bad splice is exactly how a pair gets broken. |
+| Marker pairs survived | The splice left every `assignments`, `targeted-by`, `used-by` and `notifications` pair matched and unnested. The script carries a verbatim copy of section 4's `marker_problems` helper — a bad splice is exactly how a pair gets broken. |
 | Hashes updated | Every document whose block was written or re-spliced this run — every freshly generated document and every re-spliced one — carries the matching `assignmentsSha256` / `targetedBySha256` / `usedBySha256` / `notificationsSha256` the tool gave it. A generated group or template document in particular must now carry its `targetedBySha256` / `usedBySha256`; any hash left unwritten will be re-spliced on every future run. |
 | Nothing else touched | Compare mtimes against the snapshot taken at the end of section 4. Only work-list documents, re-spliced documents and migrated documents may have changed. A document outside the work list — e.g. one retained under a type that could not be listed — is in the snapshot and must be unchanged. |
+
+This script and the section-7 signal sweep share four constraints: Python 3.9 or later with the standard
+library only (no PyYAML — the environment is not guaranteed to have it); run from the tenant folder; read-only,
+writing no file; and never printing a credential value — only the resource path, the key path or argument
+name, the rule and the value's length. Paste each as its own file and run it as given; do not write your own.
+It reads the rendered prompt — `docs/generate.md`, or the path given as its first argument — for the work-list,
+re-splice and migrate tables.
+
+````python
+#!/usr/bin/env python3
+"""Section 6 reference checks. Run from the tenant folder after section 5. Exit 1 if anything failed."""
+import json, os, pathlib, re, sys
+from collections import Counter
+
+problems = Counter()
+
+def fail(doc, msg, other=""):
+    problems[msg] += 1
+    print(f"FAIL {doc}: {msg}" + (f" -> {other}" if other else ""))
+
+def marker_problems(text):
+    """Problems with the four marked blocks: unbalanced, repeated, end before start, nested."""
+    found, unbalanced, open_blocks = [], set(), []
+    for marker in ("assignments", "targeted-by", "used-by", "notifications"):
+        s, e = text.count(f"<!-- {marker}:start -->"), text.count(f"<!-- {marker}:end -->")
+        if s != e:
+            unbalanced.add(marker)
+            found.append(f"{marker} markers unbalanced: {s} start / {e} end")
+        elif s > 1:
+            found.append(f"{marker} markers repeated ({s} pairs)")
+    for m in re.finditer(r"<!-- (assignments|targeted-by|used-by|notifications):(start|end) -->", text):
+        name, edge = m.group(1), m.group(2)
+        if edge == "start":
+            if open_blocks:
+                found.append(f"{name} markers nested inside {open_blocks[-1]}")
+            open_blocks.append(name)
+        elif name in open_blocks:
+            del open_blocks[open_blocks.index(name):]
+        elif name not in unbalanced:
+            found.append(f"{name} markers: end before start")
+    return list(dict.fromkeys(found))
+
+BLOCKS = ("assignments", "targeted-by", "used-by", "notifications")
+HASHES = ("assignmentsSha256", "notificationsSha256", "usedBySha256", "targetedBySha256")
+GUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+SENTINEL = "00000000-0000-0000-0000-000000000000"
+LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)[^)]*\)")
+DANGLING = "⚠️ not in export"
+
+def block(text, name):
+    """Content between a block's start and end comment, or None when it has none."""
+    if not text:
+        return None
+    start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
+    i = text.find(start)
+    j = text.find(end, i + len(start)) if i >= 0 else -1
+    return text[i + len(start):j] if j >= 0 else None
+
+def cells(line):
+    s = line.strip()
+    s = s[1:] if s.startswith("|") else s
+    s = s[:-1] if s.endswith("|") and not s.endswith("\\|") else s
+    return [c.strip() for c in re.split(r"(?<!\\)\|", s)]
+
+def tables(text):
+    """Every Markdown table in text as (header cells, row cells), separator rows dropped."""
+    out, header, rows = [], None, []
+    for line in (text or "").splitlines():
+        if line.strip().startswith("|"):
+            row = cells(line)
+            if set("".join(row)) <= set("-: "):
+                continue
+            if header is None:
+                header = row
+            else:
+                rows.append(row)
+        elif header is not None:
+            out.append((header, rows))
+            header, rows = None, []
+    if header is not None:
+        out.append((header, rows))
+    return out
+
+def resolve(doc, href):
+    """Tenant-relative path a relative link resolves to; None for anchors and absolute URLs."""
+    if href.startswith("#") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", href):
+        return None
+    href = href.split("#", 1)[0]
+    return pathlib.Path(os.path.normpath(os.path.join(os.path.dirname(doc), href))).as_posix()
+
+def links(doc, text):
+    return {t for t in (resolve(doc, h) for h in LINK.findall(text or "")) if t}
+
+def column_links(doc, text, column):
+    """Resolved relative links in one column, by header name, of every table in text."""
+    found = set()
+    for header, rows in tables(text):
+        if column in header:
+            i = header.index(column)
+            for row in rows:
+                if i < len(row):
+                    found |= links(doc, row[i])
+    return found
+
+def frontmatter_value(text, key):
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---", 4)
+    m = re.search(rf"^{key}:[ \t]*['\"]?([^'\"\s]*)", text[4:end] if end >= 0 else "", re.M)
+    return m.group(1) if m else None
+
+root = pathlib.Path("docs")
+texts = {p.as_posix(): p.read_text(encoding="utf-8")
+         for p in sorted(root.rglob("*.md")) if p.parent != root}
+
+def blk(doc, name):
+    return block(texts.get(doc), name)
+
+for doc, text in texts.items():
+    for msg in marker_problems(text):
+        fail(doc, msg)
+    for name in BLOCKS:
+        content = block(text, name)
+        if content is None:
+            continue
+        for line in content.splitlines():
+            for unit in (cells(line) if line.strip().startswith("|") else [line]):
+                bare = [g for g in GUID.findall(unit) if g != SENTINEL]
+                if bare and not LINK.search(unit) and DANGLING not in unit:
+                    fail(doc, "bare GUID in a marked block — no link or ⚠️ not in export beside it", bare[0])
+        for target in sorted(links(doc, content)):
+            if not target.startswith("docs/") or not pathlib.Path(target).is_file():
+                fail(doc, f"link in the {name} block resolves to no file under docs/", target)
+
+    # Link symmetry: forward and reverse each come from one lookup, so they must agree.
+    for group in sorted(column_links(doc, blk(doc, "assignments"), "Target")):
+        if group in texts and doc not in column_links(group, blk(group, "targeted-by"), "Resource"):
+            fail(doc, "assigns a group whose Targeted by does not list this document", group)
+    for res in sorted(column_links(doc, blk(doc, "targeted-by"), "Resource")):
+        if res in texts and doc not in column_links(res, blk(res, "assignments"), "Target"):
+            fail(doc, "Targeted by lists a resource whose assignments do not target this group", res)
+    for tmpl in sorted(links(doc, blk(doc, "notifications"))):
+        if tmpl in texts and doc not in column_links(tmpl, blk(tmpl, "used-by"), "Resource"):
+            fail(doc, "notifies through a template whose Used by does not list this document", tmpl)
+    for res in sorted(column_links(doc, blk(doc, "used-by"), "Resource")):
+        if res in texts and doc not in links(res, blk(res, "notifications")):
+            fail(doc, "Used by lists a resource whose notifications block does not name this template", res)
+
+# Hashes updated, read from the rendered prompt's three lists.
+listed = None
+prompt_path = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else root / "generate.md"
+if not prompt_path.is_file():
+    fail(prompt_path.as_posix(), "rendered prompt missing — cannot check hashes or the touched set")
+else:
+    prompt, listed = prompt_path.read_text(encoding="utf-8"), set()
+    for name in ("worklist", "resplice", "migrate"):
+        for header, rows in tables(block(prompt, name)):
+            if "Document" not in header:
+                continue
+            for row in rows:
+                cell = dict(zip(header, (c.strip("` ") for c in row)))
+                doc = cell.get("Document", "")
+                listed.add(doc)
+                if doc not in texts:
+                    fail(doc, "listed in the prompt but no document exists")
+                    continue
+                for key in HASHES:
+                    if cell.get(key) and frontmatter_value(texts[doc], key) != cell[key]:
+                        fail(doc, f"{key} missing or not the value the prompt gives")
+
+# Nothing else touched, against the section-4 snapshot.
+snapshot_path = pathlib.Path("chunks/mtimes.json")
+if not snapshot_path.is_file():
+    fail(snapshot_path.as_posix(), "mtime snapshot missing — section 4 has not passed")
+elif listed is not None:
+    snapshot = {pathlib.Path(k).as_posix(): v
+                for k, v in json.loads(snapshot_path.read_text(encoding="utf-8")).items()}
+    for doc in texts:
+        if doc in listed:
+            continue
+        if doc not in snapshot:
+            fail(doc, "not in the section-4 snapshot and not in the work-list, re-splice or migrate lists")
+        elif pathlib.Path(doc).stat().st_mtime != snapshot[doc]:
+            fail(doc, "changed since section 4 but not in the work-list, re-splice or migrate lists")
+    for doc in sorted(set(snapshot) - set(texts)):
+        fail(doc, "in the section-4 snapshot but no longer exists")
+
+print(f"\nchecked {len(texts)} documents")
+for msg, n in problems.most_common():
+    print(f"{n:5d}  {msg}")
+sys.exit(1 if problems else 0)
+````
 
 ---
 
@@ -912,24 +1123,353 @@ run that generated 148 documents and on a run that generated none.
 
 - The `summary-facts` block below: every count, platform and posture number.
 - The reference map in 5a: which groups are actually targeted, and how many there are.
-- A **signal sweep**: one script over `resources/`, run once, covering exactly these five checks and no
-  others. Report each signal with the resources it names, deduplicated.
+- A **signal sweep**: the script below, run once over `resources/`, covering exactly these five checks and no
+  others. Run the shipped script — do not write your own — and report each signal with the resources it
+  names, deduplicated.
 
   | Signal | What to collect |
   |---|---|
   | Not in force | Resources whose own state field says they are not enforced — `state: enabledForReportingButNotEnforced`, `state: disabled`, `isEnabled: false` — counted per type. |
   | Configured but unassigned | Assignment-capable resources with no assignment: display name and document path. |
   | Dangling targets | Assigned group GUIDs with no group in the reference map, and how many resources assign each. |
-  | Credentials near expiry | Any expiry field (`expirationDateTime`, `tokenExpirationDateTime`, …) within 180 days of the export timestamp, and any already past it. Values are quoted in the YAML — match single, double and unquoted alike. |
-  | Plaintext credentials | A value the service did **not** mask, found by exactly four rules — (a) to (c) only for a credential-shaped value: (a) an XML/plist `<key>` naming a credential whose `<string>` holds one; (b) a scalar whose own key names a credential; (c) a `description` or `notes` value where a credential-shaped token follows a credential word; (d) the `value` of an `omaSettings` entry with `isEncrypted: true` that is not masked — a secret the export's secret resolution wrote in plaintext, whatever its shape. |
+  | Credentials near expiry | Only the credential types — those whose `doc-prompt.md` `doc-headings` marker lists `Expiry and renewal` (the Apple push certificate, VPP tokens, DEP onboarding settings) — and only their top-level `expirationDateTime` / `tokenExpirationDateTime`: within 180 days of the export timestamp, or already past it. Values are quoted in the YAML — match single, double and unquoted alike. Update-ring pause windows and a Microsoft 365 group's `expirationDateTime` are not credentials. |
+  | Plaintext credentials | A value the service did **not** mask, found by exactly five rules — (a), (b), (c) and (e) only for a credential-shaped value: (a) an XML/plist `<key>` naming a credential whose `<string>` holds one; (b) a scalar whose own key names a credential; (c) a `description` or `notes` value where a credential-shaped token follows a credential word; (d) the `value` of an `omaSettings` entry with `isEncrypted: true` that is not masked — a secret the export's secret resolution wrote in plaintext, whatever its shape; (e) a `NAME=value`, `/NAME value`, `/NAME:value` or `-NAME value` argument in `installCommandLine`, `uninstallCommandLine` or any other key ending in `CommandLine` whose name names a credential. |
+
+  A name **names a credential** when, lowercased with `_`, `-` and `.` removed and one trailing `value`,
+  `text` or `string` dropped, it ends with a word from the script's one credential-word list (`password`,
+  `passwd`, `pwd`, `passphrase`, `secret`, `token`, `apikey`, `authkey`, `accesskey`, `privatekey`,
+  `sharedkey`): `wifiPassword`, `preSharedKey`, `REMOTEOFFICEAUTHKEY` and `APITOKEN` do, `tokenName`,
+  `passwordMinimumLength` and `tokenExpirationDateTime` do not. Rule (c) instead looks for a list word as a
+  whole word in the free text.
 
   A value is **credential-shaped** when it is at least 10 characters and either a hex run of 16+ characters
   or a mix of at least three character classes. Test the hex case first: a long hex key is
   lowercase-alphanumeric and an identifier exclusion would otherwise swallow it. Not credential-shaped, and
   never a finding: anything the service masked (`encryptedValueToken`, `*****`, redacted certificates),
-  GUIDs, URLs, and identifiers — `device_vendor_msft_…`, `com.apple.…`, bare snake_case, bare camelCase.
+  GUIDs, URLs, identifiers — `device_vendor_msft_…`, `com.apple.…`, bare snake_case, bare camelCase —
+  ISO-8601 dates and timestamps (`YYYY-MM-DD`, optionally `T…`), and any value containing whitespace.
   Do not widen rule (c) beyond free-text fields: run over a whole file it matches every camelCase setting
   name in the export and buries the real hits.
+
+The sweep reads every `resources/**/*.yaml` except `metadata.yaml`, plus the `.mobileconfig`, `.plist` and
+`.xml` sidecars for rule (a) only, so its result does not depend on whether the `base64-decode` transformer
+wrote payloads inline or as files. It measures time against `metadata.yaml`'s `generatedAt`, never the
+clock, and exits 0 — 1 only when `resources/metadata.yaml` is missing:
+
+````python
+#!/usr/bin/env python3
+"""Section 7 signal sweep. Run from the tenant folder before writing docs/summary.md. Prints each signal with the resources it names."""
+import json, pathlib, re, sys
+from datetime import datetime
+
+# The one credential-word list, used by rules (a), (b), (c) and (e).
+WORDS = ("password", "passwd", "pwd", "passphrase", "secret", "token", "apikey", "authkey", "accesskey", "privatekey", "sharedkey")
+WORD = re.compile(r"(?<![A-Za-z0-9])(" + "|".join(WORDS) + r")(?![A-Za-z0-9])", re.I)
+CREDENTIAL_TYPES_HEADING = "Expiry and renewal"
+EXPIRY_KEYS = ("expirationDateTime", "tokenExpirationDateTime")
+NOT_IN_FORCE = {("state", "enabledForReportingButNotEnforced"), ("state", "disabled"), ("isEnabled", "false")}
+SIDECARS = (".mobileconfig", ".plist", ".xml")
+PLIST = re.compile(r"<key>\s*([^<]+?)\s*</key>\s*<string>([^<]*)</string>")
+HEX = re.compile(r"[0-9a-fA-F]{16,}")
+GUID = re.compile(r"^\{?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}?$")
+URL = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+ISO = re.compile(r"^\d{4}-\d{2}-\d{2}(T\S*)?$")
+ARG_TOKEN = re.compile(r"""(?:[^\s"']+|"[^"]*"|'[^']*')+""")
+SEQ = re.compile(r"^-(\s|$)")
+KEY = re.compile(r"""^('(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^'"\s#-][^:]*?|-[^\s:][^:]*?):(?:\s+(.*))?$""")
+
+def names_credential(name):
+    n = re.sub(r"[_.\-]", "", str(name).lower())
+    for suffix in ("value", "text", "string"):
+        if n.endswith(suffix) and n != suffix:
+            n = n[:-len(suffix)]
+            break
+    return n.endswith(WORDS)
+
+def masked(v):
+    low = v.lower()
+    return "*****" in v or set(v) == {"*"} or "encryptedvaluetoken" in low or "redacted" in low
+
+def identifier(v):
+    return bool(re.match(r"^(device_vendor_msft_|com\.apple\.)", v, re.I)
+                or re.match(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$", v)
+                or re.match(r"^[a-z]+([A-Z][a-z0-9]*)+$", v))
+
+def credential_shaped(v):
+    v = str(v).strip()
+    if len(v) < 10 or masked(v) or re.search(r"\s", v) or ISO.match(v):
+        return False
+    if HEX.search(v):
+        return True
+    if GUID.match(v) or URL.match(v) or identifier(v):
+        return False
+    return sum(bool(re.search(p, v)) for p in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9\s]")) >= 3
+
+# A small indentation-aware reader for the YAML azure-rd writes (yaml.v3 block style):
+# mappings, sequences, quoted and plain scalars, |/> block scalars joined, [] and {}.
+def _indent(line):
+    return len(line) - len(line.lstrip(" "))
+
+def _closed(s):
+    body = s[1:]
+    if s[0] == "'":
+        return "'" in body.replace("''", "")
+    return re.search(r'(?<!\\)(\\\\)*"', body) is not None
+
+def _scalar(s):
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] == "'":
+        return s[1:-1].replace("''", "'")
+    if len(s) >= 2 and s[0] == s[-1] == '"':
+        try:
+            return json.loads(s)
+        except ValueError:
+            return s[1:-1]
+    return "" if s in ("null", "~") else s
+
+class Reader:
+    def __init__(self, text):
+        self.lines, self.pos = text.replace("\r\n", "\n").split("\n"), 0
+
+    def next_line(self):
+        while self.pos < len(self.lines):
+            s = self.lines[self.pos].strip()
+            if s and not s.startswith("#"):
+                return self.lines[self.pos]
+            self.pos += 1
+        return None
+
+    def document(self):
+        line = self.next_line()
+        return {} if line is None else self.node(_indent(line))
+
+    def node(self, ind):
+        return self.seq(ind) if SEQ.match(self.lines[self.pos].strip()) else self.mapping(ind)
+
+    def mapping(self, ind):
+        out = {}
+        while True:
+            line = self.next_line()
+            if line is None or _indent(line) < ind or SEQ.match(line.strip()):
+                return out
+            m = KEY.match(line.strip())
+            self.pos += 1
+            if _indent(line) == ind and m:
+                out[_scalar(m.group(1))] = self.value((m.group(2) or "").strip(), ind)
+
+    def seq(self, ind):
+        out = []
+        while True:
+            line = self.next_line()
+            if line is None or _indent(line) < ind:
+                return out
+            st = line.strip()
+            if _indent(line) > ind or not SEQ.match(st):
+                if _indent(line) == ind:
+                    return out
+                self.pos += 1
+                continue
+            rest = st[1:].lstrip()
+            if SEQ.match(rest) or KEY.match(rest):
+                col = ind + len(st) - len(rest)
+                self.lines[self.pos] = " " * col + rest
+                out.append(self.node(col))
+            else:
+                self.pos += 1
+                out.append(self.value(rest, ind))
+
+    def value(self, rest, ind):
+        if rest == "":
+            line = self.next_line()
+            if line is not None and (_indent(line) > ind or (_indent(line) == ind and SEQ.match(line.strip()))):
+                return self.node(_indent(line))
+            return ""
+        if re.match(r"^[|>][-+0-9]*$", rest):
+            return self.block_scalar(ind, rest[0] == ">")
+        if rest in ("[]", "{}"):
+            return [] if rest == "[]" else {}
+        parts = [rest]
+        if rest[0] in "'\"":
+            while not _closed(" ".join(parts)) and self.pos < len(self.lines):
+                parts.append(self.lines[self.pos].strip())
+                self.pos += 1
+            return _scalar(" ".join(parts))
+        while True:
+            line = self.next_line()
+            if line is None or _indent(line) <= ind:
+                return _scalar(" ".join(parts))
+            parts.append(line.strip())
+            self.pos += 1
+
+    def block_scalar(self, ind, folded):
+        out, col = [], None
+        while self.pos < len(self.lines):
+            line = self.lines[self.pos]
+            if line.strip():
+                if _indent(line) <= ind or (col is not None and _indent(line) < col):
+                    break
+                col = _indent(line) if col is None else col
+                out.append(line[col:])
+            else:
+                out.append("")
+            self.pos += 1
+        while out and out[-1] == "":
+            out.pop()
+        return (" " if folded else "\n").join(out)
+
+def read_yaml(path):
+    return Reader(path.read_text(encoding="utf-8", errors="replace")).document()
+
+def scalars(node, path=()):
+    """(key path, value) for every scalar; list indices are ints in the path."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            yield from scalars(v, path + (k,))
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            yield from scalars(v, path + (i,))
+    else:
+        yield path, node
+
+def lists(node, path=()):
+    """(key path, list) for every sequence, so a list item's keys are read together."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            yield from lists(v, path + (k,))
+    elif isinstance(node, list):
+        yield path, node
+        for i, v in enumerate(node):
+            yield from lists(v, path + (i,))
+
+def dotted(path):
+    return "".join(f"[{p}]" if isinstance(p, int) else (f".{p}" if i else str(p)) for i, p in enumerate(path))
+
+def last_key(path):
+    return next((p for p in reversed(path) if isinstance(p, str)), "")
+
+def when(v):
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?", str(v).strip())
+    return datetime(*(int(g or 0) for g in m.groups())) if m else None
+
+def command_arguments(line):
+    """(name, value) for NAME=value, /NAME:value, /NAME value and -NAME value arguments, quotes stripped."""
+    tokens, out = ARG_TOKEN.findall(line), []
+    for i, tok in enumerate(tokens):
+        m = re.match(r"^[/-]{0,2}([A-Za-z_][\w.\-]*)=(.*)$", tok) or re.match(r"^/([A-Za-z_][\w.\-]*):(.+)$", tok)
+        if m:
+            out.append((m.group(1), m.group(2)))
+        elif re.match(r"^(?:/|--?)[A-Za-z_][\w.\-]*$", tok) and i + 1 < len(tokens) and tokens[i + 1][0] not in "/-":
+            out.append((tok.lstrip("/-"), tokens[i + 1]))
+    return [(n, re.sub(r"[\"']", "", v)) for n, v in out]
+
+def plaintext(path, rel, value):
+    """Plaintext-credential findings for one YAML scalar, rules (a), (b), (c) and (e)."""
+    found, key, value = [], last_key(path), str(value)
+    for name, val in PLIST.findall(value):
+        if names_credential(name) and credential_shaped(val):
+            found.append(f"{rel}  rule (a)  {dotted(path)} plist key {name}  value length {len(val)}")
+    if names_credential(key) and credential_shaped(value):
+        found.append(f"{rel}  rule (b)  {dotted(path)}  value length {len(value)}")
+    if key.lower() in ("description", "notes"):
+        for m in WORD.finditer(value):
+            tok = re.match(r"\s*[:=]?\s*(\S+)", value[m.end():])
+            val = tok.group(1).strip("\"'.,;") if tok else ""
+            if credential_shaped(val):
+                found.append(f"{rel}  rule (c)  {dotted(path)} after '{m.group(1)}'  value length {len(val)}")
+    if key.lower().endswith("commandline"):
+        for name, val in command_arguments(value):
+            if names_credential(name) and credential_shaped(val):
+                found.append(f"{rel}  rule (e)  {dotted(path)} argument {name}  value length {len(val)}")
+    return found
+
+meta_path = pathlib.Path("resources/metadata.yaml")
+if not meta_path.is_file():
+    print("FAIL: resources/metadata.yaml is missing — nothing to sweep")
+    sys.exit(1)
+meta = read_yaml(meta_path)
+export_at = when(meta.get("generatedAt", ""))
+types = meta.get("types") or {}
+resources = meta.get("resources") or {}
+
+def type_of(key):
+    return key.rsplit("/", 1)[0]
+
+credential_types = set()
+for spec in pathlib.Path("resources").rglob("doc-prompt.md"):
+    m = re.search(r"<!--\s*doc-headings:\s*(.+?)\s*-->", spec.read_text(encoding="utf-8", errors="replace"))
+    if m and CREDENTIAL_TYPES_HEADING in [h.strip() for h in m.group(1).split("|")]:
+        credential_types.add(spec.parent.relative_to("resources").as_posix())
+
+not_in_force, expiry, secrets = {}, [], []
+for path in sorted(pathlib.Path("resources").rglob("*")):
+    if not path.is_file() or path == meta_path:
+        continue
+    rel, rtype = path.as_posix(), path.parent.relative_to("resources").as_posix()
+    if path.suffix.lower() in SIDECARS:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        secrets += [f"{rel}  rule (a)  plist key {n}  value length {len(v)}"
+                    for n, v in PLIST.findall(text) if names_credential(n) and credential_shaped(v)]
+        continue
+    if path.suffix != ".yaml":
+        continue
+    doc = read_yaml(path)
+    if not isinstance(doc, dict):
+        continue
+    for key, value in doc.items():
+        if (key, str(value)) in NOT_IN_FORCE:
+            not_in_force.setdefault(rtype, set()).add(f"{rel}  {key}: {value}")
+    if rtype in credential_types and export_at:
+        for key in EXPIRY_KEYS:
+            at = when(doc.get(key, ""))
+            if at:
+                days = (at - export_at).days
+                if days <= 180:
+                    left = f"expired {-days} day(s) before the export" if at < export_at else f"{days} day(s) left"
+                    expiry.append(f"{rel}  {key} {doc[key]}  {left}")
+    for p, value in scalars(doc):
+        secrets += plaintext(p, rel, value)
+    for p, items in lists(doc):
+        if last_key(p).lower() != "omasettings":
+            continue
+        for i, item in enumerate(items):
+            if isinstance(item, dict) and str(item.get("isEncrypted", "")).lower() == "true":
+                value = item.get("value", "")
+                if isinstance(value, str) and value and not masked(value):
+                    secrets.append(f"{rel}  rule (d)  {dotted(p + (i, 'value'))}  value length {len(value)}")
+
+unassigned, group_ids, assigners = [], set(), {}
+for key, entry in resources.items():
+    if isinstance(entry, dict) and type_of(key) == "Microsoft.Graph/groups" and entry.get("resourceId"):
+        group_ids.add(entry["resourceId"])
+for key, entry in sorted(resources.items()):
+    if not isinstance(entry, dict) or str(entry.get("presentInTenant", "")).lower() != "true":
+        continue
+    targets = entry.get("assignmentTargets") or []
+    if str((types.get(type_of(key)) or {}).get("hasAssignments", "")).lower() == "true" and not targets:
+        unassigned.append(f"{entry.get('displayName') or key}  docs/{key[:-len('.yaml')]}.md")
+    for t in targets if isinstance(targets, list) else []:
+        gid = (t.get("target") or {}).get("groupId", "") if isinstance(t, dict) else ""
+        if gid and gid not in group_ids:
+            assigners.setdefault(gid, set()).add(key)
+
+def report(title, lines):
+    lines = sorted(set(lines))
+    print(f"\n## {title}: {len(lines)}")
+    for line in lines:
+        print(f"  {line}")
+
+print(f"## Not in force: {sum(len(v) for v in not_in_force.values())}")
+for rtype in sorted(not_in_force):
+    print(f"  {rtype}: {len(not_in_force[rtype])}")
+    for line in sorted(not_in_force[rtype]):
+        print(f"    {line}")
+report("Configured but unassigned", unassigned)
+report("Dangling targets", [f"{gid}  assigned by {len(keys)} resource(s): {', '.join(sorted(keys))}"
+                            for gid, keys in assigners.items()])
+report("Credentials near expiry", expiry)
+report("Plaintext credentials", secrets)
+sys.exit(0)
+````
 
 Nothing outside these three inputs belongs in the management summary. Deeper per-resource analysis — a
 baseline deviation, a contradictory condition, an unreachable policy — stays in that resource's own document
