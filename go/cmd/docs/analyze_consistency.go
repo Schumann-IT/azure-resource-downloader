@@ -134,7 +134,8 @@ func reportAnalyzeConsistency(res *consistency.Result, dryRun bool) {
 		"resources", resources,
 		"settings", settings,
 		"unreadable", c.Unreadable,
-		"unknown_values", c.UnknownValues)
+		"unknown_values", c.UnknownValues,
+		"ruled_out_by_scope", c.RuledOutByScope)
 	if c.Unreadable > 0 {
 		log.Warn("Some resources could not be read and were not indexed", "unreadable", c.Unreadable)
 	}

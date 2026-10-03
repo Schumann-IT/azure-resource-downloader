@@ -180,19 +180,19 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   it — that must come out `none`), an unreadable resource warned and counted, a `presentInTenant: false` entry not
   indexed, byte-equal reruns, dry-run writing nothing, the refusals; `ClearTree` and the re-baseline call in
   `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).~~
-- Compare Apple Settings Catalog collections as additive lists, not as one folded value (found in a real export:
+- ~~Compare Apple Settings Catalog collections as additive lists, not as one folded value (found in a real export:
   every certain new↔new conflict was a collection entry — managed login item rules
   `com.apple.servicemanagement_rules_item_*`, allowed system extensions
   `com.apple.system-extension-policy_allowedsystemextensions_*`, privacy entries
   `com.apple.tcc.configuration-profile-policy_services_*_item_*` — where each policy adds its own entries and macOS
-  installs every profile's entries side by side):
-  - Today `walkCatalogInstance` recurses into each `groupSettingCollectionValue` element and the collector folds
+  installs every profile's entries side by side):~~
+  - ~~Today `walkCatalogInstance` recurses into each `groupSettingCollectionValue` element and the collector folds
     every child occurrence into one sorted list per child key, so two policies with different entries conflict on
     each child key. Additive applies when **every** platform family of the resource is `macos` or `ios` —
     `resourcePlatforms(entry)` from `scope.go`, computed in `buildIndex` and passed into `indexResource` /
     `indexSettingsCatalog` (both `deviceManagementConfigurationPolicies` and `compliancePolicies`); an `unknown`,
-    mixed or non-Apple platform keeps today's folding.
-  - Only **nested** collections are additive: the `settingInstance` of a `settings[]` item itself (the Apple payload
+    mixed or non-Apple platform keeps today's folding.~~
+  - ~~Only **nested** collections are additive: the `settingInstance` of a `settings[]` item itself (the Apple payload
     instance, a group-setting collection with one element per payload) is never a member list — its children stay
     keys as today, so two macOS policies setting the same payload key (`com.apple.loginwindow_…`,
     `com.apple.applicationaccess_…`) differently still `conflict`. Below that level a `groupSettingCollectionValue`
@@ -204,33 +204,33 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
     no member; an element whose fresh collector holds an unknown setting is an **unknown member** (no value
     kept). The element's children are not indexed as separate keys. A nested `simpleSettingCollectionValue` or
     `choiceSettingCollectionValue` becomes members the same way, one per value (a secret simple value → unknown
-    member; a choice option's children are still walked as their own keys).
-  - `Setting` gains `Members []string` (sorted, distinct known member values) and `UnknownMembers bool`, and a
+    member; a choice option's children are still walked as their own keys).~~
+  - ~~`Setting` gains `Members []string` (sorted, distinct known member values) and `UnknownMembers bool`, and a
     list-member flag; such a setting has an empty `Value`/`Scalar`, never crosses the OMA-URI bridge or an
-    equivalence, and counts as one setting per key and resource in `counts.indexed`.
-  - Detection for a list-member key (in `judge`, after the scope check, which runs first as today): shared known
+    equivalence, and counts as one setting per key and resource in `counts.indexed`.~~
+  - ~~Detection for a list-member key (in `judge`, after the scope check, which runs first as today): shared known
     members → one `duplicate` per pair, `a.value` and `b.value` both the canonical JSON list of the shared
     members; no shared known member and no unknown member on either side → no finding; no shared known member and
     an unknown member on either side → listed under `unknownValues`; never a `conflict`. A pair where only one side
     is a list-member setting (one key, one Apple-only and one folded resource) → `unknownValues`. An unknown member
     is never compared and never written. Other platforms keep today's folded-list comparison (Windows Settings
     Catalog merges only some collections; the catalog entry *A consistency rule and topic catalog in the
-    configuration* can mark more collections additive later).
-  - Tests (`index_test.go`, `consistency_test.go`, synthetic catalog policies): two macOS policies with different
+    configuration* can mark more collections additive later).~~
+  - ~~Tests (`index_test.go`, `consistency_test.go`, synthetic catalog policies): two macOS policies with different
     login-item rules → no finding; one shared rule → `duplicate` whose values are the shared rule only; an iOS pair
     behaves alike; two macOS policies setting one payload-level key differently → still `conflict`; a Windows
     policy pair with different nested collection values stays a `conflict`; a TCC-shaped nested collection yields
     members at the inner level only; a collection element holding a secret is never compared or written (and a
     disjoint pair with it lands in `unknownValues`); the children of an additive collection are no longer separate
-    keys; a policy with platforms `macOS, windows10` keeps folding.
-- Count the pairs the scope check ruled out: `counts.ruledOutByScope` in `consistency/metadata.yaml` (field after
+    keys; a policy with platforms `macOS, windows10` keeps folding.~~
+- ~~Count the pairs the scope check ruled out: `counts.ruledOutByScope` in `consistency/metadata.yaml` (field after
   `unknownValues` in `Counts`, always written, `0` included) — the number of **distinct resource pairs** that
   reached `evaluate` on at least one shared key or equivalence but whose overlap verdict is `none`, so no finding
   or unknown value was written for them; a pair ruled out on several keys counts once. The detector records them
   in a set beside `findings` / `unknowns` and `detect` returns the count to `Analyze` for `countAll`. Logged as
   `ruled_out_by_scope` on the `Consistency summary` line in `cmd/docs/analyze_consistency.go`. `version` stays 1
   (the file has not shipped). Tests: a fixture with an excluded pair sharing two keys counts 1; a `none` pair that
-  shares no key counts 0; a dry run reports the same count; reruns stay byte-equal.
+  shares no key counts 0; a dry run reports the same count; reruns stay byte-equal.~~
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
 - ~~Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry

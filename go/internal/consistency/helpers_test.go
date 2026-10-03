@@ -173,11 +173,14 @@ func catalogPolicy(platform string, settings ...interface{}) map[string]interfac
 	return map[string]interface{}{"id": "p", "name": "p", "platforms": platform, "settings": settings}
 }
 
-// indexOf returns a resource's settings by key.
+// indexOf returns a resource's settings by key. The platforms come from the
+// document's own platforms property, as metadata.yaml records them.
 func indexOf(t *testing.T, resource, sourceType string, doc map[string]interface{}) map[string]Setting {
 	t.Helper()
+	platforms, _ := doc["platforms"].(string)
+	families := resourcePlatforms(docs.ResourceMeta{Platforms: platforms})
 	out := map[string]Setting{}
-	for _, s := range indexResource(resource, sourceType, doc, nil, t.TempDir()) {
+	for _, s := range indexResource(resource, sourceType, doc, nil, t.TempDir(), families) {
 		out[s.Key] = s
 	}
 	return out
@@ -216,4 +219,27 @@ func hasLen(t *testing.T, m map[string]Setting, n int, msg ...interface{}) {
 	if len(m) != n {
 		t.Errorf("want %d settings, got %d %v", n, len(m), msg)
 	}
+}
+
+// groupCollection builds a group-setting-collection instance with one element
+// per children list.
+func groupCollection(id string, elements ...[]interface{}) map[string]interface{} {
+	items := make([]interface{}, 0, len(elements))
+	for _, children := range elements {
+		items = append(items, map[string]interface{}{"children": children})
+	}
+	return map[string]interface{}{
+		"@odata.type":                 "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionInstance",
+		"settingDefinitionId":         id,
+		"groupSettingCollectionValue": items,
+	}
+}
+
+// children lists the child instances of one collection element.
+func children(cs ...interface{}) []interface{} { return cs }
+
+// applePayload builds a settings[] item whose instance is an Apple payload: a
+// group collection with one element holding the payload's keys.
+func applePayload(id string, keys ...interface{}) interface{} {
+	return map[string]interface{}{"settingInstance": groupCollection(id, children(keys...))}
 }

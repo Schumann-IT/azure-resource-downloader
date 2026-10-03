@@ -384,3 +384,200 @@ func Example() {
 	}
 	// Output: conflict example_setting certain 1 2
 }
+
+// analyzePair runs a dry analysis of two Settings Catalog policies on All
+// devices with the given platforms.
+func analyzePair(t *testing.T, platformA string, docA map[string]interface{}, platformB string, docB map[string]interface{}) *Result {
+	t.Helper()
+	f := newFixture(t)
+	f.add(scType+"a.yaml", docs.ResourceMeta{Platforms: platformA, AssignmentTargets: targets(allDevices())}, docA)
+	f.add(scType+"b.yaml", docs.ResourceMeta{Platforms: platformB, AssignmentTargets: targets(allDevices())}, docB)
+	res, err := Analyze(Options{TenantDir: f.save(), DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestAnalyzeAppleCollectionsAreAdditive(t *testing.T) {
+	sharedRule := `[{"` + ruleType + `":"TeamIdentifier","` + ruleValue + `":"TEAMS"}]`
+	tests := []struct {
+		name     string
+		platform string
+		a, b     []string
+		kind     string
+		value    string
+	}{
+		{"macOS different rules: no finding", "macOS", []string{"TEAMA"}, []string{"TEAMB"}, "", ""},
+		{"macOS one shared rule: duplicate of it only", "macOS", []string{"TEAMA", "TEAMS"}, []string{"TEAMS", "TEAMB"}, KindDuplicate, sharedRule},
+		{"iOS different rules: no finding", "iOS", []string{"TEAMA"}, []string{"TEAMB"}, "", ""},
+		{"iOS one shared rule: duplicate", "iOS", []string{"TEAMS"}, []string{"TEAMS", "TEAMB"}, KindDuplicate, sharedRule},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := analyzePair(t, tt.platform, loginItemsPolicy(tt.platform, tt.a...), tt.platform, loginItemsPolicy(tt.platform, tt.b...))
+			var got []Finding
+			for _, f := range res.Mechanical.Findings {
+				if f.Key == loginRules || strings.HasPrefix(f.Key, loginRules+"_") {
+					got = append(got, f)
+				}
+			}
+			if tt.kind == "" {
+				if len(got) != 0 {
+					t.Errorf("want no collection finding, got %+v", got)
+				}
+				return
+			}
+			if len(got) != 1 || got[0].Kind != tt.kind || got[0].Key != loginRules || got[0].A.Value != tt.value || got[0].B.Value != tt.value {
+				t.Errorf("want one %s on %s valued %s, got %+v", tt.kind, loginRules, tt.value, got)
+			}
+			if len(res.Mechanical.UnknownValues) != 0 {
+				t.Errorf("no unknown values expected: %+v", res.Mechanical.UnknownValues)
+			}
+		})
+	}
+}
+
+func TestAnalyzeApplePayloadKeyStillConflicts(t *testing.T) {
+	const textKey = "com.apple.loginwindow_loginwindowtext"
+	policy := func(text string) map[string]interface{} {
+		return catalogPolicy("macOS", applePayload("com.apple.loginwindow", simpleInstance(textKey, text)))
+	}
+	res := analyzePair(t, "macOS", policy("one"), "macOS", policy("two"))
+	got := findingsByKey(res.Mechanical.Findings)
+	if _, ok := got["conflict|"+textKey+"|"+scType+"a.yaml|"+scType+"b.yaml"]; !ok {
+		t.Errorf("a payload-level key set differently must still conflict: %+v", res.Mechanical.Findings)
+	}
+}
+
+func TestAnalyzeWindowsNestedCollectionStillConflicts(t *testing.T) {
+	res := analyzePair(t, "windows10", loginItemsPolicy("windows10", "TEAMA"), "windows10", loginItemsPolicy("windows10", "TEAMB"))
+	got := findingsByKey(res.Mechanical.Findings)
+	if _, ok := got["conflict|"+ruleValue+"|"+scType+"a.yaml|"+scType+"b.yaml"]; !ok {
+		t.Errorf("a non-Apple nested collection keeps the folded comparison: %+v", res.Mechanical.Findings)
+	}
+}
+
+func TestAnalyzeAppleUnknownMembers(t *testing.T) {
+	const memberSecret = "resolved-Member-Secret-1a2b3c"
+	secretRule := children(map[string]interface{}{
+		"settingDefinitionId": ruleValue,
+		"simpleSettingValue": map[string]interface{}{
+			"@odata.type": "#microsoft.graph.deviceManagementConfigurationSecretSettingValue",
+			"value":       memberSecret,
+			"valueState":  "notEncrypted",
+		},
+	})
+	withSecret := catalogPolicy("macOS", applePayload(loginPayload, groupCollection(loginRules, loginRule("TEAMA"), secretRule)))
+
+	t.Run("disjoint pair with a secret member is listed, never written", func(t *testing.T) {
+		f := newFixture(t)
+		f.add(scType+"a.yaml", docs.ResourceMeta{Platforms: "macOS", AssignmentTargets: targets(allDevices())}, withSecret)
+		f.add(scType+"b.yaml", docs.ResourceMeta{Platforms: "macOS", AssignmentTargets: targets(allDevices())}, loginItemsPolicy("macOS", "TEAMB"))
+		dir := f.save()
+		res, err := Analyze(Options{TenantDir: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Mechanical.Findings) != 0 {
+			t.Errorf("want no finding, got %+v", res.Mechanical.Findings)
+		}
+		if len(res.Mechanical.UnknownValues) != 1 || res.Mechanical.UnknownValues[0].Key != loginRules {
+			t.Errorf("want the pair under unknownValues, got %+v", res.Mechanical.UnknownValues)
+		}
+		for _, name := range []string{MechanicalFileName, MetadataFileName} {
+			data, err := os.ReadFile(filepath.Join(dir, DirName, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(data, []byte(memberSecret)) {
+				t.Errorf("%s leaks a secret member", name)
+			}
+		}
+	})
+
+	t.Run("a shared known member is still a duplicate", func(t *testing.T) {
+		res := analyzePair(t, "macOS", withSecret, "macOS", loginItemsPolicy("macOS", "TEAMA"))
+		if len(res.Mechanical.Findings) != 1 || res.Mechanical.Findings[0].Kind != KindDuplicate {
+			t.Errorf("want one duplicate, got %+v", res.Mechanical.Findings)
+		}
+		if strings.Contains(res.Mechanical.Findings[0].A.Value, memberSecret) {
+			t.Error("an unknown member is never written")
+		}
+	})
+
+	t.Run("one member list against one folded value", func(t *testing.T) {
+		res := analyzePair(t, "macOS", withSecret, "macOS, windows10", catalogPolicy("macOS, windows10",
+			applePayload(loginPayload, map[string]interface{}{
+				"settingDefinitionId": loginRules,
+				"simpleSettingValue":  map[string]interface{}{"value": "x"},
+			})))
+		if len(res.Mechanical.Findings) != 0 || len(res.Mechanical.UnknownValues) != 1 {
+			t.Errorf("a mixed pair is listed under unknownValues: %+v %+v", res.Mechanical.Findings, res.Mechanical.UnknownValues)
+		}
+	})
+}
+
+func TestAnalyzeRuledOutByScope(t *testing.T) {
+	build := func(t *testing.T) string {
+		f := newFixture(t)
+		f.addGroup("admins", grpAdmins, "")
+		win := func(ts ...interface{}) docs.ResourceMeta {
+			return docs.ResourceMeta{Platforms: "windows10", AssignmentTargets: ts}
+		}
+		// The complement pair shares two keys: ruled out once.
+		f.add(scType+"l1.yaml", win(allUsers(), exclude(grpAdmins)), catalogPolicy("windows10",
+			catalogSimple("first_value", 1), catalogSimple("second_value", 1)))
+		f.add(scType+"admin.yaml", win(include(grpAdmins)), catalogPolicy("windows10",
+			catalogSimple("first_value", 2), catalogSimple("second_value", 2)))
+		// A macOS policy never meets either and shares no key: not counted.
+		f.add(scType+"mac.yaml", docs.ResourceMeta{Platforms: "macOS", AssignmentTargets: targets(allDevices())},
+			catalogPolicy("macOS", catalogSimple("mac_only", 1)))
+		return f.save()
+	}
+
+	dir := build(t)
+	dry, err := Analyze(Options{TenantDir: dir, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, 1, dry.Metadata.Counts.RuledOutByScope, "a pair ruled out on two keys counts once")
+	equal(t, 0, len(dry.Mechanical.Findings))
+
+	read := func() string {
+		data, err := os.ReadFile(filepath.Join(dir, DirName, MetadataFileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	res, err := Analyze(Options{TenantDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, dry.Metadata.Counts.RuledOutByScope, res.Metadata.Counts.RuledOutByScope, "a dry run reports the same count")
+	first := read()
+	if !strings.Contains(first, "ruledOutByScope: 1\n") {
+		t.Errorf("metadata.yaml must carry the count: %s", first)
+	}
+	if _, err := Analyze(Options{TenantDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	equal(t, first, read(), "reruns stay byte-equal")
+
+	t.Run("always written, zero included", func(t *testing.T) {
+		f := newFixture(t)
+		f.add(scType+"a.yaml", docs.ResourceMeta{Platforms: "windows10"}, catalogPolicy("windows10", catalogSimple("x", 1)))
+		dir := f.save()
+		if _, err := Analyze(Options{TenantDir: dir}); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, DirName, MetadataFileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "ruledOutByScope: 0\n") {
+			t.Errorf("a zero count is written: %s", data)
+		}
+	})
+}

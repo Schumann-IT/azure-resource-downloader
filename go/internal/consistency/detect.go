@@ -1,6 +1,7 @@
 package consistency
 
 import (
+	"encoding/json"
 	"sort"
 )
 
@@ -30,10 +31,14 @@ type detector struct {
 
 	findings map[string]Finding
 	unknowns map[string]UnknownValue
+	// ruledOut holds the distinct resource pairs that reached evaluate but
+	// whose overlap is none.
+	ruledOut map[[2]string]bool
 }
 
-// detect returns the mechanical findings and the unknown-value pairs, sorted.
-func detect(settings []Setting, scopes map[string]*Scope, eqs []Equivalence) ([]Finding, []UnknownValue) {
+// detect returns the mechanical findings and the unknown-value pairs, sorted,
+// and the number of distinct resource pairs the scope check ruled out.
+func detect(settings []Setting, scopes map[string]*Scope, eqs []Equivalence) ([]Finding, []UnknownValue, int) {
 	d := &detector{
 		settings: settings,
 		scopes:   scopes,
@@ -41,6 +46,7 @@ func detect(settings []Setting, scopes map[string]*Scope, eqs []Equivalence) ([]
 		overlaps: map[[2]string]Overlap{},
 		findings: map[string]Finding{},
 		unknowns: map[string]UnknownValue{},
+		ruledOut: map[[2]string]bool{},
 	}
 
 	byKey := map[string][]int{}
@@ -56,7 +62,8 @@ func detect(settings []Setting, scopes map[string]*Scope, eqs []Equivalence) ([]
 	for _, e := range d.eqs.ordered {
 		d.pairs(memberIndexes(e, byKey), e)
 	}
-	return d.sorted()
+	findings, unknowns := d.sorted()
+	return findings, unknowns, len(d.ruledOut)
 }
 
 // memberIndexes lists the settings of every distinct member of e.
@@ -139,8 +146,12 @@ func (d *detector) inContext(a, b *Setting, e *Equivalence) bool {
 
 // contextOf decides which comparison a pair belongs to: two configurations on
 // one key compare on that key; a pair an equivalence joins compares under it;
-// any other pair on one key compares on that key.
+// any other pair on one key compares on that key. A list-member setting never
+// crosses an equivalence.
 func (d *detector) contextOf(a, b *Setting) *Equivalence {
+	if a.ListMember || b.ListMember {
+		return nil
+	}
 	if a.Key == b.Key && a.Class == ClassConfiguration && b.Class == ClassConfiguration {
 		return nil
 	}
@@ -162,6 +173,7 @@ func (d *detector) overlap(a, b string) Overlap {
 func (d *detector) evaluate(a, b *Setting, e *Equivalence) {
 	o := d.overlap(a.Resource, b.Resource)
 	if o.Verdict == OverlapNone {
+		d.ruledOut[[2]string{a.Resource, b.Resource}] = true
 		return
 	}
 	key, operator, confidence := a.Key, "", ConfidenceFirm
@@ -191,20 +203,77 @@ func (d *detector) evaluate(a, b *Setting, e *Equivalence) {
 	if _, done := d.findings[id]; done {
 		return
 	}
+	valueA, valueB := a.Value, b.Value
+	if a.ListMember && b.ListMember {
+		// Only the shared members: the rest of each list is additive.
+		valueA = sharedMembersJSON(a, b)
+		valueB = valueA
+	}
 	d.findings[id] = Finding{
 		Kind:       kind,
 		Key:        key,
 		Overlap:    o.Verdict,
 		Confidence: confidence,
 		Operator:   operator,
-		A:          FindingSide{Resource: a.Resource, SourceKey: a.SourceKey, Value: a.Value},
-		B:          FindingSide{Resource: b.Resource, SourceKey: b.SourceKey, Value: b.Value},
+		A:          FindingSide{Resource: a.Resource, SourceKey: a.SourceKey, Value: valueA},
+		B:          FindingSide{Resource: b.Resource, SourceKey: b.SourceKey, Value: valueB},
 	}
+}
+
+// sharedMembers returns the known members both list-member settings carry,
+// sorted.
+func sharedMembers(a, b *Setting) []string {
+	inB := map[string]bool{}
+	for _, m := range b.Members {
+		inB[m] = true
+	}
+	var shared []string
+	for _, m := range a.Members {
+		if inB[m] {
+			shared = append(shared, m)
+		}
+	}
+	return shared
+}
+
+// sharedMembersJSON renders the shared members as one JSON list; each member
+// is already canonical JSON.
+func sharedMembersJSON(a, b *Setting) string {
+	shared := sharedMembers(a, b)
+	raw := make([]json.RawMessage, 0, len(shared))
+	for _, m := range shared {
+		raw = append(raw, json.RawMessage(m))
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// judgeMembers judges an additive collection key: shared known members are a
+// duplicate; disjoint lists are no finding unless a member is unknown. A
+// pair where only one side is a member list cannot be compared. Never a
+// conflict: the device installs every resource's members side by side.
+func judgeMembers(a, b *Setting) (string, bool) {
+	if !a.ListMember || !b.ListMember {
+		return "", false
+	}
+	if len(sharedMembers(a, b)) > 0 {
+		return KindDuplicate, true
+	}
+	if a.UnknownMembers || b.UnknownMembers {
+		return "", false
+	}
+	return "", true
 }
 
 // judge returns the finding kind of a pair ("" for none); ok is false when a
 // value is unknown and the pair can only be listed.
 func (d *detector) judge(a, b *Setting, e *Equivalence) (string, bool) {
+	if a.ListMember || b.ListMember {
+		return judgeMembers(a, b)
+	}
 	enforces := func(s *Setting) bool {
 		if s.Class == ClassConfiguration {
 			return true

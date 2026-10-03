@@ -89,6 +89,19 @@ type Setting struct {
 	Unknown bool
 	// Class is requirement (compliance) or configuration.
 	Class Class
+	// ListMember marks an additive collection key: the resource adds the
+	// entries in Members to a list the device installs side by side with
+	// every other resource's (an Apple Settings Catalog nested collection).
+	// Such a setting has no Value or Scalar, never crosses the OMA-URI bridge
+	// or an equivalence, and only ever yields a duplicate on shared members.
+	ListMember bool
+	// Members are the sorted, distinct known member values of a ListMember
+	// setting, each in canonical JSON.
+	Members []string
+	// UnknownMembers marks a ListMember setting with at least one member that
+	// cannot or must not be read (a secret); such a member is never compared
+	// and never written.
+	UnknownMembers bool
 
 	family string
 }
@@ -99,16 +112,41 @@ type rawValue struct {
 	value     string
 	scalar    string
 	unknown   bool
+	// member marks one entry of an additive collection; value is then the
+	// member's canonical JSON.
+	member bool
 }
 
 // collector folds raw occurrences into Settings per key for one resource.
 type collector struct {
 	family string
 	byKey  map[string][]rawValue
+	// additive makes nested Settings Catalog collections member lists (an
+	// Apple-only resource); otherwise every occurrence folds into one value.
+	additive bool
 }
 
 func newCollector(family string) *collector {
 	return &collector{family: family, byKey: map[string][]rawValue{}}
+}
+
+// addMember records one entry of an additive collection under key; an
+// unknown member keeps no value.
+func (c *collector) addMember(key, sourceKey, value string, unknown bool) {
+	if unknown {
+		value = ""
+	}
+	c.add(key, rawValue{sourceKey: sourceKey, value: value, unknown: unknown, member: true})
+}
+
+// hasMembers reports whether a key's occurrences are collection members.
+func hasMembers(raws []rawValue) bool {
+	for _, r := range raws {
+		if r.member {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *collector) add(key string, v rawValue) {
@@ -134,32 +172,67 @@ func (c *collector) settings(resource, sourceType string) []Setting {
 			SourceType: sourceType,
 			Key:        k,
 			Class:      classOf(sourceType),
+			SourceKey:  firstSourceKey(raws),
 			family:     c.family,
 		}
-		sourceKeys := make([]string, 0, len(raws))
-		values := make([]string, 0, len(raws))
-		for _, r := range raws {
-			sourceKeys = append(sourceKeys, r.sourceKey)
-			values = append(values, r.value)
-			if r.unknown {
-				s.Unknown = true
-			}
-		}
-		sort.Strings(sourceKeys)
-		s.SourceKey = sourceKeys[0]
-		switch {
-		case s.Unknown:
-			// Never carry a value of a setting that holds an unknown part.
-		case len(raws) == 1:
-			s.Value = raws[0].value
-			s.Scalar = raws[0].scalar
-		default:
-			sort.Strings(values)
-			s.Value = canonicalJSON(values)
+		if hasMembers(raws) {
+			foldMembers(&s, raws)
+		} else {
+			foldValues(&s, raws)
 		}
 		out = append(out, s)
 	}
 	return out
+}
+
+// firstSourceKey returns the lowest source key of a key's occurrences.
+func firstSourceKey(raws []rawValue) string {
+	sourceKeys := make([]string, 0, len(raws))
+	for _, r := range raws {
+		sourceKeys = append(sourceKeys, r.sourceKey)
+	}
+	sort.Strings(sourceKeys)
+	return sourceKeys[0]
+}
+
+// foldValues folds a key's occurrences into one value: the single value, or
+// the sorted list of all of them.
+func foldValues(s *Setting, raws []rawValue) {
+	values := make([]string, 0, len(raws))
+	for _, r := range raws {
+		values = append(values, r.value)
+		if r.unknown {
+			s.Unknown = true
+		}
+	}
+	switch {
+	case s.Unknown:
+		// Never carry a value of a setting that holds an unknown part.
+	case len(raws) == 1:
+		s.Value = raws[0].value
+		s.Scalar = raws[0].scalar
+	default:
+		sort.Strings(values)
+		s.Value = canonicalJSON(values)
+	}
+}
+
+// foldMembers turns a key's occurrences into the members of an additive
+// collection: sorted, distinct known members, and a flag for unknown ones.
+func foldMembers(s *Setting, raws []rawValue) {
+	s.ListMember = true
+	seen := map[string]bool{}
+	for _, r := range raws {
+		switch {
+		case r.unknown:
+			s.UnknownMembers = true
+		case r.member:
+			seen[r.value] = true
+		default:
+			seen[canonicalJSON(r.value)] = true
+		}
+	}
+	s.Members = sortedSet(seen)
 }
 
 // typedNonSettings are top-level properties of the typed (legacy) resources
@@ -283,14 +356,16 @@ func indexSettingsCatalog(doc map[string]interface{}, c *collector) {
 			continue
 		}
 		if inst, ok := item["settingInstance"].(map[string]interface{}); ok {
-			walkCatalogInstance(inst, c)
+			walkCatalogInstance(inst, c, true)
 		}
 	}
 }
 
 // walkCatalogInstance indexes one setting instance and recurses into the
-// children it carries.
-func walkCatalogInstance(inst map[string]interface{}, c *collector) {
+// children it carries. top marks the settingInstance of a settings[] item:
+// on Apple it is the payload instance, whose collection elements are payloads
+// and never members, so only collections below it can be additive.
+func walkCatalogInstance(inst map[string]interface{}, c *collector, top bool) {
 	id, _ := inst["settingDefinitionId"].(string)
 	if id == "" {
 		return
@@ -298,21 +373,25 @@ func walkCatalogInstance(inst map[string]interface{}, c *collector) {
 	if cv, ok := inst["choiceSettingValue"].(map[string]interface{}); ok {
 		walkCatalogChoice(id, cv, c)
 	}
+	if sv, ok := inst["simpleSettingValue"].(map[string]interface{}); ok {
+		addCatalogSimple(id, sv, c)
+	}
+	if gv, ok := inst["groupSettingValue"].(map[string]interface{}); ok {
+		walkCatalogChildren(gv, c)
+	}
+	if c.additive && !top {
+		addCatalogMembers(id, inst, c)
+		return
+	}
 	for _, raw := range listOf(inst["choiceSettingCollectionValue"]) {
 		if cv, ok := raw.(map[string]interface{}); ok {
 			walkCatalogChoice(id, cv, c)
 		}
 	}
-	if sv, ok := inst["simpleSettingValue"].(map[string]interface{}); ok {
-		addCatalogSimple(id, sv, c)
-	}
 	for _, raw := range listOf(inst["simpleSettingCollectionValue"]) {
 		if sv, ok := raw.(map[string]interface{}); ok {
 			addCatalogSimple(id, sv, c)
 		}
-	}
-	if gv, ok := inst["groupSettingValue"].(map[string]interface{}); ok {
-		walkCatalogChildren(gv, c)
 	}
 	for _, raw := range listOf(inst["groupSettingCollectionValue"]) {
 		if gv, ok := raw.(map[string]interface{}); ok {
@@ -324,8 +403,79 @@ func walkCatalogInstance(inst map[string]interface{}, c *collector) {
 func walkCatalogChildren(value map[string]interface{}, c *collector) {
 	for _, raw := range listOf(value["children"]) {
 		if child, ok := raw.(map[string]interface{}); ok {
-			walkCatalogInstance(child, c)
+			walkCatalogInstance(child, c, false)
 		}
+	}
+}
+
+// addCatalogMembers indexes the collections of a nested instance as additive
+// lists under the collection's lowercased id: one member per element.
+func addCatalogMembers(id string, inst map[string]interface{}, c *collector) {
+	key := strings.ToLower(id)
+	for _, raw := range listOf(inst["choiceSettingCollectionValue"]) {
+		cv, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if option, _ := cv["value"].(string); !notConfigured(option, false) {
+			c.addMember(key, id, canonicalJSON(option), false)
+		}
+		// An option's children are still settings of their own.
+		walkCatalogChildren(cv, c)
+	}
+	for _, raw := range listOf(inst["simpleSettingCollectionValue"]) {
+		if sv, ok := raw.(map[string]interface{}); ok {
+			addSimpleMember(key, id, sv, c)
+		}
+	}
+	for _, raw := range listOf(inst["groupSettingCollectionValue"]) {
+		if gv, ok := raw.(map[string]interface{}); ok {
+			addGroupMember(key, id, gv, c)
+		}
+	}
+}
+
+// addSimpleMember adds one simple collection value as a member; a secret is
+// an unknown member.
+func addSimpleMember(key, id string, sv map[string]interface{}, c *collector) {
+	if isCatalogSecret(sv) {
+		c.addMember(key, id, "", true)
+		return
+	}
+	if v := sv["value"]; !notConfigured(v, true) {
+		c.addMember(key, id, canonicalJSON(v), false)
+	}
+}
+
+// addGroupMember adds one group collection element as a member valued by the
+// canonical JSON of its children, indexed into a fresh collector so every
+// value rule applies unchanged. A collection nested inside the element is a
+// member list of its own and stays out of the element's value; an element
+// with no configured child adds no member; one holding an unknown setting is
+// an unknown member.
+func addGroupMember(key, id string, gv map[string]interface{}, c *collector) {
+	element := newCollector(c.family)
+	element.additive = true
+	walkCatalogChildren(gv, element)
+
+	children := map[string]interface{}{}
+	unknown := false
+	for _, s := range element.settings("", "") {
+		if s.ListMember {
+			c.byKey[s.Key] = append(c.byKey[s.Key], element.byKey[s.Key]...)
+			continue
+		}
+		if s.Unknown {
+			unknown = true
+			continue
+		}
+		children[s.Key] = s.Value
+	}
+	switch {
+	case unknown:
+		c.addMember(key, id, "", true)
+	case len(children) > 0:
+		c.addMember(key, id, canonicalJSON(children), false)
 	}
 }
 
@@ -342,12 +492,19 @@ func walkCatalogChoice(id string, cv map[string]interface{}, c *collector) {
 	walkCatalogChildren(cv, c)
 }
 
+// isCatalogSecret reports a secret simple value: valueState present, or a
+// secret value type.
+func isCatalogSecret(sv map[string]interface{}) bool {
+	odataType, _ := sv["@odata.type"].(string)
+	_, secret := sv["valueState"]
+	return secret || strings.Contains(odataType, "SecretSettingValue")
+}
+
 // addCatalogSimple indexes a simple value. A secret (valueState present, or a
 // secret value type) is set with an unknown value, whatever the export holds.
 func addCatalogSimple(id string, sv map[string]interface{}, c *collector) {
 	key := strings.ToLower(id)
-	odataType, _ := sv["@odata.type"].(string)
-	if _, secret := sv["valueState"]; secret || strings.Contains(odataType, "SecretSettingValue") {
+	if isCatalogSecret(sv) {
 		c.add(key, rawValue{sourceKey: id, unknown: true})
 		return
 	}
@@ -356,6 +513,18 @@ func addCatalogSimple(id string, sv map[string]interface{}, c *collector) {
 		return
 	}
 	c.add(key, leafValue(id, v))
+}
+
+// appleOnly reports whether every platform family of a resource is macOS or
+// iOS/iPadOS, where the device installs every profile's nested collection
+// entries side by side. Unknown, mixed or other platforms keep folding.
+func appleOnly(platforms []string) bool {
+	for _, p := range platforms {
+		if p != PlatformMacOS && p != PlatformIOS {
+			return false
+		}
+	}
+	return len(platforms) > 0
 }
 
 func listOf(v interface{}) []interface{} {
@@ -541,10 +710,12 @@ func indexIntent(doc map[string]interface{}, c *collector) {
 }
 
 // indexResource indexes one parsed resource document of a source type.
-func indexResource(resource, sourceType string, doc map[string]interface{}, artifacts []string, typeDir string) []Setting {
+// platforms are the resource's platform families (resourcePlatforms).
+func indexResource(resource, sourceType string, doc map[string]interface{}, artifacts []string, typeDir string, platforms []string) []Setting {
 	switch sourceType {
 	case typeSettingsCatalog, typeCompliancePolicies:
 		c := newCollector(familyCatalog)
+		c.additive = appleOnly(platforms)
 		indexSettingsCatalog(doc, c)
 		return c.settings(resource, sourceType)
 	case typeDeviceConfigurations:

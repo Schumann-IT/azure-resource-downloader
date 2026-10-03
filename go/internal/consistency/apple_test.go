@@ -111,13 +111,13 @@ func TestIndexAppleCustomProfileBase64AndSidecar(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString([]byte("not used")))
-	settings := indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, []string{"synthetic.mobileconfig"}, typeDir)
+	settings := indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, []string{"synthetic.mobileconfig"}, typeDir, nil)
 	if len(settings) != 1 || settings[0].Value != inline[key].Value {
 		t.Errorf("the sidecar copy must hash like the inline copy: %+v", settings)
 	}
 
 	// An unreadable sidecar indexes nothing.
-	settings = indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, []string{"missing.mobileconfig"}, typeDir)
+	settings = indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, []string{"missing.mobileconfig"}, typeDir, nil)
 	if len(settings) != 0 {
 		t.Errorf("an unreadable sidecar indexes nothing: %+v", settings)
 	}

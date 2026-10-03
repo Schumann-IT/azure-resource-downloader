@@ -122,6 +122,10 @@ type Counts struct {
 	Unreadable    int                       `yaml:"unreadable"`
 	Findings      map[string]map[string]int `yaml:"findings"`
 	UnknownValues int                       `yaml:"unknownValues"`
+	// RuledOutByScope is the number of distinct resource pairs that share at
+	// least one key or equivalence but whose scopes cannot meet (overlap
+	// none), so nothing was recorded for them; a pair counts once.
+	RuledOutByScope int `yaml:"ruledOutByScope"`
 }
 
 // SourceCount is the number of indexed resources and settings of a source type.
@@ -161,7 +165,7 @@ func Analyze(opts Options) (*Result, error) {
 		scopes[key] = buildScope(m.Resources[key], groupKinds, filters)
 	}
 
-	findings, unknowns := detect(settings, scopes, opts.Equivalences)
+	findings, unknowns, ruledOut := detect(settings, scopes, opts.Equivalences)
 
 	res := &Result{
 		Dir:        filepath.Join(opts.TenantDir, DirName),
@@ -174,7 +178,7 @@ func Analyze(opts Options) (*Result, error) {
 		ExportGeneratedAt: m.GeneratedAt,
 		ExportComplete:    m.Run.Complete,
 		ToolVersion:       opts.ToolVersion,
-		Counts:            countAll(settings, indexed, unreadable, findings, unknowns),
+		Counts:            countAll(settings, indexed, unreadable, findings, unknowns, ruledOut),
 	}
 
 	if opts.DryRun {
@@ -214,7 +218,7 @@ func buildIndex(m *docs.Metadata, resourcesDir string) ([]Setting, map[string]st
 		}
 		indexed[key] = rtype
 		typeDir := filepath.Join(resourcesDir, filepath.FromSlash(rtype))
-		settings = append(settings, indexResource(key, rtype, doc, entry.Artifacts, typeDir)...)
+		settings = append(settings, indexResource(key, rtype, doc, entry.Artifacts, typeDir, resourcePlatforms(entry))...)
 	}
 	return settings, indexed, unreadable
 }
@@ -308,12 +312,13 @@ func isDynamic(groupTypes []string) bool {
 
 // countAll builds the metadata counts; every source type, kind and overlap is
 // listed, zero included, so the shape never depends on the tenant.
-func countAll(settings []Setting, indexed map[string]string, unreadable []string, findings []Finding, unknowns []UnknownValue) Counts {
+func countAll(settings []Setting, indexed map[string]string, unreadable []string, findings []Finding, unknowns []UnknownValue, ruledOut int) Counts {
 	c := Counts{
-		Indexed:       map[string]SourceCount{},
-		Unreadable:    len(unreadable),
-		Findings:      map[string]map[string]int{},
-		UnknownValues: len(unknowns),
+		Indexed:         map[string]SourceCount{},
+		Unreadable:      len(unreadable),
+		Findings:        map[string]map[string]int{},
+		UnknownValues:   len(unknowns),
+		RuledOutByScope: ruledOut,
 	}
 	for _, t := range indexedTypes {
 		c.Indexed[t] = SourceCount{}
