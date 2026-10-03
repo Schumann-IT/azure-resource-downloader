@@ -144,27 +144,48 @@ func rootDictIdentifier(dec *xml.Decoder) string {
 		case xml.EndElement:
 			return "" // the root dict ended without the key
 		case xml.StartElement:
-			if t.Name.Local == "key" {
-				var name string
-				if err := dec.DecodeElement(&name, &t); err != nil {
-					return ""
-				}
-				wantValue = strings.TrimSpace(name) == "PayloadIdentifier"
-				continue
-			}
-			if wantValue {
-				if t.Name.Local != "string" {
-					return ""
-				}
-				var id string
-				if err := dec.DecodeElement(&id, &t); err != nil {
-					return ""
-				}
-				return strings.TrimSpace(id)
-			}
-			if err := dec.Skip(); err != nil {
-				return ""
+			id, done := rootDictChild(dec, t, &wantValue)
+			if done {
+				return id
 			}
 		}
 	}
+}
+
+// rootDictChild handles one child element of the root dict. A <key> arms
+// wantValue when it names PayloadIdentifier; the value that follows is read as
+// the identifier. done reports that the scan is over, with id the result.
+func rootDictChild(dec *xml.Decoder, t xml.StartElement, wantValue *bool) (id string, done bool) {
+	switch {
+	case t.Name.Local == "key":
+		name, ok := keyName(dec, t)
+		*wantValue = name == "PayloadIdentifier"
+		return "", !ok
+	case *wantValue:
+		return stringValue(dec, t), true
+	default:
+		return "", dec.Skip() != nil
+	}
+}
+
+// stringValue reads the trimmed text of a <string> element, or "" for any other
+// element or a decode failure.
+func stringValue(dec *xml.Decoder, start xml.StartElement) string {
+	if start.Name.Local != "string" {
+		return ""
+	}
+	var id string
+	if err := dec.DecodeElement(&id, &start); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(id)
+}
+
+// keyName reads the trimmed text of a <key> element.
+func keyName(dec *xml.Decoder, start xml.StartElement) (string, bool) {
+	var name string
+	if err := dec.DecodeElement(&name, &start); err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(name), true
 }

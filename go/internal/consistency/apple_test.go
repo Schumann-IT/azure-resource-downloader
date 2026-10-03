@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/log"
+
 	"azure-resource-downloader/internal/docs"
+	"azure-resource-downloader/internal/logger"
 )
 
 // Synthetic payload identifiers and markers; none comes from a real tenant.
@@ -136,6 +139,44 @@ func TestIndexAppleCustomProfileIndexesNothing(t *testing.T) {
 	for name, doc := range tests {
 		t.Run(name, func(t *testing.T) {
 			hasLen(t, indexOf(t, dcType+"x.yaml", typeDeviceConfigurations, doc), 0)
+		})
+	}
+}
+
+// TestIndexAppleCustomProfileLogsOnlyKeyAndReason pins that the "index nothing"
+// DEBUG line carries the resource key and a fixed reason, never payload content.
+func TestIndexAppleCustomProfileLogsOnlyKeyAndReason(t *testing.T) {
+	signed := append([]byte{0x30, 0x82, 0x1f, 0x00, 0x06, 0x09}, []byte(plist(rootIDA, payloadMark))...)
+	binary := append([]byte("bplist00"), 0xd1, 0x01, 0x02)
+	tests := map[string]map[string]interface{}{
+		"signed CMS profile":      customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString(signed)),
+		"binary plist":            customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString(binary)),
+		"no root identifier":      customProfile(odataIOSCustom, plist("", payloadMark)),
+		"not base64, not markup":  customProfile(odataMacOSCustom, "%%% not base64 %%%"),
+		"no payload":              customProfile(odataMacOSCustom, ""),
+		"not a plist root":        customProfile(odataMacOSCustom, "<dict><key>PayloadIdentifier</key><string>x</string></dict>"),
+		"app without bundleId":    appConfig("  ", "<dict/>"),
+		"app without payload xml": appConfig(bundleIDTest, ""),
+	}
+	previous := logger.Default
+	t.Cleanup(func() { logger.Default = previous })
+
+	const resource = dcType + "x.yaml"
+	for name, doc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger.Default = log.NewWithOptions(&buf, log.Options{Level: log.DebugLevel})
+			indexOf(t, resource, typeDeviceConfigurations, doc)
+
+			out := buf.String()
+			if !strings.Contains(out, resource) {
+				t.Errorf("log line lacks the resource key %q: %q", resource, out)
+			}
+			for _, secret := range []string{payloadMark, rootIDA, innerID, bundleIDTest, "Synthetic name"} {
+				if strings.Contains(out, secret) {
+					t.Errorf("log line leaks %q: %q", secret, out)
+				}
+			}
 		})
 	}
 }
