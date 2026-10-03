@@ -229,7 +229,8 @@ func foldMembers(s *Setting, raws []rawValue) {
 		case r.member:
 			seen[r.value] = true
 		default:
-			seen[canonicalJSON(r.value)] = true
+			// A plain value on a member key can never match a member.
+			s.UnknownMembers = true
 		}
 	}
 	s.Members = sortedSet(seen)

@@ -252,6 +252,24 @@ func TestIndexAppleNestedCollectionsAreMembers(t *testing.T) {
 
 	ios := indexOf(t, scType+"i.yaml", typeSettingsCatalog, loginItemsPolicy("iOS", "TEAMA"))
 	isTrue(t, ios[loginRules].ListMember && len(ios[loginRules].Members) == 1, "iOS is additive too")
+
+	cp := indexOf(t, "Microsoft.Graph/compliancePolicies/m.yaml", typeCompliancePolicies, loginItemsPolicy("macOS", "TEAMA"))
+	isTrue(t, cp[loginRules].ListMember && len(cp[loginRules].Members) == 1, "compliance policies are additive too")
+}
+
+func TestFoldMembersPlainValueOnMemberKeyIsUnknown(t *testing.T) {
+	c := newCollector("apple")
+	c.addMember("k", "k", `{"a":"1"}`, false)
+	c.add("k", rawValue{sourceKey: "k", value: "plain"})
+	got := c.settings("r", typeSettingsCatalog)
+
+	equal(t, 1, len(got))
+	isTrue(t, got[0].ListMember)
+	isTrue(t, got[0].UnknownMembers, "a plain value on a member key is an unknown member")
+	equal(t, 1, len(got[0].Members))
+	for _, m := range got[0].Members {
+		isTrue(t, !strings.Contains(m, "plain"))
+	}
 }
 
 func TestIndexNonAppleCollectionsKeepFolding(t *testing.T) {
