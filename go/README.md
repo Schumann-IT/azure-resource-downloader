@@ -1192,7 +1192,7 @@ not indexed yet:
 | Type | Joined on |
 |---|---|
 | `deviceManagementConfigurationPolicies`, `compliancePolicies` (Settings Catalog) | `settingDefinitionId` |
-| `deviceConfigurations`, custom (OMA-URI) | the OMA-URI path, normalised so it meets the Settings Catalog id (`./Device/Vendor/MSFT/A/B` ↔ `device_vendor_msft_a_b`) |
+| `deviceConfigurations`, custom (OMA-URI) | the OMA-URI path, normalised so it meets the Settings Catalog id (`./Device/Vendor/MSFT/A/B` ↔ `device_vendor_msft_a_b`; the Firewall CSP, whose Settings Catalog ids carry no `device_` prefix, as `./Vendor/MSFT/Firewall/A` ↔ `vendor_msft_firewall_a`) |
 | `deviceConfigurations`, typed | `@odata.type#property`, nested objects as dotted paths |
 | `deviceConfigurations`, Apple custom profiles | the profile's top-level `PayloadIdentifier` (`bundleId` for app configurations); valued by the hash of the payload |
 | `deviceCompliancePolicies` | `@odata.type#property` — a *requirement*, not a configuration |

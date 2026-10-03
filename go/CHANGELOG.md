@@ -42,6 +42,18 @@ This project is released independently of the documentation browser in `web/`: i
   section from `config-tailored-intune.yaml` into your base file to use it.** See the README's *The catalog*
   section.
 
+### Fixed
+
+#### Documentation and drift analysis
+
+- **Firewall settings from custom profiles are compared with the Settings Catalog.** A Windows Firewall setting
+  configured through a custom OMA-URI profile was indexed under a different key than the same setting in a Settings
+  Catalog policy, so `docs analyze-consistency` never saw the two side by side and missed their conflicts and
+  duplicates. Both now index under the Settings Catalog's `vendor_msft_firewall_…` key. A consistency catalog that
+  names a firewall setting in the old `device_vendor_msft_firewall_…` form is now refused with the form to use —
+  such a member only ever matched custom profiles. **If your base file's `consistency:` section uses that form,
+  replace it as the error message says.**
+
 ## [0.4.0] - 2026-10-02
 
 ### Added
