@@ -5,6 +5,7 @@ import {
   SECTION_VOCABULARY,
   applyMarkerBlocks,
   applyMetadataTable,
+  applyNumericColumns,
   applySectionHeadings,
   isKnownSection,
   slugifyHeading,
@@ -425,5 +426,112 @@ describe('applyMetadataTable', () => {
     const tokens = [table()];
     applyMetadataTable(tokens as any);
     expect(tokens[0].attrGet('class')).toBeNull();
+  });
+});
+
+// Builds the token stream markdown-it emits for a table: a header row and body
+// rows, each cell an `*_open`, `inline`, `*_close` triple.
+function tableTokens(header: string[], rows: string[][]): FakeToken[] {
+  const row = (tag: 'th' | 'td', cells: string[]): FakeToken[] => [
+    new FakeToken('tr_open', 'tr'),
+    ...cells.flatMap((text) => [
+      new FakeToken(`${tag}_open`, tag),
+      new FakeToken('inline', '', text),
+      new FakeToken(`${tag}_close`, tag),
+    ]),
+    new FakeToken('tr_close', 'tr'),
+  ];
+  return [
+    new FakeToken('table_open', 'table'),
+    new FakeToken('thead_open', 'thead'),
+    ...row('th', header),
+    new FakeToken('thead_close', 'thead'),
+    new FakeToken('tbody_open', 'tbody'),
+    ...rows.flatMap((cells) => row('td', cells)),
+    new FakeToken('tbody_close', 'tbody'),
+    new FakeToken('table_close', 'table'),
+  ];
+}
+
+// The column indices whose cells carry data-numeric, header and body alike;
+// asserts a column is tagged on all of its cells or on none.
+function numericColumns(tokens: FakeToken[]): number[] {
+  const tagged = new Map<number, number>();
+  const total = new Map<number, number>();
+  let column = 0;
+  for (const token of tokens) {
+    if (token.type === 'tr_open') column = 0;
+    if (token.type !== 'th_open' && token.type !== 'td_open') continue;
+    total.set(column, (total.get(column) ?? 0) + 1);
+    if (token.attrGet('data-numeric') !== null) {
+      tagged.set(column, (tagged.get(column) ?? 0) + 1);
+    }
+    column++;
+  }
+  for (const [col, n] of tagged) expect(n).toBe(total.get(col));
+  return [...tagged.keys()].sort();
+}
+
+describe('applyNumericColumns', () => {
+  const tag = (header: string[], rows: string[][]): number[] => {
+    const tokens = tableTokens(header, rows);
+    applyNumericColumns(tokens as any);
+    return numericColumns(tokens);
+  };
+
+  it('tags exactly the count column whichever column order the agent chose', () => {
+    const rows = [
+      ['Policies', '12', 'compliance, configuration'],
+      ['Groups', '3', 'security'],
+    ];
+    expect(tag(['Area', 'Resources', 'Types'], rows)).toEqual([1]);
+    expect(
+      tag(
+        ['Area', 'Types (count)', 'Resources'],
+        rows.map(([area, count, types]) => [area, types, count]),
+      ),
+    ).toEqual([2]);
+  });
+
+  it('reads thousands separators, emphasis and code spans as integers', () => {
+    expect(tag(['Area', 'N'], [['a', '1,234'], ['b', '**12**'], ['c', '`7`']])).toEqual([1]);
+  });
+
+  it('keeps a column numeric across empty and dash placeholder cells', () => {
+    const rows = [['a', '5'], ['b', '-'], ['c', '\u2013'], ['d', '\u2014'], ['e', '']];
+    expect(tag(['Area', 'N'], rows)).toEqual([1]);
+  });
+
+  it('leaves a column with one non-numeric cell plain', () => {
+    expect(tag(['Area', 'N'], [['a', '12 (3 disabled)'], ['b', '4']])).toEqual([]);
+    expect(tag(['Area', 'N'], [['a', '1.5'], ['b', '4']])).toEqual([]);
+    expect(tag(['Area', 'N'], [['a', '1,23'], ['b', '4']])).toEqual([]);
+  });
+
+  it('does not tag an all-empty or all-dash column', () => {
+    expect(tag(['Area', 'N'], [['a', ''], ['b', '']])).toEqual([]);
+    expect(tag(['Area', 'N'], [['a', '-'], ['b', '\u2014']])).toEqual([]);
+  });
+
+  it('does not tag a column of prose', () => {
+    expect(tag(['Area', 'Types'], [['a', 'compliance'], ['b', 'groups']])).toEqual([]);
+  });
+
+  it('leaves header-only and empty tables untouched', () => {
+    expect(tag(['Area', 'N'], [])).toEqual([]);
+    const empty = [new FakeToken('table_open', 'table'), new FakeToken('table_close', 'table')];
+    applyNumericColumns(empty as any);
+    expect(empty.every((t) => t.attrs.length === 0)).toBe(true);
+  });
+
+  it('judges each table on its own', () => {
+    const tokens = [
+      ...tableTokens(['A', 'N'], [['x', '1']]),
+      ...tableTokens(['A', 'N'], [['x', 'one']]),
+    ];
+    applyNumericColumns(tokens as any);
+    const second = tokens.slice(tokens.length / 2);
+    expect(numericColumns(tokens.slice(0, tokens.length / 2))).toEqual([1]);
+    expect(numericColumns(second)).toEqual([]);
   });
 });

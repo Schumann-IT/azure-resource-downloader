@@ -11,6 +11,8 @@
 // only rewrites a markdown-it token stream, so it is unit-testable without a
 // module, and it costs one linear pass inside the existing render.
 
+import { normalise } from './findings-table';
+
 export const SECTION_HEADING_CLASS = 'doc-section-heading';
 
 export const METADATA_TABLE_CLASS = 'doc-metadata';
@@ -284,4 +286,76 @@ export function applyMetadataTable(tokens: any[]): void {
     }
     return;
   }
+}
+
+const INTEGER = /^(?:\d+|\d{1,3}(?:,\d{3})+)$/;
+const PLACEHOLDER = /^(?:-|\u2013|\u2014)$/;
+
+// Tags every cell (header and body) of a count column with `data-numeric`, so
+// the stylesheet can right-align and compact it by what it holds rather than by
+// where it sits: the generator leaves most tables' column order to the agent,
+// and `Area | Resources | Types` and `Area | Types | Resources` both occur. A
+// column is numeric when at least one body cell is an integer and every other
+// body cell is empty or a dash placeholder; one prose or decimal cell (`12 (3
+// disabled)`, `1.5`) keeps the column plain. Every table is tagged; where the
+// tag has a visual effect is the stylesheet's decision.
+export function applyNumericColumns(tokens: any[]): void {
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].type !== 'table_open') continue;
+    const close = tableClose(tokens, i);
+    if (close < 0) return;
+    tagNumericColumns(tokens, i, close);
+    i = close;
+  }
+}
+
+function tableClose(tokens: any[], open: number): number {
+  for (let i = open + 1; i < tokens.length; i++) {
+    if (tokens[i].type === 'table_close') return i;
+  }
+  return -1;
+}
+
+interface ColumnState {
+  integers: number;
+  plain: boolean;
+}
+
+function tagNumericColumns(tokens: any[], open: number, close: number): void {
+  const columns: ColumnState[] = [];
+  const cells: Array<{ index: number; column: number }> = [];
+  let column = 0;
+  let inBody = false;
+
+  for (let i = open + 1; i < close; i++) {
+    const type = tokens[i].type;
+    if (type === 'tbody_open') inBody = true;
+    else if (type === 'tbody_close') inBody = false;
+    else if (type === 'tr_open') column = 0;
+    else if (type === 'th_open' || type === 'td_open') {
+      cells.push({ index: i, column });
+      if (inBody && type === 'td_open') {
+        const state = (columns[column] ??= { integers: 0, plain: false });
+        const text = normalise(cellContent(tokens, i, close));
+        if (INTEGER.test(text)) state.integers++;
+        else if (text !== '' && !PLACEHOLDER.test(text)) state.plain = true;
+      }
+      column++;
+    }
+  }
+
+  for (const cell of cells) {
+    const state = columns[cell.column];
+    if (state && state.integers > 0 && !state.plain) {
+      tokens[cell.index].attrSet('data-numeric', '');
+    }
+  }
+}
+
+function cellContent(tokens: any[], cellOpen: number, close: number): string {
+  for (let i = cellOpen + 1; i < close; i++) {
+    if (tokens[i].type === 'inline') return String(tokens[i].content || '');
+    if (tokens[i].type === 'th_close' || tokens[i].type === 'td_close') break;
+  }
+  return '';
 }

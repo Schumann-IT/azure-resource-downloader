@@ -3,6 +3,94 @@ import { promises as fsp } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+const POSITIONAL = /:(?:first-child|last-child|nth-child\(|nth-last-child\(|first-of-type|last-of-type|nth-of-type\()/;
+
+// Splits a selector list on its top-level commas: commas inside `:where(...)`,
+// `:not(...)` or an attribute selector stay together.
+export function splitSelectorList(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote = '';
+  let current = '';
+  for (const ch of list) {
+    if (quote) {
+      if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth--;
+    else if (ch === ',' && depth === 0) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
+}
+
+// Removes every `:where(...)` group, balanced, so what is left is the part of a
+// selector that carries specificity.
+function stripWhere(selector: string): string {
+  let out = '';
+  for (let i = 0; i < selector.length; i++) {
+    if (selector.startsWith(':where(', i)) {
+      let depth = 0;
+      let j = i + ':where'.length;
+      for (; j < selector.length; j++) {
+        if (selector[j] === '(') depth++;
+        else if (selector[j] === ')' && --depth === 0) break;
+      }
+      i = j;
+      continue;
+    }
+    out += selector[i];
+  }
+  return out;
+}
+
+// True when `selector` styles a table cell by its column position. Allowed: the
+// contract tables (`.findings`, `.doc-metadata`), typography's zero-specificity
+// edge-padding defaults (positional part inside `:where(...)`), and row or
+// container positions (`tr:last-child`, `.doc-assignments > :first-child`).
+export function isPositionalCellSelector(selector: string): boolean {
+  if (/\.(?:findings|doc-metadata)(?![\w-])/.test(selector)) return false;
+  const live = stripWhere(selector);
+  // Compounds are what sits between combinators; a cell compound is one whose
+  // type is td or th.
+  return live
+    .split(/\s*[>+~]\s*|\s+/)
+    .some((compound) => /^(?:td|th)(?![\w-])/.test(compound) && POSITIONAL.test(compound));
+}
+
+describe('positional table-column selector guard', () => {
+  it('flags a positional td or th compound', () => {
+    expect(
+      isPositionalCellSelector('.prose .doc-section[data-section="at-a-glance"] td:last-child'),
+    ).toBe(true);
+    expect(isPositionalCellSelector('.prose table th:nth-of-type(2)')).toBe(true);
+    expect(isPositionalCellSelector('.x td:nth-last-child(1)')).toBe(true);
+  });
+
+  it('allows typography defaults, contract tables and row or container positions', () => {
+    expect(isPositionalCellSelector('.prose :where(thead th:first-child):not(:where([class~="not-prose"] *))')).toBe(false);
+    expect(isPositionalCellSelector('.prose :where(tbody td:last-child)')).toBe(false);
+    expect(isPositionalCellSelector('.prose table.findings td:nth-child(3)')).toBe(false);
+    expect(isPositionalCellSelector('.prose table.doc-metadata th:first-child')).toBe(false);
+    expect(isPositionalCellSelector('.prose table.findings.findings-drift td:first-child')).toBe(false);
+    expect(isPositionalCellSelector('.doc-assignments>:first-child')).toBe(false);
+    expect(isPositionalCellSelector('.prose tbody tr:last-child')).toBe(false);
+  });
+
+  it('splits a selector list on top-level commas only', () => {
+    expect(splitSelectorList('a:where(b, c), d[x="1,2"], e')).toEqual([
+      'a:where(b, c)',
+      'd[x="1,2"]',
+      'e',
+    ]);
+  });
+});
+
 // Reproduces the manual check that the custom <details>/<summary> CSS (which
 // @tailwindcss/typography does NOT provide) actually survives into the compiled
 // stylesheet. Compiles src/styles.css with the local Tailwind v4 CLI and greps
@@ -164,6 +252,42 @@ describe('Tailwind stylesheet build', () => {
     for (const tone of ['warning', 'quiet', 'matched']) {
       expect(css).toContain(`.findings-drift td[data-attribution="${tone}"]`);
     }
+  });
+
+  it('styles no table column by its position outside the contract tables', () => {
+    const offenders: string[] = [];
+    const scan = (block: string): void => {
+      let i = 0;
+      while (i < block.length) {
+        const open = block.indexOf('{', i);
+        if (open < 0) break;
+        const prelude = block.slice(i, open).trim();
+        let depth = 1;
+        let j = open + 1;
+        for (; j < block.length && depth > 0; j++) {
+          if (block[j] === '{') depth++;
+          else if (block[j] === '}') depth--;
+        }
+        const body = block.slice(open + 1, j - 1);
+        if (prelude.startsWith('@')) {
+          // A nested at-rule (media, supports, layer) holds rules of its own.
+          if (/^@(?:media|supports|layer|container)/.test(prelude)) scan(body);
+        } else {
+          for (const selector of splitSelectorList(prelude)) {
+            if (isPositionalCellSelector(selector)) offenders.push(selector);
+          }
+        }
+        i = j;
+      }
+    };
+    scan(css.replace(/\/\*[\s\S]*?\*\//g, ''));
+    expect(offenders).toEqual([]);
+  });
+
+  it('right-aligns the at-a-glance count columns by content', () => {
+    expect(css).toMatch(
+      /\.prose \.doc-section\[data-section=["']at-a-glance["']\]\s+\[data-numeric\]\s*\{[^}]*text-align:\s*right/,
+    );
   });
 
   it('still emits the typography prose classes', () => {

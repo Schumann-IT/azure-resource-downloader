@@ -738,9 +738,12 @@ html {
   overflow-wrap: anywhere;
 }
 
-/* The summary's `At a glance` table carries a sentence per row in its first
-   column, so it needs the same opt-out from the shared wide-table `nowrap`
-   that `.findings` takes. */
+/* The summary's `At a glance` table is free-form: the generator leaves its
+   column order and names to the agent, so nothing here may depend on where a
+   column sits. Counts are found by content (`data-numeric`, set by
+   `applyNumericColumns` in src/docs/section-hooks.ts); every other column is
+   prose and wraps. The table takes the same opt-out from the shared wide-table
+   `nowrap` that `.findings` takes. */
 .prose .doc-section[data-section="at-a-glance"] table {
   display: table;
   width: 100%;
@@ -749,10 +752,17 @@ html {
   font-size: 0.9375rem;
 }
 
-.prose .doc-section[data-section="at-a-glance"] td:last-child,
-.prose .doc-section[data-section="at-a-glance"] th:last-child {
-  width: 5rem;
+.prose .doc-section[data-section="at-a-glance"] th,
+.prose .doc-section[data-section="at-a-glance"] td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.prose .doc-section[data-section="at-a-glance"] [data-numeric] {
+  width: 1%;
   text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* -------------------------------------------------------------------------
@@ -808,6 +818,10 @@ html {
    subtype, id), and it is a spec sheet rather than data: short labels and
    values that should wrap, not a wide table that scrolls. Hence the opt-out
    from the shared `nowrap` rule above, the same one .findings needs.
+
+   Positional exception: the label | value column order is a CLI contract (the
+   generator opens every document with it), so the `:first-child` rule below
+   names that contract rather than guessing at a free-form table.
    ------------------------------------------------------------------------- */
 .prose table.doc-metadata {
   display: table;
