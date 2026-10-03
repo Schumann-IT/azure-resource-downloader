@@ -44,36 +44,70 @@ compliance against configuration and the LLM step judges against a reviewed cata
 > brief; the result enters the backlog later like those reviews did.
 >
 > **Not regeneration-gated.**
+>
+> **From the code.** `docs analyze-consistency` (`cmd/docs/analyze_consistency.go`) and `internal/consistency/`
+> shipped the mechanical half: the setting index, the scope model and the detector. The detector already takes
+> `consistency.Equivalence` (`equivalence.go`: ID, Members, Relation, Enforced per platform, Status) through
+> `Options.Equivalences`, which the command passes as `nil` today; an equivalence with `status: verify` already
+> makes its findings `possible`, and `contradiction` already exists. This entry fills that hook. Member keys are
+> validated in two steps: at load, every member must be a canonical key form the index emits (shared with the
+> `index.go` key builders, never restated); at analysis, a member that indexes nothing in this export is counted,
+> not an error — the config is per tenant, existence is per export. Topic match rules copy the taxonomy rule
+> shape (`internal/docs/taxonomy.go`: OR of rules, AND within one, case-insensitive regexes) plus a `key:` regex
+> over canonical setting keys. A rule's `left` / `right` selector is `topic: <id>` or `keys: [...]`, with an
+> optional `class: requirement | configuration` and a `platforms:` regex.
+>
+> **Where the configuration lives.** The seed catalog ships in the tracked worked example
+> `go/config-tailored-intune.yaml`. The operator's live configuration is `go/.config/` (the `--config-dir`,
+> e.g. `go/.config/intune/base.yaml` and its per-domain profiles), git-ignored as operator data; nothing in this
+> entry reads or writes it — tests build their own config fixtures, and the catalog reaches a tenant only when the
+> operator copies the section into their base file.
+>
+> **Decision.** Indexing the inner payloads of Apple custom profiles is split out of this entry: it ships as the
+> next entry, *Index the inner payloads of Apple custom profiles*, which extends this entry's seed equivalences.
+>
+> **Contract.** none — `consistency/metadata.yaml` is never served; the web consistency view reads only
+> `consistency/index.md`.
+>
+> **Owner.** `go/config-tailored-intune.yaml` (inside `go/`); never `go/.config/`. No sequencing.
+>
+> **Implementer.** opus
 
 **Plan.**
 
-- The `consistency:` key through `/add-config-option`: a general key in `internal/config` (`keyScopes`), read by
-  `docs analyze-consistency` like `generate-index` reads `taxonomy:`; types, compilation and validation in
-  `internal/consistency` (id pattern, selectors and equivalence members resolve against the index's source types,
-  relations from the closed set, references are `https://learn.microsoft.com/…`), with errors naming the offending
-  entry; the compiled `equivalences` feed the mechanical detector's alias hook.
-- The compiled catalog's hash in `consistency/metadata.yaml`; an absent catalog means mechanical findings only.
-- Both example files stay no-ops (the key illustrated in comments only); the worked example
-  `config-tailored-intune.yaml` carries a seed catalog — equivalences: the macOS and iOS/iPadOS password and
+- The `consistency:` key through `/add-config-option`: a general key (`keyScopes`, `ScopeGeneral`) read by
+  `cmd/docs/analyze_consistency.go` with `viper.UnmarshalKey`, like `generate-index` reads `taxonomy:`, passing
+  the compiled equivalences instead of `nil`; an invalid section exits with `exitCannotAnswer` naming the section;
+  `cmd/config_test.go` partition coverage.
+- `internal/consistency/catalog.go`: `Catalog{Version, Equivalences, Topics, Rules}` compiled to a `Compiled`.
+  Validation, each error naming the section and the id: `version >= 1`; ids match the taxonomy id pattern and
+  are unique per section; relations from the closed set; `enforced` keys are known platform families;
+  `reference` starts with `https://learn.microsoft.com/`; `status` is `verified | verify`; every equivalence
+  member is a canonical key form the index emits (checked through the shared `index.go` builders); every topic
+  has at least one non-empty match rule and its regexes compile; a rule's `left` / `right` each name an existing
+  topic or a non-empty key list, and its `violation` and `resolution` text is non-empty. The compiled
+  equivalences are the existing `consistency.Equivalence` values; reference and description stay in the catalog.
+- A pure topic resolver `(*Compiled).Topics(settings)`: per resource its topics (a resource may sit in several),
+  in a stable order; exported for *The consistency analysis job*, tested here.
+- A `catalog:` block in `consistency/metadata.yaml`: the `sha256` of the compiled catalog's canonical JSON, the
+  counts per section and `unmatchedMembers` (members that indexed nothing in this export); absent without a
+  catalog, which means mechanical findings only. Additive, the metadata version unchanged; the command logs one
+  catalog line.
+- The seed catalog in `go/config-tailored-intune.yaml` — equivalences: the macOS and iOS/iPadOS password and
   passcode family first (compliance ↔ Settings Catalog ↔ legacy device restrictions), then encryption
   (FileVault/BitLocker), firewall, minimum OS version; topics: encryption, Defender/EDR, firewall, Windows Update,
   identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
   semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
-  `status: verify`, never guessed.
-- Index the inner payloads of Apple custom profiles for the catalog: for each `PayloadContent` entry of a
-  `macOSCustomConfiguration` or `iosCustomConfiguration` property list, one setting
-  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>` (several per profile), read from the same
-  normalised payload bytes the top-level identifier key hashes, so `topics` and `rules` can select them and `equivalences` can relate a payload type to
-  Settings Catalog, legacy and compliance keys (e.g. `com.apple.mobiledevice.passwordpolicy` ↔ the password
-  family). The value is unknown — the payload's keys are not read, since its strings may carry secrets — unless
-  this bullet's design reads specific keys from an allow-list with each value treated like a secret by default.
-  Two profiles carrying the same `PayloadType` on overlapping scopes are a finding only through a catalog entry;
-  the top-level `PayloadIdentifier` conflict is already reported by `docs analyze-consistency`. Tests: a two-payload profile yields two keys, a
-  signed/binary payload yields none, no payload string reaches `consistency/`.
-- Tests: validation errors (unknown relation, unresolvable member, non-Learn reference), compilation, the catalog
-  hash, the equivalences reaching the detector (a seed macOS password equivalence turns a fixture pair into a
-  `contradiction`), `cmd/config_test.go` partition coverage.
-- Documentation at *done*: `README.md` (the key, its three sections, the seed catalog); `CHANGELOG.md` `### Added`.
+  `status: verify`, never guessed. Both example files carry the key in comments only (they stay no-ops).
+- Tests: validation errors (unknown relation, malformed member, non-Learn reference, duplicate id, a rule naming a
+  missing topic); every key the index fixtures produce passes member validation; compilation; hash stability (a
+  reordered YAML hashes the same); the metadata block present and absent; `unmatchedMembers`; a seed macOS
+  password equivalence turns a fixture compliance / configuration pair into a `contradiction`, `possible` under
+  `status: verify`; topic resolution.
+- Documentation at *done*: `README.md` — the key, its three sections, the closed vocabularies, the seed catalog in
+  the worked example, and under *Working with several tenants* one sentence that inside a checkout `go/.config/` is
+  the git-ignored `--config-dir`; `CHANGELOG.md` `### Added` with the operator action in bold: copy the
+  `consistency:` section from `config-tailored-intune.yaml` into your base file (the catalog is opt-in).
 - Last, after every other bullet: write the Claude Cowork review brief `Claude
   outputs/consistency-catalog-review-instructions.md` (git-ignored, never committed — input for a Cowork session,
   not repository documentation). It tells Cowork to read the seed catalog in `go/config-tailored-intune.yaml`
@@ -86,7 +120,46 @@ compliance against configuration and the LLM step judges against a reviewed cata
   (keep / fix / drop / add), ready-to-paste YAML, `status: verified` only with a cited Learn source, open
   questions where Learn is silent — with no repository edits and nothing read under `output/`.
 
-## 2. The consistency analysis job
+## 2. Index the inner payloads of Apple custom profiles
+
+*Kind:* feat
+
+**Goal.** The consistency catalog can select and relate what a macOS or iOS/iPadOS custom profile actually
+configures: each payload inside the profile becomes a setting that topics, rules and equivalences can name, without
+a payload string ever leaving the export.
+
+> **Why.** Today a custom profile is indexed only by the root `PayloadIdentifier` of its property list
+> (`internal/consistency/apple.go`), which already reports two profiles sharing an identifier with different
+> payloads. What the profile configures — a passcode policy, a FileVault payload — is invisible to the catalog, so
+> the same control set through a custom profile and a Settings Catalog or compliance policy (R4) cannot be named.
+>
+> **Decision.** Presence only: the setting's value is always unknown and the payload's keys are never read — its
+> strings may carry secrets. Equivalences and rules can show a control set through several surfaces but cannot
+> compare its values.
+>
+> **Sequencing.** After *A consistency rule and topic catalog in the configuration*, whose member validation and
+> seed equivalences this entry extends. Not regeneration-gated.
+>
+> **Owner.** `go/config-tailored-intune.yaml` (inside `go/`); never `go/.config/`.
+
+**Plan.**
+
+- `internal/consistency/apple.go`: for each `PayloadContent` dict of a `macOSCustomConfiguration` or
+  `iosCustomConfiguration` XML property list, one setting with key
+  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>`, read from the same normalised payload bytes the
+  identifier hash uses; one setting per distinct type, `Unknown: true`.
+- A `Setting` flag, like `ListMember`, that keeps these keys out of same-key pairing: two profiles sharing a
+  `PayloadType` are a finding only through a catalog equivalence or rule, never on their own.
+- The catalog's member validation accepts the new key form (through the shared key builders).
+- The seed catalog: `#microsoft.graph.<macOS|ios>CustomConfiguration#com.apple.mobiledevice.passwordpolicy` joins
+  the macOS and iOS/iPadOS password equivalences, `status: verify`.
+- Tests: a two-payload profile yields two keys; a signed or binary payload yields none; two profiles with the same
+  `PayloadType` yield no finding without a catalog and an unknown-value pair through the seed equivalence; no
+  payload string reaches `consistency/` (a sentinel string grepped in the written tree).
+- Documentation at *done*: `README.md` (the indexed sources of `docs analyze-consistency`); `CHANGELOG.md`
+  `### Added`.
+
+## 3. The consistency analysis job
 
 *Kind:* feat
 
@@ -134,7 +207,7 @@ operator can act on.
   finding) and accepts a correct one.
 - Documentation at *done*: `README.md` (the job, the `consistency/` files); `CHANGELOG.md` `### Added`.
 
-## 3. Feed the consistency findings into the tenant summary
+## 4. Feed the consistency findings into the tenant summary
 
 *Kind:* feat
 
