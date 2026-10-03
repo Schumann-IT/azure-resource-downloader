@@ -560,10 +560,19 @@ func listOf(v interface{}) []interface{} {
 	return l
 }
 
+// unscopedCSPRoots lists the CSP roots whose Settings Catalog ids carry no
+// "device_" / "user_" scope prefix, so an OMA-URI under them must index without
+// one to join the catalog form. A root joins this table only with the Settings
+// Catalog id it was observed as, never by guess:
+//   - firewall: vendor_msft_firewall_mdmstore_publicprofile_enablefirewall
+var unscopedCSPRoots = []string{"firewall"}
+
 // normaliseOMAURI maps an OMA-URI path onto the Settings Catalog id form:
 // lowercase, leading "./" dropped, "vendor/msft/…" read as
 // "device/vendor/msft/…", "/" → "_". Area and setting are deliberately not
-// split: ADMX-backed ids contain underscores of their own.
+// split: ADMX-backed ids contain underscores of their own. The one exception
+// is a root in unscopedCSPRoots (Firewall): its "device_vendor_msft_<root>_…"
+// form is rewritten to "vendor_msft_<root>_…", whichever way it was spelled.
 func normaliseOMAURI(uri string) string {
 	k := strings.ToLower(strings.TrimSpace(uri))
 	k = strings.TrimPrefix(k, "./")
@@ -571,7 +580,13 @@ func normaliseOMAURI(uri string) string {
 	if strings.HasPrefix(k, "vendor/msft/") {
 		k = "device/" + k
 	}
-	return strings.ReplaceAll(k, "/", "_")
+	k = strings.ReplaceAll(k, "/", "_")
+	for _, root := range unscopedCSPRoots {
+		if rest, ok := strings.CutPrefix(k, "device_vendor_msft_"+root+"_"); ok {
+			return "vendor_msft_" + root + "_" + rest
+		}
+	}
+	return k
 }
 
 // catalogKey is the canonical key of a Settings Catalog, Settings Catalog
@@ -598,7 +613,8 @@ const intentKeySeparator = "--"
 // validMemberKey reports whether key is already in one of the canonical forms
 // the index emits — a typedKey, an intent id kept verbatim, or a key equal to
 // its normaliseOMAURI form (which is also what catalogKey yields for every
-// Settings Catalog and ADMX id) — so a catalog member can only ever name
+// Settings Catalog and ADMX id; a Firewall node is "vendor_msft_firewall_…",
+// never "device_vendor_msft_firewall_…") — so a catalog member can only ever name
 // something the index could produce. When it is not, canonical is the form
 // to paste instead ("" when none can be derived).
 func validMemberKey(key string) (ok bool, canonical string) {

@@ -55,33 +55,33 @@ duplicates instead of silently missing them.
 
 **Plan.**
 
-- `internal/consistency/index.go`: add a package-level table of CSP roots whose Settings Catalog ids carry no scope
+- ~~`internal/consistency/index.go`: add a package-level table of CSP roots whose Settings Catalog ids carry no scope
   prefix (only `firewall`, with a comment citing `vendor_msft_firewall_mdmstore_…` as the observed Settings Catalog
   id). In `normaliseOMAURI`, after the existing steps (lowercase, trim, `./` and `/` dropped, `vendor/msft/` read
   as `device/vendor/msft/`, `/` → `_`), rewrite a key starting with `device_vendor_msft_<root>_` to
   `vendor_msft_<root>_…` — on the `_` form, so `./Vendor/…`, `./Device/Vendor/…` and an already-underscored
   `device_vendor_msft_firewall_…` member all land on the same key, and the root match needs the trailing `_` (no
   `firewallfoo` false match). `user_` keys are left alone. Update the doc comments of `normaliseOMAURI` and
-  `validMemberKey` to name the exception. Member validation follows automatically (it shares the builder).
-- `internal/consistency/index_test.go` `TestNormaliseOMAURI`: add `./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall`,
+  `validMemberKey` to name the exception. Member validation follows automatically (it shares the builder).~~
+- ~~`internal/consistency/index_test.go` `TestNormaliseOMAURI`: add `./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall`,
   `./Device/Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall` and a mixed-case variant →
   `vendor_msft_firewall_mdmstore_…`; keep the existing `./Device/Vendor/MSFT/Policy/…`, `./Vendor/MSFT/Policy/…` →
-  `device_vendor_msft_policy_…` and `./User/…` → `user_vendor_msft_…` cases unchanged.
-- `internal/consistency/catalog_test.go`: the two cases that pin the old canonical firewall form are updated to the
+  `device_vendor_msft_policy_…` and `./User/…` → `user_vendor_msft_…` cases unchanged.~~
+- ~~`internal/consistency/catalog_test.go`: the two cases that pin the old canonical firewall form are updated to the
   new one — this is the fixed behaviour, not a weakened assertion: in `TestValidMemberKey`,
   `./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall` → `(false, "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall")`,
   plus a new case `device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall` → `(false, "vendor_msft_firewall_…")`;
   in the `CompileCatalog` refusal table, the "rule key not canonical" case expects
   `use "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"`, and a new equivalence-member case in the
-  `device_vendor_msft_firewall_…` form is refused with the same message.
-- `internal/consistency/catalog_test.go` `TestIndexKeysAreValidMembers`: add a Windows custom profile
+  `device_vendor_msft_firewall_…` form is refused with the same message.~~
+- ~~`internal/consistency/catalog_test.go` `TestIndexKeysAreValidMembers`: add a Windows custom profile
   (`#microsoft.graph.windows10CustomConfiguration`) to the fixture with a `./Vendor/MSFT/Firewall/…` OMA setting,
-  so the round-trip invariant covers the exception.
-- `internal/consistency/consistency_test.go`: a new test on a synthetic tenant — a custom OMA-URI profile setting
+  so the round-trip invariant covers the exception.~~
+- ~~`internal/consistency/consistency_test.go`: a new test on a synthetic tenant — a custom OMA-URI profile setting
   `./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall` to `false` and a Settings Catalog policy choosing
   `vendor_msft_firewall_mdmstore_publicprofile_enablefirewall_true` for the same scope yield exactly one `conflict`
   on `vendor_msft_firewall_mdmstore_publicprofile_enablefirewall`; with the OMA value `true` they yield one
-  `duplicate` instead.
+  `duplicate` instead.~~
 - Documentation at *done*: `README.md` (the *Joined on* row for custom OMA-URI settings); `CHANGELOG.md`
   `### Fixed`.
 

@@ -129,7 +129,10 @@ func TestCompileCatalogValidation(t *testing.T) {
 		{"rule key not canonical", func(c *CatalogConfig) {
 			c.Rules[0].Right.Keys = []string{"./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall"}
 		},
-			[]string{"rules", `use "device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"`}},
+			[]string{"rules", `use "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"`}},
+		{"firewall member in the scoped form", func(c *CatalogConfig) {
+			c.Equivalences[0].Members[1] = "device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"
+		}, []string{"equivalences", "macos-password-minimum-length", `use "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"`}},
 		{"rule unknown class", func(c *CatalogConfig) { c.Rules[0].Left.Class = "policy" },
 			[]string{"rules", `unknown class "policy"`}},
 		{"rule uncompilable platforms", func(c *CatalogConfig) { c.Rules[0].Right.Platforms = "[" },
@@ -174,7 +177,8 @@ func TestValidMemberKey(t *testing.T) {
 		{"vendor_msft_firewall_mdmstore_domainprofile_enablefirewall", true, ""},
 		{"deviceConfiguration--windows10EndpointProtectionConfiguration_firewallEnabled", true, ""},
 		{"./Device/Vendor/MSFT/BitLocker/RequireDeviceEncryption", false, "device_vendor_msft_bitlocker_requiredeviceencryption"},
-		{"./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall", false, "device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"},
+		{"./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall", false, "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"},
+		{"device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall", false, "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"},
 		{"Com.Apple.MobileDevice.PasswordPolicy_MinLength", false, macCatalogKey},
 		{"#microsoft.graph.macOSCompliancePolicy", false, ""},
 		{"", false, ""},
@@ -210,6 +214,12 @@ func TestIndexKeysAreValidMembers(t *testing.T) {
 			map[string]interface{}{"definitionId": "deviceConfiguration--windows10EndpointProtectionConfiguration_firewallEnabled", "valueJson": `true`},
 		}})
 	f.add(scType+"apple.yaml", docs.ResourceMeta{Platforms: "macOS"}, loginItemsPolicy("macOS", "TEAM1"))
+	f.add(dcType+"win_custom.yaml", docs.ResourceMeta{ODataType: "#microsoft.graph.windows10CustomConfiguration", Platforms: "windows10"},
+		map[string]interface{}{
+			"@odata.type": "#microsoft.graph.windows10CustomConfiguration",
+			"omaSettings": []interface{}{
+				map[string]interface{}{"omaUri": "./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall", "value": false},
+			}})
 	dir := f.save()
 
 	m, err := docs.LoadExportMetadata(dir)
@@ -217,6 +227,13 @@ func TestIndexKeysAreValidMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings, _, _ := buildIndex(&m, filepath.Join(dir, "resources"))
+	firewall := false
+	for _, s := range settings {
+		firewall = firewall || s.Key == "vendor_msft_firewall_mdmstore_publicprofile_enablefirewall"
+	}
+	if !firewall {
+		t.Error("fixture indexes no vendor_msft_firewall_ key from the custom profile")
+	}
 	sourceTypes := map[string]bool{}
 	for _, s := range settings {
 		sourceTypes[s.SourceType] = true

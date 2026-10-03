@@ -624,3 +624,52 @@ func TestAnalyzeTypedEnumDefaultsAreNotConfigured(t *testing.T) {
 		})
 	}
 }
+
+// TestFirewallCustomProfileMeetsSettingsCatalog covers the Firewall CSP bridge:
+// a custom OMA-URI setting and a Settings Catalog choice on the same node meet
+// under the unscoped "vendor_msft_firewall_…" key.
+func TestFirewallCustomProfileMeetsSettingsCatalog(t *testing.T) {
+	const (
+		fwKey = "vendor_msft_firewall_mdmstore_publicprofile_enablefirewall"
+		fwURI = "./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall"
+	)
+	tests := []struct {
+		name string
+		oma  interface{}
+		kind string
+	}{
+		{"differing values conflict", false, "conflict"},
+		{"equal values duplicate", true, "duplicate"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			win := docs.ResourceMeta{Platforms: "windows10", AssignmentTargets: targets(allDevices())}
+			f.add(scType+"fw.yaml", win, catalogPolicy("windows10",
+				catalogChoice(fwKey, fwKey+"_true")))
+			f.add(dcType+"fw_custom.yaml", docs.ResourceMeta{
+				ODataType:         "#microsoft.graph.windows10CustomConfiguration",
+				AssignmentTargets: targets(allDevices()),
+			}, map[string]interface{}{
+				"@odata.type": "#microsoft.graph.windows10CustomConfiguration",
+				"omaSettings": []interface{}{
+					map[string]interface{}{"omaUri": fwURI, "value": tt.oma},
+				},
+			})
+
+			res, err := Analyze(Options{TenantDir: f.save(), ExpectDomain: "contoso.example.com", ToolVersion: "v-test"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var onKey []Finding
+			for _, fd := range res.Mechanical.Findings {
+				if fd.Key == fwKey {
+					onKey = append(onKey, fd)
+				}
+			}
+			if len(onKey) != 1 || onKey[0].Kind != tt.kind {
+				t.Errorf("findings on %s = %+v, want exactly one %s", fwKey, onKey, tt.kind)
+			}
+		})
+	}
+}
