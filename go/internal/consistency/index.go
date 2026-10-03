@@ -175,6 +175,8 @@ var typedNonSettings = map[string]bool{
 	"assignments":             true,
 	"scheduledActionsForRule": true,
 	"omaSettings":             true,
+	// A read-only Graph capability flag, true on every typed profile.
+	"supportsScopeTags": true,
 }
 
 // isODataKey reports whether a property key is OData annotation, never a
@@ -473,9 +475,7 @@ func walkTyped(odataType, path string, v interface{}, c *collector) {
 var credentialSuffixes = []string{"password", "passphrase", "secret", "sharedkey", "token"}
 
 // typedLeaf builds the raw value of one typed property. A credential-named
-// property is unknown (never written in clear), and an inline macOS payload
-// compares by the same SHA-256 the sidecar path uses, so it is never written
-// to the finding as text.
+// property is unknown (never written in clear).
 func typedLeaf(key, path string, v interface{}) rawValue {
 	last := strings.ToLower(path[strings.LastIndex(path, ".")+1:])
 	for _, suffix := range credentialSuffixes {
@@ -483,29 +483,7 @@ func typedLeaf(key, path string, v interface{}) rawValue {
 			return rawValue{sourceKey: key, unknown: true}
 		}
 	}
-	if s, ok := v.(string); ok && (path == "payload" || path == "configurationXml") {
-		sum := sha256.Sum256([]byte(s))
-		h := "sha256:" + hex.EncodeToString(sum[:])
-		return rawValue{sourceKey: key, value: h, scalar: h}
-	}
 	return leafValue(key, v)
-}
-
-// indexMacOSPayload indexes a custom macOS profile's payload when the export
-// moved it to its sidecar artifact (the only artifact such a profile has).
-func indexMacOSPayload(doc map[string]interface{}, artifacts []string, typeDir string, c *collector) {
-	odataType, _ := doc["@odata.type"].(string)
-	if odataType == "" || len(artifacts) != 1 {
-		return
-	}
-	if _, inline := doc["payload"]; inline {
-		return
-	}
-	if name, _ := doc["payloadFileName"].(string); name == "" {
-		return
-	}
-	key := odataType + "#payload"
-	c.add(key, artifactValue(key, filepath.Join(typeDir, filepath.Base(artifacts[0]))))
 }
 
 // indexGroupPolicy indexes an Administrative Templates profile by definition
@@ -580,8 +558,11 @@ func indexResource(resource, sourceType string, doc map[string]interface{}, arti
 			return c.settings(resource, sourceType)
 		}
 		c := newCollector(familyTyped)
-		indexTypedProperties(doc, c)
-		indexMacOSPayload(doc, artifacts, typeDir, c)
+		if odataType, _ := doc["@odata.type"].(string); appleCustomPayloadProperty[odataType] != "" {
+			indexAppleCustomProfile(resource, doc, artifacts, typeDir, c)
+		} else {
+			indexTypedProperties(doc, c)
+		}
 		return c.settings(resource, sourceType)
 	case typeDeviceCompliancePolicies:
 		c := newCollector(familyTyped)

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -149,27 +148,13 @@ func TestIndexTypedProperties(t *testing.T) {
 	hasLen(t, got, 4, "non-settings, OData annotations and not-configured values are never indexed: %v", got)
 }
 
-func TestIndexTypedPayloadAndCredentials(t *testing.T) {
-	doc := map[string]interface{}{
-		"@odata.type":      "#microsoft.graph.macOSCustomConfiguration",
-		"payload":          "<plist>inline-payload-text</plist>",
-		"configurationXml": "<xml>inline-xml-text</xml>",
-	}
-	got := indexOf(t, "Microsoft.Graph/deviceConfigurations/m.yaml", typeDeviceConfigurations, doc)
-	sum := sha256.Sum256([]byte("<plist>inline-payload-text</plist>"))
-	equal(t, "sha256:"+hex.EncodeToString(sum[:]), got["#microsoft.graph.macOSCustomConfiguration#payload"].Value)
-	for _, s := range got {
-		if strings.Contains(s.Value, "inline-") {
-			t.Errorf("inline payload text must not appear in the value: %q", s.Value)
-		}
-	}
-
+func TestIndexTypedCredentials(t *testing.T) {
 	wifi := map[string]interface{}{
 		"@odata.type":  "#microsoft.graph.windowsWifiConfiguration",
 		"preSharedKey": "hunter2",
 		"ssid":         "corp",
 	}
-	got = indexOf(t, "Microsoft.Graph/deviceConfigurations/w.yaml", typeDeviceConfigurations, wifi)
+	got := indexOf(t, "Microsoft.Graph/deviceConfigurations/w.yaml", typeDeviceConfigurations, wifi)
 	psk := got["#microsoft.graph.windowsWifiConfiguration#preSharedKey"]
 	if !psk.Unknown {
 		t.Errorf("a credential-named property must be unknown: %+v", psk)

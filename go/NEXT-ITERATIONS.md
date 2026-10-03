@@ -181,47 +181,47 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).~~
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
-- Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
+- ~~Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
   run over a real export: `payload`, `payloadName`, `payloadFileName`, `bundleId`, `configurationXml` and `fileName`
   were indexed as settings, so any two unrelated custom profiles on overlapping scopes came out as a `conflict` —
-  the bulk of the mechanical conflicts in that export):
-  - Dispatch in `indexResource`'s typed `deviceConfigurations` branch on `@odata.type`: for
+  the bulk of the mechanical conflicts in that export):~~
+  - ~~Dispatch in `indexResource`'s typed `deviceConfigurations` branch on `@odata.type`: for
     `#microsoft.graph.macOSCustomConfiguration`, `#microsoft.graph.iosCustomConfiguration` (same Graph shape —
     `payloadName`, `payloadFileName`, `payload` — and the same replace-by-identifier semantics) and
     `#microsoft.graph.macOSCustomAppConfiguration`, a new `indexAppleCustomProfile(resource, doc, artifacts,
     typeDir, c)` replaces `indexTypedProperties` entirely, so no other property of these types (`payloadName`,
     `payloadFileName`, `fileName`, `bundleId`, `deploymentChannel`, the bare `payload` / `configurationXml`) is
-    ever a key. Delete `indexMacOSPayload` and the `payload` / `configurationXml` branch of `typedLeaf`.
-  - Payload bytes, one helper for both properties: the resource's single sidecar artifact when `entry.Artifacts`
+    ever a key. Delete `indexMacOSPayload` and the `payload` / `configurationXml` branch of `typedLeaf`.~~
+  - ~~Payload bytes, one helper for both properties: the resource's single sidecar artifact when `entry.Artifacts`
     has exactly one (file mode: `payload` → `<payloadFileName stem>.mobileconfig`, `configurationXml` → named
     after `fileName`); else the inline string; an inline string that does not start with `<` after trimming is
     base64-decoded first (file mode without `remove-source`, or the `base64-decode` transformer off, leaves the
-    Graph base64 in the YAML); a decode failure or an unreadable sidecar indexes nothing.
-  - Value: `sha256:<hex>` of the bytes after the export's inline normalisation — export
+    Graph base64 in the YAML); a decode failure or an unreadable sidecar indexes nothing.~~
+  - ~~Value: `sha256:<hex>` of the bytes after the export's inline normalisation — export
     `transform.normalizeInlineText` as `NormalizeInlineText` (one definition, used by both) and hash its result
     with trailing newlines trimmed — so an inline copy (BOM stripped, CRLF → LF, trailing blanks trimmed) and a
-    byte-exact sidecar copy of one payload hash equal.
-  - Custom configuration (macOS, iOS): parse the bytes with `encoding/xml` (no new dependency) as an XML property
+    byte-exact sidecar copy of one payload hash equal.~~
+  - ~~Custom configuration (macOS, iOS): parse the bytes with `encoding/xml` (no new dependency) as an XML property
     list and read `PayloadIdentifier` from the root `<dict>` only — not from the inner `PayloadContent` payloads,
     which the catalog entry indexes; index one setting `<@odata.type>#payload:<PayloadIdentifier>` (identifier
     trimmed, case kept). Same identifier and different hash → `conflict` (the device keeps one profile per
     identifier); same hash → `duplicate`. Bytes that are not an XML plist (a signed CMS profile, a binary
-    `bplist`) or carry no root `PayloadIdentifier` index nothing.
-  - Custom app configuration (macOS): the app's preference domain is its `bundleId`; index one setting
+    `bplist`) or carry no root `PayloadIdentifier` index nothing.~~
+  - ~~Custom app configuration (macOS): the app's preference domain is its `bundleId`; index one setting
     `#microsoft.graph.macOSCustomAppConfiguration#configurationXml:<bundleId>` with the hash above; an empty
-    `bundleId` or no payload indexes nothing.
-  - Add `supportsScopeTags` to `typedNonSettings` (a read-only Graph capability flag on every typed profile, `true`
-    throughout, which otherwise makes every same-type pair a `duplicate`).
-  - Whatever indexes nothing logs at DEBUG through `logger.Default` with the resource key and a fixed reason
-    only — never payload bytes, identifiers or names.
-  - Tests (synthetic plists built in the test, temp directories only): two macOS profiles with one identifier
+    `bundleId` or no payload indexes nothing.~~
+  - ~~Add `supportsScopeTags` to `typedNonSettings` (a read-only Graph capability flag on every typed profile, `true`
+    throughout, which otherwise makes every same-type pair a `duplicate`).~~
+  - ~~Whatever indexes nothing logs at DEBUG through `logger.Default` with the resource key and a fixed reason
+    only — never payload bytes, identifiers or names.~~
+  - ~~Tests (synthetic plists built in the test, temp directories only): two macOS profiles with one identifier
     and different bytes → `conflict`; different identifiers → no finding; an inline copy and a CRLF sidecar copy
     of one payload → `duplicate`; a still-base64 inline payload indexes like its decoded form; an inner
     `PayloadContent` `PayloadIdentifier` is not the key; an iOS pair behaves like the macOS one; two app
     configurations on one `bundleId` with different XML → `conflict`; a signed/binary payload and a plist
     without `PayloadIdentifier` index nothing; `payloadName`, `payloadFileName`, `fileName`, `bundleId`,
     `deploymentChannel` and `supportsScopeTags` are no longer keys; no payload string appears in either output
-    file.
+    file.~~
 
 ## 2. A consistency rule and topic catalog in the configuration
 

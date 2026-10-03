@@ -103,7 +103,7 @@ func decodePayload(properties map[string]interface{}, cfg *models.Base64DecodeCo
 	}
 
 	// Inline mode: replace the encoded value with the decoded text.
-	properties[cfg.SourceKey] = normalizeInlineText(decoded)
+	properties[cfg.SourceKey] = NormalizeInlineText(decoded)
 	return nil, nil
 }
 
@@ -151,7 +151,7 @@ func decodeOmaSettings(properties map[string]interface{}, cfg *models.Base64Deco
 			continue
 		}
 
-		setting["value"] = normalizeInlineText(decoded)
+		setting["value"] = NormalizeInlineText(decoded)
 	}
 
 	return artifacts, nil
@@ -193,20 +193,22 @@ func decodeScriptContent(properties map[string]interface{}, cfg *models.Base64De
 			continue
 		}
 
-		properties[sc.key] = normalizeInlineText(decoded)
+		properties[sc.key] = NormalizeInlineText(decoded)
 	}
 
 	return artifacts, nil
 }
 
-// normalizeInlineText prepares decoded bytes for inline YAML output: it strips
+// NormalizeInlineText prepares decoded bytes for inline YAML output: it strips
 // a leading UTF-8 BOM, converts CRLF / lone CR line endings to LF and trims
 // trailing spaces/tabs from every line. Without this, Windows-authored scripts
 // (BOM + CRLF) or lines with trailing whitespace force the YAML emitter into
 // double-quoted style with escape sequences, because literal block scalars can
 // represent neither carriage returns nor trailing spaces. File-mode sidecar
-// artifacts are written byte-exact and are not normalized.
-func normalizeInlineText(decoded []byte) string {
+// artifacts are written byte-exact and are not normalized; the consistency
+// analysis applies this same function to them, so an inline copy and a sidecar
+// copy of one payload compare equal.
+func NormalizeInlineText(decoded []byte) string {
 	text := strings.TrimPrefix(string(decoded), "\uFEFF")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
