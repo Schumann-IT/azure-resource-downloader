@@ -179,6 +179,32 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   it — that must come out `none`), an unreadable resource warned and counted, a `presentInTenant: false` entry not
   indexed, byte-equal reruns, dry-run writing nothing, the refusals; `ClearTree` and the re-baseline call in
   `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).~~
+- Compare Apple Settings Catalog collections as additive lists, not as one folded value (found in a real export:
+  every certain new↔new conflict was a collection entry — managed login item rules
+  `com.apple.servicemanagement_rules_item_*`, allowed system extensions
+  `com.apple.system-extension-policy_allowedsystemextensions_*`, privacy entries
+  `com.apple.tcc.configuration-profile-policy_services_*_item_*` — where each policy adds its own entries and macOS
+  installs every profile's entries side by side):
+  - Today `walkCatalogInstance` recurses into each `groupSettingCollectionValue` element and the collector folds
+    every child occurrence into one sorted list per child key, so two policies with different entries conflict on
+    each child key. For a resource whose platform (metadata `platforms`, else the `@odata.type` prefix — the scope
+    model's platform) is macOS or iOS/iPadOS, index a group-setting collection instead as list members: one member
+    per element, keyed by the collection's `settingDefinitionId`, valued by the canonical JSON of the element's
+    children (their own `settingDefinitionId`s and values, secrets as in the secret rule — an element holding a
+    secret is an unknown member); the element's children are not indexed as separate keys. `choiceSettingCollection`
+    and `simpleSettingCollection` values on those platforms become members the same way, one per value.
+  - Detection for a list-member key: no finding when the two resources' member sets are disjoint; a `duplicate` for
+    a pair that shares at least one member (one finding per pair, the shared members as the values); never a
+    `conflict`. An unknown member is never compared and never written. Other platforms keep today's folded-list
+    comparison (Windows Settings Catalog merges only some collections; the catalog entry *A consistency rule and
+    topic catalog in the configuration* can mark more collections additive later).
+  - Tests: two macOS policies with different login-item rules → no finding; one shared rule → `duplicate`; a
+    Windows policy pair with different collection values stays a `conflict`; a collection element holding a secret
+    is never compared or written; the children of an additive collection are no longer separate keys.
+- Count the pairs the scope check ruled out: `counts.ruledOutByScope` in `consistency/metadata.yaml` — resource pairs
+  that share at least one key (or an equivalence) but whose overlap is `none`, so no finding was written. Logged on
+  the `Consistency summary` line. `version` stays 1 (the file has not shipped). Tests: a fixture with an excluded
+  pair counts 1, a dry run reports the same count, reruns stay byte-equal.
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
 - ~~Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
