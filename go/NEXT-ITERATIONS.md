@@ -158,11 +158,6 @@ compliance against configuration and the LLM step judges against a reviewed cata
   equivalences and rules; and to return a change plan in the shape of the earlier reviews — per entry a verdict
   (keep / fix / drop / add), ready-to-paste YAML, `status: verified` only with a cited Learn source, open
   questions where Learn is silent — with no repository edits and nothing read under `output/`.~~
-- Follow-up (found while seeding R6 and R7): a rule selector can name only a topic or a key list, so it cannot
-  say "any resource the filter is attached to" (R6) or "the dynamic group an assignment targets" (R7); the seed
-  gives both rules the same topic on each side. Decide, before *The consistency analysis job* evaluates rules,
-  whether selectors need an assignment-relative form (`attachedTo: filter`, `targets: group`) or whether those two
-  rules belong to the mechanical scope model instead.
 
 ## 2. Index the inner payloads of Apple custom profiles
 
@@ -229,6 +224,15 @@ operator can act on.
 
 **Plan.**
 
+- First, before any rule is evaluated: decide how R6 (an assignment filter that contradicts the platform or
+  enrollment type of the policy it is attached to) and R7 (Autopilot / ESP targeting a dynamic group whose rule
+  cannot admit the enrolling devices) are expressed. A catalog rule selector names only a topic or a key list, so
+  the seed gives both the same topic on each side as placeholders. Either selectors gain an assignment-relative form
+  (e.g. `attachedTo: filter`, `targets: group`, followed through each resource's assignments), or the two checks
+  move into the mechanical scope model. Decide from the Claude Cowork review's R6/R7 findings (documented filter
+  properties per platform and enrollment type; dynamic-group evaluation timing at enrollment), record it as a
+  `Decision.` note here, and implement the chosen form with its tests. (Moved from *A consistency rule and topic
+  catalog in the configuration*.)
 - `docs analyze-consistency` also writes `consistency/analyze.md` from an embedded template (`go:embed`, atomic
   write, header stripped) with marked blocks `export`, `mechanical`, `clusters` (deterministic per topic, split by
   expected output size like `generate.md` §3), `overlap` (a compact pair matrix per cluster) and `rules`; preflight
