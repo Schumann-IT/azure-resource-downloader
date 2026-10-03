@@ -41,6 +41,7 @@ function stripWhere(selector: string): string {
         if (selector[j] === '(') depth++;
         else if (selector[j] === ')' && --depth === 0) break;
       }
+      // eslint-disable-next-line sonarjs/updated-loop-counter -- skips the balanced :where(...) group
       i = j;
       continue;
     }
@@ -59,7 +60,7 @@ export function isPositionalCellSelector(selector: string): boolean {
   // Compounds are what sits between combinators; a cell compound is one whose
   // type is td or th.
   return live
-    .split(/\s*[>+~]\s*|\s+/)
+    .split(/[\s>+~]+/)
     .some((compound) => /^(?:td|th)(?![\w-])/.test(compound) && POSITIONAL.test(compound));
 }
 
@@ -256,12 +257,15 @@ describe('Tailwind stylesheet build', () => {
 
   it('styles no table column by its position outside the contract tables', () => {
     const offenders: string[] = [];
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- one brace-matching scan; splitting hides the recursion
     const scan = (block: string): void => {
       let i = 0;
       while (i < block.length) {
         const open = block.indexOf('{', i);
         if (open < 0) break;
-        const prelude = block.slice(i, open).trim();
+        const raw = block.slice(i, open);
+        // Drop `;`-terminated at-statements (@import, @layer a,b;) before the `@` test.
+        const prelude = raw.slice(raw.lastIndexOf(';') + 1).trim();
         let depth = 1;
         let j = open + 1;
         for (; j < block.length && depth > 0; j++) {

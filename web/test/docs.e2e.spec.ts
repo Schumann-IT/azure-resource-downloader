@@ -971,7 +971,7 @@ describe('Docs browser (e2e)', () => {
         const cells = [...section.matchAll(/<(th|td)(\s[^>]*)?>/g)];
         expect(cells).toHaveLength(9);
         cells.forEach((cell, i) => {
-          expect((cell[2] ?? "").includes('data-numeric')).toBe(i % 3 === countColumn);
+          expect((cell[2] ?? '').includes('data-numeric')).toBe(i % 3 === countColumn);
         });
       } finally {
         await fsp.writeFile(summaryFile, SUMMARY_MD);

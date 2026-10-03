@@ -289,7 +289,7 @@ export function applyMetadataTable(tokens: any[]): void {
 }
 
 const INTEGER = /^(?:\d+|\d{1,3}(?:,\d{3})+)$/;
-const PLACEHOLDER = /^(?:-|\u2013|\u2014)$/;
+const PLACEHOLDER = /^[-\u2013\u2014]$/;
 
 // Tags every cell (header and body) of a count column with `data-numeric`, so
 // the stylesheet can right-align and compact it by what it holds rather than by
@@ -305,6 +305,7 @@ export function applyNumericColumns(tokens: any[]): void {
     const close = tableClose(tokens, i);
     if (close < 0) return;
     tagNumericColumns(tokens, i, close);
+    // eslint-disable-next-line sonarjs/updated-loop-counter -- skips the table just tagged
     i = close;
   }
 }
@@ -321,6 +322,7 @@ interface ColumnState {
   plain: boolean;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- single token walk over header and body cells
 function tagNumericColumns(tokens: any[], open: number, close: number): void {
   const columns: ColumnState[] = [];
   const cells: Array<{ index: number; column: number }> = [];
