@@ -37,10 +37,11 @@ This project is released independently of the documentation browser in `web/`: i
   still `verify`. The section is validated strictly and offline: a misspelt field, a key not in the canonical form
   (the error gives the form to paste) or a non-Learn reference exits `2` before anyone signs in.
   `consistency/metadata.yaml` records the catalog's hash and the member keys this export does not carry.
-  `config-tailored-intune.yaml` ships a seed catalog — 20 equivalences, 11 topics and rules R1–R8 — not yet
-  checked against Microsoft Learn, so every entry is `verify`. The catalog is opt-in: **copy the `consistency:`
-  section from `config-tailored-intune.yaml` into your base file to use it.** See the README's *The catalog*
-  section.
+  `config-tailored-intune.yaml` ships a catalog reviewed against Microsoft Learn and two real tenant exports —
+  password and passcode, encryption, firewall, Defender, Windows Hello, LAPS, update-policy and Platform SSO
+  relations; the entries Learn fully supports are `verified`, the Apple mappings stay `verify`. The catalog is
+  opt-in: **copy the `consistency:` section from `config-tailored-intune.yaml` into your base file to use it.** See
+  the README's *The catalog* section.
 
 ### Fixed
 

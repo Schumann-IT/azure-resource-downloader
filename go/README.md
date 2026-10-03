@@ -822,7 +822,7 @@ no flag and no environment variable.
   including every hash in `metadata.yaml` — so copy and change only what you need.
 - [`config-tailored-intune.yaml`](config-tailored-intune.yaml) is a worked, opinionated **base** file for an
   Intune-centred tenant: secrets resolved, the cleaning and id-resolution transformers dropped, a full
-  `taxonomy:` for `docs generate-index` and a seed `consistency:` catalog for `docs analyze-consistency` (see
+  `taxonomy:` for `docs generate-index` and a reviewed `consistency:` catalog for `docs analyze-consistency` (see
   [The catalog](#the-catalog-consistency)). A starting point, not a default — it changes the recorded hashes.
 
 ### Working with several tenants
@@ -1284,17 +1284,20 @@ naming the section and entry id, before the export is resolved. A member that no
 carries is not an error — the catalog is shared, settings are per export — and is listed under
 `unmatchedMembers` in `consistency/metadata.yaml`, whose `catalog:` block also records the catalog's hash.
 
-**The seed.** [`config-tailored-intune.yaml`](config-tailored-intune.yaml) ships a seed catalog: 20 equivalences
-(the macOS and iOS/iPadOS password and passcode family across compliance, Settings Catalog and legacy device
-restrictions; FileVault / BitLocker; firewall; minimum OS version), 11 topics (encryption, Defender/EDR,
-firewall, Windows Update, identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO,
-compliance, assignment filters) and 11 rules covering R1–R8 (compliance requiring a control no configuration
-enables; minimum OS above what updates deliver; Conditional Access requiring compliance without a policy for the
-platform; one control through several surfaces; deferral against a feature update profile; filters
-contradicting a policy's platform; enrollment targeting against its dynamic group; Platform SSO against password
-compliance). **Every seed entry is `status: verify` and none sets `enforced`** — it was written without a sourced
-check, so its contradictions are `possible`, and R6 and R7 are placeholders until rule selectors can follow an
-assignment. To use it, copy the `consistency:` section into your own base file.
+**The reviewed catalog.** [`config-tailored-intune.yaml`](config-tailored-intune.yaml) ships a catalog reviewed
+against Microsoft Learn and two real tenant exports (2026-10-03): 37 equivalences (the macOS, iOS/iPadOS and
+Windows password and passcode families across compliance, Settings Catalog, legacy restrictions and DeviceLock;
+FileVault, BitLocker and device health; the firewall per profile; Defender; Windows Hello), 13 topics (encryption,
+Defender/EDR, firewall, Windows Update with separate feature- and driver-update-policy topics, identity & sign-in,
+Conditional Access, browsers, Office/OneDrive, enrollment, macOS accounts/SSO, compliance) and 29 rules (among
+them compliance requiring a control no configuration enables, one control through several surfaces, update-ring
+settings that a feature or driver update policy overrides, Windows Hello user settings overriding device ones,
+Windows LAPS against the built-in administrator, macOS Platform SSO against password compliance). **Two
+equivalences and seven rules are `verified`**; the rest stay `verify`, mostly because Learn never names the Apple
+key behind an Intune setting, so those mappings rest on Apple's documentation. `enforced` is set only where Learn
+documents remediation — the password and passcode equivalences. Not in the catalog: assignment-filter and
+enrollment-targeting checks (R6, R7), which belong to the scope model, and the minimum-OS comparison, which needs
+update profiles the index does not read. To use it, copy the `consistency:` section into your own base file.
 
 ## Supported resource types
 
