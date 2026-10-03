@@ -66,44 +66,77 @@ compliance against configuration and the LLM step judges against a reviewed cata
 > **Decision.** Indexing the inner payloads of Apple custom profiles is split out of this entry: it ships as the
 > next entry, *Index the inner payloads of Apple custom profiles*, which extends this entry's seed equivalences.
 >
-> **Contract.** none — `consistency/metadata.yaml` is never served; the web consistency view reads only
-> `consistency/index.md`.
+> **Contract.** none — the `consistency:` key and the `catalog:` block this entry adds to
+> `consistency/metadata.yaml` are Go-internal: the browser never serves `consistency/metadata.yaml` or
+> `mechanical.yaml`, and the web consistency view reads only `consistency/index.md`, which this entry does not
+> write. The block is additive; the metadata `version` stays as it is.
 >
-> **Owner.** `go/config-tailored-intune.yaml` (inside `go/`); never `go/.config/`. No sequencing.
+> **Owner.** Outside `go/`: only `Claude outputs/consistency-catalog-review-instructions.md` (git-ignored,
+> written by the last bullet, never committed). Inside `go/`: `config-tailored-intune.yaml` and both example
+> files; never `go/.config/`. No sequencing; *Index the inner payloads of Apple custom profiles* follows this
+> entry.
 >
 > **Implementer.** opus
 
 **Plan.**
 
-- The `consistency:` key through `/add-config-option`: a general key (`keyScopes`, `ScopeGeneral`) read by
-  `cmd/docs/analyze_consistency.go` with `viper.UnmarshalKey`, like `generate-index` reads `taxonomy:`, passing
-  the compiled equivalences instead of `nil`; an invalid section exits with `exitCannotAnswer` naming the section;
-  `cmd/config_test.go` partition coverage.
-- `internal/consistency/catalog.go`: `Catalog{Version, Equivalences, Topics, Rules}` compiled to a `Compiled`.
-  Validation, each error naming the section and the id: `version >= 1`; ids match the taxonomy id pattern and
-  are unique per section; relations from the closed set; `enforced` keys are known platform families;
-  `reference` starts with `https://learn.microsoft.com/`; `status` is `verified | verify`; every equivalence
-  member is a canonical key form the index emits (checked through the shared `index.go` builders); every topic
-  has at least one non-empty match rule and its regexes compile; a rule's `left` / `right` each name an existing
-  topic or a non-empty key list, and its `violation` and `resolution` text is non-empty. The compiled
-  equivalences are the existing `consistency.Equivalence` values; reference and description stay in the catalog.
-- A pure topic resolver `(*Compiled).Topics(settings)`: per resource its topics (a resource may sit in several),
-  in a stable order; exported for *The consistency analysis job*, tested here.
-- A `catalog:` block in `consistency/metadata.yaml`: the `sha256` of the compiled catalog's canonical JSON, the
-  counts per section and `unmatchedMembers` (members that indexed nothing in this export); absent without a
-  catalog, which means mechanical findings only. Additive, the metadata version unchanged; the command logs one
-  catalog line.
+- The `consistency:` key through `/add-config-option`: a general key (`internal/config/keys.go` `keyScopes`,
+  `ScopeGeneral`, no default — absent means no catalog). `cmd/docs/analyze_consistency.go` reads it like
+  `generate-index` reads `taxonomy:` (`viper.IsSet`, then `viper.UnmarshalKey` into a `mapstructure`-tagged
+  `consistency.CatalogConfig`) and compiles it **before** resolving the export, so a typo fails offline and before
+  any sign-in; an unparsable or invalid section exits with `exitCannotAnswer` and `invalid 'consistency' config
+  section: …`. The compiled catalog reaches `consistency.Analyze` through a new `Options.Catalog *Compiled`, whose
+  equivalences replace today's `nil` (the existing `Options.Equivalences` stays for the package tests).
+  `config.example.yaml` carries the section commented out (it must stay a no-op); `config.example.domain.yaml`
+  names `consistency` among the base-file-only keys in its header comment. `cmd/config_test.go`: the key is
+  accepted in a base file and rejected in a profile, the per-file mention check covers it, and the no-op test
+  asserts `viper.IsSet("consistency")` is false for `config.example.yaml`.
+- `internal/consistency/catalog.go`: `CatalogConfig{Version, Equivalences, Topics, Rules}` compiled to a
+  `Compiled`. Validation, each error naming the section and the id: `version >= 1`; ids match the taxonomy id
+  pattern (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`) and are unique per section; an equivalence has at least two distinct
+  members; relations from the closed set (`same | >= | <= | = | required`); `enforced` keys are the platform
+  families of `scope.go` (`windows | macos | ios | android | linux`); `reference` starts with
+  `https://learn.microsoft.com/`; `status` is `verified | verify`; every topic has a label and at least one
+  match rule with a non-empty field, and every regex compiles; a rule has a description, its `left` / `right`
+  each name an existing topic or a non-empty key list (each key validated like a member), `class` is
+  `requirement | configuration` when set, `platforms` compiles, and `violation` and `resolution` are non-empty.
+  The compiled equivalences are the existing `consistency.Equivalence` values; reference and description stay in
+  the catalog.
+- Member validation shares the index's key construction, never a restatement: `index.go` gains small key
+  builders the indexers call — `catalogKey(id)` (lowercase; Settings Catalog, compliance and ADMX ids),
+  the existing `normaliseOMAURI`, `typedKey(odataType, path)` (`#microsoft.graph.<Type>#<dotted.path>`, also the
+  Apple custom `…#payload:<identifier>` form), and the intent id verbatim — and `validMemberKey(key)` accepts a
+  key exactly when it is already in one of those forms: a `#microsoft.graph.<Type>#<path>` key with a
+  non-empty path, an intent id (contains `--`), or otherwise a key equal to its `normaliseOMAURI` form
+  (lowercase, no `/`, no leading `./`). A raw OMA-URI or a mixed-case Settings Catalog id is rejected with the
+  canonical form in the error, so the operator can paste it.
+- A pure topic resolver `(*Compiled).Topics(r TopicFacts)`: `TopicFacts` carries the resource's name, type,
+  `@odata.type`, platforms and the canonical keys of its indexed settings; the semantics are the taxonomy's (OR of
+  rules, AND within one rule, `name` / `odataType` / `platforms` / `key` case-insensitive regexes, `type` exact,
+  `key` matching when any of the resource's keys matches). It returns every matching topic id (a resource may sit
+  in several) sorted by id; exported for *The consistency analysis job*, tested here.
+- A `catalog:` block in `consistency/metadata.yaml`: `sha256` of the catalog's canonical JSON — every field
+  (descriptions, references and statuses included, since the LLM step judges against them), entries sorted by id
+  per section, member and key lists sorted, map keys sorted — so neither YAML key order nor entry order moves it;
+  the counts per section; and `unmatchedMembers`, the sorted unique member keys no indexed setting of this export
+  carries. Absent without a catalog, which means mechanical findings only. Additive, the metadata `version`
+  unchanged; the command logs one catalog line (counts, unmatched members, `verify` entries), also under
+  `--dry-run`.
 - The seed catalog in `go/config-tailored-intune.yaml` — equivalences: the macOS and iOS/iPadOS password and
   passcode family first (compliance ↔ Settings Catalog ↔ legacy device restrictions), then encryption
   (FileVault/BitLocker), firewall, minimum OS version; topics: encryption, Defender/EDR, firewall, Windows Update,
   identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
   semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
-  `status: verify`, never guessed. Both example files carry the key in comments only (they stay no-ops).
-- Tests: validation errors (unknown relation, malformed member, non-Learn reference, duplicate id, a rule naming a
-  missing topic); every key the index fixtures produce passes member validation; compilation; hash stability (a
-  reordered YAML hashes the same); the metadata block present and absent; `unmatchedMembers`; a seed macOS
-  password equivalence turns a fixture compliance / configuration pair into a `contradiction`, `possible` under
-  `status: verify`; topic resolution.
+  `status: verify`, never guessed.
+- Tests: validation errors (unknown relation, a one-member equivalence, a raw OMA-URI member with the canonical
+  form in the message, an unknown `enforced` platform, non-Learn reference, duplicate id, a rule naming a missing
+  topic, an uncompilable regex); every key the index fixtures produce passes member validation; compilation; hash
+  stability (reordered YAML keys and entries hash the same, a changed reference does not); the metadata block
+  present and absent; `unmatchedMembers`; a seed macOS password equivalence turns a fixture compliance /
+  configuration pair into a `contradiction`, `possible` under `status: verify`; topic resolution (several topics,
+  a `key:` rule, no match); the command refuses an invalid section with exit 2 before resolving the export; the
+  tracked `config-tailored-intune.yaml` `consistency:` section compiles without error (read by relative path like
+  the example-file tests). Every fixture is built in a temp directory; no test reads `go/.config/` or `output/`.
 - Documentation at *done*: `README.md` — the key, its three sections, the closed vocabularies, the seed catalog in
   the worked example, and under *Working with several tenants* one sentence that inside a checkout `go/.config/` is
   the git-ignored `--config-dir`; `CHANGELOG.md` `### Added` with the operator action in bold: copy the
