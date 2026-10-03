@@ -53,6 +53,33 @@ policies can be told apart at a glance. Items whose document has no summary yet 
   the index carries one); `CHANGELOG.md` `### Added` (Views and navigation), noting the summaries appear once the
   documentation is regenerated with the current CLI.
 
+## 2. The consistency view
+
+*Kind:* feat
+
+**Goal.** A reader of a tenant can open the consistency analysis — the contradictions and redundancies across its
+policies — in the browser, rendered like every other document, from the tenant's pages.
+
+> **Contract.** The go entry *The consistency analysis job* adds `<tenant>/consistency/`: `index.md` is the human
+> report the browser renders; `findings.yaml`, `mechanical.yaml`, `metadata.yaml`, `analyze.md` and `chunks/` are
+> never served. The tree is cleared by a re-baselining download, like `drift/`, so a missing `index.md` is normal.
+>
+> **Decision.** The browser renders the consistency tree in v1 (shipped as a pair with that go entry).
+>
+> **Owner.** none — every file is under `web/`. Ships as a pair with go *The consistency analysis job*.
+
+**Plan.**
+
+- `src/docs/path-safety.ts`: a resolver for `consistency/` serving exactly `.md` (one extension, like the drift
+  resolvers), re-verifying containment after `realpath()`, refusing `analyze.md` and anything under `chunks/`; cases
+  in `test/path-safety.spec.ts`. `consistency/` is not a discovery marker.
+- A route behind a representation prefix (declared before the `:tenant/*path` catch-all, like `_drift`) and a view
+  rendering `consistency/index.md` through the one `markdown-it` instance, with a clear empty state when the tree is
+  missing or not yet analysed; the entry point on the tenant pages decided at plan review.
+- Tests: e2e cases for the rendered report, the empty state, and refused paths (`analyze.md`, `chunks/`, `.yaml`).
+- Documentation at *done*: `README.md` (route, the served `consistency/` root, the docs-root tree);
+  `CHANGELOG.md` `### Added`.
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section

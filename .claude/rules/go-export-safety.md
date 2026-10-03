@@ -24,13 +24,20 @@ Everything lives under `<output>/<tenant>/`, `<tenant>` being the Entra default 
   after a successful metadata write, never under dry-run) — `audit.yaml` included: swept with the tree, never
   pruned, no delete path of its own. No history, by design. Drift never writes under
   `resources/` or `docs/`, never updates the export's `metadata.yaml`, never prunes.
+- `consistency/` — owned by `docs analyze-consistency`: `mechanical.yaml` (the same-setting findings) and
+  `metadata.yaml` (the export it describes, `exportGeneratedAt`, and counts) at the root, written atomically,
+  findings first and metadata last; other files there are left alone. It reads only `resources/` and describes
+  one export, so a re-baselining `resource download` clears it (`consistency.ClearTree`, after a successful
+  metadata write, never under dry-run). A resolved secret never reaches it: secret values are indexed as
+  unknown and never written or logged.
 - File names: display name sanitised (lowercase, `[a-z0-9_]`, `resource_` prefix for a leading digit,
   `unnamed` fallback); collisions resolved by lowest resource id + `sha256(id)` suffix — decided by id, never by
   finish order.
 
 ## `resources/metadata.yaml` — facts, and the prune contract
 `prune` (config-only, no flag) is the **only** delete path inside the export; the only other deletes go
-through `drift.ClearTree` and touch only `drift/`. These rules make that safe — never relax them:
+through `drift.ClearTree` and `consistency.ClearTree` and touch only `drift/` or `consistency/`. These rules
+make that safe — never relax them:
 - It describes the **export directory, not the tenant**. Never remove an entry while its file exists on disk;
   a resource gone from the tenant becomes `presentInTenant: false` with facts and hash retained. Only a prune
   that actually deleted the file removes an entry.
@@ -39,7 +46,7 @@ through `drift.ClearTree` and touch only `drift/`. These rules make that safe �
   `SkippedTypes` is not. Collapsing them turns a missing permission into a deletion.
 - Prune refuses unless the run is `Complete` and `FailedResources == 0`; deletes only within covered types;
   never leaves `resources/`; never deletes `metadata.yaml`; removes a type's `doc-prompt.md` only when the
-  type emptied out; never reaches into `docs/` or `drift/` (an orphaned document is reported, not deleted).
+  type emptied out; never reaches into `docs/`, `drift/` or `consistency/` (an orphaned document is reported, not deleted).
   Preview and real path share one eligibility decision (`prunableKeys`). Every deletion is logged, with a total.
 - **Partial runs merge, never truncate**: a `--type`-scoped run keeps entries and `lastCoveredAt` of types it
   did not cover. Skipped/filtered resources are re-observed (`skipped`/`filtered: true`), not rewritten.

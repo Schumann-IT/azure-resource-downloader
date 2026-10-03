@@ -82,7 +82,7 @@ func TestRemovedFlagsAreGone(t *testing.T) {
 	for _, name := range []string{"download", "drift", "audit", "types", "list"} {
 		commands["resource "+name] = subcommand(t, resourceCmd, name)
 	}
-	for _, name := range []string{"generate-prompt", "generate-index", "analyze-drift"} {
+	for _, name := range []string{"generate-prompt", "generate-index", "analyze-drift", "analyze-consistency"} {
 		commands["docs "+name] = subcommand(t, docsCmd, name)
 	}
 

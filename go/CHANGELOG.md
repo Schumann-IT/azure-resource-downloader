@@ -11,6 +11,22 @@ This project is released independently of the documentation browser in `web/`: i
 
 ## [Unreleased]
 
+### Added
+
+#### Documentation and drift analysis
+
+- **Find settings that collide across policies.** The new `docs analyze-consistency` indexes every exported
+  setting — Settings Catalog, custom OMA-URI, typed device configurations, legacy compliance, administrative
+  templates and intents — together with the assignments of the resource that sets it, and reports where two
+  resources configure the same setting for devices or users they can both reach: a conflict, a duplicate or a
+  compliance contradiction, each marked as a certain or only possible overlap. It runs offline and
+  deterministically from `resources/` alone, so it works right after a download and before any documentation;
+  its output, `<tenant>/consistency/`, describes one export and is cleared by a re-baselining
+  `resource download`. Assignments that cannot meet rule a pair out, Apple collection entries that macOS
+  installs side by side are compared as lists, Graph defaults and identity properties are not treated as
+  settings, and secrets are never compared, written or logged — even in an export made with
+  `resolve-secrets`. See the README's *Consistency analysis* section. (#56)
+
 ## [0.4.0] - 2026-10-02
 
 ### Added

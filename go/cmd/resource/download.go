@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"azure-resource-downloader/internal/cmdutil"
+	"azure-resource-downloader/internal/consistency"
 	"azure-resource-downloader/internal/docs"
 	"azure-resource-downloader/internal/drift"
 	"azure-resource-downloader/internal/logger"
@@ -195,6 +196,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		// stale observation (and its analysis artifacts) cannot outlive the
 		// baseline it was decided against.
 		rebaselineClearDrift(prep.Output, prep.DryRun)
+		rebaselineClearConsistency(prep.Output, prep.DryRun)
 	}
 
 	if summary.FailedResources > 0 {
@@ -265,5 +267,25 @@ func rebaselineClearDrift(tenantDir string, dryRun bool) {
 	case removed:
 		log.Info("Cleared the drift observation: this run re-baselined the export it was compared against",
 			"dir", filepath.Join(tenantDir, drift.DriftDirName))
+	}
+}
+
+// rebaselineClearConsistency removes the tenant's consistency/ tree after a run
+// that updated the export baseline: the analysis describes one export, so a new
+// baseline supersedes it. Never under dry-run. The delete goes through
+// consistency.ClearTree, whose path is constructed — never derived from input —
+// so it cannot reach into resources/, docs/ or drift/. A failure only warns.
+func rebaselineClearConsistency(tenantDir string, dryRun bool) {
+	log := logger.Default
+	if dryRun {
+		return
+	}
+	removed, err := consistency.ClearTree(tenantDir)
+	switch {
+	case err != nil:
+		log.Warn("Superseded consistency analysis not cleared", "error", err)
+	case removed:
+		log.Info("Cleared the consistency analysis: this run re-baselined the export it described",
+			"dir", filepath.Join(tenantDir, consistency.DirName))
 	}
 }

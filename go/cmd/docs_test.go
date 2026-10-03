@@ -38,6 +38,9 @@ func TestDocsGroupFlagSurface(t *testing.T) {
 	for name, flags := range map[string][]string{
 		"generate-index": {"prompt", "exit-code"},
 		"analyze-drift":  {"exit-code"},
+		// analyze-consistency writes a fixed tree and has no prompt yet, so it
+		// offers --domain alone.
+		"analyze-consistency": {"out", "prompt", "exit-code"},
 	} {
 		sub := subcommand(t, docsCmd, name)
 		for _, flag := range flags {
@@ -45,5 +48,8 @@ func TestDocsGroupFlagSurface(t *testing.T) {
 				t.Errorf("docs %s offers --%s but ignores it", name, flag)
 			}
 		}
+	}
+	if subcommand(t, docsCmd, "analyze-consistency").Flags().Lookup("domain") == nil {
+		t.Error("docs analyze-consistency is missing --domain")
 	}
 }

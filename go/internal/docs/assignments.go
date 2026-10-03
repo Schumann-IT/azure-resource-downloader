@@ -74,6 +74,44 @@ func parseAssignments(targets []interface{}) []assignmentRow {
 	return rows
 }
 
+// AssignmentTarget is the exported, structured view of one raw assignment
+// target for packages outside docs (the consistency analysis models
+// assignment scopes from it). It is derived from parseAssignments, so both
+// read the same facts the same way — the zero-GUID "no filter" sentinel
+// included, which arrives here as an empty FilterID.
+type AssignmentTarget struct {
+	// Exclude is true for an exclusion group target.
+	Exclude bool
+	// AllDevices and AllUsers mark the built-in targets, which carry no group.
+	AllDevices bool
+	AllUsers   bool
+	// GroupID is the targeted group; empty for a built-in target.
+	GroupID string
+	// FilterID is the assignment filter; empty when there is none.
+	FilterID string
+	// FilterType is the filter mode: include, exclude or none.
+	FilterType string
+}
+
+// ParseAssignmentTargets returns the structured assignment targets of a
+// resource's raw metadata assignmentTargets, tolerant of malformed entries
+// exactly like the documentation run.
+func ParseAssignmentTargets(targets []interface{}) []AssignmentTarget {
+	rows := parseAssignments(targets)
+	out := make([]AssignmentTarget, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, AssignmentTarget{
+			Exclude:    r.direction == "Exclude",
+			AllDevices: strings.Contains(r.targetKind, allDevicesTargetKind),
+			AllUsers:   strings.Contains(r.targetKind, allUsersTargetKind),
+			GroupID:    r.groupID,
+			FilterID:   r.filterID,
+			FilterType: r.filterType,
+		})
+	}
+	return out
+}
+
 // assignmentDirection maps a target @odata.type to the Include/Exclude column.
 func assignmentDirection(targetKind string) string {
 	if strings.Contains(targetKind, "exclusionGroupAssignmentTarget") {

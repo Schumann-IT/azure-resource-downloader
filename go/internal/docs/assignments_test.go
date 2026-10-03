@@ -163,3 +163,40 @@ func TestGroupKindLabel(t *testing.T) {
 		})
 	}
 }
+
+// TestParseAssignmentTargets pins the exported view other packages model
+// scopes from: direction, the built-in targets and the zero-GUID sentinel.
+func TestParseAssignmentTargets(t *testing.T) {
+	got := ParseAssignmentTargets([]interface{}{
+		map[string]interface{}{"target": map[string]interface{}{
+			"@odata.type": "#microsoft.graph.groupAssignmentTarget", "groupId": "g1",
+			"deviceAndAppManagementAssignmentFilterId":   "f1",
+			"deviceAndAppManagementAssignmentFilterType": "include",
+		}},
+		map[string]interface{}{"target": map[string]interface{}{
+			"@odata.type": "#microsoft.graph.exclusionGroupAssignmentTarget", "groupId": "g2",
+		}},
+		map[string]interface{}{"target": map[string]interface{}{
+			"@odata.type": "#microsoft.graph.allDevicesAssignmentTarget",
+			"deviceAndAppManagementAssignmentFilterId": noFilterSentinel,
+		}},
+		map[string]interface{}{"target": map[string]interface{}{
+			"@odata.type": "#microsoft.graph.allLicensedUsersAssignmentTarget",
+		}},
+		"malformed",
+	})
+	want := []AssignmentTarget{
+		{GroupID: "g1", FilterID: "f1", FilterType: "include"},
+		{Exclude: true, GroupID: "g2"},
+		{AllDevices: true},
+		{AllUsers: true},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("want %d targets, got %+v", len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("target %d: want %+v, got %+v", i, want[i], got[i])
+		}
+	}
+}
