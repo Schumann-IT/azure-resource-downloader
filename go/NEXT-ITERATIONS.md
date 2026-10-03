@@ -231,6 +231,20 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   `ruled_out_by_scope` on the `Consistency summary` line in `cmd/docs/analyze_consistency.go`. `version` stays 1
   (the file has not shipped). Tests: a fixture with an excluded pair sharing two keys counts 1; a `none` pair that
   shares no key counts 0; a dry run reports the same count; reruns stay byte-equal.~~
+- Treat typed enum defaults as not configured (found in a real export: 27 of the 28 certain duplicates between
+  split compliance policies were Graph defaults that every legacy compliance policy returns whether or not the
+  operator set them — `deviceThreatProtectionRequiredSecurityLevel: unavailable`,
+  `advancedThreatProtectionRequiredSecurityLevel: unavailable`, `passwordRequiredType: deviceDefault`):
+  - A `typedEnumDefaults` table in `internal/consistency/index.go`, keyed by the bare property name (any
+    `@odata.type`), listing the value(s) that mean "not configured": the three above. An explicit per-property list,
+    never a blanket rule on the strings (`unavailable` or `deviceDefault` may be a real choice on another property).
+  - `walkTyped` / `typedLeaf` (typed `deviceConfigurations` and `deviceCompliancePolicies` only) skip a top-level
+    property whose value matches its table entry, compared case-insensitively, like the other not-configured
+    values — it is not indexed, so it yields no finding, no `unknownValues` pair and no equivalence member. Settings
+    Catalog, OMA-URI, ADMX and intents are unchanged.
+  - Tests: two compliance policies on one scope that both carry the three defaults → no finding; one setting
+    `passwordRequiredType: alphanumeric` and the other `deviceDefault` → no finding (the default side is not
+    configured); both `alphanumeric` → `duplicate`; `unavailable` on a property not in the table is still indexed.
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
 - ~~Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
