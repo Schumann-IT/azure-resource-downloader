@@ -119,6 +119,9 @@ references, documented enforcement and the rules Learn actually supports.
 - `go/config-tailored-intune.yaml`: replace the `consistency:` section with `consistency-catalog-proposed.yaml`'s,
   keeping the file's comment style (a short comment per group naming the review as source); never touch
   `go/.config/`.
+- Drop the proposal's `^device_vendor_msft_firewall_mdmstore_…` alternative from the `firewall` topic's key regex:
+  after *Fix the Firewall CSP bridge between custom OMA-URIs and the Settings Catalog* custom firewall OMA-URIs index
+  as `vendor_msft_firewall_…`, so that form matches nothing (harmless, but dead).
 - Tests: the tracked-config tests still compile the section; extend them to pin the new shape — counts per
   section, R6/R7 and `assignment-filters` absent, the verified entries' ids — and keep the
   `macos-password-minimum-length` pin.
