@@ -8,85 +8,97 @@ Numbered entries are scheduled work: committed here before they are implemented,
 and archived to `../.claude/archive/go/` once done. Parked ideas, grouped by area below, are
 deliberately unscheduled; each says why it is parked and what would make it worth doing.
 
-## 1. A consistency rule and topic catalog in the configuration
+## 1. Index the inner payloads of Apple custom profiles
 
 *Kind:* feat
 
-**Goal.** The operator can tell the consistency analysis which settings describe the same control across policy
-types (compliance included), which cross-type relations to check, and how to group resources into topics — each
-with its resolution semantics and its Microsoft Learn source written down — so the mechanical step can compare
-compliance against configuration and the LLM step judges against a reviewed catalog instead of recall.
+**Goal.** The consistency catalog can select and relate what a macOS or iOS/iPadOS custom profile actually
+configures: each payload inside the profile becomes a setting that topics, rules and equivalences can name, without
+a payload string ever leaving the export.
 
-> **Decision.** The catalog is a configuration key like `taxonomy:` (operator-editable, validated), not embedded
-> data.
+> **Why.** Today a custom profile is indexed only by the root `PayloadIdentifier` of its property list
+> (`internal/consistency/apple.go`), which already reports two profiles sharing an identifier with different
+> payloads. What the profile configures — a passcode policy, a FileVault payload — is invisible to the catalog, so
+> the same control set through a custom profile and a Settings Catalog or compliance policy (R4) cannot be named.
 >
-> **Shape.** A general key `consistency:` with `equivalences` (id, members — a compliance property and/or
-> configuration keys: Settings Catalog `settingDefinitionId`s, OMA-URI paths, legacy `@odata.type#property` —, a
-> relation `same | >= | <= | = | required`, `enforced` per platform for the compliance side, a Microsoft Learn
-> reference, `status: verified | verify`), `topics` (id, label, match patterns over setting keys,
-> `@odata.type`s and type names; a resource may sit in several topics) and `rules` (id, description, left and right
-> selectors, what counts as a violation, resolution semantics — which setting wins —, a Microsoft Learn reference,
-> `status: verified | verify`). Seed rules from the Cowork draft, all to be verified: R1 compliance requires
-> encryption/Defender/firewall but no in-scope configuration enables it; R2 compliance minimum OS above what the
-> update rings / feature-update profiles deliver; R3 a CA policy requires a compliant device but the targeted users
-> have no compliance policy for a covered platform; R4 the same control configured through several surfaces; R5
-> update-ring feature deferral with a feature-update profile on an overlapping scope; R6 a filter property that
-> contradicts the policy's platform or enrollment type; R7 enrollment/ESP/Autopilot targeting inconsistent with its
-> dynamic group rule; R8 a macOS Platform SSO / account setting conflicting with password compliance.
+> **Decision.** Presence only: the setting's value is always unknown and the payload's keys are never read — its
+> strings may carry secrets. Equivalences and rules can show a control set through several surfaces but cannot
+> compare its values.
 >
-> **Equivalences replace the parked mapping idea.** Joining a legacy typed property and a Settings Catalog / CSP
-> setting is the same problem as joining a compliance property and a configuration setting, so the former parked
-> idea *a curated legacy-property → CSP mapping* is part of `equivalences`.
+> **Sequencing.** Builds on *A consistency rule and topic catalog in the configuration* (shipped), whose member
+> validation and seed equivalences this entry extends. *Replace the seed consistency catalog with the reviewed catalog* has shipped, so its
+> payload member lands in the reviewed catalog. Not regeneration-gated.
 >
-> **Microsoft Learn check by Claude Cowork.** The seed catalog's semantics — which compliance settings are enforced
-> on which platform, which setting wins, which keys describe one control — need sourced verification, which a Cowork
-> session with web access does best (as for the metadata and prompt reviews). The entry's last bullet writes its
-> brief; the result enters the backlog later like those reviews did.
+> **Owner.** `go/config-tailored-intune.yaml` (inside `go/`); never `go/.config/`.
+
+**Plan.**
+
+- `internal/consistency/apple.go`: for each `PayloadContent` dict of a `macOSCustomConfiguration` or
+  `iosCustomConfiguration` XML property list, one setting with key
+  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>`, read from the same normalised payload bytes the
+  identifier hash uses; one setting per distinct type, `Unknown: true`.
+- A `Setting` flag, like `ListMember`, that keeps these keys out of same-key pairing: two profiles sharing a
+  `PayloadType` are a finding only through a catalog equivalence or rule, never on their own.
+- The catalog's member validation accepts the new key form (through the shared key builders).
+- The seed catalog: `#microsoft.graph.<macOS|ios>CustomConfiguration#com.apple.mobiledevice.passwordpolicy` joins
+  the macOS and iOS/iPadOS password equivalences, `status: verify`.
+- Tests: a two-payload profile yields two keys; a signed or binary payload yields none; two profiles with the same
+  `PayloadType` yield no finding without a catalog and an unknown-value pair through the seed equivalence; no
+  payload string reaches `consistency/` (a sentinel string grepped in the written tree).
+- Documentation at *done*: `README.md` (the indexed sources of `docs analyze-consistency`); `CHANGELOG.md`
+  `### Added`.
+
+## 2. R6 and R7 as assignment checks in the scope model
+
+*Kind:* feat
+
+**Goal.** The consistency analysis reports assignments that cannot work as intended — a filter that can never
+match the policy it is attached to, an Autopilot profile or Enrollment Status Page aimed at the wrong kind of group,
+include and exclude targets of incompatible kinds — each with the Microsoft Learn statement it rests on.
+
+> **Decision.** R6 and R7 are checks in the mechanical scope model (`internal/consistency/scope.go`), not catalog
+> rules: every condition joins one resource to its own assignment target, the referenced filter or group, and a
+> fixed capability table from Learn — a shape the catalog's two-sided relations cannot express. The scope model
+> already holds every input (filter id and mode, filter `platform` and `rule`, group `membershipRule` and kind,
+> resource platforms). Recommended by the Claude Cowork review of 2026-10-03 (`Claude
+> outputs/consistency-catalog-review.md`, section 2), taken by the user.
+>
+> **Scope: the error-level subset the export supports today.** R6.0 dangling filter reference; R6.1 filter platform
+> family ≠ resource platform family; R6.4 rule property not valid for the filter platform (W only for
+> `enrollmentProfileName` on macOS — Learn contradicts itself); R6.6 an ESP or platform restriction whose filter
+> uses a property outside the enrollment subset; R6.7 a value outside a closed property domain; R7.1 an Autopilot
+> profile included via a user-kind target; R7.3 an Autopilot profile on All devices with an exclusion; R7.6 an
+> Autopilot group rule no Autopilot device can satisfy; R7.15 an Apple user-enrollment profile on a device target;
+> R7.16 user-kind include with device-kind exclude, or the reverse; R7.17 device include with a dynamic device-group
+> exclude, as one summary count (info — 39 hits in one tenant). The other conditions wait for export fields (parked
+> idea *the remaining R6/R7 assignment checks*).
+>
+> **Evidence from the review (counts only).** Tenant A: 3 resources with a macOS filter using `enrollmentProfileName`
+> (6 targets), 1 resource with R7.16; tenant B clean.
+>
+> **Contract.** The findings land in `consistency/mechanical.yaml`; whether the browser shows them is decided with
+> *The consistency analysis job* and the web *consistency view*.
 >
 > **Not regeneration-gated.**
 
 **Plan.**
 
-- The `consistency:` key through `/add-config-option`: a general key in `internal/config` (`keyScopes`), read by
-  `docs analyze-consistency` like `generate-index` reads `taxonomy:`; types, compilation and validation in
-  `internal/consistency` (id pattern, selectors and equivalence members resolve against the index's source types,
-  relations from the closed set, references are `https://learn.microsoft.com/…`), with errors naming the offending
-  entry; the compiled `equivalences` feed the mechanical detector's alias hook.
-- The compiled catalog's hash in `consistency/metadata.yaml`; an absent catalog means mechanical findings only.
-- Both example files stay no-ops (the key illustrated in comments only); the worked example
-  `config-tailored-intune.yaml` carries a seed catalog — equivalences: the macOS and iOS/iPadOS password and
-  passcode family first (compliance ↔ Settings Catalog ↔ legacy device restrictions), then encryption
-  (FileVault/BitLocker), firewall, minimum OS version; topics: encryption, Defender/EDR, firewall, Windows Update,
-  identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
-  semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
-  `status: verify`, never guessed.
-- Index the inner payloads of Apple custom profiles for the catalog: for each `PayloadContent` entry of a
-  `macOSCustomConfiguration` or `iosCustomConfiguration` property list, one setting
-  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>` (several per profile), read from the same
-  normalised payload bytes the top-level identifier key hashes, so `topics` and `rules` can select them and `equivalences` can relate a payload type to
-  Settings Catalog, legacy and compliance keys (e.g. `com.apple.mobiledevice.passwordpolicy` ↔ the password
-  family). The value is unknown — the payload's keys are not read, since its strings may carry secrets — unless
-  this bullet's design reads specific keys from an allow-list with each value treated like a secret by default.
-  Two profiles carrying the same `PayloadType` on overlapping scopes are a finding only through a catalog entry;
-  the top-level `PayloadIdentifier` conflict is already reported by `docs analyze-consistency`. Tests: a two-payload profile yields two keys, a
-  signed/binary payload yields none, no payload string reaches `consistency/`.
-- Tests: validation errors (unknown relation, unresolvable member, non-Learn reference), compilation, the catalog
-  hash, the equivalences reaching the detector (a seed macOS password equivalence turns a fixture pair into a
-  `contradiction`), `cmd/config_test.go` partition coverage.
-- Documentation at *done*: `README.md` (the key, its three sections, the seed catalog); `CHANGELOG.md` `### Added`.
-- Last, after every other bullet: write the Claude Cowork review brief `Claude
-  outputs/consistency-catalog-review-instructions.md` (git-ignored, never committed — input for a Cowork session,
-  not repository documentation). It tells Cowork to read the seed catalog in `go/config-tailored-intune.yaml`
-  (`consistency:` — equivalences, topics, rules), the README's description of the key and its closed vocabularies,
-  and the indexed source types; to check every entry against Microsoft Learn — that the members of each
-  equivalence describe the same control, the relation and operator, which compliance settings are enforced on
-  which platform (macOS, iOS/iPadOS, Windows, Android), each rule's violation and resolution semantics ("which
-  setting wins"), and that every reference URL resolves and supports the claim; to name missing high-value
-  equivalences and rules; and to return a change plan in the shape of the earlier reviews — per entry a verdict
-  (keep / fix / drop / add), ready-to-paste YAML, `status: verified` only with a cited Learn source, open
-  questions where Learn is silent — with no repository edits and nothing read under `output/`.
+- Embedded capability tables next to `scope.go` (Go tables or an embedded YAML), each row with its Learn
+  `reference` and `status`: filter property × platform × operators × value domain; enrollment-workload property
+  subsets; Autopilot attribute patterns; workload × allowed group kind. Rows from the review's section 2.1/2.3
+  facts.
+- A filter-rule tokenizer (atoms `entity.property op value`, `and`/`or`, parentheses, keywords case-insensitive
+  with or without `-`) evaluated three-valued; shared with the dynamic-group classifier where it fits.
+- The checks listed in the Scope note, over every indexed and non-indexed resource with assignments, as a new
+  finding kind in `consistency/mechanical.yaml` (one finding per resource and assignment target: check id, severity
+  `error | warning | info`, the Learn reference), counted in `consistency/metadata.yaml`; R7.17 as a count only.
+  Never a group name, rule string or filter value in either file.
+- Tests from synthetic fixtures: each check positive and negative; the undecidable cases the review lists
+  (static groups, unknown platform, version thresholds alone) never flag; nothing tenant-identifying in the output.
+- Documentation at *done*: `README.md` (*Consistency analysis* — the assignment checks, the finding shape, the
+  capability tables and their sources); `CHANGELOG.md` `### Added`.
 
-## 2. The consistency analysis job
+## 3. The consistency analysis job
 
 *Kind:* feat
 
@@ -109,6 +121,10 @@ operator can act on.
 > Go → web contract list gains `consistency/`.
 >
 > **Not regeneration-gated.** The new prompt template is not hashed.
+>
+> **Decision.** R6 and R7 are not catalog rules: they are checks in the scope model, delivered by *R6 and R7 as
+> assignment checks in the scope model* (Claude Cowork review, 2026-10-03). This job judges only the catalog's
+> rules; their value conditions (e.g. "deferral > 0") are read from the `violation` text.
 
 **Plan.**
 
@@ -134,7 +150,7 @@ operator can act on.
   finding) and accepts a correct one.
 - Documentation at *done*: `README.md` (the job, the `consistency/` files); `CHANGELOG.md` `### Added`.
 
-## 3. Feed the consistency findings into the tenant summary
+## 4. Feed the consistency findings into the tenant summary
 
 *Kind:* feat
 
@@ -187,6 +203,11 @@ branch), L (several branches or a design change).
    presentation values* and *Intune branding images* each need a re-baseline after shipping, so they pair well with
    a planned re-download; *mask dedicated secret properties* only joins a regeneration if it extends the prompt
    redaction rule instead of masking.
+5. **The consistency track** (go-internal, in order; *Fix the Firewall CSP bridge* and *Replace the seed consistency catalog with the
+   reviewed catalog* have shipped): *Index the inner payloads of Apple custom profiles*, *R6 and R7 as assignment
+   checks in the scope model*, then *The consistency analysis job* (with web *The consistency view*) and *Feed the
+   consistency findings into the tenant summary*. *Reject catalog members whose type is never indexed* rides the
+   next catalog round; *export the tenant `deviceManagement.settings`* rides the analysis job.
 
 ## Parked ideas — export & metadata
 
@@ -220,8 +241,8 @@ available.
 
 ### Idea: export the tenant `deviceManagement.settings`
 
-*Area:* export & metadata · *Impact:* medium · *Effort:* S · *Ships with:* standalone; then turn the type's
-metadata back into tenant-wide settings
+*Area:* export & metadata · *Impact:* medium · *Effort:* S · *Ships with:* standalone, or with *The consistency
+analysis job* (it makes rule R3 decidable); then turn the type's metadata back into tenant-wide settings
 
 `GET /deviceManagement` without `$select` returns only `id`, `intuneAccountId` and `maximumDepTokens`, so the
 `deviceManagement` export carries no configurable setting. Pass `$select=id,intuneAccountId,maximumDepTokens,settings`
@@ -233,7 +254,10 @@ the type's metadata becomes "tenant-wide settings" again: Purpose, KeySettings o
 `deviceManagementSettings` page documenting real exported data. Effect: one nested map more per tenant, so drift
 reports one change per tenant once. **Parked** because the metadata review made the type honestly informational and
 nobody has asked for these settings in the export yet. **Revisit** when an operator wants tenant-wide Intune
-settings documented or drift-tracked.
+settings documented or drift-tracked — or with *The consistency analysis job*: rule R3 (Conditional Access requires a
+compliant device, but a platform has no compliance policy) resolves differently for the two values of
+`secureByDefault` (the default **Compliant** lets the device pass), so it cannot be judged without this export
+(Claude Cowork catalog review, 2026-10-03, section 4).
 
 ### Idea: export ADMX presentation values for group policy configurations
 
@@ -334,6 +358,55 @@ golden YAML that the assignment objects are identical. Effect: none expected; on
 because the current call works. **Revisit** if it starts failing, or with other work on these handlers.
 
 ## Parked ideas — drift & compare
+
+### Idea: the remaining R6/R7 assignment checks
+
+*Area:* drift & compare · *Impact:* low · *Effort:* M · *Ships with:* after *R6 and R7 as assignment checks in the scope model*
+
+The Claude Cowork review (2026-10-03, `Claude outputs/consistency-catalog-review.md` section 2) specifies more
+conditions than the first entry ships: R6.2/R6.3 management-type mismatches, R6.5 filters on unsupported workloads,
+R6.8 contradictory atoms, R6.9–R6.13 (ownership vs Autopilot audiences, `enrollmentProfileName` values matching no
+profile, deprecated `osVersion`, app intents), R7.4/R7.5 non-Autopilot or circular group rules, R7.7–R7.14
+(group tags matching no device, one group on several profiles, ESP blocking lists on user-only targets,
+pre-provisioning). **Parked** because they need fields the export may not carry (`assignmentFilterManagementType`,
+the assignment `intent`, `createdDateTime`, `deploymentProfileAssignmentStatus`, group owners) or rule algebra
+beyond simple atoms. **Revisit** once the first checks run on real tenants and the export questions in the review's
+2.6 are answered.
+
+### Idea: keep the macOS preference domain in Settings Catalog keys
+
+*Area:* drift & compare · *Impact:* medium · *Effort:* M · *Ships with:* standalone; changes which catalog members match
+
+Edge, Office, Microsoft AutoUpdate and Defender for Mac settings all index as
+`com.apple.managedclient.preferences_<key>`, so a topic or an equivalence member cannot tell the apps apart (Cowork
+review, open question 6.0.7). Fix: carry the preference domain (e.g. `com.microsoft.edge`) into the key or as a
+fact the topic matcher reads. **Parked** because it changes a key form operators may already use in a catalog and
+needs a look at how the Settings Catalog instance carries the domain. **Revisit** when a macOS browser, Office or
+Defender rule needs to tell the apps apart.
+
+### Idea: canonicalise the PassportForWork `tenantid` id pair
+
+*Area:* drift & compare · *Impact:* low · *Effort:* S · *Ships with:* standalone
+
+One tenant carries `device_vendor_msft_passportforwork_tenantid_policies_usecloudtrustforonpremauth` (bare
+`tenantid`) next to the `{tenantid}` form of the same CSP node — two Settings Catalog definitions for one node, so
+the same-key step misses the pair (Cowork review, open question 6.0.6). **Parked** until Learn or Graph confirms
+both definitions write the same node. **Revisit** then: canonicalise the segment in `catalogKey`, or add a `same`
+equivalence to the catalog.
+
+### Idea: reject catalog members whose type is never indexed
+
+*Area:* drift & compare · *Impact:* low · *Effort:* S · *Ships with:* standalone; with the next catalog round
+
+The `consistency:` validation checks a member's *form* only (`validMemberKey`), so a well-formed typed key of a type
+the setting index never reads passes and can never match — e.g. the seed's
+`#microsoft.graph.windowsFeatureUpdateProfile#featureUpdateVersion` (feature update profiles are not among the six
+indexed types). It is only visible later as an `unmatchedMembers` entry, indistinguishable from a key this export
+merely does not carry. Fix: refuse a typed member or `keys:` selector whose `@odata.type` belongs to no indexed
+source type, naming the type, with a test on that seed key. **Parked** because it needs a map from `@odata.type` to
+source type that the index does not keep today (`deviceConfigurations` alone spans dozens of types), and the Cowork
+review is told to flag unmatchable members itself. **Revisit** when the review's fixes land, or when a second
+unmatchable member is found.
 
 ### Idea: per-document backlinks to consistency findings
 

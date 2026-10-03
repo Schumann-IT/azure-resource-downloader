@@ -70,6 +70,11 @@ func TestNormaliseOMAURI(t *testing.T) {
 		"./User/Vendor/MSFT/Policy/Config/Start/HideRecentlyAddedApps":                 "user_vendor_msft_policy_config_start_hiderecentlyaddedapps",
 		"./Device/Vendor/MSFT/Policy/Config/ADMX_Power/PW_PromptPasswordOnResume_DC_1": "device_vendor_msft_policy_config_admx_power_pw_promptpasswordonresume_dc_1",
 		"  ./device/vendor/msft/Policy/Config/Update/ActiveHoursStart  ":               "device_vendor_msft_policy_config_update_activehoursstart",
+		"./Vendor/MSFT/Firewall/MdmStore/PublicProfile/EnableFirewall":                 "vendor_msft_firewall_mdmstore_publicprofile_enablefirewall",
+		"./Device/Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall":          "vendor_msft_firewall_mdmstore_domainprofile_enablefirewall",
+		"/vendor/MSFT/FIREWALL/MdmStore/PrivateProfile/EnableFirewall":                 "vendor_msft_firewall_mdmstore_privateprofile_enablefirewall",
+		"device_vendor_msft_firewall_mdmstore_publicprofile_enablefirewall":            "vendor_msft_firewall_mdmstore_publicprofile_enablefirewall",
+		"./Vendor/MSFT/FirewallFoo/Setting":                                            "device_vendor_msft_firewallfoo_setting",
 	}
 	for in, want := range tests {
 		equal(t, want, normaliseOMAURI(in), in)

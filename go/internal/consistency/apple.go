@@ -69,7 +69,7 @@ func indexAppleCustomProfile(resource string, doc map[string]interface{}, artifa
 
 	sum := sha256.Sum256([]byte(text))
 	value := "sha256:" + hex.EncodeToString(sum[:])
-	key := odataType + "#" + property + ":" + identity
+	key := typedKey(odataType, property+":"+identity)
 	c.add(key, rawValue{sourceKey: key, value: value, scalar: value})
 }
 

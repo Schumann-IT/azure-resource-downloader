@@ -58,8 +58,13 @@ type Options struct {
 	// ToolVersion is recorded in consistency/metadata.yaml.
 	ToolVersion string
 	// Equivalences join canonical keys across policy types; empty means exact
-	// keys only.
+	// keys only. Ignored when Catalog is set.
 	Equivalences []Equivalence
+	// Catalog is the compiled `consistency:` configuration section; its
+	// equivalences replace Equivalences, and it is described in
+	// consistency/metadata.yaml. Nil means no catalog: mechanical findings
+	// only.
+	Catalog *Compiled
 	// DryRun computes everything and writes nothing.
 	DryRun bool
 }
@@ -114,6 +119,20 @@ type MetadataFile struct {
 	ExportComplete    bool   `yaml:"exportComplete"`
 	ToolVersion       string `yaml:"toolVersion"`
 	Counts            Counts `yaml:"counts"`
+	// Catalog describes the configuration catalog the analysis ran with;
+	// absent without one, which means mechanical findings only.
+	Catalog *CatalogMeta `yaml:"catalog,omitempty"`
+}
+
+// CatalogMeta is the catalog: block of consistency/metadata.yaml.
+type CatalogMeta struct {
+	// SHA256 is the hash of the catalog's canonical JSON (Compiled.SHA256).
+	SHA256 string        `yaml:"sha256"`
+	Counts CatalogCounts `yaml:"counts"`
+	// UnmatchedMembers are the equivalence member keys no indexed setting of
+	// this export carries, sorted. Not an error: the catalog is shared, the
+	// settings are per export.
+	UnmatchedMembers []string `yaml:"unmatchedMembers"`
 }
 
 // Counts summarises one analysis.
@@ -165,7 +184,11 @@ func Analyze(opts Options) (*Result, error) {
 		scopes[key] = buildScope(m.Resources[key], groupKinds, filters)
 	}
 
-	findings, unknowns, ruledOut := detect(settings, scopes, opts.Equivalences)
+	eqs := opts.Equivalences
+	if opts.Catalog != nil {
+		eqs = opts.Catalog.Equivalences()
+	}
+	findings, unknowns, ruledOut := detect(settings, scopes, eqs)
 
 	res := &Result{
 		Dir:        filepath.Join(opts.TenantDir, DirName),
@@ -179,6 +202,7 @@ func Analyze(opts Options) (*Result, error) {
 		ExportComplete:    m.Run.Complete,
 		ToolVersion:       opts.ToolVersion,
 		Counts:            countAll(settings, indexed, unreadable, findings, unknowns, ruledOut),
+		Catalog:           catalogMeta(opts.Catalog, settings),
 	}
 
 	if opts.DryRun {
@@ -340,6 +364,25 @@ func countAll(settings []Setting, indexed map[string]string, unreadable []string
 		c.Findings[f.Kind][f.Overlap]++
 	}
 	return c
+}
+
+// catalogMeta describes the catalog for metadata.yaml: its hash, its counts and
+// the members no indexed setting carries. Nil without a catalog.
+func catalogMeta(c *Compiled, settings []Setting) *CatalogMeta {
+	if c == nil {
+		return nil
+	}
+	carried := make(map[string]bool, len(settings))
+	for i := range settings {
+		carried[settings[i].Key] = true
+	}
+	unmatched := []string{}
+	for _, m := range c.members() {
+		if !carried[m] {
+			unmatched = append(unmatched, m)
+		}
+	}
+	return &CatalogMeta{SHA256: c.SHA256(), Counts: c.Counts(), UnmatchedMembers: unmatched}
 }
 
 // write writes mechanical.yaml first and metadata.yaml last, both atomically,

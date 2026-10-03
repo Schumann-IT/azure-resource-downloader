@@ -43,6 +43,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Documentation generation (`docs/generate.md`)](#documentation-generation-docsgeneratemd)
 - [Navigation index (`docs/index.yaml`)](#navigation-index-docsindexyaml)
 - [Consistency analysis (`consistency/`)](#consistency-analysis-consistency)
+  - [The catalog (`consistency:`)](#the-catalog-consistency)
 - [Supported resource types](#supported-resource-types)
 - [Transformations](#transformations)
 - [Excluding types per tenant](#excluding-types-per-tenant)
@@ -531,9 +532,15 @@ and `--log-level` apply. Without `--domain` it signs in only to resolve the tena
 log closes with a `Consistency summary` line (resources, settings, unreadable files, unknown values, pairs ruled
 out by scope) and one line per finding kind with its `certain` / `possible` counts.
 
+With a `consistency:` section in the base file, the analysis also runs against that **catalog** — its
+equivalences join settings across policy types, so a configuration value that fails a compliance requirement
+becomes a `contradiction` — and logs a `Consistency catalog` line (`equivalences`, `topics`, `rules`,
+`unmatched_members`, `verify`), under `--dry-run` too. See [The catalog](#the-catalog-consistency).
+
 **Exit codes:** `0` on success, whatever was found — findings never change the exit code; `2` when the question
-cannot be answered: no `resources/metadata.yaml`, a tenant mismatch, an unresolvable export directory, or a
-failed write.
+cannot be answered: an invalid `consistency:` section (`invalid 'consistency' config section: …`, raised before
+the export is resolved or anyone signs in), no `resources/metadata.yaml`, a tenant mismatch, an unresolvable
+export directory, or a failed write.
 
 ### `--debug`
 
@@ -791,7 +798,7 @@ Configuration splits in two, and the split is **enforced**: a key on the wrong s
 
 | | Where | Settings |
 |---|---|---|
-| **General** | base file | `output`, `type`, `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`, `transformers`, `taxonomy` |
+| **General** | base file | `output`, `type`, `workers`, `workers-by-api`, `timeout`, `resolve-secrets`, `no-prompt`, `prune`, `transformers`, `taxonomy`, `consistency` |
 | **Tenant-scoped** | `<config-dir>/<domain>.yaml` | `subscription`, `client-id`, `tenant-id`, `filters`, `exclude-type`, `audit-workspace-id` |
 
 The split is not bookkeeping. `transformers` is hashed into `transformConfigSha256`, so a per-tenant override
@@ -814,8 +821,9 @@ no flag and no environment variable.
   Both carry the same guarantee — loading either unmodified behaves byte-for-byte like running without it,
   including every hash in `metadata.yaml` — so copy and change only what you need.
 - [`config-tailored-intune.yaml`](config-tailored-intune.yaml) is a worked, opinionated **base** file for an
-  Intune-centred tenant: secrets resolved, the cleaning and id-resolution transformers dropped, and a full
-  `taxonomy:` for `docs generate-index`. A starting point, not a default — it changes the recorded hashes.
+  Intune-centred tenant: secrets resolved, the cleaning and id-resolution transformers dropped, a full
+  `taxonomy:` for `docs generate-index` and a reviewed `consistency:` catalog for `docs analyze-consistency` (see
+  [The catalog](#the-catalog-consistency)). A starting point, not a default — it changes the recorded hashes.
 
 ### Working with several tenants
 
@@ -837,6 +845,10 @@ on mismatch, so a typo can never write one tenant's data under another tenant's 
 completes from the profiles in `--config-dir` and the exports under `--output`, so `azure-rd resource download
 --config-dir ~/.azure-rd --domain <Tab>` answers *which tenants do I have?* — install completions with
 `azure-rd completion zsh` (or `bash`, `fish`, `powershell`).
+
+Inside a checkout of this repository, `go/.config/` is git-ignored for exactly this: point `--config-dir` at a
+folder under it and the configuration — which may hold client ids, workspace ids and resolved choices — never
+lands in a commit.
 
 ### Where each setting went
 
@@ -1180,7 +1192,7 @@ not indexed yet:
 | Type | Joined on |
 |---|---|
 | `deviceManagementConfigurationPolicies`, `compliancePolicies` (Settings Catalog) | `settingDefinitionId` |
-| `deviceConfigurations`, custom (OMA-URI) | the OMA-URI path, normalised so it meets the Settings Catalog id (`./Device/Vendor/MSFT/A/B` ↔ `device_vendor_msft_a_b`) |
+| `deviceConfigurations`, custom (OMA-URI) | the OMA-URI path, normalised so it meets the Settings Catalog id (`./Device/Vendor/MSFT/A/B` ↔ `device_vendor_msft_a_b`; the Firewall CSP, whose Settings Catalog ids carry no `device_` prefix, as `./Vendor/MSFT/Firewall/A` ↔ `vendor_msft_firewall_a`) |
 | `deviceConfigurations`, typed | `@odata.type#property`, nested objects as dotted paths |
 | `deviceConfigurations`, Apple custom profiles | the profile's top-level `PayloadIdentifier` (`bundleId` for app configurations); valued by the hash of the payload |
 | `deviceCompliancePolicies` | `@odata.type#property` — a *requirement*, not a configuration |
@@ -1206,7 +1218,7 @@ devices its users sign in to. Group membership is not exported, so two different
 
 **Findings.** One per resource pair and key: `conflict` (two configurations, different values), `duplicate`
 (the same value), `contradiction` (a compliance requirement against a configuration it cannot be met with —
-needs an equivalence, which the catalog will supply). Each carries the `overlap` and a `confidence`
+only through an equivalence of [the catalog](#the-catalog-consistency) joining the two keys). Each carries the `overlap` and a `confidence`
 (`firm` | `possible`).
 
 ```yaml
@@ -1233,9 +1245,59 @@ counts:
   findings: { conflict: { certain: 1, possible: 3 }, contradiction: { … }, duplicate: { … } }
   unknownValues: 0
   ruledOutByScope: 17              # pairs sharing a key whose assignments cannot meet
+catalog:                           # only when a consistency: section is configured
+  sha256: 3f1c…                    # the compiled catalog; any entry change moves it, reordering does not
+  counts: { equivalences: 20, topics: 11, rules: 11 }
+  unmatchedMembers:                # member keys no setting of this export carries — not an error
+    - '#microsoft.graph.iosCompliancePolicy#passcodeMinimumLength'
 ```
 
 Values that are secrets never reach either file (see [Security notes](#security-notes)).
+
+### The catalog (`consistency:`)
+
+The mechanical step joins exact keys only. The **catalog** is the operator-maintained knowledge it cannot derive
+from the export: which settings describe the same control across policy types, how resources group into topics,
+and which cross-type relations to check — each with its Microsoft Learn source and a review status. It is a
+general key of the **base file** (in a tenant profile it is a fatal error), read only by `docs analyze-consistency`
+— the download pipeline ignores it, so it never changes a resource's YAML or any hash in `resources/`. There is
+no default: without the key the analysis runs on exact keys alone, as before. The full structure, with a worked
+fragment, is in [`config.example.yaml`](config.example.yaml) (commented out, so the file stays a no-op).
+
+| Section | Entry fields | What it does today |
+|---|---|---|
+| `equivalences` | `id`, `description`, `members` (≥ 2 canonical keys), `relation`, `enforced`, `reference`, `status` | joins its members in the detector: a configuration value that fails the compliance requirement is a `contradiction`, two configurations disagreeing a `conflict` |
+| `topics` | `id`, `label`, `match` rules over `name`, `type`, `odataType`, `platforms`, `key` (regexes, OR across rules, AND within one, as in `taxonomy:`) | validated and resolved per resource; read by the consistency analysis job |
+| `rules` | `id`, `description`, `left` / `right` selectors (`topic:` or `keys:`, optional `class:`, `platforms:`), `violation`, `resolution`, `reference`, `status` | validated; evaluated by the consistency analysis job |
+
+**Closed vocabularies.** `relation`: `same` (both sides enforce the control) or `'>='` / `'<='` / `'='` /
+`required` (the compliance side is the requirement the configuration must satisfy; quote the operators in
+YAML). `enforced`: per platform family `windows | macos | ios | android | linux`, true when the compliance side
+is applied to the device rather than only evaluated. `status`: `verified | verify` — a finding resting on a
+`verify` equivalence is never `firm`. `class`: `requirement | configuration`. `reference` must start with
+`https://learn.microsoft.com/`. Ids follow the taxonomy's id pattern and are unique per section.
+
+**Validation is strict and offline.** Members and selector keys must already be in the canonical form the index
+emits (the *Joined on* column above): a raw OMA-URI or a mixed-case Settings Catalog id is refused with the
+canonical form in the message, ready to paste; an unknown or misspelt field is refused too. Any error exits `2`
+naming the section and entry id, before the export is resolved. A member that no setting of *this* export
+carries is not an error — the catalog is shared, settings are per export — and is listed under
+`unmatchedMembers` in `consistency/metadata.yaml`, whose `catalog:` block also records the catalog's hash.
+
+**The reviewed catalog.** [`config-tailored-intune.yaml`](config-tailored-intune.yaml) ships a catalog reviewed
+against Microsoft Learn and two real tenant exports (2026-10-03): 37 equivalences (the macOS, iOS/iPadOS and
+Windows password and passcode families across compliance, Settings Catalog, legacy restrictions and DeviceLock;
+FileVault, BitLocker and device health; the firewall per profile; Defender; Windows Hello), 13 topics (encryption,
+Defender/EDR, firewall, Windows Update with separate feature- and driver-update-policy topics, identity & sign-in,
+Conditional Access, browsers, Office/OneDrive, enrollment, macOS accounts/SSO, compliance) and 29 rules (among
+them compliance requiring a control no configuration enables, one control through several surfaces, update-ring
+settings that a feature or driver update policy overrides, Windows Hello user settings overriding device ones,
+Windows LAPS against the built-in administrator, macOS Platform SSO against password compliance). **Two
+equivalences and seven rules are `verified`**; the rest stay `verify`, mostly because Learn never names the Apple
+key behind an Intune setting, so those mappings rest on Apple's documentation. `enforced` is set only where Learn
+documents remediation — the password and passcode equivalences. Not in the catalog: assignment-filter and
+enrollment-targeting checks (R6, R7), which belong to the scope model, and the minimum-OS comparison, which needs
+update profiles the index does not read. To use it, copy the `consistency:` section into your own base file.
 
 ## Supported resource types
 

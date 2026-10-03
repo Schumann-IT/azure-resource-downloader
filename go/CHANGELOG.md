@@ -27,6 +27,34 @@ This project is released independently of the documentation browser in `web/`: i
   settings, and secrets are never compared, written or logged — even in an export made with
   `resolve-secrets`. See the README's *Consistency analysis* section. (#56)
 
+- **Teach the consistency analysis which settings mean the same thing.** A new `consistency:` section in the base
+  configuration file is a catalog the operator maintains: *equivalences* (which compliance properties, Settings
+  Catalog ids, OMA-URIs and legacy properties describe one control, and how they must relate), *topics* (how
+  resources group into areas such as encryption or Windows Update) and *rules* (the cross-type relations to
+  check), each with its Microsoft Learn source and a `verified` / `verify` status. With it, `docs
+  analyze-consistency` compares compliance against configuration across policy types and reports a
+  configuration that cannot meet a compliance requirement as a contradiction — only `possible` while its entry is
+  still `verify`. The section is validated strictly and offline: a misspelt field, a key not in the canonical form
+  (the error gives the form to paste) or a non-Learn reference exits `2` before anyone signs in.
+  `consistency/metadata.yaml` records the catalog's hash and the member keys this export does not carry.
+  `config-tailored-intune.yaml` ships a catalog reviewed against Microsoft Learn and two real tenant exports —
+  password and passcode, encryption, firewall, Defender, Windows Hello, LAPS, update-policy and Platform SSO
+  relations; the entries Learn fully supports are `verified`, the Apple mappings stay `verify`. The catalog is
+  opt-in: **copy the `consistency:` section from `config-tailored-intune.yaml` into your base file to use it.** See
+  the README's *The catalog* section. (#58)
+
+### Fixed
+
+#### Documentation and drift analysis
+
+- **Firewall settings from custom profiles are compared with the Settings Catalog.** A Windows Firewall setting
+  configured through a custom OMA-URI profile was indexed under a different key than the same setting in a Settings
+  Catalog policy, so `docs analyze-consistency` never saw the two side by side and missed their conflicts and
+  duplicates. Both now index under the Settings Catalog's `vendor_msft_firewall_…` key. A consistency catalog that
+  names a firewall setting in the old `device_vendor_msft_firewall_…` form is now refused with the form to use —
+  such a member only ever matched custom profiles. **If your base file's `consistency:` section uses that form,
+  replace it as the error message says.** (#58)
+
 ## [0.4.0] - 2026-10-02
 
 ### Added

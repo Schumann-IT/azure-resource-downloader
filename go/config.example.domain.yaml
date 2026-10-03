@@ -12,10 +12,10 @@
 #
 # A profile holds TENANT-SCOPED settings only: things that exist inside one
 # tenant, where a value from another tenant is meaningless or harmful. General
-# settings (output, transformers, workers, timeout, taxonomy, …) belong in the
-# base configuration file — see config.example.yaml. Putting a general setting
-# here is a fatal error naming the key, and vice versa; the partition is
-# enforced, not advisory.
+# settings (output, transformers, workers, timeout, taxonomy, consistency, …)
+# belong in the base configuration file — see config.example.yaml. Putting a
+# general setting here is a fatal error naming the key, and vice versa; the
+# partition is enforced, not advisory.
 #
 # The profile is merged OVER the base file. Every key below is empty, so copying
 # this file unmodified behaves exactly like having no profile at all.

@@ -176,6 +176,11 @@ func TestPartitionIsEnforced(t *testing.T) {
 			wantInErr: "transformers",
 		},
 		{
+			name:      "the consistency catalog in a profile",
+			profile:   "consistency:\n  version: 1\n",
+			wantInErr: "consistency",
+		},
+		{
 			name:      "a setting that is now a flag",
 			base:      "dry-run: true\n",
 			wantInErr: "--dry-run",
@@ -221,6 +226,21 @@ func TestPartitionIsEnforced(t *testing.T) {
 				t.Errorf("error %q should mention %q", err, tt.wantInErr)
 			}
 		})
+	}
+}
+
+// TestConsistencyCatalogBelongsInTheBaseFile: the catalog describes how Intune
+// settings relate, not one tenant, so a base file may carry it.
+func TestConsistencyCatalogBelongsInTheBaseFile(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, config.BaseFileName), "consistency:\n  version: 1\n")
+	write(t, filepath.Join(dir, "contoso.example.com.yaml"), "")
+
+	if err := loadConfig(t, domainCmd(t, "contoso.example.com", true), "", dir); err != nil {
+		t.Fatalf("initConfig() = %v, want nil for 'consistency' in the base file", err)
+	}
+	if !viper.IsSet("consistency") {
+		t.Error("'consistency' from the base file is not set")
 	}
 }
 
@@ -298,6 +318,12 @@ func TestConfigExampleIsNoOp(t *testing.T) {
 	// commented out to preserve the no-op guarantee.
 	if viper.IsSet("taxonomy") {
 		t.Errorf("config.example.yaml sets 'taxonomy' = %v, want unset", viper.Get("taxonomy"))
+	}
+
+	// An active consistency catalog changes consistency/mechanical.yaml and
+	// metadata.yaml, so it must stay commented out as well.
+	if viper.IsSet("consistency") {
+		t.Errorf("config.example.yaml sets 'consistency' = %v, want unset", viper.Get("consistency"))
 	}
 
 	// The transform-config hash written to resources/metadata.yaml must be
