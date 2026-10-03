@@ -275,14 +275,16 @@ compliance against configuration and the LLM step judges against a reviewed cata
   identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
   semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
   `status: verify`, never guessed.
-- Index the inner payloads of macOS custom profiles for the catalog: for each `PayloadContent` entry of a
-  `macOSCustomConfiguration` property list, one setting `#microsoft.graph.macOSCustomConfiguration#<PayloadType>`
-  (several per profile), so `topics` and `rules` can select them and `equivalences` can relate a payload type to
+- Index the inner payloads of Apple custom profiles for the catalog: for each `PayloadContent` entry of a
+  `macOSCustomConfiguration` or `iosCustomConfiguration` property list, one setting
+  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>` (several per profile), read from the same
+  normalised payload bytes the top-level identifier key hashes, so `topics` and `rules` can select them and `equivalences` can relate a payload type to
   Settings Catalog, legacy and compliance keys (e.g. `com.apple.mobiledevice.passwordpolicy` ↔ the password
   family). The value is unknown — the payload's keys are not read, since its strings may carry secrets — unless
   this bullet's design reads specific keys from an allow-list with each value treated like a secret by default.
   Two profiles carrying the same `PayloadType` on overlapping scopes are a finding only through a catalog entry;
-  the top-level identifier conflict stays item 1's. Tests: a two-payload profile yields two keys, a
+  the top-level `PayloadIdentifier` conflict stays with *Index settings and assignment scopes and report
+  same-setting conflicts*. Tests: a two-payload profile yields two keys, a
   signed/binary payload yields none, no payload string reaches `consistency/`.
 - Tests: validation errors (unknown relation, unresolvable member, non-Learn reference), compilation, the catalog
   hash, the equivalences reaching the detector (a seed macOS password equivalence turns a fixture pair into a
