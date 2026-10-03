@@ -33,8 +33,11 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 > **Decision.** Scope v1: mechanical first; the rule catalog, the LLM job, the summary signal and the web view are
 > the following entries.
 >
-> **Decision.** macOS custom profiles: key them by their payload identifier (`PayloadIdentifier`; `bundleId` for
-> app configurations) rather than treating them as non-settings or leaving them to the catalog.
+> **Decision.** macOS custom profiles: their identity and payload properties are non-settings; each profile is
+> keyed by its top-level `PayloadIdentifier` (`bundleId` for app configurations) — the device replaces a profile
+> with the same identifier, a mechanical conflict. The inner payloads (`PayloadContent`, several per profile, each
+> with its own `PayloadType` and identifier) are semantic overlap and go to *A consistency rule and topic catalog
+> in the configuration*.
 >
 > **Decision.** `<tenant>/consistency/` describes one export: a re-baselining `resource download` clears it, like
 > `drift/`. The web browser renders it in v1 (the web entry *The consistency view*).
@@ -178,7 +181,8 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   run over a real export: `payload`, `payloadName`, `payloadFileName`, `bundleId`, `configurationXml` and `fileName`
   were indexed as settings, so any two unrelated custom profiles on overlapping scopes came out as a `conflict` —
   the bulk of the mechanical conflicts in that export):
-  - `macOSCustomConfiguration`: read the top-level `PayloadIdentifier` of the XML property list (inline `payload`,
+  - `macOSCustomConfiguration`: read the profile's top-level `PayloadIdentifier` (not the identifiers of the inner
+    `PayloadContent` payloads, which the catalog entry indexes) of the XML property list (inline `payload`,
     or the sidecar artifact the export moved it to) with `encoding/xml` — no new dependency; index one setting
     `#microsoft.graph.macOSCustomConfiguration#payload:<PayloadIdentifier>` whose value stays the `sha256:<hex>` of
     the payload bytes (inline and sidecar hash alike). Same identifier and different bytes → `conflict` (the device
@@ -246,6 +250,15 @@ compliance against configuration and the LLM step judges against a reviewed cata
   identity & sign-in, browsers, Office/OneDrive, enrollment, macOS accounts/SSO; rules R1–R8 — each entry's
   semantics and reference checked against Microsoft Learn where the implementer can; anything not settled stays
   `status: verify`, never guessed.
+- Index the inner payloads of macOS custom profiles for the catalog: for each `PayloadContent` entry of a
+  `macOSCustomConfiguration` property list, one setting `#microsoft.graph.macOSCustomConfiguration#<PayloadType>`
+  (several per profile), so `topics` and `rules` can select them and `equivalences` can relate a payload type to
+  Settings Catalog, legacy and compliance keys (e.g. `com.apple.mobiledevice.passwordpolicy` ↔ the password
+  family). The value is unknown — the payload's keys are not read, since its strings may carry secrets — unless
+  this bullet's design reads specific keys from an allow-list with each value treated like a secret by default.
+  Two profiles carrying the same `PayloadType` on overlapping scopes are a finding only through a catalog entry;
+  the top-level identifier conflict stays item 1's. Tests: a two-payload profile yields two keys, a
+  signed/binary payload yields none, no payload string reaches `consistency/`.
 - Tests: validation errors (unknown relation, unresolvable member, non-Learn reference), compilation, the catalog
   hash, the equivalences reaching the detector (a seed macOS password equivalence turns a fixture pair into a
   `contradiction`), `cmd/config_test.go` partition coverage.
