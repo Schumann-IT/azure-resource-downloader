@@ -5,6 +5,7 @@ status: done
 started: 2026-10-02
 finished: 2026-10-03
 branch: feat/consistency-analysis
+pr: 56
 changelog: Unreleased
 ---
 ## Index settings and assignment scopes and report same-setting conflicts

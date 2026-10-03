@@ -25,7 +25,7 @@ This project is released independently of the documentation browser in `web/`: i
   `resource download`. Assignments that cannot meet rule a pair out, Apple collection entries that macOS
   installs side by side are compared as lists, Graph defaults and identity properties are not treated as
   settings, and secrets are never compared, written or logged — even in an export made with
-  `resolve-secrets`. See the README's *Consistency analysis* section.
+  `resolve-secrets`. See the README's *Consistency analysis* section. (#56)
 
 ## [0.4.0] - 2026-10-02
 
