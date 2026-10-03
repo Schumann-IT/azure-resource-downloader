@@ -83,11 +83,13 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 > normalised payload text (inline or sidecar alike); no payload content ever reaches `consistency/`. A nested Apple
 > Settings Catalog collection key only yields a `duplicate` valued by the JSON list of the shared members; the
 > counts carry `ruledOutByScope` (distinct same-key resource pairs whose overlap is `none`).
+> Typed Graph defaults listed per property (`unavailable` threat levels, `deviceDefault` password and passcode
+> types) are not configured and never indexed: fewer findings, the same shape, both `version`s stay 1.
 >
 > **Owner.** `.claude/rules/go-export-safety.md` (go). Root `CLAUDE.md` is not touched here. No sequencing: no web
 > side.
 >
-> **Implementer.** opus
+> **Implementer.** sonnet
 
 **Plan.**
 
@@ -235,16 +237,25 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   split compliance policies were Graph defaults that every legacy compliance policy returns whether or not the
   operator set them — `deviceThreatProtectionRequiredSecurityLevel: unavailable`,
   `advancedThreatProtectionRequiredSecurityLevel: unavailable`, `passwordRequiredType: deviceDefault`):
-  - A `typedEnumDefaults` table in `internal/consistency/index.go`, keyed by the bare property name (any
-    `@odata.type`), listing the value(s) that mean "not configured": the three above. An explicit per-property list,
-    never a blanket rule on the strings (`unavailable` or `deviceDefault` may be a real choice on another property).
-  - `walkTyped` / `typedLeaf` (typed `deviceConfigurations` and `deviceCompliancePolicies` only) skip a top-level
-    property whose value matches its table entry, compared case-insensitively, like the other not-configured
-    values — it is not indexed, so it yields no finding, no `unknownValues` pair and no equivalence member. Settings
-    Catalog, OMA-URI, ADMX and intents are unchanged.
-  - Tests: two compliance policies on one scope that both carry the three defaults → no finding; one setting
-    `passwordRequiredType: alphanumeric` and the other `deviceDefault` → no finding (the default side is not
-    configured); both `alphanumeric` → `duplicate`; `unavailable` on a property not in the table is still indexed.
+  - A `typedEnumDefaults map[string][]string` in `internal/consistency/index.go`, next to `typedNonSettings`,
+    keyed by the bare top-level property name (any `@odata.type`), listing the value(s) that mean "not
+    configured": `deviceThreatProtectionRequiredSecurityLevel` and `advancedThreatProtectionRequiredSecurityLevel`
+    → `unavailable`; `passwordRequiredType` → `deviceDefault`; plus `passcodeRequiredType` → `deviceDefault`, the
+    iOS/iPadOS compliance spelling of the same Graph default. An explicit per-property list, never a blanket rule on
+    the strings (`unavailable` or `deviceDefault` may be a real choice on another property).
+  - In `walkTyped`, next to the existing `notConfigured(v, true)` return: a leaf whose `path` has no `.` (a
+    top-level property; a nested path such as `x.passwordRequiredType` is never matched) and whose value is a string
+    equal under `strings.EqualFold` to one of its table entries is skipped — not indexed, so it yields no finding,
+    no `unknownValues` pair and no equivalence member. `notConfigured` itself and its exact `notConfigured`
+    comparison stay as they are; `typedLeaf` and `typedNonSettings` are unchanged. Settings Catalog, OMA-URI, ADMX
+    and intents are unchanged.
+  - Tests, `internal/consistency/index_test.go` (index level, beside `TestIndexTypedProperties`): the four defaults
+    are not indexed, also as `Unavailable` / `DeviceDefault`; `unavailable` on a property not in the table and
+    `passwordRequiredType: alphanumeric` are still indexed; a nested `deviceDefault` under a table name is still
+    indexed. `internal/consistency/consistency_test.go` (run level, synthetic fixtures in a temp directory): two
+    compliance policies of one `@odata.type` on one scope that both carry the defaults → no finding; one
+    `passwordRequiredType: alphanumeric`, the other `deviceDefault` → no finding (the default side is not
+    configured); both `alphanumeric` → `duplicate`.
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
 - ~~Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
