@@ -259,17 +259,25 @@ func seekDictKey(dec *xml.Decoder, name string) bool {
 		case xml.EndElement:
 			return false
 		case xml.StartElement:
-			if t.Name.Local != "key" {
-				if dec.Skip() != nil {
-					return false
-				}
-				continue
-			}
-			if k, ok := keyName(dec, t); !ok || k == name {
-				return ok
+			if found, stop := dictChild(dec, t, name); stop {
+				return found
 			}
 		}
 	}
+}
+
+// dictChild handles one direct child of a dict: a value element is skipped
+// unread, a <key> is compared with name. stop is true once the scan is decided,
+// found then telling whether the key was reached (false on a decoding failure).
+func dictChild(dec *xml.Decoder, t xml.StartElement, name string) (found, stop bool) {
+	if t.Name.Local != "key" {
+		return false, dec.Skip() != nil
+	}
+	k, ok := keyName(dec, t)
+	if !ok {
+		return false, true
+	}
+	return true, k == name
 }
 
 // nextStart returns the next start element at the current level. ok is false
