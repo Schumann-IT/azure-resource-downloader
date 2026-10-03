@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,9 @@ const (
 	odataMacOSCustomApp = "#microsoft.graph.macOSCustomAppConfiguration"
 )
 
+// errPlistKey reports a <key> element that could not be decoded.
+var errPlistKey = errors.New("undecodable plist key")
+
 // appleCustomPayloadProperty names, per Apple custom profile type, the
 // property that carries its payload. These types are keyed by their payload
 // identifier, never by their typed properties.
@@ -35,8 +39,10 @@ var appleCustomPayloadProperty = map[string]string{
 // configuration by its bundleId (the app's preference domain). The device keeps
 // one profile per identifier, so the same identifier with different payloads
 // is a conflict. The value is the SHA-256 of the normalised payload text; the
-// payload itself never leaves the export. Whatever indexes nothing logs at
-// DEBUG with the resource key and a fixed reason only.
+// payload itself never leaves the export. A macOS/iOS profile also gets one
+// key per inner payload type (indexApplePayloadTypes), independently of its
+// identifier. Whatever indexes nothing logs at DEBUG with the resource key and
+// a fixed reason only.
 func indexAppleCustomProfile(resource string, doc map[string]interface{}, artifacts []string, typeDir string, c *collector) {
 	odataType, _ := doc["@odata.type"].(string)
 	property := appleCustomPayloadProperty[odataType]
@@ -61,6 +67,7 @@ func indexAppleCustomProfile(resource string, doc map[string]interface{}, artifa
 	text := strings.TrimRight(transform.NormalizeInlineText(data), "\n")
 
 	if odataType != odataMacOSCustomApp {
+		indexApplePayloadTypes(resource, odataType, text, c)
 		if identity = plistRootIdentifier(text); identity == "" {
 			skip("payload is not an XML property list with a root PayloadIdentifier")
 			return
@@ -106,15 +113,26 @@ func applePayloadBytes(doc map[string]interface{}, property string, artifacts []
 // for anything that is not an XML plist (a signed CMS profile, a binary
 // bplist) or carries no root PayloadIdentifier.
 func plistRootIdentifier(text string) string {
-	if !strings.HasPrefix(strings.TrimSpace(text), "<") {
+	dec := openRootDict(text)
+	if dec == nil {
 		return ""
+	}
+	return rootDictIdentifier(dec)
+}
+
+// openRootDict returns a decoder positioned just inside the root <dict> of an
+// XML property list, or nil for anything that is not one (a signed CMS
+// profile, a binary bplist, markup with another root).
+func openRootDict(text string) *xml.Decoder {
+	if !strings.HasPrefix(strings.TrimSpace(text), "<") {
+		return nil
 	}
 	dec := xml.NewDecoder(bytes.NewReader([]byte(text)))
 	seenPlist := false
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			return ""
+			return nil
 		}
 		start, ok := tok.(xml.StartElement)
 		if !ok {
@@ -124,9 +142,9 @@ func plistRootIdentifier(text string) string {
 		case !seenPlist && start.Name.Local == "plist":
 			seenPlist = true
 		case seenPlist && start.Name.Local == "dict":
-			return rootDictIdentifier(dec)
+			return dec
 		default:
-			return ""
+			return nil
 		}
 	}
 }
@@ -188,4 +206,167 @@ func keyName(dec *xml.Decoder, start xml.StartElement) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(name), true
+}
+
+// indexApplePayloadTypes adds one setting per distinct, non-empty PayloadType
+// among the dicts of the root PayloadContent array of a macOS/iOS custom
+// profile, keyed typedKey(odataType, <PayloadType>). It records presence only:
+// the value is always unknown, because a payload's strings may carry secrets,
+// and no key of a payload dict other than PayloadType is ever read. The root's
+// own PayloadType (Configuration) is not indexed. A payload that is not an XML
+// property list with such an array logs at DEBUG with the resource key and a
+// fixed reason only.
+func indexApplePayloadTypes(resource, odataType, text string, c *collector) {
+	types, ok := plistPayloadTypes(text)
+	if !ok {
+		logger.Default.Debug("Custom profile payload types not indexed by the consistency analysis",
+			"resource", resource, "reason", "payload is not an XML property list with a PayloadContent array")
+		return
+	}
+	for _, payloadType := range types {
+		key := typedKey(odataType, payloadType)
+		c.add(key, rawValue{sourceKey: key, unknown: true, payloadType: true})
+	}
+}
+
+// plistPayloadTypes returns the distinct, non-empty PayloadType strings of the
+// dicts in the root dict's PayloadContent array, sorted. ok is false for
+// anything that is not an XML property list whose root dict holds a
+// PayloadContent array, or that fails to decode.
+func plistPayloadTypes(text string) ([]string, bool) {
+	dec := openRootDict(text)
+	if dec == nil || !seekDictKey(dec, "PayloadContent") {
+		return nil, false
+	}
+	start, ok, err := nextStart(dec)
+	if err != nil || !ok || start.Name.Local != "array" {
+		return nil, false
+	}
+	return arrayPayloadTypes(dec)
+}
+
+// seekDictKey scans the direct children of the dict the decoder is in,
+// skipping every value unread, until a <key> naming name; the decoder is then
+// positioned before that key's value. It reports false when the dict ends
+// first or the decoding fails.
+func seekDictKey(dec *xml.Decoder, name string) bool {
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		switch t := tok.(type) {
+		case xml.EndElement:
+			return false
+		case xml.StartElement:
+			if t.Name.Local != "key" {
+				if dec.Skip() != nil {
+					return false
+				}
+				continue
+			}
+			if k, ok := keyName(dec, t); !ok || k == name {
+				return ok
+			}
+		}
+	}
+}
+
+// nextStart returns the next start element at the current level. ok is false
+// when the enclosing element ends first; err reports a decoding failure.
+func nextStart(dec *xml.Decoder) (start xml.StartElement, ok bool, err error) {
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return xml.StartElement{}, false, err
+		}
+		switch t := tok.(type) {
+		case xml.EndElement:
+			return xml.StartElement{}, false, nil
+		case xml.StartElement:
+			return t, true, nil
+		}
+	}
+}
+
+// arrayPayloadTypes reads the PayloadContent array the decoder has just
+// entered to its end and returns the distinct, non-empty PayloadType of each
+// dict in it, sorted; any other element is skipped unread. ok is false when
+// the decoding fails.
+func arrayPayloadTypes(dec *xml.Decoder) ([]string, bool) {
+	seen := map[string]bool{}
+	for {
+		start, ok, err := nextStart(dec)
+		if err != nil {
+			return nil, false
+		}
+		if !ok {
+			return sortedSet(seen), true
+		}
+		payloadType, err := payloadElementType(dec, start)
+		if err != nil {
+			return nil, false
+		}
+		if payloadType != "" {
+			seen[payloadType] = true
+		}
+	}
+}
+
+// payloadElementType consumes one element of the PayloadContent array and
+// returns the PayloadType of a dict; any other element yields "".
+func payloadElementType(dec *xml.Decoder, start xml.StartElement) (string, error) {
+	if start.Name.Local != "dict" {
+		return "", dec.Skip()
+	}
+	return dictPayloadType(dec)
+}
+
+// dictPayloadType reads the payload dict the decoder has just entered to its
+// end and returns the trimmed string value of its direct-child PayloadType
+// key, or "" when it has none. Every other value is skipped unread: a payload's
+// keys may carry secrets.
+func dictPayloadType(dec *xml.Decoder) (string, error) {
+	var payloadType string
+	wantValue := false
+	for {
+		start, ok, err := nextStart(dec)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return payloadType, nil
+		}
+		value, err := payloadDictChild(dec, start, &wantValue)
+		if err != nil {
+			return "", err
+		}
+		if value != "" {
+			payloadType = value
+		}
+	}
+}
+
+// payloadDictChild consumes one child element of a payload dict. A <key> arms
+// wantValue when it names PayloadType; the <string> that follows is returned.
+// Any other element is skipped unread.
+func payloadDictChild(dec *xml.Decoder, start xml.StartElement, wantValue *bool) (string, error) {
+	if start.Name.Local == "key" {
+		name, ok := keyName(dec, start)
+		if !ok {
+			return "", errPlistKey
+		}
+		*wantValue = name == "PayloadType"
+		return "", nil
+	}
+	want := *wantValue
+	*wantValue = false
+	if want && start.Name.Local == "string" {
+		var value string
+		if err := dec.DecodeElement(&value, &start); err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(value), nil
+	}
+	return "", dec.Skip()
 }

@@ -63,7 +63,7 @@ a payload string ever leaving the export.
 
 **Plan.**
 
-- `internal/consistency/apple.go`: for a `macOSCustomConfiguration` or `iosCustomConfiguration` whose
+- ~~`internal/consistency/apple.go`: for a `macOSCustomConfiguration` or `iosCustomConfiguration` whose
   normalised payload text (the same bytes the identifier hash uses) is an XML property list, read the root
   dict's `PayloadContent` array and, from each dict in it, the direct-child `PayloadType` string (the root's own
   `PayloadType`, `Configuration`, is not indexed); add one setting per distinct, non-empty type with key
@@ -72,33 +72,33 @@ a payload string ever leaving the export.
   binary or unparseable payload yields no payload-type key; log the skip at DEBUG with the resource key and a
   fixed reason only. Put the walk in its own small functions beside `plistRootIdentifier` (it skips nested
   values with `dec.Skip()` the same way) rather than growing the existing ones, and never read any key other
-  than `PayloadType` from a payload dict.
-- `internal/consistency/index.go`: a `Setting` flag (e.g. `PayloadType bool`, documented like `ListMember`)
+  than `PayloadType` from a payload dict.~~
+- ~~`internal/consistency/index.go`: a `Setting` flag (e.g. `PayloadType bool`, documented like `ListMember`)
   set on these keys; `internal/consistency/detect.go`: `inContext` rejects any pair of two settings on the same
   key when either carries the flag, in both the same-key pass and every equivalence pass, while cross-key
   pairs under an equivalence still evaluate (and land as unknown-value pairs because the value is unknown).
-  Rules and topics need no change beyond seeing the new keys.
-- `go/config-tailored-intune.yaml`: add `#microsoft.graph.macOSCustomConfiguration#com.apple.mobiledevice.passwordpolicy`
+  Rules and topics need no change beyond seeing the new keys.~~
+- ~~`go/config-tailored-intune.yaml`: add `#microsoft.graph.macOSCustomConfiguration#com.apple.mobiledevice.passwordpolicy`
   to the members of `macos-password-required` and
   `#microsoft.graph.iosCustomConfiguration#com.apple.mobiledevice.passwordpolicy` to `ios-passcode-required`
   (both stay `status: verify`; extend their comment line to name the custom-profile surface). No other entry
-  changes.
-- Tests in `internal/consistency/apple_test.go`: a two-payload profile (two distinct types, plus a duplicated
+  changes.~~
+- ~~Tests in `internal/consistency/apple_test.go`: a two-payload profile (two distinct types, plus a duplicated
   type) yields exactly the identifier key and two payload-type keys, both unknown; an iOS profile yields the
   `iosCustomConfiguration` form; base64-inline, sidecar-artifact and inline-markup payloads all index; a signed
   (non-`<`) payload, a binary plist and a plist without `PayloadContent` yield no payload-type key; a profile
   without a root `PayloadIdentifier` still yields its payload-type keys; `macOSCustomAppConfiguration` yields
-  none.
-- Tests in `internal/consistency/consistency_test.go` (or `detect` tests): two overlapping-scope profiles with
+  none.~~
+- ~~Tests in `internal/consistency/consistency_test.go` (or `detect` tests): two overlapping-scope profiles with
   the same `PayloadType` yield neither a finding nor an unknown-value pair, without a catalog and with an
   equivalence listing that key; a profile and a `macOSCompliancePolicy` with `passwordRequired: true` joined by
   an equivalence yield one unknown-value pair keyed `equivalence:<id>`; a rule whose right side names the
   payload-type key matches the profile. A sentinel string placed in a payload value (e.g. a `Password` key
-  inside a payload dict) never appears in any file written under `consistency/` (grep the written tree).
-- `cmd/docs/analyze_consistency_test.go`: a shape test beside `TestTailoredConfigSeedsThePasswordLengthEquivalence`
+  inside a payload dict) never appears in any file written under `consistency/` (grep the written tree).~~
+- ~~`cmd/docs/analyze_consistency_test.go`: a shape test beside `TestTailoredConfigSeedsThePasswordLengthEquivalence`
   pins the exact members of `macos-password-required` and `ios-passcode-required` including the new keys;
   `TestTailoredConfigCatalogCompiles` keeps its counts (37 / 13 / 29) and verified lists unchanged — run it to
-  confirm, do not edit its expectations.
+  confirm, do not edit its expectations.~~
 - Documentation at *done*: `README.md` (the indexed sources of `docs analyze-consistency`: the Apple custom
   profiles row gains the `#…CustomConfiguration#<PayloadType>` key, set with an unknown value, never paired on
   its own; the consistency-analysis secrets bullet says payload contents are never read beyond `PayloadType`);

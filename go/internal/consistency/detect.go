@@ -136,9 +136,13 @@ func (d *detector) pairs(idx []int, e *Equivalence) {
 }
 
 // inContext reports whether the pair, from different resources, belongs to
-// context e.
+// context e. Two settings on one key never pair when either is an Apple
+// payload type: its presence alone says nothing about a conflict.
 func (d *detector) inContext(a, b *Setting, e *Equivalence) bool {
 	if a.Resource == b.Resource || d.contextOf(a, b) != e {
+		return false
+	}
+	if a.Key == b.Key && (a.PayloadType || b.PayloadType) {
 		return false
 	}
 	return e != nil || a.Key == b.Key

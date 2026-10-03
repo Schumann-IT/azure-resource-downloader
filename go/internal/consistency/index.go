@@ -103,6 +103,13 @@ type Setting struct {
 	// cannot or must not be read (a secret); such a member is never compared
 	// and never written.
 	UnknownMembers bool
+	// PayloadType marks the presence of one payload type inside an Apple
+	// custom profile (#…CustomConfiguration#<PayloadType>). Its value is
+	// always unknown, and two such settings never pair on their shared key:
+	// one payload type in two profiles is neither a finding nor an
+	// unknown-value pair. It pairs only with a different member key of an
+	// equivalence, and only ever as an unknown-value pair.
+	PayloadType bool
 
 	family string
 }
@@ -116,6 +123,9 @@ type rawValue struct {
 	// member marks one entry of an additive collection; value is then the
 	// member's canonical JSON.
 	member bool
+	// payloadType marks the presence of an Apple custom profile payload type
+	// (Setting.PayloadType).
+	payloadType bool
 }
 
 // collector folds raw occurrences into Settings per key for one resource.
@@ -204,6 +214,9 @@ func foldValues(s *Setting, raws []rawValue) {
 		values = append(values, r.value)
 		if r.unknown {
 			s.Unknown = true
+		}
+		if r.payloadType {
+			s.PayloadType = true
 		}
 	}
 	switch {

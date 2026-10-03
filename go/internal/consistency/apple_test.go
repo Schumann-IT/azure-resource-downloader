@@ -246,3 +246,162 @@ func TestAnalyzeAppleCustomProfiles(t *testing.T) {
 		}
 	}
 }
+
+// Synthetic payload types; the first is a real Apple type so the tailored
+// catalog's member form is exercised, the others are fixtures.
+const (
+	payloadPassword = "com.apple.mobiledevice.passwordpolicy"
+	payloadFirewall = "com.apple.security.firewall"
+	payloadNested   = "com.example.nested.payload"
+	payloadSecret   = "synthetic-payload-secret-4b2a"
+)
+
+// payloadDict builds one PayloadContent dict of the given PayloadType (empty:
+// none) followed by extra raw plist children.
+func payloadDict(payloadType, extra string) string {
+	var b strings.Builder
+	b.WriteString("    <dict>\n")
+	b.WriteString("      <key>PayloadIdentifier</key>\n      <string>" + innerID + "</string>\n")
+	b.WriteString(extra)
+	if payloadType != "" {
+		b.WriteString("      <key>PayloadType</key>\n      <string> " + payloadType + " </string>\n")
+	}
+	b.WriteString("    </dict>\n")
+	return b.String()
+}
+
+// payloadPlist builds a synthetic configuration profile whose root dict holds
+// the root PayloadType Configuration, a PayloadContent array of the given
+// elements, and rootID (empty: no root PayloadIdentifier).
+func payloadPlist(rootID string, elements ...string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">` + "\n")
+	b.WriteString("<plist version=\"1.0\">\n<dict>\n")
+	b.WriteString("  <key>PayloadType</key>\n  <string>Configuration</string>\n")
+	b.WriteString("  <key>PayloadContent</key>\n  <array>\n")
+	for _, e := range elements {
+		b.WriteString(e)
+	}
+	b.WriteString("  </array>\n")
+	if rootID != "" {
+		b.WriteString("  <key>PayloadIdentifier</key>\n  <string>" + rootID + "</string>\n")
+	}
+	b.WriteString("</dict>\n</plist>\n")
+	return b.String()
+}
+
+// twoPayloadPlist holds two distinct payload types, one of them twice, a
+// payload dict without a type, a non-dict element, a nested PayloadContent
+// whose inner type must not be indexed, and a secret-bearing value.
+func twoPayloadPlist(rootID string) string {
+	nested := "      <key>PayloadContent</key>\n      <array>\n" + payloadDict(payloadNested, "") + "      </array>\n"
+	secret := "      <key>Password</key>\n      <string>" + payloadSecret + "</string>\n" +
+		"      <key>Settings</key>\n      <dict><key>PayloadType</key><string>" + payloadNested + "</string></dict>\n"
+	return payloadPlist(rootID,
+		payloadDict(payloadPassword, secret),
+		payloadDict(payloadFirewall, nested),
+		payloadDict(payloadPassword, "      <key>minLength</key>\n      <integer>12</integer>\n"),
+		payloadDict("", ""),
+		"    <string>not a payload</string>\n",
+	)
+}
+
+func TestIndexApplePayloadTypes(t *testing.T) {
+	text := twoPayloadPlist(rootIDA)
+	for _, odataType := range []string{odataMacOSCustom, odataIOSCustom} {
+		got := indexOf(t, dcType+"m.yaml", typeDeviceConfigurations, customProfile(odataType, text))
+		hasLen(t, got, 3, "the identifier key and two payload-type keys", odataType, got)
+		idKey := odataType + "#payload:" + rootIDA
+		equal(t, false, got[idKey].PayloadType, "the identifier key is not a payload type")
+		equal(t, hashOf(strings.TrimRight(text, "\n")), got[idKey].Value)
+		for _, payloadType := range []string{payloadPassword, payloadFirewall} {
+			s, ok := got[odataType+"#"+payloadType]
+			isTrue(t, ok, "payload type indexed", odataType, payloadType)
+			isTrue(t, s.Unknown && s.PayloadType, "set, value unknown", odataType, payloadType)
+			empty(t, s.Value, odataType, payloadType)
+			empty(t, s.Scalar, odataType, payloadType)
+			equal(t, odataType+"#"+payloadType, s.SourceKey)
+			equal(t, ClassConfiguration, s.Class)
+		}
+		absent(t, got, odataType+"#Configuration", "the root PayloadType is not indexed")
+		absent(t, got, odataType+"#"+payloadNested, "a nested PayloadType is not indexed")
+	}
+}
+
+func TestIndexApplePayloadTypesPayloadForms(t *testing.T) {
+	text := twoPayloadPlist(rootIDA)
+	// Settings come sorted by key.
+	want := []string{odataMacOSCustom + "#" + payloadPassword, odataMacOSCustom + "#" + payloadFirewall}
+	check := func(t *testing.T, settings []Setting) {
+		t.Helper()
+		var got []string
+		for _, s := range settings {
+			if s.PayloadType {
+				got = append(got, s.Key)
+			}
+		}
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("payload-type keys = %v, want %v", got, want)
+		}
+	}
+	t.Run("inline markup", func(t *testing.T) {
+		check(t, indexResource(dcType+"m.yaml", typeDeviceConfigurations, customProfile(odataMacOSCustom, text), nil, t.TempDir(), nil))
+	})
+	t.Run("base64 inline", func(t *testing.T) {
+		doc := customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString([]byte(text)))
+		check(t, indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, nil, t.TempDir(), nil))
+	})
+	t.Run("sidecar artifact", func(t *testing.T) {
+		typeDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(typeDir, "synthetic.mobileconfig"), []byte(strings.ReplaceAll(text, "\n", "\r\n")), 0644); err != nil {
+			t.Fatal(err)
+		}
+		doc := customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString([]byte("not used")))
+		check(t, indexResource(dcType+"m.yaml", typeDeviceConfigurations, doc, []string{"synthetic.mobileconfig"}, typeDir, nil))
+	})
+}
+
+func TestIndexApplePayloadTypesWithoutRootIdentifier(t *testing.T) {
+	got := indexOf(t, dcType+"m.yaml", typeDeviceConfigurations, customProfile(odataMacOSCustom, twoPayloadPlist("")))
+	hasLen(t, got, 2, "only the payload-type keys", got)
+	isTrue(t, got[odataMacOSCustom+"#"+payloadPassword].PayloadType)
+	isTrue(t, got[odataMacOSCustom+"#"+payloadFirewall].PayloadType)
+}
+
+func TestIndexApplePayloadTypesIndexNothing(t *testing.T) {
+	signed := append([]byte{0x30, 0x82, 0x1f, 0x00, 0x06, 0x09}, []byte(twoPayloadPlist(rootIDA))...)
+	binary := append([]byte("bplist00"), 0xd1, 0x01, 0x02)
+	noContent := strings.Replace(plist(rootIDA, payloadMark), "PayloadContent", "OtherContent", 1)
+	truncated := strings.SplitAfter(twoPayloadPlist(rootIDA), payloadFirewall)[0]
+	notArray := payloadPlist(rootIDA)
+	notArray = strings.Replace(notArray, "<array>\n  </array>", "<dict><key>PayloadType</key><string>"+payloadPassword+"</string></dict>", 1)
+	tests := map[string]map[string]interface{}{
+		"signed CMS profile":            customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString(signed)),
+		"binary plist":                  customProfile(odataMacOSCustom, base64.StdEncoding.EncodeToString(binary)),
+		"no PayloadContent":             customProfile(odataMacOSCustom, noContent),
+		"PayloadContent is not array":   customProfile(odataMacOSCustom, notArray),
+		"unparseable plist":             customProfile(odataIOSCustom, truncated),
+		"custom app configuration":      appConfig(bundleIDTest, twoPayloadPlist(rootIDA)),
+		"not a plist root":              customProfile(odataMacOSCustom, "<dict><key>PayloadContent</key><array/></dict>"),
+		"empty PayloadContent of types": customProfile(odataMacOSCustom, payloadPlist(rootIDA, payloadDict("", ""))),
+	}
+	previous := logger.Default
+	t.Cleanup(func() { logger.Default = previous })
+	for name, doc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger.Default = log.NewWithOptions(&buf, log.Options{Level: log.DebugLevel})
+			for key, s := range indexOf(t, dcType+"x.yaml", typeDeviceConfigurations, doc) {
+				if s.PayloadType {
+					t.Errorf("unexpected payload-type key %q", key)
+				}
+			}
+			for _, leak := range []string{payloadSecret, payloadPassword, payloadFirewall, payloadNested, rootIDA, innerID} {
+				if strings.Contains(buf.String(), leak) {
+					t.Errorf("log line leaks %q: %q", leak, buf.String())
+				}
+			}
+		})
+	}
+}

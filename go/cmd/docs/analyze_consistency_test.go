@@ -292,3 +292,47 @@ func TestTailoredConfigSeedsThePasswordLengthEquivalence(t *testing.T) {
 	}
 	t.Fatal("equivalence macos-password-minimum-length not found in the tracked catalog")
 }
+
+// TestTailoredConfigSeedsTheCustomProfilePasswordMembers pins that each
+// platform's required-password equivalence names its own platform's custom
+// profile payload type, beside the compliance, legacy and Settings Catalog
+// members.
+func TestTailoredConfigSeedsTheCustomProfilePasswordMembers(t *testing.T) {
+	_, c := loadTailoredCatalog(t)
+	want := map[string][]string{
+		"macos-password-required": {
+			"#microsoft.graph.macOSCompliancePolicy#passwordRequired",
+			"#microsoft.graph.macOSCustomConfiguration#com.apple.mobiledevice.passwordpolicy",
+			"#microsoft.graph.macOSGeneralDeviceConfiguration#passwordRequired",
+			"com.apple.mobiledevice.passwordpolicy_forcepin",
+		},
+		"ios-passcode-required": {
+			"#microsoft.graph.iosCompliancePolicy#passcodeRequired",
+			"#microsoft.graph.iosCustomConfiguration#com.apple.mobiledevice.passwordpolicy",
+			"#microsoft.graph.iosGeneralDeviceConfiguration#passcodeRequired",
+			"com.apple.mobiledevice.passwordpolicy_forcepin",
+		},
+	}
+	found := map[string]bool{}
+	for _, e := range c.Equivalences() {
+		members, ok := want[e.ID]
+		if !ok {
+			continue
+		}
+		found[e.ID] = true
+		got := append([]string(nil), e.Members...)
+		sort.Strings(got)
+		sort.Strings(members)
+		if strings.Join(got, "|") != strings.Join(members, "|") {
+			t.Errorf("%s members = %v, want %v", e.ID, got, members)
+		}
+		if e.Relation != consistency.RelationRequired {
+			t.Errorf("%s relation = %q, want required", e.ID, e.Relation)
+		}
+	}
+	for id := range want {
+		if !found[id] {
+			t.Errorf("equivalence %s not found in the tracked catalog", id)
+		}
+	}
+}

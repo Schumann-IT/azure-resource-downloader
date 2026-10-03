@@ -673,3 +673,145 @@ func TestFirewallCustomProfileMeetsSettingsCatalog(t *testing.T) {
 		})
 	}
 }
+
+// TestAnalyzeApplePayloadTypesNeverPairOnTheirKey pins that one payload type in
+// two overlapping profiles is neither a finding nor an unknown-value pair,
+// without a catalog and with an equivalence listing that key.
+func TestAnalyzeApplePayloadTypesNeverPairOnTheirKey(t *testing.T) {
+	payloadKey := odataMacOSCustom + "#" + payloadPassword
+	build := func(t *testing.T) string {
+		f := newFixture(t)
+		mac := docs.ResourceMeta{Platforms: "macOS", ODataType: odataMacOSCustom, AssignmentTargets: targets(allDevices())}
+		f.add(dcType+"p1.yaml", mac, customProfile(odataMacOSCustom, payloadPlist(rootIDA, payloadDict(payloadPassword, ""))))
+		f.add(dcType+"p2.yaml", mac, customProfile(odataMacOSCustom,
+			payloadPlist(rootIDB, payloadDict(payloadPassword, "      <key>minLength</key>\n      <integer>4</integer>\n"))))
+		return f.save()
+	}
+	for name, eqs := range map[string][]Equivalence{
+		"no catalog": nil,
+		"equivalence lists the key": {{
+			ID:       "macos-password-required",
+			Members:  []string{"#microsoft.graph.macOSCompliancePolicy#passwordRequired", payloadKey},
+			Relation: RelationRequired,
+			Enforced: map[string]bool{PlatformMacOS: true},
+			Status:   StatusVerified,
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			res, err := Analyze(Options{TenantDir: build(t), Equivalences: eqs, DryRun: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(res.Mechanical.Findings) != 0 {
+				t.Errorf("want no finding, got %+v", res.Mechanical.Findings)
+			}
+			if len(res.Mechanical.UnknownValues) != 0 {
+				t.Errorf("want no unknown-value pair, got %+v", res.Mechanical.UnknownValues)
+			}
+		})
+	}
+}
+
+// applePasswordTenant holds a macOS custom profile with the password payload
+// type, a sentinel secret inside that payload, and a macOS compliance policy
+// requiring a password, both on All devices.
+func applePasswordTenant(t *testing.T) string {
+	f := newFixture(t)
+	secret := "      <key>Password</key>\n      <string>" + payloadSecret + "</string>\n"
+	f.add(dcType+"profile.yaml",
+		docs.ResourceMeta{Platforms: "macOS", ODataType: odataMacOSCustom, AssignmentTargets: targets(allDevices())},
+		customProfile(odataMacOSCustom, payloadPlist(rootIDA, payloadDict(payloadPassword, secret))))
+	f.add(compType+"mac.yaml",
+		docs.ResourceMeta{ODataType: "#microsoft.graph.macOSCompliancePolicy", AssignmentTargets: targets(allDevices())},
+		map[string]interface{}{"@odata.type": "#microsoft.graph.macOSCompliancePolicy", "passwordRequired": true})
+	return f.save()
+}
+
+// TestAnalyzeApplePayloadTypeAcrossAnEquivalence joins a custom profile's
+// payload type and a compliance requirement: one unknown-value pair under the
+// equivalence, never a finding, and the payload's strings never reach
+// consistency/.
+func TestAnalyzeApplePayloadTypeAcrossAnEquivalence(t *testing.T) {
+	const complianceKey = "#microsoft.graph.macOSCompliancePolicy#passwordRequired"
+	payloadKey := odataMacOSCustom + "#" + payloadPassword
+	dir := applePasswordTenant(t)
+	res, err := Analyze(Options{TenantDir: dir, Equivalences: []Equivalence{{
+		ID:       "macos-password-required",
+		Members:  []string{complianceKey, payloadKey},
+		Relation: RelationRequired,
+		Enforced: map[string]bool{PlatformMacOS: true},
+		Status:   StatusVerify,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Mechanical.Findings) != 0 {
+		t.Errorf("want no finding, got %+v", res.Mechanical.Findings)
+	}
+	unknowns := res.Mechanical.UnknownValues
+	if len(unknowns) != 1 {
+		t.Fatalf("want one unknown-value pair, got %+v", unknowns)
+	}
+	u := unknowns[0]
+	equal(t, "equivalence:macos-password-required", u.Key)
+	equal(t, compType+"mac.yaml", u.A.Resource)
+	equal(t, complianceKey, u.A.SourceKey)
+	equal(t, dcType+"profile.yaml", u.B.Resource)
+	equal(t, payloadKey, u.B.SourceKey)
+
+	// Grep the written tree: the payload type is the only payload string there.
+	sawKey := false
+	err = filepath.WalkDir(filepath.Join(dir, DirName), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sawKey = sawKey || bytes.Contains(data, []byte(payloadKey))
+		for _, leak := range []string{payloadSecret, innerID, "Synthetic name"} {
+			if bytes.Contains(data, []byte(leak)) {
+				t.Errorf("%s leaks payload content %q", path, leak)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	isTrue(t, sawKey, "the payload-type key is written as the sourceKey")
+}
+
+// TestApplePayloadTypeIsSelectableByCatalog pins that a rule key and a topic
+// key regex can name a custom profile's payload type: the rule's key compiles
+// and is among the profile's indexed keys, and the topic matches the profile.
+// Rules are applied by the analysis agent, so the indexed key is what the
+// rule's selector meets.
+func TestApplePayloadTypeIsSelectableByCatalog(t *testing.T) {
+	const wdav = "com.microsoft.wdav"
+	ruleKey := odataMacOSCustom + "#" + wdav
+	cfg := validCatalog()
+	cfg.Topics = append(cfg.Topics, TopicConfig{ID: "defender", Label: "Defender", Match: []TopicRule{{Key: `#com\.microsoft\.wdav$`}}})
+	cfg.Rules[0].Right = Selector{Keys: []string{ruleKey}, Class: "configuration", Platforms: "macos"}
+	c, err := CompileCatalog(cfg)
+	if err != nil {
+		t.Fatalf("a rule naming the payload-type key must compile: %v", err)
+	}
+
+	doc := customProfile(odataMacOSCustom, payloadPlist(rootIDA, payloadDict(wdav, "")))
+	var keys []string
+	for key := range indexOf(t, dcType+"wdav.yaml", typeDeviceConfigurations, doc) {
+		keys = append(keys, key)
+	}
+	found := false
+	for _, k := range keys {
+		found = found || k == ruleKey
+	}
+	isTrue(t, found, "the rule's key is indexed for the profile", keys)
+
+	topics := c.Topics(TopicFacts{Type: "Microsoft.Graph/deviceConfigurations", ODataType: odataMacOSCustom, Platforms: "macOS", Keys: keys})
+	if strings.Join(topics, ",") != "defender" {
+		t.Errorf("topics = %v, want [defender]", topics)
+	}
+}

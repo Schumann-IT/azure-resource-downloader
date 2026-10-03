@@ -262,7 +262,8 @@ consistency:
 
   equivalences:
     # --- macOS password: compliance <-> legacy device restrictions <-> Settings Catalog
-    #     (com.apple.mobiledevice.passwordpolicy). 'enforced' on macOS: Learn documents the
+    #     (com.apple.mobiledevice.passwordpolicy) <-> custom profile (that payload type, presence
+    #     only, so only in macos-password-required). 'enforced' on macOS: Learn documents the
     #     compliance password settings as remediated on the device.
     - id: macos-password-required
       description: Require a password to unlock macOS devices
@@ -270,6 +271,7 @@ consistency:
         - '#microsoft.graph.macOSCompliancePolicy#passwordRequired'
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordRequired'
         - com.apple.mobiledevice.passwordpolicy_forcepin
+        - '#microsoft.graph.macOSCustomConfiguration#com.apple.mobiledevice.passwordpolicy'
       relation: required
       enforced:
         macos: true
@@ -332,13 +334,15 @@ consistency:
       status: verify
 
     # --- iOS/iPadOS passcode: compliance <-> legacy device restrictions <-> Settings Catalog
-    #     (shared com.apple.mobiledevice.passwordpolicy keys; platform scopes keep macOS apart).
+    #     (shared com.apple.mobiledevice.passwordpolicy keys; platform scopes keep macOS apart)
+    #     <-> custom profile (that payload type, presence only, so only in ios-passcode-required).
     - id: ios-passcode-required
       description: Require a passcode to unlock iOS/iPadOS devices
       members:
         - '#microsoft.graph.iosCompliancePolicy#passcodeRequired'
         - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeRequired'
         - com.apple.mobiledevice.passwordpolicy_forcepin
+        - '#microsoft.graph.iosCustomConfiguration#com.apple.mobiledevice.passwordpolicy'
       relation: required
       enforced:
         ios: true
