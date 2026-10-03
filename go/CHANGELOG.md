@@ -27,6 +27,21 @@ This project is released independently of the documentation browser in `web/`: i
   settings, and secrets are never compared, written or logged — even in an export made with
   `resolve-secrets`. See the README's *Consistency analysis* section. (#56)
 
+- **Teach the consistency analysis which settings mean the same thing.** A new `consistency:` section in the base
+  configuration file is a catalog the operator maintains: *equivalences* (which compliance properties, Settings
+  Catalog ids, OMA-URIs and legacy properties describe one control, and how they must relate), *topics* (how
+  resources group into areas such as encryption or Windows Update) and *rules* (the cross-type relations to
+  check), each with its Microsoft Learn source and a `verified` / `verify` status. With it, `docs
+  analyze-consistency` compares compliance against configuration across policy types and reports a
+  configuration that cannot meet a compliance requirement as a contradiction — only `possible` while its entry is
+  still `verify`. The section is validated strictly and offline: a misspelt field, a key not in the canonical form
+  (the error gives the form to paste) or a non-Learn reference exits `2` before anyone signs in.
+  `consistency/metadata.yaml` records the catalog's hash and the member keys this export does not carry.
+  `config-tailored-intune.yaml` ships a seed catalog — 20 equivalences, 11 topics and rules R1–R8 — not yet
+  checked against Microsoft Learn, so every entry is `verify`. The catalog is opt-in: **copy the `consistency:`
+  section from `config-tailored-intune.yaml` into your base file to use it.** See the README's *The catalog*
+  section.
+
 ## [0.4.0] - 2026-10-02
 
 ### Added
