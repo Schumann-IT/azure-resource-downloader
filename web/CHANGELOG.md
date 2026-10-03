@@ -13,6 +13,17 @@ section of the [repository README](../README.md) for the procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+#### Views and navigation
+
+- **The tenant summary's *At a glance* table lines up whatever column order it was written in.** The stylesheet
+  assumed the count sat in the last column and squeezed that column to a narrow, right-aligned strip, so a
+  summary written as `Area | Resources | Types` showed its type list crammed to the right and its counts
+  left-aligned. Count columns are now recognised by their content — every filled cell a whole number, dashes
+  allowed — and are right-aligned and compact wherever they sit, while text columns wrap at full width.
+  Existing exports pick this up on the next page load; no regeneration is needed. (#57)
+
 ## [0.4.0] - 2026-10-02
 
 ### Added

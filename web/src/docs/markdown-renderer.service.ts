@@ -7,6 +7,7 @@ import { applyChangedBy, applyFindingsTable, ChangedByCellLike } from './finding
 import {
   applyMarkerBlocks,
   applyMetadataTable,
+  applyNumericColumns,
   applySectionHeadings,
   slugifyHeading,
   wrapSections,
@@ -140,6 +141,7 @@ export class MarkdownRendererService implements OnModuleInit {
       applySectionHeadings(state.tokens);
       const markers = applyMarkerBlocks(state.tokens);
       applyMetadataTable(state.tokens);
+      applyNumericColumns(state.tokens);
       // Last: wrapping changes token indices, and it needs the heading slugs
       // and the marker ranges the earlier passes produced. `state.Token` is the
       // constructor markdown-it's own renderer expects.

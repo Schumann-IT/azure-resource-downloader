@@ -78,6 +78,15 @@ a `CHANGELOG.md` entry; a one-off finding you have judged acceptable is silenced
   `@source` in `src/styles.css`, or its classes are purged.
 - Every visual state needs a dark variant (`prefers-color-scheme` / `dark:`).
 - Interactive elements keep a visible `:focus-visible` outline.
+- **Tables are styled by content, never by position.** Column treatments (alignment, width, wrapping) key on
+  attributes the renderer sets from the token stream — `data-numeric` on a count column, or a column-name tag
+  the way `findings-table.ts` tags the drift findings' cells — never on `:first-child`, `:last-child` or
+  `:nth-child()`: the generator leaves most tables' column order to the agent, and both orders occur. The one
+  exception is a table whose column order is a CLI contract — today the Findings tables (`table.findings`, led
+  by Severity) and the label | value metadata table (`table.doc-metadata`); its selector names that contract in
+  a comment.
+- Counts are right-aligned, `tabular-nums` and `nowrap`; prose and list columns wrap (`white-space: normal`,
+  `overflow-wrap: anywhere`).
 - `{{{body}}}` (triple-stache) is used **only** for already-rendered Markdown HTML. All other values
   use `{{ }}` escaping.
 - Do not introduce client-side JavaScript or a frontend framework. HTML interactivity (`<details>`, `:target`,
@@ -102,6 +111,9 @@ a `CHANGELOG.md` entry; a one-off finding you have judged acceptable is silenced
   - touching routes, discovery, rendering, highlighting or link rewriting → a case in
     `test/docs.e2e.spec.ts`;
   - touching `src/styles.css` → assert the rule survives compilation in `test/styles-build.spec.ts`.
+  - adding or changing a table treatment → a renderer test for every column order the generator may
+    produce, asserting the tag lands on the right cells; the guard in `test/styles-build.spec.ts` fails on
+    any positional table-column selector outside the contract allow-list.
 - Keep the invariant tests: discovery must ignore `_`-prefixed folders and folders whose
   `docs/index.yaml` is missing or malformed, `docs/generate.md` must not be served, frontmatter must
   not appear in the body, `<details>` must pass through, cross-type links must resolve, traversal

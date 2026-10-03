@@ -55,7 +55,7 @@ const KNOWN: ReadonlySet<string> = new Set<string>(SEVERITIES);
 const KNOWN_DRIFT: ReadonlySet<string> = new Set<string>(DRIFT_SEVERITIES);
 const KNOWN_VERDICTS: ReadonlySet<string> = new Set<string>(VERDICTS);
 
-function normalise(value: string): string {
+export function normalise(value: string): string {
   return value.trim().replace(/^[*_`]+|[*_`]+$/g, '').toLowerCase();
 }
 

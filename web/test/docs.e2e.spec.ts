@@ -945,6 +945,40 @@ describe('Docs browser (e2e)', () => {
     expect(res.text).not.toContain('class="findings"');
   });
 
+  it.each([
+    ['Area | Resources | Types', ['Area', 'Resources', 'Types'], (a: string, n: string, t: string) => [a, n, t], 1],
+    ['Area | Types (count) | Resources', ['Area', 'Types (count)', 'Resources'], (a: string, n: string, t: string) => [a, t, n], 2],
+  ])(
+    'tags the count cells of the at-a-glance table by content (%s)',
+    async (_name, header, order, countColumn) => {
+      const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
+      const table = [
+        row(header as string[]),
+        row(header.map(() => '---')),
+        row((order as any)('Policies', '1,234', 'compliance, configuration')),
+        row((order as any)('Groups', '3', 'security')),
+      ].join('\n');
+      await fsp.writeFile(
+        summaryFile,
+        `# My Tenant\n\n## At a glance\n\n${table}\n\n## Coverage caveats\n\n| Area | Note |\n|---|---|\n| x | 5 |\n`,
+      );
+      try {
+        const res = await request(app.getHttpServer()).get('/mytenant').expect(200);
+        const section = res.text.slice(
+          res.text.indexOf('data-section="at-a-glance"'),
+          res.text.indexOf('data-section="coverage-caveats"'),
+        );
+        const cells = [...section.matchAll(/<(th|td)(\s[^>]*)?>/g)];
+        expect(cells).toHaveLength(9);
+        cells.forEach((cell, i) => {
+          expect((cell[2] ?? '').includes('data-numeric')).toBe(i % 3 === countColumn);
+        });
+      } finally {
+        await fsp.writeFile(summaryFile, SUMMARY_MD);
+      }
+    },
+  );
+
   it('reflects an edited summary.md on the next request without a restart', async () => {
     const marker = `SUMMARY_PROBE_${Date.now()}`;
     await fsp.writeFile(summaryFile, `${SUMMARY_MD}\n${marker}\n`);
