@@ -147,9 +147,10 @@ func TestAnalyzeConsistencyRecordsTheCatalog(t *testing.T) {
 	}
 }
 
-// TestTailoredConfigCatalogCompiles keeps the seed catalog shipped in the
-// worked example valid.
-func TestTailoredConfigCatalogCompiles(t *testing.T) {
+// loadTailoredCatalog decodes and compiles the consistency section of the
+// tracked worked example, config-tailored-intune.yaml.
+func loadTailoredCatalog(t *testing.T) (consistency.CatalogConfig, *consistency.Compiled) {
+	t.Helper()
 	v := viper.New()
 	v.SetConfigFile(filepath.Join("..", "..", "config-tailored-intune.yaml"))
 	if err := v.ReadInConfig(); err != nil {
@@ -164,35 +165,104 @@ func TestTailoredConfigCatalogCompiles(t *testing.T) {
 	}
 	c, err := consistency.CompileCatalog(cfg)
 	if err != nil {
-		t.Fatalf("the seed catalog does not compile: %v", err)
+		t.Fatalf("the tracked catalog does not compile: %v", err)
 	}
+	return cfg, c
+}
+
+// TestTailoredConfigCatalogCompiles keeps the tracked catalog shipped in the
+// worked example valid and pins its reviewed shape: the counts, the entries
+// that left it, and exactly which entries are verified.
+func TestTailoredConfigCatalogCompiles(t *testing.T) {
+	cfg, c := loadTailoredCatalog(t)
 	counts := c.Counts()
-	if counts.Equivalences == 0 || counts.Topics == 0 || counts.Rules == 0 {
-		t.Errorf("seed counts = %+v, want every section populated", counts)
+	if counts.Equivalences != 37 || counts.Topics != 13 || counts.Rules != 29 {
+		t.Errorf("tracked catalog counts = %+v, want 37 equivalences / 13 topics / 29 rules", counts)
 	}
 	for _, e := range cfg.Equivalences {
 		if len(e.Members) < 2 || e.Relation == "" {
 			t.Errorf("equivalence %q decoded incompletely: %+v", e.ID, e)
 		}
+		if strings.Contains(e.ID, "minimum-os") {
+			t.Errorf("equivalence %q: the minimum-OS comparison is blocked on indexing", e.ID)
+		}
+	}
+	for _, topic := range cfg.Topics {
+		if topic.ID == "assignment-filters" {
+			t.Errorf("topic %q belongs to the scope model, not the catalog", topic.ID)
+		}
+	}
+	for _, r := range cfg.Rules {
+		if strings.HasPrefix(r.ID, "r6-") || strings.HasPrefix(r.ID, "r7-") {
+			t.Errorf("rule %q belongs to the scope model, not the catalog", r.ID)
+		}
+	}
+
+	var gotEq, gotRules []string
+	for _, e := range cfg.Equivalences {
+		if e.Status == "verified" {
+			gotEq = append(gotEq, e.ID)
+		}
+	}
+	for _, r := range cfg.Rules {
+		if r.Status == "verified" {
+			gotRules = append(gotRules, r.ID)
+		}
+	}
+	wantEq := []string{"windows-defender-cloud-protection-maps", "windows-defender-realtime-admx"}
+	wantRules := []string{
+		"r-whfb-user-over-device-enable", "r-whfb-user-over-device-minpinlength",
+		"r5-deferral-with-feature-profile", "r5b-ring-feature-pause-with-feature-profile",
+		"r5c-ring-driver-exclusion-with-driver-policy", "r5d-overlapping-feature-update-policies",
+		"r5e-apple-enforcement-ignores-update-settings",
+	}
+	sort.Strings(gotEq)
+	sort.Strings(gotRules)
+	if strings.Join(gotEq, "|") != strings.Join(wantEq, "|") {
+		t.Errorf("verified equivalences = %v, want %v", gotEq, wantEq)
+	}
+	if strings.Join(gotRules, "|") != strings.Join(wantRules, "|") {
+		t.Errorf("verified rules = %v, want %v", gotRules, wantRules)
 	}
 }
 
-// TestTailoredConfigSeedsThePasswordLengthEquivalence pins the seed the
-// contradiction analysis relies on: the macOS password length members and relation.
+// TestTailoredConfigCatalogUsesTheBridgedFirewallForm guards the Firewall CSP
+// bridge: custom OMA-URIs index as vendor_msft_firewall_..., so no member,
+// topic key regex or rule selector of the tracked catalog may name the refused
+// device_vendor_msft_firewall_... form.
+func TestTailoredConfigCatalogUsesTheBridgedFirewallForm(t *testing.T) {
+	cfg, _ := loadTailoredCatalog(t)
+	const refused = "device_vendor_msft_firewall_"
+	check := func(where, key string) {
+		if strings.HasPrefix(strings.TrimPrefix(key, "^"), refused) {
+			t.Errorf("%s uses the refused %s form: %q", where, refused, key)
+		}
+	}
+	for _, e := range cfg.Equivalences {
+		for _, m := range e.Members {
+			check("equivalence "+e.ID, m)
+		}
+	}
+	for _, topic := range cfg.Topics {
+		for _, m := range topic.Match {
+			check("topic "+topic.ID, m.Key)
+		}
+	}
+	for _, r := range cfg.Rules {
+		for _, k := range r.Left.Keys {
+			check("rule "+r.ID+" left", k)
+		}
+		for _, k := range r.Right.Keys {
+			check("rule "+r.ID+" right", k)
+		}
+	}
+}
+
+// TestTailoredConfigSeedsThePasswordLengthEquivalence pins what the
+// contradiction analysis relies on in the tracked catalog: the macOS password
+// length members and relation.
 func TestTailoredConfigSeedsThePasswordLengthEquivalence(t *testing.T) {
-	v := viper.New()
-	v.SetConfigFile(filepath.Join("..", "..", "config-tailored-intune.yaml"))
-	if err := v.ReadInConfig(); err != nil {
-		t.Fatal(err)
-	}
-	var cfg consistency.CatalogConfig
-	if err := v.UnmarshalKey("consistency", &cfg); err != nil {
-		t.Fatal(err)
-	}
-	c, err := consistency.CompileCatalog(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, c := loadTailoredCatalog(t)
 	want := []string{
 		"#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength",
 		"#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinimumLength",
@@ -213,5 +283,5 @@ func TestTailoredConfigSeedsThePasswordLengthEquivalence(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("equivalence macos-password-minimum-length not found in the seed")
+	t.Fatal("equivalence macos-password-minimum-length not found in the tracked catalog")
 }

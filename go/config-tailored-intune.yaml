@@ -246,30 +246,34 @@ taxonomy:
 # exact keys only. Member and selector keys are canonical index keys (see
 # config.example.yaml for the forms and the closed vocabularies).
 #
-# EVERY ENTRY IS 'status: verify'. The seed was written from the Intune
-# documentation structure without a sourced check; the members, relations,
-# enforcement and resolution semantics still need a Microsoft Learn review, and
-# a finding resting on a 'verify' entry is never firm. Promote an entry to
-# 'verified' only with a cited Learn source. 'enforced' is deliberately left out
-# everywhere (= evaluated only) until the review settles which compliance
-# settings are applied to the device on which platform.
+# The catalog was reviewed against Microsoft Learn on 2026-10-03 and the entries
+# were checked against two real tenant exports. 2 equivalences and 7 rules are
+# 'status: verified' (each with a cited Learn source); the rest stay 'verify',
+# because the Apple key mappings rest on Apple's payload documentation rather than
+# Learn, and a finding resting on a 'verify' entry is never firm. Promote an entry
+# only with a cited source. 'enforced' is set only on the password equivalences,
+# which Learn documents as remediated on Windows, macOS and iOS; everywhere else
+# it is left out (= evaluated only). Assignment-filter and include/exclude kind
+# checks are not rules here: they belong to the scope model. The minimum-OS
+# comparison across policy types is left out until the index can read the
+# versions.
 consistency:
   version: 1
 
   equivalences:
     # --- macOS password: compliance <-> legacy device restrictions <-> Settings Catalog
-    #     (com.apple.mobiledevice.passwordpolicy). The Settings Catalog key is
-    #     shared with iOS/iPadOS; platform scopes keep the two families apart.
-    #     'passwordBlockSimple' vs 'passwordpolicy_allowsimple' is the same control
-    #     with inverted polarity, which no relation expresses: left out.
+    #     (com.apple.mobiledevice.passwordpolicy). 'enforced' on macOS: Learn documents the
+    #     compliance password settings as remediated on the device.
     - id: macos-password-required
-      description: A password is required to unlock the Mac
+      description: Require a password to unlock macOS devices
       members:
         - '#microsoft.graph.macOSCompliancePolicy#passwordRequired'
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordRequired'
         - com.apple.mobiledevice.passwordpolicy_forcepin
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: macos-password-minimum-length
       description: Minimum password length on macOS
@@ -278,25 +282,31 @@ consistency:
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinimumLength'
         - com.apple.mobiledevice.passwordpolicy_minlength
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: macos-password-inactivity-lock
-      description: Maximum minutes of inactivity before the Mac locks
+      description: Maximum idle minutes before the macOS screen locks and the password is required
       members:
         - '#microsoft.graph.macOSCompliancePolicy#passwordMinutesOfInactivityBeforeLock'
-        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinutesOfInactivityBeforeLock'
+        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinutesOfInactivityBeforeScreenTimeout'
         - com.apple.mobiledevice.passwordpolicy_maxinactivity
       relation: '<='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: macos-password-expiration
-      description: Maximum password age in days on macOS
+      description: Password expiration (days) on macOS
       members:
         - '#microsoft.graph.macOSCompliancePolicy#passwordExpirationDays'
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordExpirationDays'
         - com.apple.mobiledevice.passwordpolicy_maxpinageindays
       relation: '<='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: macos-password-history
       description: Number of previous passwords that cannot be reused on macOS
@@ -305,27 +315,34 @@ consistency:
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordPreviousPasswordBlockCount'
         - com.apple.mobiledevice.passwordpolicy_pinhistory
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: macos-password-complex-characters
-      description: Minimum number of non-alphanumeric characters in a macOS password
+      description: Minimum number of non-alphanumeric (complex) characters in the macOS password
       members:
         - '#microsoft.graph.macOSCompliancePolicy#passwordMinimumCharacterSetCount'
         - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinimumCharacterSetCount'
         - com.apple.mobiledevice.passwordpolicy_mincomplexchars
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
 
-    # --- iOS/iPadOS passcode: compliance <-> legacy device restrictions <-> Settings Catalog.
+    # --- iOS/iPadOS passcode: compliance <-> legacy device restrictions <-> Settings Catalog
+    #     (shared com.apple.mobiledevice.passwordpolicy keys; platform scopes keep macOS apart).
     - id: ios-passcode-required
-      description: A passcode is required to unlock the iPhone or iPad
+      description: Require a passcode to unlock iOS/iPadOS devices
       members:
         - '#microsoft.graph.iosCompliancePolicy#passcodeRequired'
         - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeRequired'
         - com.apple.mobiledevice.passwordpolicy_forcepin
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-ios
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
     - id: ios-passcode-minimum-length
       description: Minimum passcode length on iOS/iPadOS
@@ -334,25 +351,31 @@ consistency:
         - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeMinimumLength'
         - com.apple.mobiledevice.passwordpolicy_minlength
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-ios
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
     - id: ios-passcode-inactivity-lock
-      description: Maximum minutes of inactivity before the iPhone or iPad locks
+      description: Maximum idle minutes until the iOS/iPadOS screen auto-locks
       members:
-        - '#microsoft.graph.iosCompliancePolicy#passcodeMinutesOfInactivityBeforeLock'
-        - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeMinutesOfInactivityBeforeLock'
+        - '#microsoft.graph.iosCompliancePolicy#passcodeMinutesOfInactivityBeforeScreenTimeout'
+        - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeMinutesOfInactivityBeforeScreenTimeout'
         - com.apple.mobiledevice.passwordpolicy_maxinactivity
       relation: '<='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-ios
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
     - id: ios-passcode-expiration
-      description: Maximum passcode age in days on iOS/iPadOS
+      description: Passcode expiration (days) on iOS/iPadOS
       members:
         - '#microsoft.graph.iosCompliancePolicy#passcodeExpirationDays'
         - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeExpirationDays'
         - com.apple.mobiledevice.passwordpolicy_maxpinageindays
       relation: '<='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-ios
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
     - id: ios-passcode-history
       description: Number of previous passcodes that cannot be reused on iOS/iPadOS
@@ -361,119 +384,280 @@ consistency:
         - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodePreviousPasscodeBlockCount'
         - com.apple.mobiledevice.passwordpolicy_pinhistory
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-ios
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
 
-    # --- Encryption.
+    # --- Encryption and firewall: compliance requirement <-> configuration that satisfies it.
     - id: macos-filevault
-      description: FileVault disk encryption is on
+      description: FileVault disk encryption on macOS (compliance requires, configuration enables; encryption starts at the user's next sign-out)
       members:
         - '#microsoft.graph.macOSCompliancePolicy#storageRequireEncryption'
         - '#microsoft.graph.macOSEndpointProtectionConfiguration#fileVaultEnabled'
         - com.apple.mcx.filevault2_enable
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/encrypt-devices-filevault
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/encrypt-filevault-macos
       status: verify
     - id: windows-device-encryption
-      description: Device storage is encrypted with BitLocker
+      description: BitLocker OS-drive encryption on Windows (compliance checks DeviceStatus EncryptionCompliance; configuration enables via BitLocker CSP)
       members:
         - '#microsoft.graph.windows10CompliancePolicy#storageRequireEncryption'
         - '#microsoft.graph.windows10EndpointProtectionConfiguration#bitLockerEncryptDevice'
         - device_vendor_msft_bitlocker_requiredeviceencryption
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/encrypt-devices
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
       status: verify
-
-    # --- Firewall. Windows has one Settings Catalog key per network profile, so
-    #     each profile is its own equivalence with the compliance requirement:
-    #     one equivalence over all three would compare the profiles with each
-    #     other.
     - id: macos-firewall
-      description: The macOS application firewall is on
+      description: macOS application firewall turned on
       members:
         - '#microsoft.graph.macOSCompliancePolicy#firewallEnabled'
         - '#microsoft.graph.macOSEndpointProtectionConfiguration#firewallEnabled'
         - com.apple.security.firewall_enablefirewall
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
     - id: windows-firewall-domain
-      description: Microsoft Defender Firewall is on for the domain profile
+      description: Windows Defender Firewall turned on for the domain profile
       members:
         - '#microsoft.graph.windows10CompliancePolicy#activeFirewallRequired'
         - vendor_msft_firewall_mdmstore_domainprofile_enablefirewall
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/endpoint-security-firewall-policy
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
       status: verify
     - id: windows-firewall-private
-      description: Microsoft Defender Firewall is on for the private profile
+      description: Windows Defender Firewall turned on for the private profile
       members:
         - '#microsoft.graph.windows10CompliancePolicy#activeFirewallRequired'
         - vendor_msft_firewall_mdmstore_privateprofile_enablefirewall
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/endpoint-security-firewall-policy
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
       status: verify
     - id: windows-firewall-public
-      description: Microsoft Defender Firewall is on for the public profile
+      description: Windows Defender Firewall turned on for the public profile
       members:
         - '#microsoft.graph.windows10CompliancePolicy#activeFirewallRequired'
         - vendor_msft_firewall_mdmstore_publicprofile_enablefirewall
       relation: required
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/endpoint-security-firewall-policy
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
       status: verify
 
-    # --- Minimum OS version. Version strings rarely compare as numbers, so the
-    #     mechanical step mostly lists these pairs as unknown values; the
-    #     judgement is R2's. The configuration-side keys are the least certain
-    #     part of the seed (the Windows feature update profile is not an indexed
-    #     type yet, so it shows under unmatchedMembers).
-    - id: windows-minimum-os-version
-      description: The minimum Windows version compliance requires against the version feature updates deliver
+    # --- Further password / passcode settings (Apple payload keys; legacy-template pairs).
+    - id: macos-password-type
+      description: Alphanumeric password required on macOS
       members:
-        - '#microsoft.graph.windows10CompliancePolicy#osMinimumVersion'
-        - '#microsoft.graph.windowsFeatureUpdateProfile#featureUpdateVersion'
-      relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/windows-10-feature-updates
+        - '#microsoft.graph.macOSCompliancePolicy#passwordRequiredType'
+        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordRequiredType'
+        - com.apple.mobiledevice.passwordpolicy_requirealphanumeric
+      relation: required
+      enforced:
+        macos: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
-    - id: macos-minimum-os-version
-      description: The minimum macOS version compliance requires against the version a software update enforcement targets
+    - id: ios-passcode-grace-period
+      description: Maximum minutes after screen lock before the iOS/iPadOS passcode is required
       members:
-        - '#microsoft.graph.macOSCompliancePolicy#osMinimumVersion'
-        - com.apple.configuration.softwareupdate.enforcement.specific_targetosversion
-      relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/software-updates-macos
+        - '#microsoft.graph.iosCompliancePolicy#passcodeMinutesOfInactivityBeforeLock'
+        - '#microsoft.graph.iosGeneralDeviceConfiguration#passcodeMinutesOfInactivityBeforeLock'
+        - com.apple.mobiledevice.passwordpolicy_maxgraceperiod
+      relation: '<='
+      enforced:
+        ios: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-ios-ipados-settings
       status: verify
-    - id: ios-minimum-os-version
-      description: The minimum iOS/iPadOS version compliance requires against the version a software update enforcement targets
+    - id: macos-password-grace-period
+      description: Maximum minutes after macOS screen lock before the password is required
       members:
-        - '#microsoft.graph.iosCompliancePolicy#osMinimumVersion'
-        - com.apple.configuration.softwareupdate.enforcement.specific_targetosversion
+        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinutesOfInactivityBeforeLock'
+        - com.apple.mobiledevice.passwordpolicy_maxgraceperiod
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/templates/ref-device-restrictions-apple
+      status: verify
+    - id: macos-password-max-failed-attempts
+      description: Failed sign-in attempts before macOS locks
+      members:
+        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMaximumAttemptCount'
+        - com.apple.mobiledevice.passwordpolicy_maxfailedattempts
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/templates/ref-device-restrictions-apple
+      status: verify
+    - id: macos-password-lockout-duration
+      description: Minutes until a macOS login lockout resets
+      members:
+        - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinutesUntilFailedLoginReset'
+        - com.apple.mobiledevice.passwordpolicy_minutesuntilfailedloginreset
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/templates/ref-device-restrictions-apple
+      status: verify
+
+    # --- Windows BitLocker (Device Health Attestation) and macOS firewall extras.
+    - id: windows-bitlocker-dha
+      description: '"Require BitLocker" via Device Health Attestation (measured at boot) is satisfied only by a configuration that enables BitLocker'
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#bitLockerEnabled'
+        - device_vendor_msft_bitlocker_requiredeviceencryption
+        - '#microsoft.graph.windows10EndpointProtectionConfiguration#bitLockerEncryptDevice'
+      relation: required
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
+      status: verify
+    - id: macos-firewall-stealth-mode
+      description: macOS firewall stealth mode turned on
+      members:
+        - '#microsoft.graph.macOSCompliancePolicy#firewallEnableStealthMode'
+        - '#microsoft.graph.macOSEndpointProtectionConfiguration#firewallEnableStealthMode'
+        - com.apple.security.firewall_enablestealthmode
+      relation: required
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
+      status: verify
+    - id: macos-firewall-block-all-incoming
+      description: macOS firewall blocks all incoming connections
+      members:
+        - '#microsoft.graph.macOSCompliancePolicy#firewallBlockAllIncoming'
+        - '#microsoft.graph.macOSEndpointProtectionConfiguration#firewallBlockAllIncoming'
+        - com.apple.security.firewall_blockallincoming
+      relation: required
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
+      status: verify
+
+    # --- Defender: compliance <-> configuration, and the same setting through two CSP surfaces.
+    - id: windows-defender-realtime-protection
+      description: Windows compliance "Real-time protection" ↔ Defender real-time monitoring configuration
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#rtpEnabled'
+        - device_vendor_msft_policy_config_defender_allowrealtimemonitoring
+        - '#microsoft.graph.windows10GeneralConfiguration#defenderRequireRealTimeMonitoring'
+      relation: required
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
+      status: verify
+    - id: windows-defender-cloud-protection-maps
+      description: Defender cloud protection (MAPS) set by Policy CSP and by the ADMX-backed Policy CSP node — same GP setting
+      members:
+        - device_vendor_msft_policy_config_defender_allowcloudprotection
+        - device_vendor_msft_policy_config_admx_microsoftdefenderantivirus_spynetreporting
+      relation: same
+      reference: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-defender
+      status: verified
+    - id: windows-defender-realtime-admx
+      description: Defender real-time monitoring set by Policy CSP and by the ADMX-backed "Turn off real-time protection" node (inverse polarity)
+      members:
+        - device_vendor_msft_policy_config_defender_allowrealtimemonitoring
+        - device_vendor_msft_policy_config_admx_microsoftdefenderantivirus_disablerealtimemonitoring
+      relation: same
+      reference: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-microsoftdefenderantivirus
+      status: verified
+    - id: windows-defender-local-admin-merge
+      description: Defender "local admin merge" for list settings, via Defender CSP and via ADMX-backed Policy CSP
+      members:
+        - device_vendor_msft_defender_configuration_disablelocaladminmerge
+        - device_vendor_msft_policy_config_admx_microsoftdefenderantivirus_disablelocaladminmerge
+      relation: same
+      reference: https://learn.microsoft.com/en-us/windows/client-management/mdm/defender-csp
+      status: verify
+    - id: macos-defender-realtime-protection-deprecated
+      description: macOS Defender real-time protection — deprecated enableRealTimeProtection vs its replacement antivirusEngine enforcementLevel
+      members:
+        - com.apple.managedclient.preferences_enablerealtimeprotection
+        - com.apple.managedclient.preferences_enforcementlevel_antivirusengine
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/ref-antivirus-defender-settings-macos
+      status: verify
+
+    # --- Windows password: compliance <-> DeviceLock CSP.
+    - id: windows-password-minimum-length
+      description: Minimum password length on Windows (compliance vs DeviceLock CSP)
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#passwordMinimumLength'
+        - device_vendor_msft_policy_config_devicelock_mindevicepasswordlength
       relation: '>='
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/software-updates-ios
+      enforced:
+        windows: true
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
+      status: verify
+    - id: windows-password-inactivity-lock
+      description: Idle minutes before the Windows device locks / requires the password
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#passwordMinutesOfInactivityBeforeLock'
+        - device_vendor_msft_policy_config_devicelock_maxinactivitytimedevicelock
+      relation: '<='
+      enforced:
+        windows: true
+      reference: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-devicelock
+      status: verify
+    - id: windows-password-history
+      description: Number of previous passwords that can't be reused on Windows
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#passwordPreviousPasswordBlockCount'
+        - device_vendor_msft_policy_config_devicelock_devicepasswordhistory
+      relation: '>='
+      enforced:
+        windows: true
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/templates/ref-device-restrictions-windows
+      status: verify
+    - id: windows-password-expiration
+      description: Maximum password age in days on Windows
+      members:
+        - '#microsoft.graph.windows10CompliancePolicy#passwordExpirationDays'
+        - device_vendor_msft_policy_config_devicelock_devicepasswordexpiration
+      relation: '<='
+      enforced:
+        windows: true
+      reference: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-devicelock
+      status: verify
+
+    # --- macOS Gatekeeper and system extensions.
+    - id: macos-gatekeeper-enabled
+      description: Gatekeeper must be on when compliance restricts app sources
+      members:
+        - '#microsoft.graph.macOSCompliancePolicy#gatekeeperAllowedAppSource'
+        - com.apple.systempolicy.control_enableassessment
+        - '#microsoft.graph.macOSEndpointProtectionConfiguration#gatekeeperAllowedAppSource'
+      relation: required
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
+      status: verify
+    - id: macos-gatekeeper-block-override
+      description: Prevent users overriding Gatekeeper (Finder Control-click open)
+      members:
+        - com.apple.systempolicy.managed_disableoverride
+        - '#microsoft.graph.macOSEndpointProtectionConfiguration#gatekeeperBlockOverride'
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/ref-endpoint-protection-macos
+      status: verify
+    - id: macos-system-extensions-allowed
+      description: Allowed system extensions — legacy Extensions template vs custom system-extension-policy payload
+      members:
+        - '#microsoft.graph.macOSExtensionsConfiguration#systemExtensionsAllowed'
+        - '#microsoft.graph.macOSCustomConfiguration#com.apple.system-extension-policy'
+      relation: same
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/templates/ref-kernel-extensions-settings-macos
       status: verify
 
   topics:
+    # Topics: how resources group for the topic-based rules.
     - id: encryption
       label: Encryption
       match:
-        - name: '(?:bitlocker|filevault|encryption)'
-        - key: '(?:bitlocker|filevault|storagerequireencryption)'
+        - key: (?:bitlocker|filevault|storagerequireencryption|fderecoverykeyescrow|dontallowfde|fvkeyonstandby)
+        - name: (?:bitlocker|filevault|disk ?encryption)
+          type: Microsoft.Graph/deviceManagementIntents
     - id: defender-edr
       label: Defender / EDR
       match:
-        - name: '(?:mde|defender|\bngp\b|\basr\b|\bedr\b)'
-        - key: '(?:defender|antivirus|devicethreatprotection|advancedthreatprotection)'
+        - name: (?i)(?:mde|defender|\bngp\b|\basr\b|\bedr\b)
+        - key: (?i)(?:defender|antivirus|antispyware|rtpenabled|signatureoutofdate|devicethreatprotection|advancedthreatprotection|#com\.microsoft\.wdav(?:\.atp)?$|^com\.apple\.managedclient\.preferences_(?:enforcementlevel_antivirusengine|enablerealtimeprotection|enforcementlevel_tamperprotection|cloudblocklevel|threattypesettings|disallowedthreatactions|automaticdefinitionupdateenabled|scanafterdefinitionupdate))
         - type: Microsoft.Graph/mobileThreatDefenseConnectors
     - id: firewall
       label: Firewall
       match:
-        - name: 'firewall'
-        - key: 'firewall'
+        - key: ^vendor_msft_firewall_mdmstore_(domainprofile|privateprofile|publicprofile)_
+        - key: ^com\.apple\.security\.firewall_
+        - key: ^#microsoft\.graph\.windows10CompliancePolicy#activeFirewallRequired$
+        - key: ^#microsoft\.graph\.(macOSCompliancePolicy|macOSEndpointProtectionConfiguration)#firewall
+        - key: ^#microsoft\.graph\.windows10EndpointProtectionConfiguration#firewallProfile(Domain|Private|Public)\.
     - id: windows-update
       label: Windows Update
       match:
-        - name: '(?:updatering|windows-update)'
-        - odataType: 'windowsUpdateForBusinessConfiguration'
+        - name: (?:updatering|windows-update)
+        - odataType: windowsUpdateForBusinessConfiguration
         - type: Microsoft.Graph/windowsFeatureUpdateProfiles
         - type: Microsoft.Graph/windowsDriverUpdateProfiles
     - id: identity-sign-in
@@ -482,147 +666,537 @@ consistency:
         - type: Microsoft.Graph/conditionalAccessPolicies
         - type: Microsoft.Graph/authenticationStrengthPolicies
         - type: Microsoft.Graph/authenticationMethodsPolicy
-        - key: '(?:passportforwork|windowshello)'
+        - key: (?i)(?:passportforwork|windowshello)
+        - odataType: windowsIdentityProtectionConfiguration$
     - id: browsers
       label: Browsers
       match:
-        - name: '(?:\bedge\b|chrome|firefox|safari|browser)'
-        - key: '(?:microsoft_edge|com\.apple\.safari|google_?chrome|firefox)'
+        - name: (?i)(?:\bedge\b|chrome|firefox|safari|browser)
+        - key: (?:microsoft_edge|com\.apple\.safari|google_?chrome|firefox)
+        - platforms: macos
+          key: ^com\.apple\.managedclient\.preferences_(?:smartscreenenabled|clearbrowsingdataonexit|autofillcreditcardenabled|autofillsettings)$
     - id: office-onedrive
       label: Office / OneDrive
       match:
-        - name: '(?:office|onedrive|m365)'
-        - key: '(?:onedrive|office16|com\.microsoft\.office)'
+        - name: (?i)(?:office|onedrive|m365|microsoft 365)
+        - key: (?:onedrive|_(?:access|excel|lync|office|onent|outlk|ppt|proj|pub|visio|word)16v2~|office16|com\.microsoft\.office)
+        - platforms: macos
+          key: ^com\.apple\.managedclient\.preferences_(?:channelname|acknowledgeddatacollectionpolicy|updatedeadline\.[a-z]+)$
     - id: enrollment
       label: Enrollment & Autopilot
       match:
-        - name: '(?:autopilot|enrollment|\besp\b)'
+        - name: (?:autopilot|enrollment|\besp\b)
         - type: Microsoft.Graph/windowsAutopilotDeploymentProfiles
         - type: Microsoft.Graph/deviceEnrollmentConfigurations
         - type: Microsoft.Graph/depOnboardingSettings
     - id: macos-accounts-sso
       label: macOS accounts & SSO
       match:
-        - platforms: 'macos'
-          key: '(?:extensiblesso|platformsso|com\.apple\.loginwindow)'
-        - odataType: 'macOSExtensionsConfiguration|macOSDeviceFeaturesConfiguration'
-    # The two topics below are not control areas but the sides R3 and R6 name.
+        - platforms: macos
+          key: ^(?:com\.apple\.extensiblesso|com\.apple\.loginwindow|com\.apple\.mcx_disableguestaccount$|ade_accountsettings_|ade_macos_authenticationmethod$)
+        - platforms: macos
+          key: ^#microsoft\.graph\.macOSDeviceFeaturesConfiguration#(?:macOSSingleSignOnExtension|singleSignOnExtension|adminShowHostInfo|loginWindowText|authorizedUsersList|consoleAccessDisabled)
     - id: compliance
       label: Compliance
       match:
         - type: Microsoft.Graph/deviceCompliancePolicies
         - type: Microsoft.Graph/compliancePolicies
-    - id: assignment-filters
-      label: Assignment filters
+
+    # Single-type topics the update and Conditional Access rules refer to.
+    - id: windows-feature-update-policy
+      label: Windows feature update policies
       match:
-        - type: Microsoft.Graph/assignmentFilters
+        - type: Microsoft.Graph/windowsFeatureUpdateProfiles
+    - id: windows-driver-update-policy
+      label: Windows driver update policies
+      match:
+        - type: Microsoft.Graph/windowsDriverUpdateProfiles
+    - id: conditional-access
+      label: Conditional Access
+      match:
+        - type: Microsoft.Graph/conditionalAccessPolicies
 
   rules:
-    # R1: compliance requires a control no in-scope configuration enables.
-    - id: r1-encryption
-      description: Compliance requires encryption that no in-scope configuration enables
-      left: {topic: encryption, class: requirement}
-      right: {topic: encryption, class: configuration}
-      violation: A compliance policy requires encryption for a scope that no configuration enabling FileVault or BitLocker reaches
-      resolution: Compliance only evaluates; the configuration has to enable encryption, otherwise the device stays non-compliant
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/encrypt-devices
-      status: verify
+    # --- Requirement without configuration (compliance asks, nothing delivers).
     - id: r1-defender
-      description: Compliance requires Defender protection that no in-scope configuration enables
-      left: {topic: defender-edr, class: requirement}
-      right: {topic: defender-edr, class: configuration}
-      violation: A compliance policy requires real-time protection or a threat level for a scope that no Defender configuration reaches
-      resolution: Compliance only evaluates; the antivirus or EDR configuration has to enable the protection
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/endpoint-security-antivirus-policy
+      description: Windows compliance requires Defender Antimalware / real-time protection / current signatures, but no Defender antivirus configuration reaches the scope
+      left:
+        keys:
+          - '#microsoft.graph.windows10CompliancePolicy#defenderEnabled'
+          - '#microsoft.graph.windows10CompliancePolicy#rtpEnabled'
+          - '#microsoft.graph.windows10CompliancePolicy#signatureOutOfDate'
+        class: requirement
+        platforms: windows
+      right:
+        topic: defender-edr
+        class: configuration
+        platforms: windows
+      violation: A compliance policy requires Defender Antimalware, real-time protection or up-to-date security intelligence for a scope that no Defender antivirus configuration reaches
+      resolution: Compliance only evaluates. RTP is on by default (AllowRealtimeMonitoring default 1), so the device can still be compliant. It turns noncompliant when a GPO or local change turns RTP off, or when a non-Microsoft AV registered with Windows Security Center puts Defender into disabled or passive mode. Manage the state with an endpoint-security Antivirus or Settings Catalog Defender policy (Defender/AllowRealtimeMonitoring = 1) plus tamper protection.
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
       status: verify
     - id: r1-firewall
-      description: Compliance requires a firewall that no in-scope configuration enables
-      left: {topic: firewall, class: requirement}
-      right: {topic: firewall, class: configuration}
-      violation: A compliance policy requires an active firewall for a scope that no firewall configuration reaches
-      resolution: Compliance only evaluates; the firewall configuration has to turn the firewall on
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/endpoint-security-firewall-policy
-      status: verify
-    # R2: compliance minimum OS above what the update configuration delivers.
-    - id: r2-minimum-os-above-updates
-      description: The compliance minimum OS version is above what the update rings and feature update profiles deliver
+      description: macOS compliance requires the firewall but no firewall configuration reaches the scope
       left:
-        keys: ['#microsoft.graph.windows10CompliancePolicy#osMinimumVersion']
+        topic: firewall
         class: requirement
-        platforms: 'windows'
-      right: {topic: windows-update}
-      violation: The minimum OS version a compliance policy requires is newer than the version the in-scope feature update profile or update ring holds devices at
-      resolution: The update configuration decides the installed version; the compliance minimum must not exceed it or devices become non-compliant
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/windows-10-feature-updates
+        platforms: macos
+      right:
+        topic: firewall
+        class: configuration
+        platforms: macos
+      violation: A compliance policy requires the macOS firewall for a scope that no firewall configuration reaches
+      resolution: The macOS firewall is off by default and Learn does not document the compliance setting turning it on; deploy a com.apple.security.firewall configuration (Settings Catalog or endpoint security macOS firewall) to the same scope or the devices stay noncompliant
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
       status: verify
-    # R3: CA requires a compliant device, but the targeted users have no
-    #     compliance policy for a covered platform.
-    - id: r3-ca-compliant-device-without-compliance
-      description: A conditional access policy requires a compliant device but no compliance policy covers a platform it targets
-      left: {topic: identity-sign-in}
-      right: {topic: compliance}
-      violation: A conditional access policy grants on a compliant device for users or platforms that no compliance policy is assigned to
-      resolution: Conditional access blocks the sign-in; a compliance policy for the platform has to reach those users' devices
-      reference: https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-grant
-      status: verify
-    # R4: the same control configured through several surfaces.
-    - id: r4-encryption-surfaces
-      description: Encryption is configured through several surfaces for one scope
-      left: {topic: encryption, class: configuration}
-      right: {topic: encryption, class: configuration}
-      violation: Two configurations of different kinds (Settings Catalog, endpoint security, legacy profile, custom OMA-URI) set encryption for overlapping scopes
-      resolution: Conflicting values leave the setting in conflict on the device; keep one surface
-      reference: https://learn.microsoft.com/en-us/mem/intune/configuration/device-profile-troubleshoot
-      status: verify
-    - id: r4-firewall-surfaces
-      description: The firewall is configured through several surfaces for one scope
-      left: {topic: firewall, class: configuration}
-      right: {topic: firewall, class: configuration}
-      violation: Two configurations of different kinds set the firewall for overlapping scopes
-      resolution: Conflicting values leave the setting in conflict on the device; keep one surface
-      reference: https://learn.microsoft.com/en-us/mem/intune/configuration/device-profile-troubleshoot
-      status: verify
-    # R5: update-ring feature deferral with a feature update profile.
-    - id: r5-deferral-with-feature-profile
-      description: An update ring defers feature updates while a feature update profile targets an overlapping scope
+    - id: r2-minimum-os-above-updates
+      description: Windows compliance minimum OS version vs the version a feature update policy targets
       left:
-        keys: ['#microsoft.graph.windowsUpdateForBusinessConfiguration#featureUpdatesDeferralPeriodInDays']
-      right: {topic: windows-update}
-      violation: An update ring sets a feature update deferral greater than zero for a scope a feature update profile also reaches
-      resolution: The feature update profile decides the version; the ring's feature deferral should be zero where a profile applies
-      reference: https://learn.microsoft.com/en-us/mem/intune/protect/windows-10-feature-updates
+        keys:
+          - '#microsoft.graph.windows10CompliancePolicy#osMinimumVersion'
+        class: requirement
+        platforms: windows
+      right:
+        topic: windows-feature-update-policy
+      violation: The minimum OS version a compliance policy requires is newer than the Windows version the in-scope feature update policy targets
+      resolution: The feature update policy decides which version Windows Update offers and never downgrades; compliance only evaluates, so devices held at the targeted version stay noncompliant until the policy target is raised or the compliance minimum lowered
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-feature-update-policy
       status: verify
-    # R6: a filter property contradicting the policy's platform or enrollment
-    #     type. Both sides are the filter topic: the relation is between a
-    #     filter and the assignments that use it.
-    - id: r6-filter-contradicts-platform
-      description: An assignment filter's rule contradicts the platform or enrollment type of the policy it is attached to
-      left: {topic: assignment-filters}
-      right: {topic: assignment-filters}
-      violation: A filter's platform or rule property (operating system, enrollment profile, ownership) can never be true for the devices the policy targets
-      resolution: The filter evaluates per device, so the assignment silently reaches nobody (include) or everybody (exclude)
-      reference: https://learn.microsoft.com/en-us/mem/intune/fundamentals/filters
+    - id: r3-ca-compliant-device-without-compliance
+      description: Conditional Access requires a compliant device, but users/platforms in its scope may receive no compliance policy
+      left:
+        topic: conditional-access
+      right:
+        topic: compliance
+      violation: A conditional access policy grants on a compliant device for users or platforms that no compliance policy is assigned to
+      resolution: 'Decided by the tenant-wide "Mark devices with no compliance policy assigned as" (deviceManagement.settings.secureByDefault). Compliant (default, secureByDefault=false): an enrolled device with no compliance policy counts as compliant, so the "Require device to be marked as compliant" grant is satisfied without any posture check. Not compliant (true): the device is noncompliant and Conditional Access blocks the sign-in, unless the policy uses "Require one of the selected controls" and another control is met. Either way, devices not registered in Entra ID / not enrolled in Intune, and platforms other than Windows 10+, iOS, Android, macOS and Linux Ubuntu, never satisfy the control. Fix: assign a compliance policy for the platform to those users'' devices and set the tenant setting to Not compliant.'
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/overview
       status: verify
-    # R7: enrollment / ESP / Autopilot targeting against its dynamic group rule.
-    - id: r7-enrollment-targeting
-      description: Enrollment, ESP or Autopilot targeting is inconsistent with the dynamic group rule it relies on
-      left: {topic: enrollment}
-      right: {topic: enrollment}
-      violation: An Autopilot profile or Enrollment Status Page targets a dynamic group whose membership rule cannot contain the devices being enrolled
-      resolution: The group rule decides membership; the profile reaches only devices the rule admits at enrollment time
-      reference: https://learn.microsoft.com/en-us/mem/intune/enrollment/windows-enrollment-status
-      status: verify
-    # R8: macOS Platform SSO / account settings against password compliance.
-    - id: r8-macos-sso-password-compliance
-      description: A macOS Platform SSO or account setting conflicts with password compliance
-      left: {topic: macos-accounts-sso, class: configuration, platforms: 'macos'}
+
+    # --- The same setting delivered by more than one surface.
+    - id: r4-encryption-surfaces
+      description: The same encryption switch is set through a legacy typed profile and through the CSP / Settings Catalog
+      left:
+        keys:
+          - '#microsoft.graph.windows10EndpointProtectionConfiguration#bitLockerEncryptDevice'
+          - '#microsoft.graph.macOSEndpointProtectionConfiguration#fileVaultEnabled'
+        class: configuration
       right:
         keys:
-          - '#microsoft.graph.macOSCompliancePolicy#passwordRequired'
-          - '#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength'
-          - '#microsoft.graph.macOSCompliancePolicy#passwordExpirationDays'
+          - device_vendor_msft_bitlocker_requiredeviceencryption
+          - com.apple.mcx.filevault2_enable
+        class: configuration
+      violation: A legacy endpoint-protection profile and a Settings Catalog / endpoint-security / OMA-URI policy set the same encryption switch to different values for overlapping scopes
+      resolution: All policy types have equal precedence; Intune flags the setting as Conflict and it may not be applied at all (neither value is guaranteed). Equal values are not a conflict. Configure encryption in one surface only
+      reference: https://learn.microsoft.com/en-us/intune/device-security/endpoint-security-policies
+      status: verify
+    - id: r4-firewall-surfaces
+      description: Windows Firewall profile settings delivered by more than one policy type
+      left:
+        topic: firewall
+        class: configuration
+        platforms: windows
+      right:
+        topic: firewall
+        class: configuration
+        platforms: windows
+      violation: Two configurations of different kinds set the same Windows Firewall profile setting to different values for overlapping scopes
+      resolution: When two policy instances or types set the same firewall setting with different values, Intune does not send the setting to the device; keep one policy (firewall rules profiles are exempt and merge)
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/firewall
+      status: verify
+
+    # --- Windows Update rings vs feature / driver update policies, and Apple update enforcement.
+    - id: r5-deferral-with-feature-profile
+      description: Update ring feature update deferral where a feature update policy also applies
+      left:
+        keys:
+          - '#microsoft.graph.windowsUpdateForBusinessConfiguration#featureUpdatesDeferralPeriodInDays'
+        class: configuration
+        platforms: windows
+      right:
+        topic: windows-feature-update-policy
+      violation: An update ring sets a feature update deferral greater than zero for devices a feature update policy also targets
+      resolution: Windows Update evaluates both policies and the ring deferral can delay or block the feature update the policy targets; Microsoft recommends a ring feature deferral of 0 where a feature update policy applies, with feature update policies as the primary version control and rings governing restart, deadline and active-hours behaviour only
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-feature-update-policy
+      status: verified
+
+    # --- Encryption prerequisites (BitLocker, FileVault).
+    - id: r1-encryption-windows
+      description: Windows encryption is required by compliance but enabled by no configuration
+      left:
+        keys:
+          - '#microsoft.graph.windows10CompliancePolicy#storageRequireEncryption'
+          - '#microsoft.graph.windows10CompliancePolicy#bitLockerEnabled'
         class: requirement
-      violation: Platform SSO password synchronisation makes the local password follow the Entra password, which a stricter local password compliance rule then fails
-      resolution: With password sync the Entra password policy governs the local password; align the compliance rule with it
-      reference: https://learn.microsoft.com/en-us/mem/intune/configuration/platform-sso-macos
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_bitlocker_requiredeviceencryption
+          - '#microsoft.graph.windows10EndpointProtectionConfiguration#bitLockerEncryptDevice'
+        class: configuration
+        platforms: windows
+      violation: A compliance policy requires BitLocker for a scope that no configuration enabling BitLocker (RequireDeviceEncryption) reaches
+      resolution: Compliance only evaluates; without a configuration that enables BitLocker the device stays non-compliant. With "Require BitLocker" (DHA) the state is measured at boot, so even an encrypted device needs a reboot before it reports compliant
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-windows-settings
+      status: verify
+    - id: r1-encryption-macos
+      description: macOS encryption is required by compliance but enabled by no configuration
+      left:
+        keys:
+          - '#microsoft.graph.macOSCompliancePolicy#storageRequireEncryption'
+        class: requirement
+        platforms: macos
+      right:
+        keys:
+          - com.apple.mcx.filevault2_enable
+          - '#microsoft.graph.macOSEndpointProtectionConfiguration#fileVaultEnabled'
+        class: configuration
+        platforms: macos
+      violation: A compliance policy requires encryption for a scope that no configuration enabling FileVault reaches
+      resolution: Compliance only evaluates; without a configuration that enables FileVault the device stays non-compliant. FileVault encrypts only after the user's next sign-out, so the device is non-compliant until then
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/encrypt-filevault-macos
+      status: verify
+    - id: r-bitlocker-silent-standard-user
+      description: Silent BitLocker without standard-user encryption skips devices where a standard user is signed in
+      left:
+        keys:
+          - device_vendor_msft_bitlocker_allowwarningforotherdiskencryption
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_bitlocker_allowstandarduserencryption
+        class: configuration
+        platforms: windows
+      violation: Silent BitLocker (AllowWarningForOtherDiskEncryption = 0) reaches a scope that no AllowStandardUserEncryption = 1 reaches
+      resolution: With AllowStandardUserEncryption unset or 0, RequireDeviceEncryption "won't try to enable encryption on any drive" while a standard user is signed in; the device stays unencrypted and non-compliant. Set Allow Standard User Encryption = Enabled
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/encrypt-bitlocker-windows
+      status: verify
+    - id: r-filevault-defer-required
+      description: FileVault enabled through MDM without Defer is not applied
+      left:
+        keys:
+          - com.apple.mcx.filevault2_enable
+          - com.apple.mcx.filevault2_forceenableinsetupassistant
+        class: configuration
+        platforms: macos
+      right:
+        keys:
+          - com.apple.mcx.filevault2_defer
+        class: configuration
+        platforms: macos
+      violation: FileVault Enable / Force Enable in Setup Assistant reaches a scope that no FileVault Defer = Enabled reaches
+      resolution: An Enable=On payload sent through MDM needs Defer=true (Intune supplies no user credentials); without it FileVault is not enabled, and on macOS 14.4 Setup Assistant enforcement fails. Set Defer = Enabled in the same policy
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/encrypt-filevault-macos
+      status: verify
+    - id: r4-firewall-surfaces-macos
+      description: macOS firewall payload delivered by more than one configuration
+      left:
+        topic: firewall
+        class: configuration
+        platforms: macos
+      right:
+        topic: firewall
+        class: configuration
+        platforms: macos
+      violation: Two configurations deliver the macOS firewall payload for overlapping scopes
+      resolution: macOS applies the most restrictive union of all com.apple.security.firewall payloads, so the less restrictive values are silently ignored; keep one surface
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/endpoint-security/ref-endpoint-protection-macos
+      status: verify
+    - id: r5b-ring-feature-pause-with-feature-profile
+      description: Update ring pauses feature updates where a feature update policy applies
+      left:
+        keys:
+          - '#microsoft.graph.windowsUpdateForBusinessConfiguration#featureUpdatesPaused'
+        class: configuration
+        platforms: windows
+      right:
+        topic: windows-feature-update-policy
+      violation: An update ring pauses feature updates for devices a feature update policy also targets
+      resolution: The ring pause (up to 35 days) holds back the feature update the policy targets; Learn says to ensure feature updates in the update ring aren't paused when a feature update policy applies
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/windows/manage-feature-updates
+      status: verified
+    - id: r5c-ring-driver-exclusion-with-driver-policy
+      description: Windows Update driver exclusion where a driver update policy applies
+      left:
+        keys:
+          - '#microsoft.graph.windowsUpdateForBusinessConfiguration#driversExcluded'
+          - device_vendor_msft_policy_config_update_excludewudriversinqualityupdate
+        class: configuration
+        platforms: windows
+      right:
+        topic: windows-driver-update-policy
+      violation: An update ring (Windows drivers = Block) or a Settings Catalog policy (Exclude WU Drivers in Quality Update) excludes Windows Update drivers for devices a driver update policy targets
+      resolution: The exclusion blocks installation of the drivers the driver update policy approves; Learn requires the ring's Windows driver setting = Allow and Exclude WU Drivers in Quality Update = Allow Windows Update drivers
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-driver-update-policy
+      status: verified
+    - id: r5d-overlapping-feature-update-policies
+      description: Several feature update policies reach the same device
+      left:
+        topic: windows-feature-update-policy
+      right:
+        topic: windows-feature-update-policy
+      violation: Two feature update policies targeting different Windows versions reach the same device
+      resolution: Windows Update offers one feature update at a time and always the latest applicable version (Windows 11 beats Windows 10); the lower-version policy has no effect on that device. Same version Required + Optional is offered as Required
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/windows/configure-feature-update-policy
+      status: verified
+    - id: r5e-apple-enforcement-ignores-update-settings
+      description: An Apple DDM update enforcement makes the device ignore Software Update Settings automatic actions
+      left:
+        keys:
+          - ddm-latestsoftwareupdate_enforcelatestsoftwareupdateversion
+          - ddm-latestsoftwareupdate_delayindays
+          - ddm-latestsoftwareupdate_installtime
+        class: configuration
+        platforms: macos|ios
+      right:
+        keys:
+          - softwareupdate_automaticactions
+          - softwareupdate_automaticactions_download
+          - softwareupdate_automaticactions_installosupdates
+          - softwareupdate_automaticactions_installsecurityupdate
+        class: configuration
+        platforms: macos|ios
+      violation: A DDM update enforcement (Software Update Enforce Latest) and Software Update Settings automatic actions reach the same device
+      resolution: The enforcement wins; the device ignores software update settings including automatic update actions, and may install before the deadline when idle
+      reference: https://learn.microsoft.com/en-us/intune/device-updates/apple/
+      status: verified
+
+    # --- Defender for Endpoint and macOS Defender surfaces.
+    - id: r1-defender-threat-level
+      description: Windows compliance requires an MDE machine risk score, but no MDE onboarding configuration reaches the scope
+      left:
+        keys:
+          - '#microsoft.graph.windows10CompliancePolicy#deviceThreatProtectionEnabled'
+          - '#microsoft.graph.windows10CompliancePolicy#deviceThreatProtectionRequiredSecurityLevel'
+        class: requirement
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_windowsadvancedthreatprotection_onboarding_fromconnector
+          - device_vendor_msft_windowsadvancedthreatprotection_configurationtype
+          - device_vendor_msft_windowsadvancedthreatprotection_onboarding
+        class: configuration
+        platforms: windows
+      violation: A compliance policy requires the device to be at or under an MDE machine risk score for a scope that no Defender for Endpoint onboarding (EDR) configuration reaches
+      resolution: The risk score exists only for devices onboarded to Defender for Endpoint, and only when the Intune–MDE service connection is set up (integration steps 1–2). Onboard the scope with an EDR policy ("Auto from connector"). Onboarding by GPO, script or Configuration Manager is invisible to the export, so verify it in the Defender portal.
+      reference: https://learn.microsoft.com/en-us/intune/device-security/microsoft-defender/configure-integration
+      status: verify
+    - id: r-macos-defender-two-surfaces
+      description: macOS Defender preferences delivered both by Settings Catalog / endpoint-security preferences and by a custom com.microsoft.wdav profile
+      left:
+        keys:
+          - com.apple.managedclient.preferences_enforcementlevel_antivirusengine
+          - com.apple.managedclient.preferences_enablerealtimeprotection
+          - com.apple.managedclient.preferences_enforcementlevel_tamperprotection
+          - com.apple.managedclient.preferences_cloudblocklevel
+          - com.apple.managedclient.preferences_threattypesettingsmergepolicy
+          - com.apple.managedclient.preferences_disallowedthreatactions
+          - com.apple.managedclient.preferences_automaticdefinitionupdateenabled
+          - com.apple.managedclient.preferences_scanafterdefinitionupdate
+        class: configuration
+        platforms: macos
+      right:
+        keys:
+          - '#microsoft.graph.macOSCustomConfiguration#com.microsoft.wdav'
+        class: configuration
+        platforms: macos
+      violation: The same devices receive Defender for Endpoint antivirus preferences from both a Settings Catalog / endpoint-security Antivirus policy and a custom com.microsoft.wdav configuration profile
+      resolution: Microsoft's Intune deployment guide says to configure Defender preferences by only one method (endpoint security policy, step 9a, or the custom com.microsoft.wdav profile, step 9b). Learn does not document which value wins when both deliver the same preference domain, so remove one surface.
+      reference: https://learn.microsoft.com/en-us/defender-endpoint/mac-install-with-intune
+      status: verify
+
+    # --- Windows Hello for Business, LAPS and DeviceLock interplay.
+    - id: r-whfb-user-over-device-enable
+      description: '"Use Windows Hello for Business" set in both device and user scope'
+      left:
+        keys:
+          - device_vendor_msft_passportforwork_{tenantid}_policies_usepassportforwork
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - user_vendor_msft_passportforwork_{tenantid}_policies_usepassportforwork
+        class: configuration
+        platforms: windows
+      violation: The same Windows Hello for Business policy is configured for both the device and the user scope of the PassportForWork CSP
+      resolution: The user-scope value wins; if a user policy is set the corresponding device (computer) policy is ignored, and the device value applies only where no user value is set
+      reference: https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/configure
+      status: verified
+    - id: r-whfb-user-over-device-minpinlength
+      description: Minimum PIN length set in both device and user scope
+      left:
+        keys:
+          - device_vendor_msft_passportforwork_{tenantid}_policies_pincomplexity_minimumpinlength
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - user_vendor_msft_passportforwork_{tenantid}_policies_pincomplexity_minimumpinlength
+        class: configuration
+        platforms: windows
+      violation: Windows Hello for Business minimum PIN length is configured for both the device and the user scope
+      resolution: The user-scope value wins; the device-scope value is ignored for users that receive a user value
+      reference: https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/configure
+      status: verified
+    - id: r-whfb-pin-vs-devicelock-length
+      description: DeviceLock password length and Windows Hello for Business PIN length both configured
+      left:
+        keys:
+          - device_vendor_msft_policy_config_devicelock_mindevicepasswordlength
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_passportforwork_{tenantid}_policies_pincomplexity_minimumpinlength
+          - user_vendor_msft_passportforwork_{tenantid}_policies_pincomplexity_minimumpinlength
+        class: configuration
+        platforms: windows
+      violation: The device PIN length is governed by both the DeviceLock CSP and the PassportForWork CSP
+      resolution: 'A device has a single PIN, governed by PassportForWork. Learn is inconsistent on the outcome: the PassportForWork CSP says its values take precedence over DeviceLock/EAS complexity rules; the WHfB configure page says Windows enforces the strictest of the governing policies. Align both values.'
+      reference: https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/configure
+      status: verify
+    - id: r-laps-adminname-ignored-by-automatic
+      description: LAPS AdministratorAccountName set together with automatic account management
+      left:
+        keys:
+          - device_vendor_msft_laps_policies_administratoraccountname
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_laps_policies_automaticaccountmanagementenabled
+        class: configuration
+        platforms: windows
+      violation: AdministratorAccountName is configured while automatic account management may be enabled
+      resolution: When AutomaticAccountManagementEnabled is true, AdministratorAccountName is ignored and LAPS manages the account named by AutomaticAccountManagementNameOrPrefix / Target
+      reference: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings
+      status: verify
+    - id: r-laps-automatic-vs-rename-admin
+      description: LAPS automatic account management and the "Rename administrator account" security option both act on the managed account
+      left:
+        keys:
+          - device_vendor_msft_laps_policies_automaticaccountmanagementenabled
+          - device_vendor_msft_laps_policies_automaticaccountmanagementtarget
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_policy_config_localpoliciessecurityoptions_accounts_renameadministratoraccount
+        class: configuration
+        platforms: windows
+      violation: A security-options policy renames the built-in Administrator while LAPS automatic account management targets that account (AutomaticAccountManagementTarget = 0)
+      resolution: In automatic mode LAPS controls all configuration aspects of the managed account (including its name) and blocks external modification (STATUS_POLICY_CONTROLLED_ACCOUNT, events 10101-10104), so the rename does not apply. With Target = 1 (LAPS-created account, the default) the two settings act on different accounts and do not conflict.
+      reference: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-concepts-account-management-modes
+      status: verify
+    - id: r-laps-adminname-vs-rename-admin
+      description: LAPS AdministratorAccountName may point at the renamed built-in Administrator
+      left:
+        keys:
+          - device_vendor_msft_laps_policies_administratoraccountname
+        class: configuration
+        platforms: windows
+      right:
+        keys:
+          - device_vendor_msft_policy_config_localpoliciessecurityoptions_accounts_renameadministratoraccount
+        class: configuration
+        platforms: windows
+      violation: AdministratorAccountName names the built-in Administrator (as renamed by the security option) instead of leaving it empty
+      resolution: Leave AdministratorAccountName empty to manage the built-in Administrator; LAPS finds it by its well-known RID even when renamed. Set it only for a separate custom account, which must already exist
+      reference: https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings
+      status: verify
+
+    # --- macOS Platform SSO, LAPS and ADE enrollment.
+    - id: r8-macos-sso-password-sync-complexity
+      description: Platform SSO password sync vs local password complexity (passcode payload or compliance)
+      left:
+        keys:
+          - com.apple.extensiblesso_platformsso_authenticationmethod
+          - com.apple.extensiblesso_authenticationmethod
+        class: configuration
+        platforms: macos
+      right:
+        keys:
+          - com.apple.mobiledevice.passwordpolicy_minlength
+          - com.apple.mobiledevice.passwordpolicy_requirealphanumeric
+          - com.apple.mobiledevice.passwordpolicy_customregex
+          - '#microsoft.graph.macOSCompliancePolicy#passwordRequiredType'
+          - '#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength'
+          - '#microsoft.graph.macOSCompliancePolicy#passwordMinimumCharacterSetCount'
+          - '#microsoft.graph.macOSCompliancePolicy#passwordBlockSimple'
+        platforms: macos
+      violation: With the Platform SSO Password authentication method the Entra password replaces the local password; an Intune passcode or compliance password rule more complex than the Entra password policy makes password sync fail and users are denied access (not applicable when the method is UserSecureEnclaveKey or SmartCard)
+      resolution: Make the Intune passcode/compliance complexity identical to the Entra ID password policy; the local policy is applied and blocks the synced password, Entra does not adapt
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/settings-catalog/configure-platform-sso-macos
+      status: verify
+    - id: r8b-macos-compliance-password-expires-sso-laps
+      description: Compliance/device-restriction password requirement vs Platform SSO- or LAPS-created local accounts
+      left:
+        keys:
+          - '#microsoft.graph.macOSCompliancePolicy#passwordRequired'
+          - '#microsoft.graph.macOSGeneralDeviceConfiguration#passwordRequired'
+        platforms: macos
+      right:
+        keys:
+          - com.apple.extensiblesso_platformsso_enablecreateuseratlogin
+          - com.apple.extensiblesso_platformsso_enableregistrationduringsetup
+          - ade_accountsettings_createlocaladmin
+          - ade_accountsettings_createlocalprimary
+        platforms: macos
+      violation: Requiring a password in a macOS compliance policy (or device restriction template) expires the existing password of all local accounts, including those created by LAPS and Platform SSO (Change at next authentication is on by default), causing sign-in issues for newly created LAPS accounts
+      resolution: Manage the local password with a Settings Catalog passcode policy with Change At Next Auth = False, and do not set password rules in compliance/device-restriction policies for these devices
+      reference: https://learn.microsoft.com/en-us/intune/device-security/compliance/ref-macos-settings
+      status: verify
+    - id: r-macos-laps-admin-passcode-reset
+      description: ADE local admin (LAPS) account vs any passcode profile (known issue < macOS 26.4)
+      left:
+        keys:
+          - ade_accountsettings_createlocaladmin
+          - ade_accountsettings_adminaccountpasswordrotation
+        platforms: macos
+      right:
+        keys:
+          - com.apple.mobiledevice.passwordpolicy_forcepin
+          - com.apple.mobiledevice.passwordpolicy_minlength
+          - com.apple.mobiledevice.passwordpolicy_maxpinageindays
+        class: configuration
+        platforms: macos
+      violation: On macOS earlier than 26.4, an ADE-enrolled Mac with a configured local admin account and a targeted passcode profile prompts for an admin password reset even when Change at next auth is off or Max Age is set; Intune's stored LAPS password then diverges from the device
+      resolution: Upgrade to macOS 26.4; until then rotate the admin password from Intune after the reset to resync
+      reference: https://learn.microsoft.com/en-us/intune/device-security/laps/setup-macos
+      status: verify
+    - id: r-macos-psso-registration-ade-profile
+      description: Platform SSO registration during Setup Assistant vs ADE enrollment policy settings
+      left:
+        keys:
+          - com.apple.extensiblesso_platformsso_enableregistrationduringsetup
+        class: configuration
+        platforms: macos
+      right:
+        keys:
+          - ade_macos_useraffinity
+          - ade_macos_authenticationmethod
+          - ade_macos_awaitconfiguration
+          - ade_lockedenrollment
+        platforms: macos
+      violation: PSSO registration during Setup Assistant must not target userless ADE devices (unexpected enrollment, lost affinity) and requires an ADE profile with user affinity, Setup Assistant with modern authentication, Await final configuration = Yes and Locked enrollment = Yes; otherwise enrollment fails and the device must be wiped
+      resolution: The ADE profile decides; set it to user affinity + modern auth + await final configuration + locked enrollment, assign PSSO policy, Company Portal LOB app and ADE profile to the same static user groups (macOS 26+)
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/settings-catalog/configure-platform-sso-during-enrollment
+      status: verify
+    - id: r-macos-psso-account-name-overrides-ade-account
+      description: Platform SSO during ADE account-name mapping vs ADE enrollment policy local account name
+      left:
+        keys:
+          - com.apple.extensiblesso_platformsso_enableregistrationduringsetup
+          - com.apple.extensiblesso_platformsso_tokentousermapping_accountname
+        class: configuration
+        platforms: macos
+      right:
+        keys:
+          - ade_accountsettings_primaryaccountname
+          - ade_accountsettings_prefillaccountinfo
+        platforms: macos
+      violation: For Platform SSO during ADE, the PSSO Token To User Mapping > Account Name overwrites the local account name set in the ADE enrollment policy (LAPS account settings); an {{onPremisesSamAccountName}} value there is ignored
+      resolution: PSSO wins; to keep onPremisesSamAccountName deploy Company Portal 2608.0+ and set Enable Create First User During Setup = false (users then authorize three times during enrollment)
+      reference: https://learn.microsoft.com/en-us/intune/device-configuration/settings-catalog/configure-platform-sso-macos
       status: verify
