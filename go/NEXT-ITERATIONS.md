@@ -77,6 +77,12 @@ compliance against configuration and the LLM step judges against a reviewed cata
 > entry.
 >
 > **Implementer.** opus
+>
+> **Decision.** Scope of the Claude Cowork review brief: verify **and extend** the seed catalog — read the real
+> exports locally (`output/<tenant>/resources/` and `consistency/` only), research per resource type what Microsoft
+> Learn documents as conflicting or taking precedence, and propose additions from the keys the tenants actually
+> configure; no tenant value, name or id leaves the machine or appears in the returned plan. Widened by the user on
+> 2026-10-03; supersedes "nothing read under `output/`" in the delivered brief bullet.
 
 **Plan.**
 
