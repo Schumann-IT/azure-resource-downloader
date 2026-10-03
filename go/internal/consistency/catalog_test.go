@@ -126,7 +126,9 @@ func TestCompileCatalogValidation(t *testing.T) {
 			[]string{"rules", "right", "neither a topic nor keys"}},
 		{"rule side with both topic and keys", func(c *CatalogConfig) { c.Rules[0].Right.Topic = "encryption" },
 			[]string{"rules", "right", "both a topic and keys"}},
-		{"rule key not canonical", func(c *CatalogConfig) { c.Rules[0].Right.Keys = []string{"./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall"} },
+		{"rule key not canonical", func(c *CatalogConfig) {
+			c.Rules[0].Right.Keys = []string{"./Vendor/MSFT/Firewall/MdmStore/DomainProfile/EnableFirewall"}
+		},
 			[]string{"rules", `use "device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"`}},
 		{"rule unknown class", func(c *CatalogConfig) { c.Rules[0].Left.Class = "policy" },
 			[]string{"rules", `unknown class "policy"`}},

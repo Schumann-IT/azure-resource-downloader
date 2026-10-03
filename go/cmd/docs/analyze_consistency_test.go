@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -84,6 +85,30 @@ func TestAnalyzeConsistencyRefusesAnInvalidCatalog(t *testing.T) {
 	}
 }
 
+// TestAnalyzeConsistencyRefusesAnUnknownField: a misspelt optional field is
+// refused instead of silently dropped.
+func TestAnalyzeConsistencyRefusesAnUnknownField(t *testing.T) {
+	output := t.TempDir()
+	writeEmptyExport(t, output)
+
+	err := runConsistency(t, output, map[string]interface{}{
+		"version": 1,
+		"equivalences": []interface{}{map[string]interface{}{
+			"id": "e", "members": []interface{}{"a_one", "a_two"}, "relation": "same",
+			"enforce": map[string]interface{}{"macos": true},
+		}},
+	})
+	if err == nil {
+		t.Fatal("want an error for an unknown field")
+	}
+	if got := cmdutil.ExitCode(err); got != exitCannotAnswer {
+		t.Errorf("exit code = %d, want %d", got, exitCannotAnswer)
+	}
+	if !strings.Contains(err.Error(), "invalid 'consistency' config section") {
+		t.Errorf("error %q should name the section", err)
+	}
+}
+
 // TestAnalyzeConsistencyRefusesBeforeResolving: with no export at all, the
 // catalog error is still the one reported — compilation comes first.
 func TestAnalyzeConsistencyRefusesBeforeResolving(t *testing.T) {
@@ -150,4 +175,43 @@ func TestTailoredConfigCatalogCompiles(t *testing.T) {
 			t.Errorf("equivalence %q decoded incompletely: %+v", e.ID, e)
 		}
 	}
+}
+
+// TestTailoredConfigSeedsThePasswordLengthEquivalence pins the seed the
+// contradiction analysis relies on: the macOS password length members and relation.
+func TestTailoredConfigSeedsThePasswordLengthEquivalence(t *testing.T) {
+	v := viper.New()
+	v.SetConfigFile(filepath.Join("..", "..", "config-tailored-intune.yaml"))
+	if err := v.ReadInConfig(); err != nil {
+		t.Fatal(err)
+	}
+	var cfg consistency.CatalogConfig
+	if err := v.UnmarshalKey("consistency", &cfg); err != nil {
+		t.Fatal(err)
+	}
+	c, err := consistency.CompileCatalog(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength",
+		"#microsoft.graph.macOSGeneralDeviceConfiguration#passwordMinimumLength",
+		"com.apple.mobiledevice.passwordpolicy_minlength",
+	}
+	for _, e := range c.Equivalences() {
+		if e.ID != "macos-password-minimum-length" {
+			continue
+		}
+		got := append([]string(nil), e.Members...)
+		sort.Strings(got)
+		sort.Strings(want)
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("members = %v, want %v", got, want)
+		}
+		if string(e.Relation) != ">=" {
+			t.Errorf("relation = %q, want >=", e.Relation)
+		}
+		return
+	}
+	t.Fatal("equivalence macos-password-minimum-length not found in the seed")
 }

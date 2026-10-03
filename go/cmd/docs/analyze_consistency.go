@@ -10,6 +10,7 @@ import (
 	"azure-resource-downloader/internal/logger"
 	"azure-resource-downloader/internal/version"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -131,7 +132,9 @@ func loadConsistencyCatalog() (*consistency.Compiled, error) {
 		return nil, nil
 	}
 	var cfg consistency.CatalogConfig
-	if err := viper.UnmarshalKey("consistency", &cfg); err != nil {
+	if err := viper.UnmarshalKey("consistency", &cfg, func(c *mapstructure.DecoderConfig) {
+		c.ErrorUnused = true // a misspelt optional field is refused, not silently ignored
+	}); err != nil {
 		return nil, err
 	}
 	return consistency.CompileCatalog(cfg)
