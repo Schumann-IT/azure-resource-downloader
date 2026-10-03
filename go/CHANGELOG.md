@@ -41,7 +41,7 @@ This project is released independently of the documentation browser in `web/`: i
   password and passcode, encryption, firewall, Defender, Windows Hello, LAPS, update-policy and Platform SSO
   relations; the entries Learn fully supports are `verified`, the Apple mappings stay `verify`. The catalog is
   opt-in: **copy the `consistency:` section from `config-tailored-intune.yaml` into your base file to use it.** See
-  the README's *The catalog* section.
+  the README's *The catalog* section. (#58)
 
 ### Fixed
 
@@ -53,7 +53,7 @@ This project is released independently of the documentation browser in `web/`: i
   duplicates. Both now index under the Settings Catalog's `vendor_msft_firewall_…` key. A consistency catalog that
   names a firewall setting in the old `device_vendor_msft_firewall_…` form is now refused with the form to use —
   such a member only ever matched custom profiles. **If your base file's `consistency:` section uses that form,
-  replace it as the error message says.**
+  replace it as the error message says.** (#58)
 
 ## [0.4.0] - 2026-10-02
 

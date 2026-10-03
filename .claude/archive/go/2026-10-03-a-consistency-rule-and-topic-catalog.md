@@ -5,6 +5,7 @@ status: done
 started: 2026-10-03
 finished: 2026-10-03
 branch: feat/go-consistency-catalog
+pr: 58
 changelog: Unreleased
 ---
 ## A consistency rule and topic catalog in the configuration
