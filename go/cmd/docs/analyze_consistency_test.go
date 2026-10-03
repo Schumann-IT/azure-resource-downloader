@@ -238,6 +238,13 @@ func TestTailoredConfigCatalogUsesTheBridgedFirewallForm(t *testing.T) {
 			t.Errorf("%s uses the refused %s form: %q", where, refused, key)
 		}
 	}
+	// A topic key is a regex, so the refused form may hide behind a flag group
+	// or inside an alternation: match it anywhere, case-insensitively.
+	checkRegex := func(where, key string) {
+		if strings.Contains(strings.ToLower(key), refused) {
+			t.Errorf("%s uses the refused %s form: %q", where, refused, key)
+		}
+	}
 	for _, e := range cfg.Equivalences {
 		for _, m := range e.Members {
 			check("equivalence "+e.ID, m)
@@ -245,7 +252,7 @@ func TestTailoredConfigCatalogUsesTheBridgedFirewallForm(t *testing.T) {
 	}
 	for _, topic := range cfg.Topics {
 		for _, m := range topic.Match {
-			check("topic "+topic.ID, m.Key)
+			checkRegex("topic "+topic.ID, m.Key)
 		}
 	}
 	for _, r := range cfg.Rules {
