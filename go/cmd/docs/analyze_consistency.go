@@ -51,6 +51,13 @@ leaves other files there alone. A re-baselining 'resource download' clears the
 consistency/ tree. Findings never change the exit code; it exits 2 when there
 is no export, the export belongs to another tenant, or a write fails.
 
+With a 'consistency:' section in the base configuration file (the catalog:
+equivalences, topics and rules), the equivalences join keys across policy
+types — compliance against configuration included — and consistency/
+metadata.yaml records a catalog: block (its hash, its counts and the
+equivalence members this export never sets). An invalid section exits 2
+before the export is resolved or anyone signs in.
+
 Under --dry-run nothing is written and nothing is cleared; the counts are
 reported.
 
@@ -81,6 +88,13 @@ func runAnalyzeConsistency(cmd *cobra.Command, _ []string) error {
 	dryRun := viper.GetBool("dry-run")
 	domain := cmdutil.DeclaredDomain(cmd)
 
+	// The catalog is compiled before the export is resolved, so a typo in it
+	// fails offline and before any sign-in.
+	catalog, err := loadConsistencyCatalog()
+	if err != nil {
+		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("invalid 'consistency' config section: %w", err))
+	}
+
 	tenantDir, expectDomain, err := cmdutil.ResolveExportDir(ctx, baseOutput, domain, exportCredential(domain))
 	if err != nil {
 		return cmdutil.WithExitCode(exitCannotAnswer, fmt.Errorf("cannot resolve which export to analyze: %w", err))
@@ -91,9 +105,7 @@ func runAnalyzeConsistency(cmd *cobra.Command, _ []string) error {
 		TenantDir:    tenantDir,
 		ExpectDomain: expectDomain,
 		ToolVersion:  version.Tool(),
-		// The configuration catalog supplies equivalences in a later step;
-		// until then only exact keys are joined.
-		Equivalences: nil,
+		Catalog:      catalog,
 		DryRun:       dryRun,
 	})
 	if err != nil {
@@ -108,13 +120,26 @@ func runAnalyzeConsistency(cmd *cobra.Command, _ []string) error {
 		return cmdutil.WithExitCode(exitCannotAnswer, err)
 	}
 
-	reportAnalyzeConsistency(res, dryRun)
+	reportAnalyzeConsistency(res, catalog, dryRun)
 	return nil
 }
 
+// loadConsistencyCatalog reads and compiles the `consistency:` section of the
+// configuration; nil when the section is absent.
+func loadConsistencyCatalog() (*consistency.Compiled, error) {
+	if !viper.IsSet("consistency") {
+		return nil, nil
+	}
+	var cfg consistency.CatalogConfig
+	if err := viper.UnmarshalKey("consistency", &cfg); err != nil {
+		return nil, err
+	}
+	return consistency.CompileCatalog(cfg)
+}
+
 // reportAnalyzeConsistency prints the counts and ends with one summary line per
-// finding kind.
-func reportAnalyzeConsistency(res *consistency.Result, dryRun bool) {
+// finding kind, and one catalog line when a catalog is configured.
+func reportAnalyzeConsistency(res *consistency.Result, catalog *consistency.Compiled, dryRun bool) {
 	log := logger.Default
 	c := res.Metadata.Counts
 
@@ -138,6 +163,15 @@ func reportAnalyzeConsistency(res *consistency.Result, dryRun bool) {
 		"ruled_out_by_scope", c.RuledOutByScope)
 	if c.Unreadable > 0 {
 		log.Warn("Some resources could not be read and were not indexed", "unreadable", c.Unreadable)
+	}
+
+	if cat := res.Metadata.Catalog; cat != nil && catalog != nil {
+		log.Info("Consistency catalog",
+			"equivalences", cat.Counts.Equivalences,
+			"topics", cat.Counts.Topics,
+			"rules", cat.Counts.Rules,
+			"unmatched_members", len(cat.UnmatchedMembers),
+			"verify", catalog.VerifyCount())
 	}
 
 	if dryRun {

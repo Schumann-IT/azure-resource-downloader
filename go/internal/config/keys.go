@@ -85,6 +85,10 @@ var keyScopes = map[string]Scope{
 	"prune":           ScopeGeneral,
 	"transformers":    ScopeGeneral,
 	"taxonomy":        ScopeGeneral,
+	// The consistency catalog (equivalences, topics, rules) describes how
+	// Intune settings relate, not one tenant, so one reviewed catalog serves
+	// every tenant. It has no default: absent means no catalog.
+	"consistency": ScopeGeneral,
 
 	// Command-line only. Each of these was a config key before the
 	// configuration became the single source of truth, so naming them here

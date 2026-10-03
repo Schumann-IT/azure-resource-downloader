@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -438,7 +439,7 @@ func walkCatalogChildren(value map[string]interface{}, c *collector) {
 // addCatalogMembers indexes the collections of a nested instance as additive
 // lists under the collection's lowercased id: one member per element.
 func addCatalogMembers(id string, inst map[string]interface{}, c *collector) {
-	key := strings.ToLower(id)
+	key := catalogKey(id)
 	for _, raw := range listOf(inst["choiceSettingCollectionValue"]) {
 		cv, ok := raw.(map[string]interface{})
 		if !ok {
@@ -514,7 +515,7 @@ func walkCatalogChoice(id string, cv map[string]interface{}, c *collector) {
 		if rest, ok := strings.CutPrefix(strings.ToLower(option), strings.ToLower(id)+"_"); ok {
 			scalar = rest
 		}
-		c.add(strings.ToLower(id), rawValue{sourceKey: id, value: option, scalar: scalar})
+		c.add(catalogKey(id), rawValue{sourceKey: id, value: option, scalar: scalar})
 	}
 	walkCatalogChildren(cv, c)
 }
@@ -530,7 +531,7 @@ func isCatalogSecret(sv map[string]interface{}) bool {
 // addCatalogSimple indexes a simple value. A secret (valueState present, or a
 // secret value type) is set with an unknown value, whatever the export holds.
 func addCatalogSimple(id string, sv map[string]interface{}, c *collector) {
-	key := strings.ToLower(id)
+	key := catalogKey(id)
 	if isCatalogSecret(sv) {
 		c.add(key, rawValue{sourceKey: id, unknown: true})
 		return
@@ -571,6 +572,50 @@ func normaliseOMAURI(uri string) string {
 		k = "device/" + k
 	}
 	return strings.ReplaceAll(k, "/", "_")
+}
+
+// catalogKey is the canonical key of a Settings Catalog, Settings Catalog
+// compliance or Administrative Templates definition id: the id lowercased.
+func catalogKey(id string) string {
+	return strings.ToLower(id)
+}
+
+// typedKey is the canonical key of a typed (legacy) property:
+// "<@odata.type>#<dotted.path>", e.g.
+// "#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength". Apple custom
+// profiles use it with "<property>:<identifier>" as the path.
+func typedKey(odataType, path string) string {
+	return odataType + "#" + path
+}
+
+// typedKeyPattern matches a key in the typedKey form with a non-empty path.
+var typedKeyPattern = regexp.MustCompile(`^#microsoft\.graph\.[A-Za-z0-9_]+#\S.*$`)
+
+// intentKeySeparator marks an intent definition id, which the index keeps
+// verbatim ("deviceConfiguration--windows10EndpointProtectionConfiguration_…").
+const intentKeySeparator = "--"
+
+// validMemberKey reports whether key is already in one of the canonical forms
+// the index emits — a typedKey, an intent id kept verbatim, or a key equal to
+// its normaliseOMAURI form (which is also what catalogKey yields for every
+// Settings Catalog and ADMX id) — so a catalog member can only ever name
+// something the index could produce. When it is not, canonical is the form
+// to paste instead ("" when none can be derived).
+func validMemberKey(key string) (ok bool, canonical string) {
+	switch {
+	case typedKeyPattern.MatchString(key):
+		return true, ""
+	case strings.HasPrefix(key, "#"):
+		return false, ""
+	case strings.Contains(key, intentKeySeparator):
+		canonical = strings.TrimSpace(key)
+	default:
+		canonical = normaliseOMAURI(key)
+	}
+	if canonical != "" && canonical == key {
+		return true, ""
+	}
+	return false, canonical
 }
 
 // isMaskedValue reports a value the service masked (a run of asterisks).
@@ -663,7 +708,7 @@ func walkTyped(odataType, path string, v interface{}, c *collector) {
 	if notConfigured(v, true) || isTypedEnumDefault(path, v) {
 		return
 	}
-	key := odataType + "#" + path
+	key := typedKey(odataType, path)
 	c.add(key, typedLeaf(key, path, v))
 }
 
@@ -700,7 +745,7 @@ func indexGroupPolicy(doc map[string]interface{}, c *collector) {
 		if enabled {
 			v = "enabled"
 		}
-		c.add(strings.ToLower(id), rawValue{sourceKey: id, value: v, scalar: v})
+		c.add(catalogKey(id), rawValue{sourceKey: id, value: v, scalar: v})
 	}
 }
 

@@ -330,3 +330,103 @@ transformers:
 #           label: iOS/iPadOS
 #           match:
 #             - platforms: '(?:ios|ipados)'
+
+# ---------------------------------------------------------------------------
+# Consistency catalog — equivalences, topics and rules for
+# 'docs analyze-consistency'
+# ---------------------------------------------------------------------------
+# Tells the consistency analysis which settings describe the SAME CONTROL across
+# policy types (a compliance property, a Settings Catalog id, an OMA-URI, a
+# legacy typed property), how to group resources into TOPICS, and which
+# cross-type RULES to check — each with its Microsoft Learn source and a review
+# status. It is read ONLY by 'docs analyze-consistency'; the download pipeline
+# ignores it, so it never affects a resource's YAML or any recorded fact.
+#
+# It records RULES, never facts: edit it and re-run 'docs analyze-consistency'.
+# An invalid section is a fatal error (exit 2) naming the section and the entry
+# id, raised before the export is resolved or anyone signs in.
+#
+# The default is NO catalog: with this key absent the analysis joins exact keys
+# only (mechanical findings). Leave it commented out — an active catalog changes
+# consistency/mechanical.yaml and consistency/metadata.yaml, so spelling it out
+# here would break the "loading this file == no config" guarantee. A reviewed
+# seed catalog lives in config-tailored-intune.yaml; copy its 'consistency:'
+# section into your base file to opt in.
+#
+# Closed vocabularies:
+#   relation   same | '>=' | '<=' | '=' | required   (quote the operators: a
+#              bare '>' starts a YAML block scalar). 'same': both sides enforce
+#              the control; an operator or 'required': the compliance side is
+#              the requirement the configuration value must satisfy.
+#   enforced   per platform family: windows | macos | ios | android | linux —
+#              true when the compliance side is applied to the device, not only
+#              evaluated (absent = evaluated only).
+#   status     verified | verify   (a finding resting on a 'verify' entry is
+#              never firm, it is 'possible')
+#   class      requirement | configuration
+#   reference  must start with https://learn.microsoft.com/
+#
+# Member and selector keys must already be in the canonical form the setting
+# index emits — a lowercase Settings Catalog / ADMX id, a normalised OMA-URI
+# (lowercase, '/' -> '_', no leading './'), "#microsoft.graph.<Type>#<property>"
+# or an intent definition id. A raw OMA-URI or a mixed-case id is rejected with
+# the canonical form in the message, ready to paste. A member no setting of the
+# export carries is listed under 'unmatchedMembers' in consistency/metadata.yaml,
+# never an error.
+#
+# Structure:
+#   consistency:
+#     version: 1                       # schema version, must be >= 1
+#     equivalences:
+#       - id: <url-safe-token>         # stable id; findings use "equivalence:<id>"
+#         description: <text>          # which control the members describe
+#         members: [<key>, <key>, …]   # at least two distinct canonical keys
+#         relation: '>='
+#         enforced: {macos: true}      # optional
+#         reference: https://learn.microsoft.com/…
+#         status: verify
+#     topics:
+#       - id: <url-safe-token>
+#         label: <display name>
+#         match:                       # ANY rule matches (OR); within a rule
+#                                      # every set field matches (AND)
+#           - name: <regex>            # displayName (case-insensitive)
+#             type: <exact type>       # e.g. Microsoft.Graph/deviceConfigurations
+#             odataType: <regex>       # @odata.type (case-insensitive)
+#             platforms: <regex>       # the platforms fact (case-insensitive)
+#             key: <regex>             # any canonical setting key of the resource
+#     rules:
+#       - id: <url-safe-token>
+#         description: <text>
+#         left:  {topic: <topic id>, class: requirement}     # a topic …
+#         right: {keys: [<key>, …], platforms: 'macos'}      # … or keys
+#         violation: <what counts as a violation>
+#         resolution: <which setting wins>
+#         reference: https://learn.microsoft.com/…
+#         status: verify
+#
+# consistency:
+#   version: 1
+#   equivalences:
+#     - id: macos-password-minimum-length
+#       description: Minimum password length on macOS
+#       members:
+#         - '#microsoft.graph.macOSCompliancePolicy#passwordMinimumLength'
+#         - com.apple.mobiledevice.passwordpolicy_minlength
+#       relation: '>='
+#       reference: https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-mac-os
+#       status: verify
+#   topics:
+#     - id: encryption
+#       label: Encryption
+#       match:
+#         - key: '(?:filevault|bitlocker)'
+#   rules:
+#     - id: r1-encryption
+#       description: Compliance requires encryption that no configuration enables
+#       left: {topic: encryption, class: requirement}
+#       right: {topic: encryption, class: configuration}
+#       violation: A compliance policy requires encryption and no in-scope configuration enables it
+#       resolution: The configuration must enable it; compliance only reports
+#       reference: https://learn.microsoft.com/en-us/mem/intune/protect/encrypt-devices-filevault
+#       status: verify
