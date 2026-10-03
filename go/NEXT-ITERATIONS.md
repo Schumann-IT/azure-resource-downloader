@@ -305,6 +305,20 @@ because the current call works. **Revisit** if it starts failing, or with other 
 
 ## Parked ideas — drift & compare
 
+### Idea: reject catalog members whose type is never indexed
+
+*Area:* drift & compare · *Impact:* low · *Effort:* S · *Ships with:* standalone; best before the Cowork catalog review's fixes are pasted in
+
+The `consistency:` validation checks a member's *form* only (`validMemberKey`), so a well-formed typed key of a type
+the setting index never reads passes and can never match — e.g. the seed's
+`#microsoft.graph.windowsFeatureUpdateProfile#featureUpdateVersion` (feature update profiles are not among the six
+indexed types). It is only visible later as an `unmatchedMembers` entry, indistinguishable from a key this export
+merely does not carry. Fix: refuse a typed member or `keys:` selector whose `@odata.type` belongs to no indexed
+source type, naming the type, with a test on that seed key. **Parked** because it needs a map from `@odata.type` to
+source type that the index does not keep today (`deviceConfigurations` alone spans dozens of types), and the Cowork
+review is told to flag unmatchable members itself. **Revisit** when the review's fixes land, or when a second
+unmatchable member is found.
+
 ### Idea: per-document backlinks to consistency findings
 
 *Area:* drift & compare · *Impact:* low · *Effort:* M · *Ships with:* after the consistency analysis job and its web view
