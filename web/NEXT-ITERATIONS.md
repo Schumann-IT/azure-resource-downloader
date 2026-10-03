@@ -80,6 +80,47 @@ policies — in the browser, rendered like every other document, from the tenant
 - Documentation at *done*: `README.md` (route, the served `consistency/` root, the docs-root tree);
   `CHANGELOG.md` `### Added`.
 
+## 3. Align tables by content, not by column position
+
+*Kind:* fix
+
+**Goal.** The tenant summary's *At a glance* table — and any table after it — reads cleanly whatever column order
+the documentation agent chose: counts right-aligned and compact, text wrapping at full width. A test fails whenever
+a stylesheet rule styles a table column by its position.
+
+> **Why.** `src/styles.css` forces the at-a-glance table's *last* column to `width: 5rem; text-align: right`,
+> assuming a count sits there. The go template leaves the table free ("as prose or one small table"), and real
+> exports differ: `Area | Resources | Types` squeezes the type list into the 5rem right-aligned column and leaves
+> the count left-aligned, while `Area | Types (count) | Resources` happens to look right. `styles-build.spec.ts`
+> only checks that a rule survives compilation, not which cells it reaches, so nothing caught it.
+>
+> **Scope.** Web-only: no contract change, no regeneration; existing exports are fixed on the next request. The
+> rule it enforces (tables styled by content, never by position; counts right-aligned) is already in
+> `.claude/rules/web-style.md` and its Windsurf twin.
+
+**Plan.**
+
+- `src/docs/section-hooks.ts`: a pure pass `applyNumericColumns(tokens)` — per table, a column is numeric when
+  every non-empty body cell is an integer (thousands separators allowed; `*_` and backticks stripped the way
+  `findings-table.ts`'s `normalise` does); every `th`/`td` of such a column gets `data-numeric`. Called from the
+  `doc_sections` rule in `markdown-renderer.service.ts`, before `wrapSections`. Every table is tagged; the visual
+  effect is scoped in CSS.
+- `src/styles.css`: replace the at-a-glance `td:last-child` / `th:last-child` rule with
+  `[data-section="at-a-glance"] [data-numeric]` (right-aligned, `nowrap`, `tabular-nums`, `width: 1%`); at-a-glance
+  cells get `vertical-align: top` and `overflow-wrap: anywhere`; correct the stale comment ("a sentence per row in
+  its first column").
+- `test/section-hooks.spec.ts` (inline fixtures, never `output/`): `Area | Resources | Types` and
+  `Area | Types (count) | Resources` each tag exactly the count column, header and body; a column with one
+  non-numeric cell is not tagged; header-only and empty tables are untouched.
+- `test/docs.e2e.spec.ts`: a rendered `summary.md` fixture in each column order carries `data-numeric` on the
+  count cells inside `[data-section="at-a-glance"]` and on no other cell of that table.
+- `test/styles-build.spec.ts`: a guard over the compiled CSS that fails on any selector combining
+  `table` / `td` / `th` with `:first-child`, `:last-child` or `:nth-child(` unless it is scoped to an allow-listed
+  contract table (`table.findings`, `table.doc-metadata` — the only positional selectors today besides the
+  one this entry removes); and an assertion that the `[data-numeric]` rule survives with
+  `text-align: right`.
+- Documentation at *done*: `CHANGELOG.md` `### Fixed`. No README change (no route, flag or setting).
+
 ## Parked ideas
 
 **Legend.** *Area* — **contract** (Go → web data on disk: `index.yaml`, `drift/`, frontmatter, section
