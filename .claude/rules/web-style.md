@@ -58,6 +58,15 @@ paths:
   chosen variant has exactly one URL; an unknown or malformed value falls back to the default, never a 404 —
   the way `parseFacetSelection()` validates a selection; every option has a default, so an option-less URL keeps
   working.
+- **Tables are styled by content, never by position.** Column treatments (alignment, width, wrapping) key on
+  attributes the renderer sets from the token stream — `data-numeric` on a count column, or a column-name tag
+  the way `findings-table.ts` tags the drift findings' cells — never on `:first-child`, `:last-child` or
+  `:nth-child()`: the generator leaves most tables' column order to the agent, and both orders occur. The one
+  exception is a table whose column order is a CLI contract — today the Findings tables (`table.findings`, led
+  by Severity) and the label | value metadata table (`table.doc-metadata`); its selector names that contract in
+  a comment.
+- Counts are right-aligned, `tabular-nums` and `nowrap`; prose and list columns wrap (`white-space: normal`,
+  `overflow-wrap: anywhere`).
 - `{{{body}}}` (triple-stache) only for already-rendered Markdown HTML; everything else `{{ }}` escaped.
 - **No client-side JavaScript and no frontend framework.** HTML interactivity (`<details>`, `:target`,
   `<form method="get">`) is in bounds; shipped script and client-side state are not.
@@ -69,6 +78,9 @@ paths:
 - Required coverage: `path-safety.ts` → `test/path-safety.spec.ts`; `tenant-index.ts` →
   `test/tenant-index.spec.ts`; routes, discovery, rendering, highlighting or link rewriting →
   `test/docs.e2e.spec.ts`; `src/styles.css` → `test/styles-build.spec.ts`.
+- A new or changed table treatment gets a renderer test for **every column order the generator may produce**,
+  asserting the tag lands on the right cells; the guard in `test/styles-build.spec.ts` fails on any positional
+  table-column selector outside the contract allow-list.
 - Keep the invariant tests: `_`-prefixed and index-less/malformed folders ignored; `docs/generate.md` never
   served; frontmatter never in the body; `<details>` passes through; cross-type links resolve; traversal
   404s; an edited document, resource or index is reflected on the next request; no `.md` servable from
