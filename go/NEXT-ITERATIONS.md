@@ -33,6 +33,9 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
 > **Decision.** Scope v1: mechanical first; the rule catalog, the LLM job, the summary signal and the web view are
 > the following entries.
 >
+> **Decision.** macOS custom profiles: key them by their payload identifier (`PayloadIdentifier`; `bundleId` for
+> app configurations) rather than treating them as non-settings or leaving them to the catalog.
+>
 > **Decision.** `<tenant>/consistency/` describes one export: a re-baselining `resource download` clears it, like
 > `drift/`. The web browser renders it in v1 (the web entry *The consistency view*).
 >
@@ -171,12 +174,25 @@ assignment scope, and writes the same-setting conflicts and duplicates it finds 
   `cmd/resource/download_test.go` (dry run clears nothing, a real run clears only `consistency/`).~~
 - Documentation at *done*: `README.md` (the command, the `consistency/` tree, where it sits in the pipeline);
   `CHANGELOG.md` `### Added`.
-- Follow-up (found by a dry run over a real export): typed macOS custom profiles
-  (`macOSCustomConfiguration`, `macOSCustomAppConfiguration`) index their identity and payload properties
-  (`payload`, `payloadName`, `payloadFileName`, `bundleId`, `configurationXml`, `fileName`) as settings, so any two
-  unrelated custom profiles on overlapping scopes come out as a `conflict` on those keys — the bulk of the
-  mechanical conflicts in that export. Decide whether to treat them as non-settings, key them by payload
-  identifier, or leave them to the catalog.
+- Key typed macOS custom profiles by their payload identifier, not by their identity properties (found by a dry
+  run over a real export: `payload`, `payloadName`, `payloadFileName`, `bundleId`, `configurationXml` and `fileName`
+  were indexed as settings, so any two unrelated custom profiles on overlapping scopes came out as a `conflict` —
+  the bulk of the mechanical conflicts in that export):
+  - `macOSCustomConfiguration`: read the top-level `PayloadIdentifier` of the XML property list (inline `payload`,
+    or the sidecar artifact the export moved it to) with `encoding/xml` — no new dependency; index one setting
+    `#microsoft.graph.macOSCustomConfiguration#payload:<PayloadIdentifier>` whose value stays the `sha256:<hex>` of
+    the payload bytes (inline and sidecar hash alike). Same identifier and different bytes → `conflict` (the device
+    keeps one profile per identifier); same bytes → `duplicate`.
+  - `macOSCustomAppConfiguration`: the app's preference domain is its `bundleId`; index one setting
+    `#microsoft.graph.macOSCustomAppConfiguration#configurationXml:<bundleId>` with the `sha256:<hex>` of
+    `configurationXml`.
+  - `payloadName`, `payloadFileName`, `fileName`, `bundleId` and the bare `payload` / `configurationXml` become
+    non-settings for these two types.
+  - A payload that is not an XML property list (signed or binary) or has no `PayloadIdentifier` indexes nothing;
+    log it at DEBUG with the resource key only, never payload content.
+  - Tests: two profiles with one identifier and different bytes → `conflict`; different identifiers → no finding;
+    inline and sidecar copies of the same payload → `duplicate`; a signed/binary payload indexes nothing; the
+    identity properties are no longer keys.
 
 ## 2. A consistency rule and topic catalog in the configuration
 
