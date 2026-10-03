@@ -25,28 +25,84 @@ a payload string ever leaving the export.
 > strings may carry secrets. Equivalences and rules can show a control set through several surfaces but cannot
 > compare its values.
 >
-> **Sequencing.** Builds on *A consistency rule and topic catalog in the configuration* (shipped), whose member
-> validation and seed equivalences this entry extends. *Replace the seed consistency catalog with the reviewed catalog* has shipped, so its
-> payload member lands in the reviewed catalog. Not regeneration-gated.
+> **Sequencing.** Builds on *A consistency rule and topic catalog in the configuration* and *Replace the seed
+> consistency catalog with the reviewed catalog* (both shipped). The reviewed catalog in
+> `config-tailored-intune.yaml` already names this key form and matches nothing today: the equivalence
+> `macos-system-extensions-allowed` (member `#microsoft.graph.macOSCustomConfiguration#com.apple.system-extension-policy`,
+> `relation: same`) and the rule `r-macos-defender-two-surfaces` (right side
+> `#microsoft.graph.macOSCustomConfiguration#com.microsoft.wdav`). This entry makes both live. Not
+> regeneration-gated; no other regeneration-gated work rides along.
 >
-> **Owner.** `go/config-tailored-intune.yaml` (inside `go/`); never `go/.config/`.
+> **Contract.** No web contract: the browser does not read `consistency/` today, and nothing under `docs/`,
+> `drift/` or `resources/metadata.yaml` changes. The contract is with the catalog and the `consistency/` output:
+> a new canonical index key `#microsoft.graph.macOSCustomConfiguration#<PayloadType>` /
+> `#microsoft.graph.iosCustomConfiguration#<PayloadType>`, one per distinct `PayloadType` among the
+> `PayloadContent` dicts of an XML property list, always *set, value unknown*. It sits beside the existing
+> identifier key `#…CustomConfiguration#payload:<PayloadIdentifier>` (unchanged; the `payload:` prefix keeps
+> the two apart) and is not emitted for `macOSCustomAppConfiguration`. The key passes the existing
+> `typedKeyPattern` member validation unchanged. Such a key never pairs on the same key (two profiles with
+> one `PayloadType` are never a finding nor an unknown-value pair, with or without a catalog); it pairs only
+> with a *different* member key of an equivalence (always an unknown-value pair, never a finding) and is
+> selectable by rule keys and topic `key` regexes. Only the `PayloadType` string (as the key / `sourceKey`)
+> may reach `consistency/`; no other payload string or value does.
+>
+> **Third-party payload types.** Every `PayloadType` is indexed, not only `com.apple.*`: the reviewed catalog's
+> `r-macos-defender-two-surfaces` names `com.microsoft.wdav`, and the root `PayloadIdentifier` (as
+> customer-specific as any vendor type) is already indexed and written the same way. `consistency/` stays a
+> local output like the rest of the export tree.
+>
+> **Seed scope.** Presence cannot speak to a length, an age or a count, so the payload keys join only the two
+> `relation: required` password equivalences — `macos-password-required` and `ios-passcode-required` — each
+> with its own platform's key; the valued password equivalences (`…-minimum-length`, `…-expiration`, …) keep
+> their members. Equivalence and topic/rule counts stay 37 / 13 / 29.
+>
+> **Owner.** none outside `go/` (`go/config-tailored-intune.yaml` is inside it); never `go/.config/` or
+> `output/`. No sequencing constraint.
+>
+> **Implementer.** opus
 
 **Plan.**
 
-- `internal/consistency/apple.go`: for each `PayloadContent` dict of a `macOSCustomConfiguration` or
-  `iosCustomConfiguration` XML property list, one setting with key
-  `#microsoft.graph.<macOS|ios>CustomConfiguration#<PayloadType>`, read from the same normalised payload bytes the
-  identifier hash uses; one setting per distinct type, `Unknown: true`.
-- A `Setting` flag, like `ListMember`, that keeps these keys out of same-key pairing: two profiles sharing a
-  `PayloadType` are a finding only through a catalog equivalence or rule, never on their own.
-- The catalog's member validation accepts the new key form (through the shared key builders).
-- The seed catalog: `#microsoft.graph.<macOS|ios>CustomConfiguration#com.apple.mobiledevice.passwordpolicy` joins
-  the macOS and iOS/iPadOS password equivalences, `status: verify`.
-- Tests: a two-payload profile yields two keys; a signed or binary payload yields none; two profiles with the same
-  `PayloadType` yield no finding without a catalog and an unknown-value pair through the seed equivalence; no
-  payload string reaches `consistency/` (a sentinel string grepped in the written tree).
-- Documentation at *done*: `README.md` (the indexed sources of `docs analyze-consistency`); `CHANGELOG.md`
-  `### Added`.
+- `internal/consistency/apple.go`: for a `macOSCustomConfiguration` or `iosCustomConfiguration` whose
+  normalised payload text (the same bytes the identifier hash uses) is an XML property list, read the root
+  dict's `PayloadContent` array and, from each dict in it, the direct-child `PayloadType` string (the root's own
+  `PayloadType`, `Configuration`, is not indexed); add one setting per distinct, non-empty type with key
+  `typedKey(odataType, <PayloadType>)`, `unknown: true` and an empty value. Index them independently of the
+  root identifier (a missing root `PayloadIdentifier` still skips only the identifier key). A signed (CMS),
+  binary or unparseable payload yields no payload-type key; log the skip at DEBUG with the resource key and a
+  fixed reason only. Put the walk in its own small functions beside `plistRootIdentifier` (it skips nested
+  values with `dec.Skip()` the same way) rather than growing the existing ones, and never read any key other
+  than `PayloadType` from a payload dict.
+- `internal/consistency/index.go`: a `Setting` flag (e.g. `PayloadType bool`, documented like `ListMember`)
+  set on these keys; `internal/consistency/detect.go`: `inContext` rejects any pair of two settings on the same
+  key when either carries the flag, in both the same-key pass and every equivalence pass, while cross-key
+  pairs under an equivalence still evaluate (and land as unknown-value pairs because the value is unknown).
+  Rules and topics need no change beyond seeing the new keys.
+- `go/config-tailored-intune.yaml`: add `#microsoft.graph.macOSCustomConfiguration#com.apple.mobiledevice.passwordpolicy`
+  to the members of `macos-password-required` and
+  `#microsoft.graph.iosCustomConfiguration#com.apple.mobiledevice.passwordpolicy` to `ios-passcode-required`
+  (both stay `status: verify`; extend their comment line to name the custom-profile surface). No other entry
+  changes.
+- Tests in `internal/consistency/apple_test.go`: a two-payload profile (two distinct types, plus a duplicated
+  type) yields exactly the identifier key and two payload-type keys, both unknown; an iOS profile yields the
+  `iosCustomConfiguration` form; base64-inline, sidecar-artifact and inline-markup payloads all index; a signed
+  (non-`<`) payload, a binary plist and a plist without `PayloadContent` yield no payload-type key; a profile
+  without a root `PayloadIdentifier` still yields its payload-type keys; `macOSCustomAppConfiguration` yields
+  none.
+- Tests in `internal/consistency/consistency_test.go` (or `detect` tests): two overlapping-scope profiles with
+  the same `PayloadType` yield neither a finding nor an unknown-value pair, without a catalog and with an
+  equivalence listing that key; a profile and a `macOSCompliancePolicy` with `passwordRequired: true` joined by
+  an equivalence yield one unknown-value pair keyed `equivalence:<id>`; a rule whose right side names the
+  payload-type key matches the profile. A sentinel string placed in a payload value (e.g. a `Password` key
+  inside a payload dict) never appears in any file written under `consistency/` (grep the written tree).
+- `cmd/docs/analyze_consistency_test.go`: a shape test beside `TestTailoredConfigSeedsThePasswordLengthEquivalence`
+  pins the exact members of `macos-password-required` and `ios-passcode-required` including the new keys;
+  `TestTailoredConfigCatalogCompiles` keeps its counts (37 / 13 / 29) and verified lists unchanged — run it to
+  confirm, do not edit its expectations.
+- Documentation at *done*: `README.md` (the indexed sources of `docs analyze-consistency`: the Apple custom
+  profiles row gains the `#…CustomConfiguration#<PayloadType>` key, set with an unknown value, never paired on
+  its own; the consistency-analysis secrets bullet says payload contents are never read beyond `PayloadType`);
+  `CHANGELOG.md` `### Added`.
 
 ## 2. R6 and R7 as assignment checks in the scope model
 
