@@ -149,6 +149,32 @@ func TestIndexTypedProperties(t *testing.T) {
 	hasLen(t, got, 4, "non-settings, OData annotations and not-configured values are never indexed: %v", got)
 }
 
+func TestIndexTypedEnumDefaultsAreNotConfigured(t *testing.T) {
+	const prefix = "#microsoft.graph.windows10CompliancePolicy#"
+	doc := map[string]interface{}{
+		"@odata.type": "#microsoft.graph.windows10CompliancePolicy",
+		"deviceThreatProtectionRequiredSecurityLevel":   "unavailable",
+		"advancedThreatProtectionRequiredSecurityLevel": "Unavailable",
+		"passwordRequiredType":                          "deviceDefault",
+		"passcodeRequiredType":                          "DeviceDefault",
+	}
+	hasLen(t, indexOf(t, "Microsoft.Graph/deviceCompliancePolicies/d.yaml", typeDeviceCompliancePolicies, doc), 0, "the four Graph defaults are not settings")
+
+	doc = map[string]interface{}{
+		"@odata.type":          "#microsoft.graph.windows10CompliancePolicy",
+		"otherThreatLevel":     "unavailable",
+		"passwordRequiredType": "alphanumeric",
+		"nested": map[string]interface{}{
+			"passwordRequiredType": "deviceDefault",
+		},
+	}
+	got := indexOf(t, "Microsoft.Graph/deviceCompliancePolicies/e.yaml", typeDeviceCompliancePolicies, doc)
+	equal(t, "unavailable", got[prefix+"otherThreatLevel"].Value, "unavailable on another property is a value")
+	equal(t, "alphanumeric", got[prefix+"passwordRequiredType"].Value)
+	equal(t, "deviceDefault", got[prefix+"nested.passwordRequiredType"].Value, "a nested path is never matched")
+	hasLen(t, got, 3)
+}
+
 func TestIndexTypedCredentials(t *testing.T) {
 	wifi := map[string]interface{}{
 		"@odata.type":  "#microsoft.graph.windowsWifiConfiguration",

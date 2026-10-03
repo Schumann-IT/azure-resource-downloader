@@ -581,3 +581,46 @@ func TestAnalyzeRuledOutByScope(t *testing.T) {
 		}
 	})
 }
+
+func TestAnalyzeTypedEnumDefaultsAreNotConfigured(t *testing.T) {
+	const odata = "#microsoft.graph.windows10CompliancePolicy"
+	policy := func(pw string) map[string]interface{} {
+		return map[string]interface{}{
+			"@odata.type": odata,
+			"deviceThreatProtectionRequiredSecurityLevel": "unavailable",
+			"passwordRequiredType":                        pw,
+		}
+	}
+	run := func(a, b string) *Result {
+		f := newFixture(t)
+		meta := docs.ResourceMeta{Platforms: "windows10", AssignmentTargets: targets(allDevices())}
+		f.add(compType+"a.yaml", meta, policy(a))
+		f.add(compType+"b.yaml", meta, policy(b))
+		res, err := Analyze(Options{TenantDir: f.save(), DryRun: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	for _, tt := range []struct {
+		name, a, b string
+		want       []string
+	}{
+		{"both defaults: no finding", "deviceDefault", "deviceDefault", nil},
+		{"one default side: no finding", "alphanumeric", "deviceDefault", nil},
+		{"both alphanumeric: duplicate", "alphanumeric", "alphanumeric", []string{KindDuplicate}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			res := run(tt.a, tt.b)
+			var kinds []string
+			for _, f := range res.Mechanical.Findings {
+				kinds = append(kinds, f.Kind)
+			}
+			if strings.Join(kinds, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("want %v, got %+v", tt.want, res.Mechanical.Findings)
+			}
+			equal(t, 0, len(res.Mechanical.UnknownValues))
+		})
+	}
+}

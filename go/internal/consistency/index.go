@@ -253,6 +253,32 @@ var typedNonSettings = map[string]bool{
 	"supportsScopeTags": true,
 }
 
+// typedEnumDefaults lists, per top-level typed property (any @odata.type), the
+// enum values Graph returns by default and that therefore mean "not
+// configured". An explicit per-property list: the same strings may be a real
+// choice on another property.
+var typedEnumDefaults = map[string][]string{
+	"deviceThreatProtectionRequiredSecurityLevel":   {"unavailable"},
+	"advancedThreatProtectionRequiredSecurityLevel": {"unavailable"},
+	"passwordRequiredType":                          {"deviceDefault"},
+	// The iOS/iPadOS compliance spelling of the same Graph default.
+	"passcodeRequiredType": {"deviceDefault"},
+}
+
+// isTypedEnumDefault reports whether v is a top-level property's Graph default.
+func isTypedEnumDefault(path string, v interface{}) bool {
+	s, ok := v.(string)
+	if !ok || strings.Contains(path, ".") {
+		return false
+	}
+	for _, d := range typedEnumDefaults[path] {
+		if strings.EqualFold(s, d) {
+			return true
+		}
+	}
+	return false
+}
+
 // isODataKey reports whether a property key is OData annotation, never a
 // setting.
 func isODataKey(k string) bool {
@@ -634,7 +660,7 @@ func walkTyped(odataType, path string, v interface{}, c *collector) {
 		}
 		return
 	}
-	if notConfigured(v, true) {
+	if notConfigured(v, true) || isTypedEnumDefault(path, v) {
 		return
 	}
 	key := odataType + "#" + path
