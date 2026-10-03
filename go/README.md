@@ -30,6 +30,7 @@ reads. Every run after the first regenerates only what actually changed in the t
   - [`docs generate-prompt`](#docs-generate-prompt)
   - [`docs generate-index`](#docs-generate-index)
   - [`docs analyze-drift`](#docs-analyze-drift)
+  - [`docs analyze-consistency`](#docs-analyze-consistency)
   - [`--debug`](#--debug)
 - [Authentication](#authentication)
   - [Access check before listing](#access-check-before-listing)
@@ -41,6 +42,7 @@ reads. Every run after the first regenerates only what actually changed in the t
 - [Per-type documentation prompts (`doc-prompt.md`)](#per-type-documentation-prompts-doc-promptmd)
 - [Documentation generation (`docs/generate.md`)](#documentation-generation-docsgeneratemd)
 - [Navigation index (`docs/index.yaml`)](#navigation-index-docsindexyaml)
+- [Consistency analysis (`consistency/`)](#consistency-analysis-consistency)
 - [Supported resource types](#supported-resource-types)
 - [Transformations](#transformations)
 - [Excluding types per tenant](#excluding-types-per-tenant)
@@ -231,7 +233,8 @@ observation record `drift/metadata.yaml` plus the fetched bytes of every *added*
 resource at paths mirroring `resources/` exactly, so a payload is byte-comparable with the baseline file it
 shadows. The tree is cleared and rebuilt on every run, so it always holds exactly the latest observation —
 and a re-baselining `resource download` clears it too, because a new baseline supersedes the observation by
-definition. Re-baselining is a normal `resource download`. To have an LLM judge what the findings mean,
+definition (it clears `consistency/` for the same reason). Re-baselining is a normal `resource download`. To
+have an LLM judge what the findings mean,
 follow up with [`docs analyze-drift`](#docs-analyze-drift) before re-baselining.
 
 **Comparability is a precondition.** The command refuses (exit `2`) when there is no baseline, when the
@@ -507,6 +510,30 @@ never touches `audit.yaml`.
 when the question cannot be answered: no observation (run `resource drift` first), the export was
 re-baselined after the observation (run `resource drift` again), tenant mismatch, a payload not matching the
 observation, or an unreadable `--prompt` template.
+
+### `docs analyze-consistency`
+
+Indexes every exported setting together with the assignment scope of the resource that sets it, and reports
+where two resources configure the same setting for devices or users they can both reach: a **conflict**
+(different values), a **duplicate** (the same value) or a **contradiction** (a compliance requirement against a
+configuration). Fully offline and deterministic — no LLM, no Graph call: it reads only `resources/` (the YAML and
+`metadata.yaml`), so it can run right after `resource download`, before or without any documentation. Output
+goes to `<tenant>/consistency/` — see [Consistency analysis](#consistency-analysis-consistency).
+
+```bash
+azure-rd docs analyze-consistency --domain contoso.onmicrosoft.com   # offline
+azure-rd docs analyze-consistency                                    # resolve tenant via az login
+azure-rd docs analyze-consistency --domain … --dry-run               # report counts only, write nothing
+```
+
+`--domain` is its only own flag (no `--out`, `--prompt` or `--exit-code`); the global `--output`, `--dry-run`
+and `--log-level` apply. Without `--domain` it signs in only to resolve the tenant, like `generate-index`. The
+log closes with a `Consistency summary` line (resources, settings, unreadable files, unknown values, pairs ruled
+out by scope) and one line per finding kind with its `certain` / `possible` counts.
+
+**Exit codes:** `0` on success, whatever was found — findings never change the exit code; `2` when the question
+cannot be answered: no `resources/metadata.yaml`, a tenant mismatch, an unresolvable export directory, or a
+failed write.
 
 ### `--debug`
 
@@ -831,6 +858,9 @@ only after a `resource drift` run, and is cleared by the next drift run or a re-
 ```
 output/
 └── contoso.onmicrosoft.com/                      the tenant's Entra default domain
+    ├── consistency/                              written by azure-rd docs analyze-consistency; cleared by a re-baselining download
+    │   ├── metadata.yaml                         which export was analysed, and the counts
+    │   └── mechanical.yaml                       the same-setting findings and the pairs that could not be compared
     ├── drift/                                    owned by azure-rd resource drift — the latest observation only
     │   ├── metadata.yaml                         what was compared, against which baseline, and the findings
     │   ├── audit.yaml                            written by azure-rd resource audit (and an attributing drift run): who changed each finding
@@ -1136,6 +1166,77 @@ and re-running `generate-index` reclassifies everything without a download. Reso
 axis are reported as uncategorised per axis, plus a headline count of resources uncategorised on *every* axis.
 Value ids appear in browser URLs — never rename or reuse one; labels are free to change.
 
+## Consistency analysis (`consistency/`)
+
+`docs analyze-consistency` owns `<tenant>/consistency/`. The tree describes **one export**: a re-baselining
+`resource download` deletes it (after a successful metadata write, never under `--dry-run`), so a stale analysis
+never outlives the export it judged. The command writes two files atomically — `mechanical.yaml` first,
+`metadata.yaml` last — and leaves any other file in the folder alone. Neither carries a wall-clock time:
+re-running over an unchanged export with the same binary produces byte-identical files.
+
+**What is indexed.** Every resource present in the tenant (not skipped, not filtered) of these types; others are
+not indexed yet:
+
+| Type | Joined on |
+|---|---|
+| `deviceManagementConfigurationPolicies`, `compliancePolicies` (Settings Catalog) | `settingDefinitionId` |
+| `deviceConfigurations`, custom (OMA-URI) | the OMA-URI path, normalised so it meets the Settings Catalog id (`./Device/Vendor/MSFT/A/B` ↔ `device_vendor_msft_a_b`) |
+| `deviceConfigurations`, typed | `@odata.type#property`, nested objects as dotted paths |
+| `deviceConfigurations`, Apple custom profiles | the profile's top-level `PayloadIdentifier` (`bundleId` for app configurations); valued by the hash of the payload |
+| `deviceCompliancePolicies` | `@odata.type#property` — a *requirement*, not a configuration |
+| `groupPolicyConfigurations` (ADMX) | the definition id, valued `enabled` / `disabled` |
+| `deviceManagementIntents` | the setting `definitionId` |
+
+Values that mean *not configured* are not indexed: null, empty, `notConfigured`, `false` (except for OMA-URI
+and ADMX, where `false` / disabled is a real choice) and the Graph defaults every legacy policy returns
+(`unavailable` threat levels, `deviceDefault` password and passcode types). Identity and read-only properties
+(names, ids, timestamps, `supportsScopeTags`, …) are not settings. A file that is missing or does not parse is
+warned about, counted as `unreadable` and skipped.
+
+**Collections on Apple policies are lists.** On a Settings Catalog policy whose platforms are all macOS or
+iOS/iPadOS, a collection below the payload level — managed login items, allowed system extensions, privacy
+(TCC) entries — is a list of entries that macOS installs side by side, not one value. Two policies adding
+different entries is no finding; an entry both add is a `duplicate`. Other platforms compare the whole list.
+
+**Scope.** Before two resources are compared, their assignments decide whether they can reach the same device
+or user: `none` (ruled out — no finding, counted as `ruledOutByScope`), `certain` (the same targets, no filter,
+the same known platform) or `possible` (anything that cannot be ruled out). The model reads include and exclude
+targets, All users / All devices, group membership rules, filters and platforms; a user assignment reaches the
+devices its users sign in to. Group membership is not exported, so two different groups are at best `possible`.
+
+**Findings.** One per resource pair and key: `conflict` (two configurations, different values), `duplicate`
+(the same value), `contradiction` (a compliance requirement against a configuration it cannot be met with —
+needs an equivalence, which the catalog will supply). Each carries the `overlap` and a `confidence`
+(`firm` | `possible`).
+
+```yaml
+# consistency/mechanical.yaml
+version: 1
+findings:
+  - kind: conflict                 # conflict | duplicate | contradiction
+    key: vendor_msft_firewall_mdmstore_publicprofile_enablefirewall
+    overlap: possible              # certain | possible
+    confidence: firm               # firm | possible
+    a: { resource: Microsoft.Graph/deviceManagementConfigurationPolicies/….yaml, sourceKey: …, value: … }
+    b: { resource: …, sourceKey: …, value: … }
+unknownValues: []                  # same-key pairs that could not be compared (a secret, a non-scalar), no values
+
+# consistency/metadata.yaml
+version: 1
+tenant: contoso.onmicrosoft.com
+exportGeneratedAt: "2026-08-31T18:04:12Z"   # equals resources/metadata.yaml generatedAt
+exportComplete: true
+toolVersion: azure-rd v0.4.0
+counts:
+  indexed: { Microsoft.Graph/deviceConfigurations: { resources: 12, settings: 87 }, … }   # every indexed type, zeros kept
+  unreadable: 0
+  findings: { conflict: { certain: 1, possible: 3 }, contradiction: { … }, duplicate: { … } }
+  unknownValues: 0
+  ruledOutByScope: 17              # pairs sharing a key whose assignments cannot meet
+```
+
+Values that are secrets never reach either file (see [Security notes](#security-notes)).
+
 ## Supported resource types
 
 53 types: 3 Azure Resource Manager, 50 Microsoft Graph. `azure-rd resource types` prints the same list. Graph types use the
@@ -1350,7 +1451,9 @@ channels. Type **listing** runs before it, concurrently across types.
 - `docs generate-prompt --dry-run` runs the full comparison and reports the work list without writing
   `generate.md`; `docs generate-index --dry-run` reports the index counts without writing `index.yaml`;
   `docs analyze-drift --dry-run` runs the full preflight and reports the observation's findings without
-  writing `analyze.md` (an `analyze.md` from an earlier run stays on disk and is reported as not refreshed).
+  writing `analyze.md` (an `analyze.md` from an earlier run stays on disk and is reported as not refreshed);
+  `docs analyze-consistency --dry-run` indexes and compares in full and reports the counts without writing or
+  clearing anything under `consistency/`.
 
 ## Logging
 
@@ -1378,6 +1481,11 @@ Secrets are never logged: tokens, client secrets and resolved OMA-URI values are
   sometimes carry credentials the service does not mask, and `resolve-secrets` writes OMA-URI values in
   plaintext. The prompts require the model to redact all of them in the documentation and flag them under
   `Security`; the literal stays only in the YAML.
+- **Consistency analysis.** `docs analyze-consistency` never writes or logs a secret: Settings Catalog secret
+  values, encrypted, referenced or masked OMA-URI values and typed properties named like credentials
+  (`…password`, `…passphrase`, `…secret`, `…sharedKey`, `…token`) are indexed as *set, value unknown* — even in
+  an export produced with `resolve-secrets` — and never compared. Apple custom profile payloads are compared by
+  hash only.
 - **Files** are written `0644`, directories `0755`. The tool deletes only with `prune` configured, only under
   `resources/`, and only what a complete run proved gone.
 
