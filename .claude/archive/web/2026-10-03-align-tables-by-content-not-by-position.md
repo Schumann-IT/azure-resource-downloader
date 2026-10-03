@@ -5,6 +5,7 @@ status: done
 started: 2026-10-03
 finished: 2026-10-03
 branch: fix/web-table-alignment
+pr: 57
 changelog: Unreleased
 ---
 ## Align tables by content, not by column position
